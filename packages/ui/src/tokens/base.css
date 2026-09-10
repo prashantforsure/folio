@@ -1,0 +1,105 @@
+/*
+ * The element defaults every route inherits, transcribed from the bundles'
+ * shared `<style>` preamble.
+ *
+ * Two things here are load-bearing rather than cosmetic.
+ *
+ * **`color-scheme`.** It is what makes the browser's own chrome - scrollbars,
+ * form controls, the flash of background before first paint - agree with
+ * `data-theme`. Without it a dark page gets light scrollbars, and the gap is
+ * most visible in exactly the moment the theme script is deciding.
+ *
+ * **The focus ring is the accent, not a browser blue.** The README: "Focus
+ * state everywhere: `box-shadow: 0 0 0 2px var(--focus)` with `outline: none`.
+ * Keep it - keyboard navigation matters in this app." `outline: none` without a
+ * replacement is an accessibility regression, so the two are written together
+ * here rather than left to each call site to remember. `:focus-visible` rather
+ * than `:focus`, so a mouse click on a button does not leave a ring behind.
+ */
+
+/*
+ * ## Everything below is inside `@layer base`, and that is load-bearing
+ *
+ * Tailwind declares `@layer theme, base, components, utilities` and puts its
+ * utilities in the last one. **Unlayered CSS beats every layer**, so an
+ * unlayered `a { color: var(--accent) }` here would win against `text-ink2` on
+ * a link - silently, everywhere, in a way that looks like a token bug rather
+ * than a cascade bug. It did, and it was caught in a screenshot rather than by
+ * a test, which is the argument for the screenshots.
+ *
+ * `color-scheme` stays outside the layer with the palette: it is a property on
+ * `:root`, it competes with nothing, and it has to hold whatever else is
+ * loaded.
+ */
+
+:root {
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--desk);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+
+  button {
+    font-family: inherit;
+    color: inherit;
+    transition:
+      background 0.12s,
+      border-color 0.12s,
+      color 0.12s,
+      box-shadow 0.12s,
+      transform 0.12s;
+  }
+
+  ::selection {
+    background: var(--accent-bg);
+  }
+
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus);
+  }
+
+  /* Counts and page numbers line up. README, Type. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    button {
+      transition: none;
+    }
+  }
+}

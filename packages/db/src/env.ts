@@ -18,10 +18,14 @@ import { z } from 'zod'
  *     total access to every project in the database. AGENTS.md, Tenancy and
  *     data access: "The service-role key must never reach the browser. Same for
  *     Dodo keys."
- *   - `publicEnv` holds the two values that are *designed* to be public. The
- *     anon key is a JWT that carries no privilege on its own; RLS is what makes
- *     it safe, which is one of the reasons RLS exists at all even though the
- *     server does not rely on it.
+ *   - The two values that are *designed* to be public - the Supabase URL and
+ *     the anon key - are **no longer here**. They moved to
+ *     `apps/web/lib/env/public.ts`, which is what the caveat at the foot of
+ *     this file used to propose. The reason is the tripwire below:
+ *     `refuseBrowser()` throws at module scope, so any module in this file is
+ *     unusable from a Client Component by design - and the browser is exactly
+ *     where the anon key has to be. The split is now physical rather than
+ *     conventional, which is stronger than what it replaced.
  *
  * Three things keep the first out of the second:
  *
@@ -125,13 +129,7 @@ const ServerEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: SupabaseKeySchema,
 })
 
-const PublicEnvSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: SupabaseKeySchema,
-})
-
 export type ServerEnv = z.infer<typeof ServerEnvSchema>
-export type PublicEnv = z.infer<typeof PublicEnvSchema>
 
 /**
  * What each variable is and where it comes from.
@@ -147,10 +145,6 @@ const PROVENANCE: Readonly<Record<string, string>> = {
     'Supabase dashboard, Project Settings, Database, Connection string, "Transaction pooler" (port 6543). Used by web requests.',
   SUPABASE_SERVICE_ROLE_KEY:
     'Supabase dashboard, Project Settings, API Keys, service_role. Server only - it bypasses RLS.',
-  NEXT_PUBLIC_SUPABASE_URL:
-    'Supabase dashboard, Project Settings, API, Project URL. Safe to expose.',
-  NEXT_PUBLIC_SUPABASE_ANON_KEY:
-    'Supabase dashboard, Project Settings, API Keys, anon/publishable. Safe to expose.',
 }
 
 // ---------------------------------------------------------------------------
@@ -226,25 +220,4 @@ export const serverEnv: ServerEnv = parseOrThrow(
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   },
   'server',
-)
-
-/**
- * Safe to expose. These two values are compiled into client JavaScript.
- *
- * **Caveat, flagged rather than solved:** when `apps/web` starts importing
- * this, Next.js has to be able to see the literal `process.env.NEXT_PUBLIC_*`
- * reads above in order to inline them, which for a workspace package means
- * adding `@folio/db` to `transpilePackages` in `next.config.ts`. If that turns
- * out to be awkward, the right move is to move this one object to
- * `apps/web/lib/env.ts` - which the brief for this phase explicitly allows -
- * and leave the secrets here. Nothing in this phase imports it, so nothing
- * currently depends on the answer.
- */
-export const publicEnv: PublicEnv = parseOrThrow(
-  PublicEnvSchema,
-  {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  },
-  'public',
 )

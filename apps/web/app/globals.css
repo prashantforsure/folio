@@ -1,0 +1,104 @@
+/*
+ * The single stylesheet the app loads, and the order it loads things in.
+ *
+ * 1. `tailwindcss` brings preflight and the utility engine.
+ * 2. `@folio/ui/tokens.css` declares the custom properties, republishes them as
+ *    Tailwind theme keys, and - crucially - deletes Tailwind's default colour,
+ *    font, text and radius namespaces before ours are defined. See
+ *    `packages/ui/src/tokens/theme.css`: `bg-slate-800` is not a banned utility
+ *    here, it is not a utility at all.
+ * 3. `fonts.css` declares the self-hosted faces.
+ *
+ * `@source` is required for the token package: Tailwind v4 discovers class names
+ * by scanning from the stylesheet's own directory, and `packages/ui` is outside
+ * `apps/web`. Without it every utility a shared component uses is dropped from
+ * the build, silently, and only in production.
+ */
+
+@import 'tailwindcss';
+@import '@folio/ui/tokens.css';
+@import './fonts.css';
+
+@source '../../../packages/ui/src';
+
+/*
+ * Chrome patterns that repeat across the shell and would otherwise be a long
+ * arbitrary-value string at every call site. Deliberately few: the design is
+ * specific enough that most geometry belongs at the element, and a component
+ * class layer is where a design system starts drifting from its bundles.
+ */
+@layer components {
+  /*
+   * The sidebar button. A 14px glyph above an 8px/600 uppercase label at .08em
+   * tracking - the README is explicit that the rail is "labelled, not
+   * icon-only", which is what makes it 46px tall rather than square.
+   *
+   * **78px wide, not the project rail's 56px, and that is a deliberate
+   * divergence.** The rail's labels are one short word - Writing, Bible,
+   * Scenes. This sidebar's are given by the brief and include SCREENWRITING,
+   * which at 8px/600 with .08em tracking measures about 70px. At 56px it
+   * overflows the 66px rail on both sides; it did, and the screenshot is how it
+   * was found.
+   *
+   * The three ways out were: wrap the label to two lines, shrink the type below
+   * the 8px the README sets as the floor, or widen the column. The first two
+   * change the specified design to preserve a measurement that was never
+   * specified for *this* sidebar - the 66px belongs to the in-project rail,
+   * which has its own bundle. Widening keeps every specified value and moves
+   * the one that was borrowed. Flagged in the phase report.
+   */
+  .folio-nav-item {
+    position: relative;
+    width: 78px;
+    height: 46px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-chrome);
+    cursor: pointer;
+    color: var(--ink2);
+    text-decoration: none;
+  }
+
+  .folio-nav-item:hover {
+    background: var(--hover);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  /*
+   * "Rail active state is a 2px `-accent` bar at `left:-5px` **plus** the
+   * `-sel` background. Not a colour change alone." - AGENTS.md, UI fidelity.
+   * The bar is a pseudo-element so the markup carries no decorative span, and
+   * it is driven by `aria-current`, so the accessible state and the visible
+   * state cannot disagree.
+   */
+  .folio-nav-item[aria-current='page'] {
+    background: var(--sel);
+    color: var(--ink);
+  }
+
+  .folio-nav-item[aria-current='page']::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: 13px;
+    bottom: 13px;
+    width: 2px;
+    border-radius: var(--radius-bar);
+    background: var(--accent);
+  }
+
+  .folio-nav-label {
+    font-size: var(--text-8);
+    font-weight: 600;
+    letter-spacing: var(--tracking-rail);
+    text-transform: uppercase;
+    line-height: 1;
+    white-space: nowrap;
+  }
+}

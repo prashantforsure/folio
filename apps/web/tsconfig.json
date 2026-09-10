@@ -16,6 +16,7 @@
     "next.config.ts",
     "vitest.config.mts",
     "playwright.config.ts",
+    "proxy.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
     "lib/**/*.ts",

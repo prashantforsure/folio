@@ -1,0 +1,16 @@
+/*
+ * The whole token layer, in dependency order.
+ *
+ * An app imports this one file. Order matters twice over: `theme.css` reads
+ * the variables `palette.css` and `type.css` declare, and inside `palette.css`
+ * the light block has to follow `:root` - see that file's header.
+ *
+ * `revision.css` is last and is independent of everything above it, which is
+ * the point of it being a separate file at all.
+ */
+
+@import './palette.css';
+@import './type.css';
+@import './base.css';
+@import './theme.css';
+@import './revision.css';

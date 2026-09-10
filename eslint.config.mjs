@@ -274,7 +274,7 @@ export default tseslint.config(
       '**/*.config.{ts,mts,cts,js,mjs,cjs}',
       'apps/web/app/**/{page,layout,route,error,loading,not-found,template,default,global-error}.{ts,tsx}',
       'apps/web/app/**/{icon,apple-icon,opengraph-image,twitter-image,sitemap,robots,manifest}.{ts,tsx}',
-      'apps/web/middleware.ts',
+      'apps/web/proxy.ts',
       'apps/web/instrumentation.ts',
     ],
     rules: {
@@ -289,13 +289,27 @@ export default tseslint.config(
     },
   },
 
-  // The one file that may read process.env. AGENTS.md gives packages/script no
+  // The two files that may read process.env. AGENTS.md gives packages/script no
   // access to the environment at all, and every other package reads it through
-  // the typed object this file exports - so a missing variable is one loud
+  // the typed object one of these exports - so a missing variable is one loud
   // failure at startup rather than an `undefined` that surfaces three layers
   // later. Sits after the ban above because flat config is last-match-wins.
+  //
+  // The split between them is a security boundary, not a duplication:
+  //
+  //   packages/db/src/env.ts    SECRETS. Throws if imported in a browser, so it
+  //                             is unusable from a Client Component by design.
+  //   apps/web/lib/env/*.ts     The NEXT_PUBLIC_ values, and only those. They
+  //                             have to be readable in the browser, which is
+  //                             precisely what the file above refuses to be -
+  //                             so they cannot live there. Its own header says
+  //                             so, and said so before this file existed.
+  //
+  // Both write their reads out literally rather than spreading `process.env`:
+  // Next.js inlines only a variable it can see written down, and a spread also
+  // drags every unrelated variable on the machine into the parsed object.
   {
-    files: ['packages/db/src/env.ts'],
+    files: ['packages/db/src/env.ts', 'apps/web/lib/env/*.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -319,6 +333,35 @@ export default tseslint.config(
     rules: {
       'no-restricted-syntax': [
         'error',
+        NO_DOUBLE_ASSERTION,
+        ...bannedText(HEX_COLOUR, HEX_MESSAGE),
+        ...bannedText(DARK_VARIANT, DARK_MESSAGE),
+        ...bannedText(COOL_GREY, COOL_GREY_MESSAGE),
+      ],
+    },
+  },
+
+  // Build tooling. Same category as the test-runner configs above and exempted
+  // on the same grounds: it runs in Node, outside anything Folio serves.
+  //
+  // `assert-no-server-secrets.mjs` compares the raw environment against the raw
+  // build output, so reading `process.env` is not incidental to it - it is the
+  // job. Routing it through the typed object would mean importing a module that
+  // throws when a variable is absent, and "absent" is the normal state of a
+  // machine that is only building. It is also the check that enforces AGENTS.md,
+  // Tenancy: "The service-role key must never reach the browser."
+  //
+  // Node globals are declared rather than pulled from the `globals` package,
+  // which is not a dependency and is not worth becoming one for two names.
+  {
+    files: ['apps/web/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly' },
+    },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        NO_DEFAULT_EXPORT,
         NO_DOUBLE_ASSERTION,
         ...bannedText(HEX_COLOUR, HEX_MESSAGE),
         ...bannedText(DARK_VARIANT, DARK_MESSAGE),

@@ -37,8 +37,7 @@ token and no real route yet.
 
 **Nothing in the repo needs a live database** to typecheck, lint, build or test. The two connection
 factories in [client.ts](packages/db/src/client.ts) are lazy, so importing `@folio/db` for a table
-definition reads no environment and opens no socket. `drizzle-kit generate` and `drizzle-kit check`
-need the variables to be *present* but never connect; only `drizzle-kit migrate` does.
+definition reads no environment and opens no socket.
 
 **The environment is read in exactly one file** — [env.ts](packages/db/src/env.ts), behind
 `@folio/db/env` so a secret cannot ride into a bundle via a table import. `process.env` anywhere
@@ -50,8 +49,8 @@ takes one; the handle is behind a second symbol; and a table without `project_id
 [scope-guarantees.ts](packages/db/src/scope-guarantees.ts) proves all four with `@ts-expect-error`,
 so `pnpm typecheck` is the test that they hold.
 
-**The migrations have never been applied.** They are generated and `drizzle-kit check` is clean, but
-no Postgres has parsed them — see the report and `docs/build-decisions.md`.
+**The migrations have never been applied.** No Postgres has parsed them — see
+`docs/build-decisions.md`.
 
 **FDX import cannot be called yet.** `importFinalDraft` takes an **already-parsed XML tree** so the
 mapping stays pure and the caller owns the parse; [fdx.ts](packages/script/src/fdx.ts) names the
@@ -74,9 +73,17 @@ pnpm test:e2e             # needs `pnpm --filter web exec playwright install chr
 pnpm --filter @folio/script test --coverage                        # note: no `--`
 pnpm --filter @folio/script exec vitest run src/paginate.test.ts    # one file
 pnpm --filter @folio/script exec vitest run -t "the first id wins"  # one test
+
+pnpm --filter @folio/db db:generate   # write a migration from the schema
+pnpm --filter @folio/db db:check      # verify the journal — reads files, never connects
+pnpm --filter @folio/db db:migrate    # the only command that needs a reachable database
 ```
 
-Four traps, each of which produces a false reading:
+All three `db:*` commands need the env vars **present** — `drizzle.config.ts` is evaluated whole.
+On a bare checkout `.env` is empty, so `db:check` fails with `env.ts`'s three-problem report. That
+is a config failure, not a schema failure; the journal is clean.
+
+Six traps, each of which produces a false reading:
 
 1. **Turbo replays cached logs indistinguishably from a run.** `>>> FULL TURBO` means nothing
    executed — the counts you are reading are a recording. Force it before reporting a suite as
@@ -87,8 +94,13 @@ Four traps, each of which produces a false reading:
    `pnpm test` can abort before `@folio/script` is reached — run that package directly.
 3. **AGENTS.md's own coverage command does nothing.** `test -- --coverage` passes both args to
    vitest as filename filters: suite runs, no table, exit 0. Drop the `--`.
-4. **On Windows, vitest prints an `EPERM` "failed to terminate forks worker" stack** after a passing
+4. **AGENTS.md's `pnpm --filter @folio/db drizzle-kit check` does not run at all** —
+   `ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT`, because that is not a script name. Use `db:check` above.
+5. **On Windows, vitest prints an `EPERM` "failed to terminate forks worker" stack** after a passing
    run. Read the summary counts, not the stack.
+6. **In Git Bash, `//#lint:root` is mangled into a path** — turbo answers "Could not find package
+   `/`". `pnpm lint` is unaffected; only the `turbo run` form breaks. Prefix
+   `MSYS_NO_PATHCONV=1` when forcing that one task.
 
 ## packages/script — the pure core
 

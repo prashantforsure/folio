@@ -44,7 +44,7 @@ days.
 | Database | Supabase Postgres | Plain Postgres underneath |
 | ORM | Drizzle | Session pooler for the worker, transaction pooler for requests |
 | Migrations | drizzle-kit, forward-only | Owned in the repo |
-| Auth | Supabase Auth, Google OAuth only | `auth.users` is identity; `users`/`memberships` are ours |
+| Auth | Supabase Auth — Google OAuth **and** email + password | `auth.users` is identity; `users`/`memberships` are ours. Confirmation and reset mail goes through Supabase's built-in sender; see Constraints |
 | Tenancy | Project-scoped repositories **plus** RLS as defence in depth | Server uses the service-role key, which bypasses RLS |
 | Storage | Supabase Storage | Signed URLs for everything |
 | Jobs | BullMQ + Redis on a long-running Railway service | |
@@ -79,7 +79,10 @@ silently destroy the product.
 - **Serverless functions as queue consumers.** Jobs are long-running and stateful.
 - **Supabase client libraries for data access in server code.** Drizzle against the Postgres
   connection. The Supabase JS client is for auth and storage only.
-- **An email provider.** See Constraints.
+- **A transactional email provider** (Resend, Postmark, SES). Supabase Auth's built-in SMTP
+  sender covers address confirmation and password reset, and nothing else. Adding a real provider
+  is a dependency decision *and* a product one, because it would make asynchronous notification
+  possible — and notification is cut. See Constraints.
 
 `packages/script` takes **zero** new runtime dependencies without an explicit decision. It must
 run identically in the browser, in server code, in the worker and in tests.
@@ -398,10 +401,39 @@ There is no case where an empty state is optional. A new project is entirely emp
 
 ## Constraints — what this version deliberately does not do
 
-- **No email provider.** Therefore: Google OAuth only, no password accounts, no magic links, no
-  email confirmation. Team invites are **share links** generated in-app and copied by the
-  inviter. **Nothing notifies asynchronously** — no "your export is ready", no "@mentioned you".
-  Job completion is in-app only.
+- **No transactional email provider — but email sign-in exists.** This constraint was rewritten
+  when auth was built; the paragraph it replaced said "No email provider. Therefore: Google OAuth
+  only, no password accounts, no magic links, no email confirmation."
+
+  **What changed.** Auth is Google OAuth **and** email + password. Address confirmation and
+  password reset are real, and both are delivered by **Supabase Auth's own built-in SMTP sender**.
+  That sender is rate limited project-wide — a handful of messages an hour — and Supabase
+  documents it as unsuitable for production. That cost was named and accepted rather than
+  discovered; it is a ruled decision, recorded in
+  [docs/build-decisions.md](docs/build-decisions.md).
+
+  Two consequences of the change, both deliberate. A forgotten password is now recoverable, which
+  under the old constraint it was not — an account was simply lost. And an email address is now
+  *verified*, so it can be treated as an identity, which an unconfirmed address could never be.
+
+  **What did not change.** Nothing here can send an arbitrary message to a user: the built-in
+  sender is reachable only through Supabase's own auth templates, and the app has no way to
+  compose mail. So every downstream constraint still holds, and each is still a rule rather than a
+  missing feature:
+
+  - **Nothing notifies asynchronously.** No "your export is ready", no "@mentioned you", no
+    digest, no reminder, no failure alert.
+  - **Job completion is in-app only.** A long render tells you in the UI, and only there. A closed
+    tab means you find out when you come back.
+  - **Team invites are share links** generated in-app and copied by the inviter. Folio does not
+    send an invitation; a human does, in whatever channel they already use.
+  - **No magic links.** They are passwordless sign-in over email, so they would make the built-in
+    sender load-bearing for *every* sign-in rather than for the rare recovery. One rate-limited
+    hour would lock every email user out.
+
+  Adding a real provider is not a small change: it unlocks the notification surface listed above,
+  and that surface is cut. AGENTS.md, When to ask first applies twice over — it is a dependency
+  and it is a product decision.
 - **No realtime collaboration.** Last-write-wins with a conflict banner. Loro CRDT and
   `apps/sync` are deferred; do not scaffold them.
 - **`/app/filmmaking` is a project list and a creation entry point. Stop there.** It needs an ADR

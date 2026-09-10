@@ -1,0 +1,162 @@
+/*
+ * The palette. Transcribed verbatim from `Route - Script.dc.html`, which
+ * AGENTS.md, Feature workflow 1 makes authoritative wherever two bundles
+ * disagree on chrome. Every value here appears identically in all fourteen
+ * route bundles.
+ *
+ * ## Why three blocks and not two
+ *
+ * AGENTS.md, UI fidelity: "Theme is `dark` by default, via `data-theme`." The
+ * bundles are written the other way round - `:root` carries light and
+ * `[data-theme="dark"]` overrides it - because a mock always renders one theme
+ * and never has to answer what an unmarked element is. We do, so the default
+ * moves into `:root` and the light set becomes an attribute override.
+ *
+ *   :root                    the dark set. An element with no data-theme
+ *                            ancestor is dark, which is the product default.
+ *   [data-theme='light']     declared AFTER :root deliberately. Both selectors
+ *                            have specificity (0,1,0) and both match <html>,
+ *                            so source order is what decides. Moving this block
+ *                            above :root silently disables the light theme.
+ *   [data-theme='dark']      so a dark island can be nested inside a light one.
+ *
+ * That three-block shape is the whole reason Tailwind's `dark:` variant is
+ * banned rather than merely disliked (AGENTS.md, Deliberately not using).
+ * `dark:` is a single global bit. The Script route nests a light sheet inside a
+ * dark page, and the Storyboard nests a dark frame inside a light one; both are
+ * ordinary CSS cascade here and inexpressible there.
+ *
+ * ## The accent is terracotta
+ *
+ * `oklch(0.50 0.17 27)` light, `oklch(0.72 0.14 30)` dark. The design README is
+ * explicit that the violet `oklch(0.52 0.13 285)` in the two superseded shell
+ * bundles is stale. Terracotta against a warm neutral ground is the entire
+ * look; a cool grey substituted for the neutrals, or violet for the accent,
+ * destroys it - which is why eslint bans Tailwind's `gray`/`slate` scales by
+ * name and why `theme.css` deletes the default colour palette outright rather
+ * than leaving it available and disapproved of.
+ *
+ * Hex literals are legal in this directory and nowhere else: eslint.config.mjs
+ * exempts `packages/ui/src/tokens/**` from the hardcoded-hex ban, and that
+ * exemption was declared a phase before this file existed.
+ */
+
+:root {
+  --desk: #151311;
+  --panel: #1c1917;
+  --rail: #181513;
+  --line: rgba(240, 232, 220, 0.13);
+  --line2: rgba(240, 232, 220, 0.07);
+  --ink: #ebe4d8;
+  --ink2: rgba(235, 228, 216, 0.64);
+  --ink3: rgba(235, 228, 216, 0.4);
+  --sheet: #262220;
+  --sheet-ink: #e2dbcf;
+  --sheet-line: rgba(255, 255, 255, 0.11);
+  --sheet-edge: rgba(255, 255, 255, 0.08);
+  --hover: rgba(240, 232, 220, 0.06);
+  --sel: rgba(240, 232, 220, 0.1);
+  --accent: oklch(0.72 0.14 30);
+  --accent-bg: oklch(0.72 0.14 30 / 0.14);
+  --accent-line: oklch(0.72 0.14 30 / 0.4);
+  --accent-ink: #1a1210;
+  --frame-a: oklch(0.3 0.02 50);
+  --frame-b: oklch(0.14 0.01 50);
+  --add: oklch(0.76 0.1 150);
+  --add-bg: oklch(0.76 0.1 150 / 0.13);
+  --del: oklch(0.74 0.12 25);
+  --del-bg: oklch(0.74 0.12 25 / 0.13);
+  --note: oklch(0.78 0.09 75);
+  --note-bg: oklch(0.78 0.09 75 / 0.13);
+  --focus: oklch(0.72 0.14 30);
+  --shadow: none;
+  --grid: rgba(240, 232, 220, 0.18);
+  --slate: #ebe4d8;
+  --slate-ink: #151311;
+}
+
+[data-theme='light'] {
+  --desk: #efe9df;
+  --panel: #f8f4ec;
+  --rail: #f3eee4;
+  --line: rgba(40, 30, 18, 0.16);
+  --line2: rgba(40, 30, 18, 0.08);
+  --ink: #1d1915;
+  --ink2: rgba(29, 25, 21, 0.66);
+  --ink3: rgba(29, 25, 21, 0.44);
+  --sheet: #fffdf8;
+  --sheet-ink: #171310;
+  --sheet-line: rgba(0, 0, 0, 0.12);
+  --sheet-edge: rgba(0, 0, 0, 0.16);
+  --hover: rgba(40, 30, 18, 0.05);
+  --sel: rgba(40, 30, 18, 0.08);
+  --accent: oklch(0.5 0.17 27);
+  --accent-bg: oklch(0.5 0.17 27 / 0.09);
+  --accent-line: oklch(0.5 0.17 27 / 0.36);
+  --accent-ink: #fff;
+  --frame-a: oklch(0.32 0.02 50);
+  --frame-b: oklch(0.16 0.01 50);
+  --add: oklch(0.48 0.1 150);
+  --add-bg: oklch(0.48 0.1 150 / 0.1);
+  --del: oklch(0.5 0.14 25);
+  --del-bg: oklch(0.5 0.14 25 / 0.09);
+  --note: oklch(0.55 0.1 75);
+  --note-bg: oklch(0.55 0.1 75 / 0.11);
+  --focus: oklch(0.5 0.17 27);
+  --shadow: none;
+  --grid: rgba(40, 30, 18, 0.16);
+  --slate: #1d1915;
+  --slate-ink: #efe9df;
+}
+
+[data-theme='dark'] {
+  --desk: #151311;
+  --panel: #1c1917;
+  --rail: #181513;
+  --line: rgba(240, 232, 220, 0.13);
+  --line2: rgba(240, 232, 220, 0.07);
+  --ink: #ebe4d8;
+  --ink2: rgba(235, 228, 216, 0.64);
+  --ink3: rgba(235, 228, 216, 0.4);
+  --sheet: #262220;
+  --sheet-ink: #e2dbcf;
+  --sheet-line: rgba(255, 255, 255, 0.11);
+  --sheet-edge: rgba(255, 255, 255, 0.08);
+  --hover: rgba(240, 232, 220, 0.06);
+  --sel: rgba(240, 232, 220, 0.1);
+  --accent: oklch(0.72 0.14 30);
+  --accent-bg: oklch(0.72 0.14 30 / 0.14);
+  --accent-line: oklch(0.72 0.14 30 / 0.4);
+  --accent-ink: #1a1210;
+  --frame-a: oklch(0.3 0.02 50);
+  --frame-b: oklch(0.14 0.01 50);
+  --add: oklch(0.76 0.1 150);
+  --add-bg: oklch(0.76 0.1 150 / 0.13);
+  --del: oklch(0.74 0.12 25);
+  --del-bg: oklch(0.74 0.12 25 / 0.13);
+  --note: oklch(0.78 0.09 75);
+  --note-bg: oklch(0.78 0.09 75 / 0.13);
+  --focus: oklch(0.72 0.14 30);
+  --shadow: none;
+  --grid: rgba(240, 232, 220, 0.18);
+  --slate: #ebe4d8;
+  --slate-ink: #151311;
+}
+
+/*
+ * Invented tokens. Everything above this line is transcribed from a bundle;
+ * everything below it is not, and is listed here so a reviewer can find the
+ * guesses in one place.
+ *
+ * `--avatar-bg` / `--avatar-ink` are the round user chip in the rail. The
+ * bundles draw it with `background: oklch(0.55 0.10 300); color: #fff` written
+ * inline in the markup rather than as a token, and draw two different hues
+ * across two files with nothing saying how a hue is chosen. One invariant pair
+ * is the smallest honest reading: it is an identity mark, not a palette colour,
+ * so it does not move with the theme. If per-user hues were intended, this is
+ * the token that becomes a function.
+ */
+:root {
+  --avatar-bg: oklch(0.55 0.1 300);
+  --avatar-ink: #fff;
+}

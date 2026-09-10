@@ -1,0 +1,123 @@
+/*
+ * The Tailwind bridge.
+ *
+ * AGENTS.md, Tech stack: "Tailwind + CSS variables. Tokens as variables;
+ * theming via `data-theme`." This file is the join between those two halves: it
+ * republishes the custom properties in `palette.css` and `type.css` as Tailwind
+ * v4 theme keys, so `bg-desk`, `text-ink2`, `border-line` and `text-11-5` exist
+ * as utilities and resolve through the same variables the cascade is already
+ * switching.
+ *
+ * ## Why `@theme inline`
+ *
+ * Without `inline`, Tailwind resolves a theme key to its *value* at build time
+ * and emits that value into the utility - which would bake the dark palette
+ * into `bg-desk` and leave `[data-theme='light']` with nothing to override.
+ * `inline` emits `background-color: var(--desk)` instead, so the utility is a
+ * pointer and the cascade still decides. Dropping the keyword is a silent
+ * break: every colour utility keeps working and the light theme stops.
+ *
+ * ## The `initial` resets are the real content of this file
+ *
+ * `--color-*: initial` deletes Tailwind's entire default colour palette before
+ * ours is defined. That is not tidiness. AGENTS.md, Deliberately not using:
+ * "Tailwind's default `gray` or `slate`. Cool-toned. The palette is warm
+ * neutral with a terracotta accent, and substituting will destroy the look."
+ * eslint bans those two scales by name, but a ban catches a habit only after
+ * someone has already written the class. Deleting the namespace means
+ * `bg-slate-800` is not a banned utility, it is not a utility - it emits
+ * nothing and the element renders unstyled, which is noticed immediately.
+ *
+ * The same reset runs on `--font-*`, `--text-*` and `--radius-*`, for the same
+ * reason: Tailwind's 14px/16px defaults and 0.25rem radius scale are a
+ * different design system, and the README is explicit that the density is
+ * deliberate and must not drift to "a 14/16px web default".
+ *
+ * **Revision colours are deliberately absent from this file.** See
+ * `revision.css`: minting `bg-rev-pink` is what turns an industry artefact into
+ * a decorative accent someone reaches for because it is nearby.
+ */
+
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+}
+
+@theme inline {
+  --color-desk: var(--desk);
+  --color-panel: var(--panel);
+  --color-rail: var(--rail);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink2);
+  --color-ink3: var(--ink3);
+  --color-sheet: var(--sheet);
+  --color-sheet-ink: var(--sheet-ink);
+  --color-sheet-line: var(--sheet-line);
+  --color-sheet-edge: var(--sheet-edge);
+  --color-hover: var(--hover);
+  --color-sel: var(--sel);
+  --color-accent: var(--accent);
+  --color-accent-bg: var(--accent-bg);
+  --color-accent-line: var(--accent-line);
+  --color-accent-ink: var(--accent-ink);
+  --color-frame-a: var(--frame-a);
+  --color-frame-b: var(--frame-b);
+  --color-add: var(--add);
+  --color-add-bg: var(--add-bg);
+  --color-del: var(--del);
+  --color-del-bg: var(--del-bg);
+  --color-note: var(--note);
+  --color-note-bg: var(--note-bg);
+  --color-focus: var(--focus);
+  --color-grid: var(--grid);
+  --color-slate: var(--slate);
+  --color-slate-ink: var(--slate-ink);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
+  --font-glyph: var(--font-glyph);
+
+  --tracking-title: var(--tracking-title);
+  --tracking-label: var(--tracking-label);
+  --tracking-rail: var(--tracking-rail);
+}
+
+/*
+ * The scale, in px because the bundles are in px and half-pixel steps do not
+ * survive a rem conversion at an arbitrary root size. Line heights are left
+ * to the utility that sets them; the bundles set `line-height:1` on glyphs and
+ * labels and leave prose to the default.
+ */
+@theme {
+  --text-8: 8px;
+  --text-9: 9px;
+  --text-9-5: 9.5px;
+  --text-10: 10px;
+  --text-10-5: 10.5px;
+  --text-11: 11px;
+  --text-11-5: 11.5px;
+  --text-12: 12px;
+  --text-12-5: 12.5px;
+  --text-13: 13px;
+  --text-14: 14px;
+  --text-15: 15px;
+  --text-21: 21px;
+
+  /*
+   * "Radii are flat and small" - 3px almost everywhere, 2px for the sheet and
+   * progress bars, 1px for the rail's active bar. The 5/6/7/8/9-10/12px scale
+   * belongs to the superseded shell; the one 7px survivor is Research's toggle.
+   */
+  --radius-bar: 1px;
+  --radius-sheet: 2px;
+  --radius-chrome: 3px;
+  --radius-toggle: 7px;
+  --radius-full: 9999px;
+}

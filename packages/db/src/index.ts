@@ -18,10 +18,17 @@
  *
  * ## What is exported and what is not
  *
- * `serverEnv` and `publicEnv` are **not** here. They live behind
- * `@folio/db/env`, so importing this package for a table definition cannot drag
- * the Supabase service-role key into a bundle. AGENTS.md, Tenancy: "The
- * service-role key must never reach the browser."
+ * `serverEnv` is **not** here. It lives behind `@folio/db/env`, so importing
+ * this package for a table definition cannot drag the Supabase service-role key
+ * into a bundle. AGENTS.md, Tenancy: "The service-role key must never reach the
+ * browser." `apps/web/scripts/assert-no-server-secrets.mjs` fails the build if
+ * one ever does.
+ *
+ * The two public `NEXT_PUBLIC_SUPABASE_*` values used to sit beside it and no
+ * longer do - they are in `apps/web/lib/env/public.ts`. `@folio/db/env` throws
+ * at module scope when imported in a browser, which is correct for a file
+ * holding the service-role key and fatal for one holding a value the browser
+ * needs. The split is now physical rather than conventional.
  *
  * `makeScope`, the `handle` symbol and `dbOf` are not here either. The package
  * boundary is the enforcement boundary - the same boundary AGENTS.md draws when

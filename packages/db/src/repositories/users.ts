@@ -47,10 +47,19 @@ export const readUser = async (db: FolioDatabase, id: UserId): Promise<User | nu
 /**
  * Create or refresh our profile row for a Supabase auth user.
  *
- * `id` is the `auth.users` id - one person, one id. AGENTS.md, Constraints
- * leaves us with Google OAuth only and no email provider, so the display name
- * and avatar come from the OAuth claims and are refreshed on each sign-in
- * rather than being editable in a settings page that does not exist.
+ * `id` is the `auth.users` id - one person, one id.
+ *
+ * The display name and avatar are refreshed on every sign-in rather than being
+ * editable, because there is no settings page yet. For a Google account they
+ * come from the OAuth claims. For an email + password account there are no
+ * claims at all - `auth.users` carries an address and nothing else - so the
+ * caller derives a provisional name from the address; see
+ * `apps/web/lib/auth/identity.ts`, which is where that product decision is
+ * written down and can be argued with.
+ *
+ * (AGENTS.md, Constraints said "Google OAuth only" when this was written. It
+ * was rewritten when auth was built: email + password exists, with confirmation
+ * and reset through Supabase's built-in sender.)
  */
 export const upsertUser = async (
   db: FolioDatabase,

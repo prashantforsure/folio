@@ -252,3 +252,75 @@ transfer — is unanswered.
 policies, which check membership only. AGENTS.md, Development philosophy 5 puts
 enforcement in the server action, and there are no server actions yet — so the
 column is a placeholder for a capability model nobody has specified.
+
+## Auth phase: email sign-in, and what it cost
+
+**Ruled by the client, not inferred.** AGENTS.md's Constraints section said "No email provider.
+Therefore: Google OAuth only, no password accounts, no magic links, no email confirmation." The
+client overrode it and asked for Google OAuth **and** email login.
+
+The question put back before anything was built was which of three email logins was meant, because
+without a provider they are three different products:
+
+| Option | What it costs |
+| --- | --- |
+| Password, **no** confirmation and **no** reset | Zero email, zero dependency. A forgotten password is a permanently dead account; an unverified address is not an identity, so anyone can register somebody else's, and email cannot be used for invites or dedupe |
+| Magic links | Do not function at all without transactional email. Not a deviation from the constraint — a reversal of it: a provider, an API key, custom SMTP, and a deliverability surface to own |
+| **Supabase's built-in SMTP** ← chosen | No dependency, works today. Rate limited project-wide to a handful of messages an hour, from Supabase's own address, with poor deliverability, and documented by Supabase as unsuitable for production. It degrades **silently** — the symptom is "the link never arrived" |
+
+### What was built
+
+Google OAuth, plus email + password with address confirmation and password reset, both delivered by
+the built-in sender. Magic links were **not** built: they would make the rate-limited sender
+load-bearing for every sign-in rather than for the rare recovery, so one throttled hour would lock
+out every email user.
+
+### Where the cost is visible
+
+Not buried. `apps/web/lib/auth/actions.ts` detects the rate limit and says what it is — that Folio
+sends through Supabase's built-in email, that it is rate limited, and to wait an hour or use
+Google. "Please try again" is wrong advice for a limit measured in hours. The sign-up and
+forgot-password pages say the mail is slow *before* the form is filled in, rather than after it is
+submitted.
+
+### What this does not change
+
+Everything downstream of "no email provider" still holds, and AGENTS.md, Constraints now says so
+explicitly: no asynchronous notification of any kind, job completion in-app only, team invites as
+share links copied by the inviter. The built-in sender is reachable only through Supabase's own
+auth templates; the application has no way to compose a message.
+
+### The unresolved part
+
+**Nobody has decided what happens at production scale.** The rate limit is not a development
+inconvenience that disappears on deploy — it is the same limit in production, and it is reached by
+a few dozen sign-ups an hour. The options are a real provider through Supabase's custom SMTP
+setting (a dependency decision *and* a product one, because it unlocks the notification surface
+that is cut), or accepting that email sign-up is throttled. This needs a human before launch, not
+before the next phase.
+
+## Auth phase: `pageMode` and `liveRepaginate` still have no home
+
+AGENTS.md's exception table puts them **per project**, which is a database row shared with
+collaborators. The schema phase did not create one, and this phase did not either — a migration is
+a question (AGENTS.md, When to ask first).
+
+The trap is that the schema *looks* like it has a home. `measurements.page_mode` and
+`measurements.live_repaginate` exist, and they are a different thing wearing the same name: a
+measurement is the **output** of `paginate()` for one document under one format under one mode, and
+`page_mode` is part of `measurements_document_format_mode_key`. A project with two measurements has
+two values and no rule for which wins; a project that has never been paginated has none.
+
+So the next person to wire the toggle will find the column, use it, and ship something that works in
+development — where there is one measurement — and reverts to the wrong mode in production the
+first time a project is measured at a second format.
+
+`apps/web/lib/state/project-preferences.ts` is where this is written down, next to the types, with
+the three design questions underneath it: whether the row is a `project_preferences` table or two
+columns on `projects`; whether it is really per project or per project per episode (AGENTS.md says
+project, the Script bundle draws the control inside an episode); and who may change a setting that
+is shared with collaborators, given that `memberships.role` is stored and read by nothing.
+
+**Do not solve it with a Zustand field or a localStorage key.** Either makes the setting
+per-person, and two writers on one script then disagree about how many pages it is.
+

@@ -1,0 +1,226 @@
+/*
+ * The three families, self-hosted. No CDN, no `next/font/google`.
+ *
+ * AGENTS.md, Tech stack: "Self-hosted Instrument Sans, Newsreader, Courier
+ * Prime. Courier Prime version-pinned." The design bundles link
+ * `fonts.googleapis.com` in their `<helmet>`; that is a mock convenience and is
+ * not carried over. The files live in `apps/web/public/fonts/` and are served
+ * from this origin, so there is no third-party request on first paint, nothing
+ * to fail closed when a CDN is blocked, and nothing that can change under us.
+ *
+ * ## COURIER PRIME IS PINNED AT v11. DO NOT UPGRADE IT CASUALLY.
+ *
+ * `courier-prime-*.woff2` were taken from Google Fonts' `v11` of the family and
+ * the version is part of the filename provenance recorded below. Courier Prime
+ * is the script sheet's face, and the sheet is measured, not merely styled:
+ * `packages/script/src/paginate.ts` produces a measurement record whose page
+ * map is checked against committed golden files
+ * (`packages/script/src/testing/golden/`), and AGENTS.md, Export requires that
+ * "Export must agree with on-screen pagination exactly."
+ *
+ * Today the engine is arithmetic over a monospace advance and reads no font
+ * table (`measure.ts`), so a metric change would not move the golden files -
+ * it would do something worse, and quietly: the page map would keep saying 104
+ * and the rendered sheet would stop agreeing with it. A new release that
+ * adjusts the advance width, the cap height or the line gap breaks the one
+ * guarantee the product is built on.
+ *
+ * Upgrading is a deliberate change with its own commit: swap the files,
+ * re-run `golden-page-map.test.ts`, and look at a rendered page beside the old
+ * one. It is not a dependency bump.
+ *
+ * Instrument Sans (v4) and Newsreader (v26) are chrome. They are pinned by
+ * being committed files rather than by anything load-bearing.
+ *
+ * ## What these files do NOT contain
+ *
+ * `latin` and `latin-ext` only. Two consequences, both real:
+ *
+ *   - **None of AGENTS.md's eighteen glyphs are here.** Every one is U+21C4 or
+ *     above and the ranges below stop well short. They render from a system
+ *     symbol font; `--font-glyph` in `@folio/ui` names which, and `glyph.tsx`
+ *     forces the three with emoji forms back to text.
+ *   - **No Devanagari.** AGENTS.md's worked example is a Hindi cue - `मीरा` and
+ *     `MEERA` as one character - so a script sheet will eventually render
+ *     Devanagari in a monospace context and Courier Prime has none. That is not
+ *     this phase's problem, but it is a fourth family and therefore a decision,
+ *     so it is written down here rather than discovered at the sheet.
+ *
+ * Regenerating: the files were fetched once from the `css2` endpoint with a
+ * modern UA and are committed. There is no download step in any build.
+ */
+
+/* Instrument Sans · latin · normal 400 700 · 30092 bytes */
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/instrument-sans-400-700-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Instrument Sans · latin-ext · normal 400 700 · 11144 bytes */
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/instrument-sans-400-700-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* Newsreader · latin · italic 400 600 · 146872 bytes */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/newsreader-400-600-italic-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Newsreader · latin-ext · italic 400 600 · 95540 bytes */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/newsreader-400-600-italic-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* Newsreader · latin · normal 400 600 · 132000 bytes */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/newsreader-400-600-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Newsreader · latin-ext · normal 400 600 · 86608 bytes */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/newsreader-400-600-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* Courier Prime · latin · italic 400 · 21556 bytes */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/courier-prime-400-italic-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Courier Prime · latin-ext · italic 400 · 14000 bytes */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/courier-prime-400-italic-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* Courier Prime · latin · italic 700 · 21980 bytes */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/courier-prime-700-italic-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Courier Prime · latin-ext · italic 700 · 14036 bytes */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/courier-prime-700-italic-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* Courier Prime · latin · normal 400 · 18640 bytes */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/courier-prime-400-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Courier Prime · latin-ext · normal 400 · 12736 bytes */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/courier-prime-400-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* Courier Prime · latin · normal 700 · 19348 bytes */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/courier-prime-700-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Courier Prime · latin-ext · normal 700 · 12928 bytes */
+@font-face {
+  font-family: 'Courier Prime';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/courier-prime-700-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}

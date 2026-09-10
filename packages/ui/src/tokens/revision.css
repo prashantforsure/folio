@@ -1,0 +1,67 @@
+/*
+ * Revision colours. A separate layer from the palette, on purpose.
+ *
+ * AGENTS.md, UI fidelity: "Revision colours (White -> Blue -> Pink -> Yellow ->
+ * Green) are industry artefacts, not palette tokens, and must survive a theme
+ * switch intact."
+ *
+ * They are the colour of paper. When a production issues Pink pages, the pages
+ * are pink, in the room, on a table, and the colour is how a first AD knows
+ * which draft an actor is holding. Nothing about a user's display preference
+ * changes that. A pink that turns salmon in dark mode is not a styling
+ * infelicity, it is a wrong page.
+ *
+ * ## The mechanism, so it cannot quietly become a palette token
+ *
+ * This file declares `--rev-*` **once, on `:root`, and never again**. There is
+ * no `[data-theme='light']` block here and there must never be one. That is the
+ * whole enforcement: a theme block cannot override a variable it does not
+ * mention, so the values survive a theme switch by construction rather than by
+ * anyone remembering. `revision.test.ts` next to this directory asserts the
+ * absence, so adding one fails a test rather than shipping.
+ *
+ * They are also kept out of `theme.css`'s Tailwind bridge. A `--color-*` entry
+ * would mint `bg-rev-pink`, and a utility class is exactly the affordance that
+ * invites someone to reach for a revision colour as a decorative accent.
+ * Reaching one is deliberate: `var(--rev-pink)`, or the `RevisionSwatch`
+ * component, and nothing shorter.
+ *
+ * ## Provenance of the values
+ *
+ * Blue, Pink, Yellow and Green are transcribed verbatim from
+ * `Route - Revisions.dc.html`, the one bundle that draws them - and note that
+ * the bundle already declares them only in `:root` and omits them from its own
+ * dark block, which is the same guarantee arrived at independently.
+ *
+ * **White is invented and is a deliberate departure from that bundle.** The
+ * bundle renders Draft 1 with `color: var(--ink3)` - a palette token, which
+ * inverts with the theme. Under AGENTS.md that is a bug: White is the first
+ * revision and the most common state a script is ever in, so it is the one
+ * colour that must not move. `--rev-white` is a near-paper neutral chosen to
+ * sit at the same visual weight as the other four, and, like them, it is
+ * declared once.
+ *
+ * `--rev-ring` is also invented, and it is chrome rather than colour: a hairline
+ * drawn INSET, over the swatch's own fill, so a White chip is visible against
+ * the light `--panel` ground. Because it is inset it never touches the page, so
+ * it is theme-invariant too and one value works on all five.
+ *
+ * `--rev-ink` is the text colour for a label printed on a swatch. All five
+ * fills are light, so it is dark in both themes - again invariant, again for
+ * the same reason.
+ */
+
+:root {
+  /* Verbatim from Route - Revisions.dc.html. */
+  --rev-blue: oklch(0.62 0.1 240);
+  --rev-pink: oklch(0.7 0.12 350);
+  --rev-yellow: oklch(0.8 0.12 90);
+  --rev-green: oklch(0.66 0.11 150);
+
+  /* Invented. See the header: the bundle's `var(--ink3)` is theme-dependent. */
+  --rev-white: oklch(0.97 0 0);
+
+  /* Invented. Chrome, not colour - drawn inset over the fill. */
+  --rev-ring: rgba(24, 18, 10, 0.28);
+  --rev-ink: oklch(0.24 0.01 60);
+}
