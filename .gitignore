@@ -1,0 +1,17 @@
+node_modules/
+.pnpm-store/
+dist/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
