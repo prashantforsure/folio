@@ -31,8 +31,13 @@
  * new records take theirs from `freshIds` and `countDerivationIds` says how many
  * before any is spent.
  *
- * Not here, and not blocked on anything, just later: pagination and FDX
- * *export*.
+ * Pagination is `paginate` - one pure function from a node list and a format to
+ * a **measurement record**, never to a node. `format` is an engine input, so
+ * `resolveSheet` is where a format becomes geometry, and `format: 'asian'`
+ * refuses: AGENTS.md open decision 8, the A4 sheet width, is unruled and the
+ * engine will not guess it.
+ *
+ * Not here, and not blocked on anything, just later: FDX *export*.
  *
  * Constraints this package is under (AGENTS.md):
  *   - No React, no database, no fetch, no process.env, no Date.now(),
@@ -250,3 +255,74 @@ export {
   splitContent,
   splitNode,
 } from './operations'
+
+export type {
+  ElementMetric,
+  ElementMetrics,
+  ScriptFormat,
+  SheetSpec,
+  SheetWidthEvidence,
+  UnresolvedSheet,
+} from './sheet'
+export {
+  ASIAN_SHEET_WIDTH_EVIDENCE,
+  CHAR_WIDTH_PX,
+  COURIER_ADVANCE_EM,
+  DPI,
+  LINES_PER_INCH,
+  SCRIPT_FORMATS,
+  TYPE_SIZE_PT,
+  isScriptFormat,
+  resolveSheet,
+} from './sheet'
+
+export type { LabelBook, MentionLabel, RenderedText, UnresolvedMention } from './measure'
+export { NO_LABELS, UNRESOLVED_MENTION_WIDTH, labelBook, lineCount, renderedText, wrapText } from './measure'
+
+export type {
+  LockIssue,
+  LockedPage,
+  NumberedPage,
+  PageNumbering,
+  RevisionColour,
+  RevisionSequenceExhausted,
+} from './revision'
+export {
+  FIRST_REVISION_COLOUR,
+  REVISION_COLOURS,
+  isRevisionColour,
+  nextRevisionColour,
+  numberPages,
+  suffixLetters,
+} from './revision'
+
+export type {
+  BreakRule,
+  MeasuredPage,
+  MeasurementRecord,
+  NodeMeasurement,
+  PageArtefact,
+  PageBreak,
+  PageMode,
+  PaginationError,
+  PaginationOptions,
+  PaginationTotals,
+  PlacedRun,
+  SceneMeasurement,
+} from './paginate'
+export {
+  BREAK_RULES,
+  EIGHTHS_PER_PAGE,
+  MIN_ACTION_LINES_EACH_SIDE,
+  MIN_DIALOGUE_LINES_AFTER_BREAK,
+  MIN_DIALOGUE_LINES_BEFORE_BREAK,
+  PAGE_MODES,
+  artefactsOf,
+  eighthsOf,
+  formatEighths,
+  isPageMode,
+  paginate,
+  tallyBreaks,
+} from './paginate'
+
+export { CONTINUED_TEXT, MORE_TEXT, writeContinuedCue } from './generated-text'

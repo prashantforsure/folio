@@ -7,6 +7,7 @@ import type { InlineContent } from './inline'
 import type { CommentNode, DialogueNode, SceneNode, ScreenplayNode } from './node'
 import type { OutlineNode, RuleNode } from './outline'
 import type { Provenance } from './provenance'
+import type { NodeMeasurement } from './paginate'
 import type { RenderableNode } from './stream'
 import { typed } from './provenance'
 
@@ -116,6 +117,37 @@ export const agentWithoutRun: Provenance = { source: 'agent' }
 
 // @ts-expect-error there is no third provenance source
 export const importedProvenance: Provenance = { source: 'imported' }
+
+// ---------------------------------------------------------------------------
+// The measurement record holds ids, never nodes
+// ---------------------------------------------------------------------------
+
+/**
+ * The pagination engine's output cannot be spread back onto a node.
+ *
+ * `NodeMeasurement` is the record's per-node row. It has an id, a type, its
+ * runs and its line count - and no member a node would accept as a page. This
+ * is the structural half of "if this engine can write a page attribute, it has
+ * failed": the type it returns has nothing to write.
+ */
+export const measurementIsNotANode = (measured: NodeMeasurement): SceneNode => ({
+  type: 'scene',
+  ...base,
+  // @ts-expect-error a measurement's page cannot be spread onto a node
+  page: measured.runs[0]?.page,
+})
+
+export const measurementCarriesNoContent = (measured: NodeMeasurement): NodeId => {
+  // @ts-expect-error a measurement has no content to reach for
+  const _content: InlineContent = measured.content
+  return measured.id
+}
+
+/** A comment is not renderable, so the engine cannot be handed one to place. */
+export const commentIsNotPlaceable = (comment: CommentNode): RenderableNode => {
+  // @ts-expect-error a comment node has no place in the renderable stream
+  return comment
+}
 
 // ---------------------------------------------------------------------------
 // Ids are branded, so the join key cannot be crossed with another id space

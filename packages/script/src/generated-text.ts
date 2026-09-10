@@ -305,3 +305,39 @@ export const stripGeneratedFromLine = (line: string): StrippedLine => {
  */
 export const writeCue = (name: string, modifiers: readonly DeliveryModifier[]): string =>
   modifiers.length === 0 ? name : `${name} ${modifiers.map((m) => `(${m})`).join(' ')}`
+
+// ---------------------------------------------------------------------------
+// The layout artefacts, written at render and nowhere else
+// ---------------------------------------------------------------------------
+
+/**
+ * The two strings the paginator draws at a page split.
+ *
+ * They live here, beside the recognisers that strip them on import, because
+ * this module is the one place that tells generated text from authored text.
+ * Written anywhere else they would be a second spelling, and the file that
+ * breaks the round trip is the one where the writer and the reader disagree
+ * about an apostrophe.
+ *
+ * Nothing in this file can put either of them on a node. `paginate.ts` receives
+ * them as page artefacts on the measurement record - AGENTS.md, exception table
+ * "Generated text is never in the node stream - except": `(MORE)` and
+ * `(CONT'D)` at a split are layout artefacts, computed at render.
+ */
+export const MORE_TEXT = '(MORE)'
+
+export const CONTINUED_TEXT = "(CONT'D)"
+
+/**
+ * The cue as it is redrawn at the top of a continuation page.
+ *
+ * Authored modifiers stay - a speech that was `MEERA (V.O.)` is still `(V.O.)`
+ * after the break - and the continued is appended, in that order.
+ * `readCue(writeContinuedCue(name, modifiers))` returns the name and the
+ * modifiers and reports the continued as an artefact, which is asserted in
+ * `generated-text.test.ts`.
+ */
+export const writeContinuedCue = (
+  name: string,
+  modifiers: readonly DeliveryModifier[],
+): string => `${writeCue(name, modifiers)} ${CONTINUED_TEXT}`

@@ -2,11 +2,14 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
 import {
+  CONTINUED_TEXT,
+  MORE_TEXT,
   carriesGeneratedText,
   isContinuedLine,
   isMoreLine,
   readCue,
   stripGeneratedFromLine,
+  writeContinuedCue,
   writeCue,
 } from './generated-text'
 import { DELIVERY_MODIFIERS } from './node'
@@ -195,6 +198,43 @@ describe('properties', () => {
           expect(twice.text).toBe(once.text)
         },
       ),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Writing the artefacts back out, at render
+// ---------------------------------------------------------------------------
+
+describe('the layout artefacts the paginator draws', () => {
+  it('spells them the way the recognisers in this file read them', () => {
+    expect(isMoreLine(MORE_TEXT)).toBe(true)
+    expect(isContinuedLine(CONTINUED_TEXT)).toBe(true)
+  })
+
+  it('appends the continued after the authored modifiers, not before', () => {
+    expect(writeContinuedCue('MEERA', [])).toBe("MEERA (CONT'D)")
+    expect(writeContinuedCue('MEERA', ['V.O.'])).toBe("MEERA (V.O.) (CONT'D)")
+  })
+
+  /**
+   * The round trip that stops the doubling bug at the render end: a
+   * continuation cue drawn by the paginator, read back by the importer, gives
+   * the name and the authored modifiers and reports the continued as generated.
+   */
+  it('reads back as a name, its modifiers and a stripped continued', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom('MEERA', 'ARJUN', 'THE LANDLORD', 'INSPECTOR RAO'),
+        fc.uniqueArray(fc.constantFrom(...DELIVERY_MODIFIERS), { maxLength: 2 }),
+        (name, modifiers) => {
+          const reading = readCue(writeContinuedCue(name, modifiers))
+          expect(reading.name).toBe(name)
+          expect(reading.modifiers).toEqual(modifiers)
+          expect(reading.artefacts.map((entry) => entry.kind)).toEqual(['cont-d'])
+        },
+      ),
+      { numRuns: 40 },
     )
   })
 })
