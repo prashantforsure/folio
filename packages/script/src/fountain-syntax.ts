@@ -170,18 +170,39 @@ export type HeadingClass =
  * `INTERCUT` lines silently demoted to action is a thing the writer needs to
  * know about.
  */
+/**
+ * A heading split into the prefix that made it one and the set text after it.
+ *
+ * `null` for a line that is not heading-shaped at all. Exported because
+ * derivation needs the two halves and this file's rule is that no recogniser is
+ * written twice: a second `INT\.?\/EXT|I\/E|...` regex in `slugline.ts` is
+ * exactly the drift this module exists to prevent. `classifyHeading` is the
+ * judgement; this is the same split without one.
+ */
+export type HeadingParts = {
+  readonly prefix: string
+  /** May be empty - that is the `no-set` rejection, and it is not decided here. */
+  readonly set: string
+}
+
+export const headingParts = (line: string): HeadingParts | null => {
+  const trimmed = line.trim()
+  const match = SCENE_PREFIX.exec(trimmed)
+  if (match === null) return null
+  const prefix = match[0]
+  return { prefix, set: trimmed.slice(prefix.length).replace(/^[.\s\-–—]+/u, '').trim() }
+}
+
 export const classifyHeading = (line: string): HeadingClass => {
   const trimmed = line.trim()
   if (trimmed === '') return { kind: 'none' }
-  const match = SCENE_PREFIX.exec(trimmed)
-  if (match === null) {
+  const parts = headingParts(trimmed)
+  if (parts === null) {
     const near = NEAR_SCENE_PREFIX.exec(trimmed)
     if (near === null) return { kind: 'none' }
     return { kind: 'rejected', reason: { kind: 'prefix-not-a-word', looksLike: near[0] } }
   }
-  const prefix = match[0]
-  const set = trimmed.slice(prefix.length).replace(/^[.\s\-–—]+/u, '').trim()
-  if (set === '') return { kind: 'rejected', reason: { kind: 'no-set', prefix } }
+  if (parts.set === '') return { kind: 'rejected', reason: { kind: 'no-set', prefix: parts.prefix } }
   return { kind: 'heading' }
 }
 

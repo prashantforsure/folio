@@ -14,14 +14,20 @@ bugs here will be some other surface quietly becoming authoritative.
 
 ## Repository state
 
-Phase 1 is done: the workspace, the lint contract, and the node model plus seven operations in
-`packages/script` (87 tests). [@folio/contracts](packages/contracts/src/index.ts),
+Phases 1–3 are done: the workspace, the lint contract, the node model plus seven operations, and
+script interchange — Fountain both ways, FDX import — all in `packages/script` (265 tests).
+[@folio/contracts](packages/contracts/src/index.ts),
 [@folio/db](packages/db/src/index.ts), [@folio/ui](packages/ui/src/index.ts) and
 [worker](apps/worker/src/index.ts) each export one `PACKAGE_NAME` and nothing else — empty on
 purpose, each header says why. [apps/web](apps/web/app/page.tsx) is a placeholder page so
 `next build` has a route. No migration, no design token, no route yet.
 
-Unwritten and unblocked: the parser, the serialiser, derivation, pagination, Fountain.
+`importFinalDraft` takes an **already-parsed XML tree**, not a string, so the mapping stays pure and
+the caller owns the XML parse — [fdx.ts](packages/script/src/fdx.ts) names the exact
+`fast-xml-parser` options it expects. That dependency is unapproved and in no `package.json`, so
+nothing can call FDX import yet.
+
+Unwritten and unblocked: derivation, pagination, FDX export.
 
 Do not create `apps/sync/`.
 

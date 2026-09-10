@@ -24,8 +24,15 @@
  * Fountain, so there is one implementation of the `(V.O.)`-versus-`(CONT'D)`
  * rule and not two.
  *
- * Not here, and not blocked on anything, just later: derivation, pagination and
- * FDX *export*.
+ * Derivation is `derive` - one function, one implementation, which is what makes
+ * the speculative pass trustworthy. It takes the previously derived entities and
+ * reconciles rather than rebuilding, so authored data hanging off a derived row
+ * survives a re-derive; and like everything else here it cannot mint an id, so
+ * new records take theirs from `freshIds` and `countDerivationIds` says how many
+ * before any is spent.
+ *
+ * Not here, and not blocked on anything, just later: pagination and FDX
+ * *export*.
  *
  * Constraints this package is under (AGENTS.md):
  *   - No React, no database, no fetch, no process.env, no Date.now(),
@@ -174,6 +181,63 @@ export {
   fdxNode,
   importFinalDraft,
 } from './fdx'
+
+export type {
+  AuthoredNotes,
+  AuthoredValue,
+  CharacterAuthored,
+  CharacterRecord,
+  CharacterRelationship,
+  Confidence,
+  CueTally,
+  DerivedEntities,
+  InteriorExterior,
+  Light,
+  LocationAuthored,
+  LocationCounts,
+  LocationRecord,
+  Presence,
+  Proposal,
+  ProposalDecision,
+  ProposalTarget,
+  ResolveRow,
+  ResolveRowState,
+  ResolveSubject,
+  SceneAuthored,
+  SceneRecord,
+  SluglineReading,
+  SluglineTally,
+} from './entities'
+export {
+  CONFIDENCES,
+  INTERIOR_EXTERIOR,
+  LIGHT_STATES,
+  NO_COUNTS,
+  NO_ENTITIES,
+  PRESENCE_STATES,
+  RESOLVE_ROW_STATES,
+  resolveRowKey,
+} from './entities'
+
+export type { SluglineRejection } from './slugline'
+export { readSlugline } from './slugline'
+
+export { canonicalKey } from './alias'
+
+export type {
+  AmbiguousBinding,
+  BrokenLocationEdge,
+  DanglingMention,
+  DeriveError,
+  DeriveOptions,
+  Derivation,
+  MintedRecord,
+  RejectedSceneHeading,
+} from './derive'
+export { countDerivationIds, derive } from './derive'
+
+export type { HeadingParts } from './fountain-syntax'
+export { headingParts } from './fountain-syntax'
 
 export type { Clipboard } from './operations'
 export {
