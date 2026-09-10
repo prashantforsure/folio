@@ -2,22 +2,25 @@
  * Identifiers.
  *
  * Every id in the model is a branded string. The brand is a type-level tag
- * only - it carries no format, no prefix, no length and no validation, because
- * **the id format has not been ruled on**.
+ * only - it carries no format, no prefix, no length and no validation, and that
+ * is now a decision rather than a gap.
  *
- * Two open questions block it, and both are escalated in
- * `docs/adr/0001-node-identity.md`:
+ * The id *shape* was ruled in `docs/adr/0001-node-identity.md` (see "Ruling"):
+ * a node id is opaque, globally unique and carries no type prefix - a prefix
+ * would have to change when a Scene is retyped to Action, and AGENTS.md says
+ * the id survives a type change. `SCENE_xxx` in the route spec is the *derived
+ * scene record's* id, a different id space that never reaches this file.
  *
- *   - AGENTS.md open decision 1: which node id survives a split, and what
- *     happens on merge and paste. That is the id's *lifecycle*.
- *   - AGENTS.md, Conventions > Naming: "scene ids appear as `SCENE_xxx` in the
- *     route spec - the casing is inconsistent with `ep_NNN` and needs one
- *     ruling before either is codified." That is the id's *shape*.
+ * The ruling also says the format is codified where ids are **minted** -
+ * `packages/db` and `packages/contracts` - and not here. This package has no
+ * entropy by design and cannot mint one, so a validating reader here would
+ * couple the deterministic core to a decision it takes no part in. The only
+ * thing asserted about an id anywhere in this package remains that it is a
+ * non-empty string.
  *
- * So the constructors below brand and nothing else. When the shape is ruled on,
- * a validating reader belongs here and `readScreenplayNode` should call it.
- * Until then the only thing asserted about an id anywhere in this package is
- * that it is a non-empty string - true under every candidate ruling.
+ * That ruling was delegated to the implementer, twice, and the ADR records it
+ * as reversible. AGENTS.md open decision 1 still lists the lifecycle question
+ * as open; amending the contract is a separate call.
  *
  * The brands are not decoration. The node id is the join key for comments,
  * proposals, provenance and every derived entity (AGENTS.md, When to ask

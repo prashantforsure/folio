@@ -1,6 +1,7 @@
 # ADR 0001 — Node identity under split, merge and paste
 
-- **Status:** Accepted — **decision delegated to the implementer, 2026-09-10.**
+- **Status:** Accepted — **decision delegated to the implementer, 2026-09-10.** The id
+  *shape* was delegated a second time on the same date; see "Ruling" below.
 - **Date:** 2026-09-10
 - **Deciders:**
 - **Supersedes / superseded by:** —
@@ -189,6 +190,55 @@ is not empty — true under every candidate. Three things need ruling together:
    episode is reordered or deleted, does its id change? If it does, it is a slug
    and not an id, and something else is the real key.
 
+### Ruling — **delegated to the implementer a second time, 2026-09-10**
+
+Asked again, at the point where FDX and Fountain import were about to mint an id
+for every node in a feature-length script. The answer was *"do whats best for
+the application"*, so the ruling below was made by the implementer and is
+recorded exactly as the split/merge/paste ruling above is: **each position is
+reversible, and if one is wrong it is wrong because nobody with the product
+context weighed it.** The one most worth a human look is 5.
+
+1. **A node id is opaque.** No type prefix, no ordinal, no embedded meaning of
+   any kind. It is a join key and nothing else.
+
+2. **Node ids are globally unique**, not unique per document. This is not a free
+   choice — it follows from the paste ruling already implemented above, where a
+   cross-document paste mints. It fixes the column shape in `packages/db`: a
+   comment or proposal row joins on `node_id` alone, not `(document_id, node_id)`.
+
+3. **`SCENE_xxx` is the derived scene record's id, in a different id space.** It
+   is not a node id. This is forced rather than chosen: a type prefix on a node
+   id would have to change when a Scene node is retyped to Action, and AGENTS.md
+   says the id survives a type change. The contradiction identified in the
+   section above resolves this way or not at all.
+
+4. **Record-id prefixes are lower case**: `scene_…`, `ep_…`, `chr_…`, `loc_…`.
+   One rule across every id space, matching the `ep_NNN` that AGENTS.md already
+   fixes in lower case, so the route spec's `SCENE_xxx` becomes `scene_xxx`.
+   This is the purely cosmetic half. If the route spec's upper case is
+   load-bearing for something already written down, overrule this one freely —
+   nothing depends on it.
+
+5. **`ep_NNN` is a slug, and the episode's key is a separate opaque id.**
+   `ep_007` visibly encodes an ordinal, and an ordinal moves when an episode is
+   reordered or deleted. An identifier that changes is not an identifier. The
+   alternative is a product claim — that episodes are never reordered — which
+   the implementer is not in a position to make. **This is the one to look at.**
+
+6. **`packages/script` codifies none of it.** Ids there stay branded strings
+   asserted only to be non-empty, and no validating reader was added. The pure
+   core cannot mint an id (Q6 above), so the format belongs where ids are minted
+   — `packages/db` and `packages/contracts` — and putting it here would couple
+   the deterministic core to a decision it has no part in. `ids.ts` is unchanged
+   by this ruling except for its comment.
+
+   In practice this is what let Fountain and FDX import ship while the ruling was
+   open at all: `parseFountain` and `importFinalDraft` take `freshIds` from the
+   caller and return `not-enough-ids` rather than inventing one, and
+   `countFountainNodes` / `countFdxNodes` say how many are needed before a single
+   one is spent.
+
 ## Recommendation, offered only as a starting position
 
 Split **D** (head keeps the id, anchors in the tail are re-pointed, operations
@@ -203,7 +253,21 @@ recommendation and not a decision, and none of it is in the codebase.
 
 ## Consequences
 
-Filled in once ruled on.
+- **`packages/db`.** A comment, proposal or provenance row anchors on a single
+  `node_id` column. No composite key, because cross-document paste mints.
+- **Id minting lives outside `packages/script`.** The pure core has no entropy
+  and now, deliberately, no id format either.
+- **Retirement is a real row.** Delete tombstones and an id is never reused, so
+  `packages/db` needs somewhere to record a retired id and the detached anchors
+  that used to point at it.
+- **Two id spaces, not one.** `scene_…` addresses a derived scene record and
+  appears in URLs; a node id is opaque and appears in no URL. Anything that
+  reads a scene id out of a route must not hand it to a node lookup.
+- **Episode identity is unresolved in the schema.** Ruling 5 says `ep_NNN` is a
+  slug over a separate key. Nothing in the repo implements either yet, so the
+  cost of reversing it is currently zero and rises the moment a migration lands.
+- **Import is unblocked.** Fountain and FDX both ship taking `freshIds` from the
+  caller, so neither had to wait for any of this.
 
 ## Alternatives considered
 
