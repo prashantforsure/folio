@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --t-water:oklch(0.50 0.17 27); --t-fraud:oklch(0.35 0.03 260); --t-love:oklch(0.48 0.10 150); --t-past:oklch(0.60 0.10 75);
+  --focus:oklch(0.50 0.17 27);
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --t-water:oklch(0.72 0.14 30); --t-fraud:oklch(0.72 0.04 260); --t-love:oklch(0.76 0.10 150); --t-past:oklch(0.78 0.09 75);
+  --focus:oklch(0.72 0.14 30);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s,opacity .12s}
+input{font-family:inherit;color:inherit}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ICON RAIL ── -->
+  <div style="width:66px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 5px 10px;gap:3px">
+    <div style="width:28px;height:28px;border-radius:3px;background:var(--ink);color:var(--desk);font-size:10.5px;font-weight:600;letter-spacing:.02em;display:grid;place-items:center;margin-bottom:12px">ML</div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8">
+      <button title="{{ r.name }}" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="position:relative;width:56px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ r.bg }};border:none;border-radius:3px;cursor:pointer;color:{{ r.ink }}">
+        <span style="position:absolute;left:-5px;top:12px;bottom:12px;width:2px;border-radius:1px;background:{{ r.bar }}"></span>
+        <span style="font-size:14px;line-height:1">{{ r.icon }}</span>
+        <span style="font-size:8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;line-height:1;white-space:nowrap">{{ r.name }}</span>
+        <sc-if value="{{ r.badge }}" hint-placeholder-val="{{ false }}">
+          <span style="position:absolute;top:4px;right:6px;min-width:13px;height:13px;padding:0 3px;border-radius:3px;background:var(--note);color:var(--rail);font-size:8.5px;font-weight:700;display:grid;place-items:center">{{ r.badge }}</span>
+        </sc-if>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:56px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:13px;color:var(--ink3)">{{ themeIcon }}</button>
+    <div title="Project settings" style="width:56px;height:34px;display:grid;place-items:center;border-radius:3px;cursor:pointer;font-size:14px;color:var(--ink3)">⚙</div>
+    <div style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;margin-top:6px">PP</div>
+  </div>
+
+  <!-- ── THREAD NAV ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:250px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="padding:11px 10px 8px;display:flex;align-items:center;gap:6px">
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Monsoon Line</span>
+      <button title="Project actions" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:13px">⋯</button>
+    </div>
+    <div style="padding:0 10px 10px;display:flex;gap:2px;padding:0 10px 10px">
+      <sc-for list="{{ scopes }}" as="sc" hint-placeholder-count="2">
+        <button onClick="{{ sc.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:4px 8px;border:1px solid {{ sc.border }};border-radius:3px;cursor:pointer;font-size:11px;background:{{ sc.bg }};color:{{ sc.ink }}">{{ sc.name }}</button>
+      </sc-for>
+    </div>
+
+    <nav style="flex:1;overflow-y:auto;padding:0 6px 14px;display:flex;flex-direction:column;gap:2px">
+      <div style="display:flex;align-items:center;padding:0 8px 4px">
+        <span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Threads</span>
+        <button style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="background:transparent;border:none;padding:0;cursor:pointer;font-size:10px;color:var(--ink3)">＋ thread</button>
+      </div>
+      <sc-for list="{{ threadNav }}" as="t" hint-placeholder-count="4">
+        <div onClick="{{ t.toggle }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:3px;cursor:pointer;opacity:{{ t.opacity }}">
+          <span title="Drag to reorder rows" style="flex:none;font-size:11px;color:var(--ink3);cursor:grab">⠿</span>
+          <span style="flex:none;width:8px;height:8px;border-radius:2px;background:{{ t.color }}"></span>
+          <span style="flex:1;min-width:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</span>
+          <span style="flex:none;font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ t.n }}</span>
+          <span style="flex:none;font-size:11px;color:var(--ink3);width:14px;text-align:center">{{ t.eye }}</span>
+        </div>
+      </sc-for>
+
+      <div style="display:flex;align-items:center;padding:14px 8px 4px">
+        <span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Anchors</span>
+        <span style="font-size:9.5px;color:var(--ink3)">fixed dates</span>
+      </div>
+      <sc-for list="{{ anchors }}" as="a" hint-placeholder-count="3">
+        <div style-hover="background:var(--hover)" style="display:flex;align-items:baseline;gap:8px;padding:6px 8px;border-radius:3px;cursor:pointer">
+          <span style="flex:none;width:44px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--ink2)">{{ a.when }}</span>
+          <span style="flex:1;min-width:0;font-size:11.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.what }}</span>
+        </div>
+      </sc-for>
+    </nav>
+
+    <div style="padding:10px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink2)"><span>Story spans</span><span style="font-weight:500;color:var(--ink)">9 days + 1997</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink2)"><span>Scenes without a time</span><span style="font-weight:500;color:var(--note)">{{ unplacedN }}</span></div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line)">
+      <span style="flex:none;font-family:var(--serif);font-size:21px;font-weight:500;letter-spacing:-.01em;line-height:1">Timeline</span>
+      <span style="flex:1;min-width:0;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ headerNote }}</span>
+      <div style="flex:none;display:flex;padding:2px;border:1px solid var(--line2);border-radius:3px;gap:2px">
+        <sc-for list="{{ viewTabs }}" as="t" hint-placeholder-count="3">
+          <button onClick="{{ t.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:none;border-radius:3px;cursor:pointer;font-size:11.5px;background:{{ t.bg }};color:{{ t.ink }};white-space:nowrap">
+            <span style="font-size:10px;opacity:.7">{{ t.icon }}</span>{{ t.name }}
+            <sc-if value="{{ t.badge }}" hint-placeholder-val="{{ false }}"><span style="min-width:14px;height:14px;padding:0 4px;border-radius:3px;background:var(--note);color:var(--rail);font-size:9px;font-weight:700;display:grid;place-items:center">{{ t.badge }}</span></sc-if>
+          </button>
+        </sc-for>
+      </div>
+      <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:4px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2);white-space:nowrap"><span style="font-size:10px">✦</span>Assume continuous</button>
+      <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap"><span style="font-size:11px;opacity:.75">＋</span>Event</button>
+    </header>
+
+    <div style="flex:1;min-height:0;display:flex">
+
+      <!-- ════ EMPTY ════ -->
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px">
+          <div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px;padding:22px 24px 24px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Timeline · 34 scenes</span>
+              <span style="font-family:var(--serif);font-size:22px;font-weight:500;line-height:1.15">Your scenes have a page order, not a story time</span>
+              <span style="font-size:12px;line-height:1.55;color:var(--ink2)">Give each scene a place in time and the timeline shows flashbacks, gaps, and where threads run in parallel. Start from a straight read and correct the exceptions.</span>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:12px;font-weight:600"><span style="font-size:10px">✦</span>Assume continuous</button>
+              <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink2)">Place by hand</button>
+            </div>
+            <span style="font-size:10.5px;color:var(--ink3)">Continuous puts every scene on Day 1 in page order, one after another. Sluglines marked CONTINUOUS and LATER are respected.</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ GRID (story order / chronology) ════ -->
+      <sc-if value="{{ isGrid }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-width:0;overflow:auto">
+          <div style="min-width:min-content;display:flex;flex-direction:column">
+
+            <!-- column header -->
+            <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:150px {{ colTemplate }};background:var(--panel);border-bottom:1px solid var(--line)">
+              <div style="padding:10px 14px;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);border-right:1px solid var(--line2)">{{ axisLabel }} →</div>
+              <sc-for list="{{ cols }}" as="c" hint-placeholder-count="5">
+                <div style="display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-right:1px solid var(--line2);background:{{ c.bg }}">
+                  <div style="display:flex;align-items:baseline;gap:6px">
+                    <span style="font-size:12.5px;font-weight:500;color:{{ c.ink }}">{{ c.name }}</span>
+                    <span style="font-size:10px;color:var(--ink3)">{{ c.sub }}</span>
+                  </div>
+                  <span style="font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ c.meta }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <!-- thread rows -->
+            <sc-for list="{{ rows }}" as="row" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:150px {{ colTemplate }};border-bottom:1px solid var(--line2);opacity:{{ row.opacity }}">
+                <div style="display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-right:1px solid var(--line2);background:var(--panel);position:sticky;left:0;z-index:1">
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <span style="width:8px;height:8px;border-radius:2px;background:{{ row.color }}"></span>
+                    <span style="font-size:12px;font-weight:500;line-height:1.2">{{ row.name }}</span>
+                  </div>
+                  <span style="font-size:10px;color:var(--ink3);padding-left:15px">{{ row.span }}</span>
+                </div>
+                <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="5">
+                  <div style="display:flex;flex-direction:column;gap:6px;padding:10px 8px;border-right:1px solid var(--line2);background:{{ cell.bg }};min-height:64px">
+                    <sc-for list="{{ cell.cards }}" as="k" hint-placeholder-count="1">
+                      <div onClick="{{ k.select }}" style-hover="border-color:var(--accent-line);box-shadow:0 1px 0 rgba(0,0,0,.04)" style="position:relative;display:flex;flex-direction:column;gap:4px;padding:7px 9px 7px 12px;background:{{ k.bg }};border:1px solid {{ k.border }};border-radius:3px;cursor:pointer">
+                        <span style="position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 2px 2px 0;background:{{ k.color }}"></span>
+                        <div style="display:flex;align-items:baseline;gap:6px">
+                          <span style="font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums;white-space:nowrap">{{ k.ref }}</span>
+                          <span style="flex:1;min-width:0;font-family:'Courier Prime',monospace;font-size:10.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.slug }}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:5px">
+                          <span style="padding:1px 6px;border-radius:3px;background:{{ k.chipBg }};border:1px solid {{ k.chipLine }};font-size:9.5px;color:{{ k.chipInk }};white-space:nowrap">{{ k.chip }}</span>
+                          <sc-if value="{{ k.jump }}" hint-placeholder-val="{{ false }}"><span title="{{ k.jumpTitle }}" style="font-size:10px;color:var(--note)">{{ k.jumpIcon }}</span></sc-if>
+                          <span style="flex:1"></span>
+                          <sc-for list="{{ k.also }}" as="d" hint-placeholder-count="1"><span title="{{ d.name }}" style="width:6px;height:6px;border-radius:50%;background:{{ d.color }}"></span></sc-for>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+
+            <!-- unplaced -->
+            <sc-if value="{{ hasUnplaced }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--note-bg);border-bottom:1px solid var(--line2)">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--note)"></span>
+                <span style="font-size:11.5px;color:var(--ink)">{{ unplacedN }} scenes have no story time and aren't shown in Chronology</span>
+                <span style="font-size:10.5px;color:var(--ink3)">E4 Sc 1–7</span>
+                <span style="flex:1"></span>
+                <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--ink2)">Continue from Day 9</button>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ CONTINUITY ════ -->
+      <sc-if value="{{ isContinuity }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:20px 22px 60px">
+          <div style="max-width:820px;display:flex;flex-direction:column;gap:14px">
+            <p style="margin:0;font-size:11.5px;line-height:1.5;color:var(--ink2);max-width:70ch">Places where page order and story time disagree in a way you may not have meant. Each one is either a deliberate choice or a fix. Mark it and it stops appearing.</p>
+            <sc-for list="{{ flags }}" as="f" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:10px;padding:13px 15px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+                <div style="display:flex;align-items:flex-start;gap:10px">
+                  <span style="flex:none;margin-top:4px;width:7px;height:7px;border-radius:50%;background:{{ f.color }}"></span>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                    <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">{{ f.kind }}</span>
+                    <span style="font-family:var(--serif);font-size:16px;line-height:1.35;text-wrap:pretty">{{ f.title }}</span>
+                    <span style="font-size:12px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{{ f.body }}</span>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-left:17px">
+                  <sc-for list="{{ f.refs }}" as="r" hint-placeholder-count="2">
+                    <div onClick="{{ r.select }}" style-hover="border-color:var(--accent-line)" style="display:flex;flex-direction:column;gap:2px;padding:7px 10px;background:var(--sheet);border:1px solid var(--line2);border-radius:3px;cursor:pointer">
+                      <span style="font-size:10px;color:var(--ink3)">{{ r.ref }} · {{ r.time }}</span>
+                      <span style="font-family:'Courier Prime',monospace;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.slug }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;gap:6px;padding-left:17px">
+                  <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:var(--ink);color:var(--desk);border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:600">{{ f.fix }}</button>
+                  <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Intentional</button>
+                  <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink3)">Open in Script</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ── RIGHT PANEL: selected scene ── -->
+      <sc-if value="{{ showPanel }}" hint-placeholder-val="{{ true }}">
+        <aside style="width:272px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:auto">
+          <div style="display:flex;flex-direction:column;gap:6px;padding:14px 14px 12px;border-bottom:1px solid var(--line2)">
+            <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">{{ selScene.ref }} · page {{ selScene.page }}</span>
+            <span style="font-family:'Courier Prime',monospace;font-size:13px;line-height:1.3">{{ selScene.slug }}</span>
+            <span style="font-size:11.5px;line-height:1.5;color:var(--ink2)">{{ selScene.gist }}</span>
+          </div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:14px;border-bottom:1px solid var(--line2)">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:10px;color:var(--ink3)">Story time</span>
+              <div style="display:flex;gap:6px">
+                <div style="flex:1;display:flex;align-items:center;gap:6px;padding:6px 9px;background:var(--sheet);border:1px solid var(--line);border-radius:3px">
+                  <span style="font-size:12px;font-weight:500">{{ selScene.day }}</span>
+                  <span style="flex:1"></span>
+                  <span style="font-family:ui-monospace,monospace;font-size:11px;color:var(--ink2)">{{ selScene.clock }}</span>
+                </div>
+                <button title="Chain to previous scene" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:30px;display:grid;place-items:center;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink3)">⇅</button>
+              </div>
+              <span style="font-size:10.5px;line-height:1.5;color:var(--ink3)">{{ selScene.relative }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:10px;color:var(--ink3)">Threads</span>
+              <div style="display:flex;flex-wrap:wrap;gap:5px">
+                <sc-for list="{{ selScene.threads }}" as="t" hint-placeholder-count="2">
+                  <span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:3px;background:var(--sel);font-size:10.5px"><span style="width:6px;height:6px;border-radius:2px;background:{{ t.color }}"></span>{{ t.name }}</span>
+                </sc-for>
+                <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:2px 8px;background:transparent;border:1px dashed var(--line);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--ink3)">＋</button>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:10px;color:var(--ink3)">Present</span>
+              <div style="display:flex;flex-wrap:wrap;gap:5px">
+                <sc-for list="{{ selScene.cast }}" as="c" hint-placeholder-count="2">
+                  <span style="padding:2px 8px;border-radius:3px;background:var(--sel);font-size:10.5px">{{ c.n }}</span>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          <div style="padding:12px 14px 10px;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Continuity</div>
+          <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:10px;color:var(--ink3)">Must already be true</span>
+              <sc-for list="{{ selScene.before }}" as="b" hint-placeholder-count="2">
+                <div style="display:flex;gap:8px;font-size:11.5px;line-height:1.45"><span style="color:var(--ink3)">←</span><span style="flex:1;color:var(--ink)">{{ b.t }} <span style="color:var(--ink3)">{{ b.ref }}</span></span></div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:10px;color:var(--ink3)">Becomes true after</span>
+              <sc-for list="{{ selScene.after }}" as="b" hint-placeholder-count="1">
+                <div style="display:flex;gap:8px;font-size:11.5px;line-height:1.45"><span style="color:var(--ink3)">→</span><span style="flex:1;color:var(--ink)">{{ b.t }}</span></div>
+              </sc-for>
+              <div style-hover="color:var(--ink)" style="font-size:11px;color:var(--ink3);cursor:text;padding-left:16px">Add a fact…</div>
+            </div>
+            <sc-if value="{{ selScene.hasFlag }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:8px;padding:8px 10px;border-radius:3px;background:var(--note-bg);border:1px solid var(--note)">
+                <span style="flex:none;font-size:11px;color:var(--note)">⚠</span>
+                <span style="flex:1;font-size:11px;line-height:1.5">{{ selScene.flag }} <a href="#" style="white-space:nowrap">Review →</a></span>
+              </div>
+            </sc-if>
+          </div>
+          <div style="flex:1"></div>
+          <div style="padding:10px 14px;border-top:1px solid var(--line2);display:flex;gap:6px">
+            <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:5px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Open in Script</button>
+            <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:5px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Open in Scenes</button>
+          </div>
+        </aside>
+      </sc-if>
+    </div>
+
+    <footer style="height:28px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--ink2);overflow:hidden">
+      <span style="flex:none;white-space:nowrap"><b style="font-weight:600;color:var(--ink)">34</b> scenes · 4 threads · 2 flashbacks</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ footerNote }}</span>
+      <div style="flex:1;min-width:0"></div>
+      <button onClick="{{ toggleNav }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);white-space:nowrap">{{ navLabel }}</button>
+      <span style="flex:none;display:flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--add)"></span>saved 6s ago</span>
+      <span style="flex:none;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap">/timeline</span>
+    </footer>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;story&quot;,&quot;chrono&quot;,&quot;continuity&quot;],&quot;default&quot;:&quot;story&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;empty&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "light",
+    view: this.props.view || "story",
+    scope: "series",
+    hidden: {},
+    sel: "E1-14",
+    navOverride: null,
+    w: typeof window === "undefined" ? 1440 : window.innerWidth
+  };
+  componentDidMount() {
+    this._r = () => this.setState({ w: window.innerWidth });
+    window.addEventListener("resize", this._r); this._r();
+  }
+  componentWillUnmount() { window.removeEventListener("resize", this._r); }
+  componentDidUpdate(p) { if (p.view !== this.props.view && this.props.view) this.setState({ view: this.props.view }); }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    const navOpen = s.navOverride === null ? s.w >= 1000 : s.navOverride;
+    const empty = this.props.empty === true;
+    const view = empty ? "empty" : s.view;
+
+    const threads = [
+      { id: "water", name: "Water queue", color: "var(--t-water)", span: "E1 → E3 · Meera" },
+      { id: "fraud", name: "Billing fraud", color: "var(--t-fraud)", span: "E1 → E3 · Kadam" },
+      { id: "love", name: "Anil & Farida", color: "var(--t-love)", span: "E1 → E2" },
+      { id: "past", name: "The 1997 drought", color: "var(--t-past)", span: "Flashbacks · 2" }
+    ];
+    const T = Object.fromEntries(threads.map((t) => [t.id, t]));
+    const days = ["1997", "Day 1", "Day 2", "Day 3", "Day 5", "Day 9"];
+    const eps = [["E1", "Standpipe", 104], ["E2", "The Tiffin", 97], ["E3", "Chawl Water", 118], ["E4", "Blue Bucket", 12]];
+
+    // ep, sc, slug, day, clock, threads[], cast, gist, page, flashback
+    const S = (ep, sc, slug, day, clock, th, cast, gist, page, fb) => ({ id: ep + "-" + sc, ep, sc, slug, day, clock, th, cast, gist, page, fb: !!fb, ref: ep + " Sc " + sc });
+    const scenes = [
+      S("E1", "1", "INT. CHAWL CORRIDOR - DAY", "Day 1", "07:10", ["water"], ["Meera"], "Meera hangs washing; the tap coughs.", 1),
+      S("E1", "3", "EXT. WATER TANKER - DAY", "Day 1", "09:30", ["water"], ["Meera", "Driver"], "First tanker. Meera is fourth in line.", 6),
+      S("E1", "4", "INT. KADAM'S OFFICE - AFTERNOON", "Day 1", "15:00", ["fraud"], ["Kadam", "Meera"], "Kadam explains the new water charge.", 9),
+      S("E1", "5", "EXT. CHAWL COURTYARD - DUSK", "Day 1", "18:40", ["water", "love"], ["Meera", "Anil", "Farida"], "Neighbours compare pressure. Anil notices Farida.", 12),
+      S("E1", "9", "INT. MEERA'S ROOM - NIGHT", "Day 1", "22:15", ["water"], ["Meera"], "The blue bucket is filled to a pencil line.", 21),
+      S("E1", "12", "EXT. CHAWL ROOFTOP - DAY (1997)", "1997", "—", ["past"], ["Young Meera"], "A girl watches men seal the tank.", 30, true),
+      S("E1", "14", "EXT. WATER TANKER - DAY", "Day 2", "06:40", ["water"], ["Meera", "Driver"], "Second tanker. The driver knows her name now.", 36),
+      S("E2", "3", "EXT. CHAWL COURTYARD - DAWN", "Day 2", "05:50", ["water", "love"], ["Meera", "Anil", "Farida"], "First morning of the queue. Buckets hold places.", 4),
+      S("E2", "6", "INT. FARIDA'S TIFFIN KITCHEN - MORNING", "Day 2", "08:00", ["love"], ["Farida", "Anil"], "Anil delivers a bucket he didn't need to.", 11),
+      S("E2", "9", "INT. WARD OFFICE - DAY", "Day 3", "11:00", ["fraud"], ["Meera", "Anil"], "The meter reading doesn't match the bill.", 22),
+      S("E2", "11", "INT. CHAWL CORRIDOR - NIGHT", "Day 3", "23:30", ["fraud"], ["Kadam's man"], "Kadam's man counts doors.", 31),
+      S("E2", "15", "INT. FARIDA'S TIFFIN KITCHEN - NIGHT", "Day 3", "21:00", ["love"], ["Farida", "Anil"], "Farida asks what he actually wants.", 44),
+      S("E3", "4", "INT. CHAWL CORRIDOR - NIGHT", "Day 5", "02:10", ["fraud"], ["Meera", "Kadam's man"], "Meera follows the man to the tank room.", 8),
+      S("E3", "8", "EXT. WATER TANKER - DAY", "Day 5", "09:00", ["water"], ["Meera", "Driver"], "No tanker comes.", 17),
+      S("E3", "17", "EXT. CHAWL ROOFTOP - DAY", "Day 5", "16:30", ["water", "fraud"], ["Meera", "Anil"], "The tank is opened.", 41),
+      S("E3", "22", "EXT. CHAWL ROOFTOP - DAY (1997)", "1997", "—", ["past"], ["Young Meera", "Her father"], "Her father signs the paper.", 58, true),
+      S("E3", "30", "INT. WARD OFFICE - DAY", "Day 9", "10:00", ["fraud", "water"], ["Meera", "Kadam", "Anil"], "The hearing.", 92)
+    ];
+    const unplaced = 7;
+
+    const isStory = view === "story";
+    const colKeys = isStory ? eps.map((e) => e[0]) : days;
+    const colOf = (sc) => isStory ? sc.ep : sc.day;
+    const visible = scenes.filter((sc) => s.scope === "series" || sc.ep === "E1");
+
+    const cols = colKeys.map((k) => {
+      const inCol = visible.filter((sc) => colOf(sc) === k);
+      const ep = eps.find((e) => e[0] === k);
+      const isPast = k === "1997";
+      return {
+        name: k, sub: isStory ? ep[1] : isPast ? "flashback" : "",
+        meta: isStory ? ep[2] + " pp · " + inCol.length + " placed" : inCol.length + (inCol.length === 1 ? " scene" : " scenes"),
+        bg: isPast ? "var(--note-bg)" : "var(--panel)", ink: isPast ? "var(--note)" : "var(--ink)"
+      };
+    });
+
+    const dayIdx = (d) => days.indexOf(d);
+    const rows = threads.map((t) => {
+      const hidden = !!s.hidden[t.id];
+      return {
+        name: t.name, color: t.color, span: t.span, opacity: hidden ? ".35" : "1",
+        cells: colKeys.map((k) => {
+          const cards = visible.filter((sc) => sc.th[0] === t.id && colOf(sc) === k).map((sc) => {
+            const isSel = sc.id === s.sel;
+            // jump: in story view, a scene whose day is earlier than the previous scene's day in page order
+            const idx = scenes.indexOf(sc), prev = scenes[idx - 1];
+            const back = prev && dayIdx(sc.day) < dayIdx(prev.day);
+            const fwd = prev && dayIdx(sc.day) > dayIdx(prev.day) + 1;
+            return {
+              ref: sc.ref, slug: sc.slug.replace(/ - .*$/, "").replace(/^(INT\.|EXT\.)\s*/, ""), color: t.color,
+              chip: isStory ? (sc.fb ? "1997" : sc.day + (sc.clock !== "—" ? " · " + sc.clock : "")) : sc.ep + " · p." + sc.page,
+              chipBg: sc.fb ? "var(--note-bg)" : "transparent", chipLine: sc.fb ? "var(--note)" : "var(--line2)", chipInk: sc.fb ? "var(--note)" : "var(--ink2)",
+              jump: isStory && (back || fwd) && !sc.fb, jumpIcon: back ? "↶" : "↷",
+              jumpTitle: back ? "Earlier than the scene before it" : "Skips ahead",
+              also: sc.th.slice(1).map((id) => ({ name: T[id].name, color: T[id].color })),
+              bg: isSel ? "var(--accent-bg)" : "var(--sheet)", border: isSel ? "var(--accent-line)" : "var(--line2)",
+              select: () => this.setState({ sel: sc.id })
+            };
+          });
+          return { cards, bg: k === "1997" ? "var(--note-bg)" : "transparent" };
+        })
+      };
+    });
+
+    const sel = scenes.find((x) => x.id === s.sel) || scenes[6];
+    const idx = scenes.indexOf(sel);
+    let prev = null; for (let i = idx - 1; i >= 0; i--) if (!scenes[i].fb) { prev = scenes[i]; break; }
+    const flagFor = {
+      "E1-14": "Happens after E2 Sc 3 (Day 2 · 05:50) though it's on the page first.",
+      "E2-3": "Happens before E1 Sc 14 (Day 2 · 06:40) though it comes later on the page.",
+      "E1-5": "Farida is present here but is introduced in E2 Sc 3.",
+      "E2-15": "Sits before E2 Sc 11 in story time (21:00 vs 23:30)."
+    };
+    const selScene = {
+      ref: sel.ref, page: sel.page, slug: sel.slug, gist: sel.gist, day: sel.day, clock: sel.clock,
+      relative: prev ? (sel.fb ? "Flashback. Sits outside the day count." : sel.day === prev.day ? "Same day as " + prev.ref + ", " + (prev.clock) + " → " + sel.clock : dayIdx(sel.day) > dayIdx(prev.day) ? "Next placed day after " + prev.ref + " (" + prev.day + ")" : "Earlier than " + prev.ref + " (" + prev.day + ")") : "First scene.",
+      threads: sel.th.map((id) => ({ name: T[id].name, color: T[id].color })),
+      cast: sel.cast.map((n) => ({ n })),
+      before: sel.id === "E1-14" ? [{ t: "Meera owns the blue bucket", ref: "E1 Sc 9" }, { t: "Tanker comes every morning", ref: "E1 Sc 3" }] : [{ t: "Water has been cut for a day", ref: "E1 Sc 1" }],
+      after: sel.id === "E1-14" ? [{ t: "The driver knows Meera by name" }] : [{ t: "—" }],
+      hasFlag: !!flagFor[sel.id], flag: flagFor[sel.id] || ""
+    };
+
+    const mk = (id) => { const x = scenes.find((y) => y.id === id); return { ref: x.ref, slug: x.slug, time: x.day + (x.clock !== "—" ? " · " + x.clock : ""), select: () => this.setState({ sel: id, view: "story" }) }; };
+    const flags = [
+      { kind: "Order", color: "var(--note)", title: "E1 ends after E2 begins.", body: "E1 Sc 14 is set at 06:40 on Day 2. E2 Sc 3 opens at 05:50 the same morning. If the episode break is meant to be a hard cut in time, move E2 Sc 3 later or E1 Sc 14 earlier.", refs: [mk("E1-14"), mk("E2-3")], fix: "Set E2 Sc 3 to 07:00" },
+      { kind: "Introduction", color: "var(--del)", title: "Farida appears before she is introduced.", body: "She is present in E1 Sc 5 (Day 1 dusk) but the script introduces her by name in E2 Sc 3. Either she's a face in the crowd in E1, or her introduction moves.", refs: [mk("E1-5"), mk("E2-3")], fix: "Mark E1 Sc 5 as background" },
+      { kind: "Same night", color: "var(--note)", title: "Two Day 3 night scenes are in reverse order.", body: "E2 Sc 15 (21:00) is on the page after E2 Sc 11 (23:30). Fine if intercutting; otherwise swap or retime.", refs: [mk("E2-11"), mk("E2-15")], fix: "Swap on the page" }
+    ];
+
+    return {
+      theme: s.theme, themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      navOpen, navLabel: navOpen ? "Hide nav" : "Show nav", toggleNav: () => this.setState({ navOverride: !navOpen }),
+      scopes: [["series", "Series"], ["E1", "Episode 1"]].map(([id, name]) => ({ name, bg: s.scope === id ? "var(--sel)" : off, border: s.scope === id ? "var(--line)" : "var(--line2)", ink: s.scope === id ? "var(--ink)" : "var(--ink2)", go: () => this.setState({ scope: id }) })),
+      threadNav: threads.map((t) => ({ ...t, n: scenes.filter((x) => x.th.includes(t.id)).length, opacity: s.hidden[t.id] ? ".45" : "1", eye: s.hidden[t.id] ? "○" : "◉", toggle: () => this.setState({ hidden: { ...s.hidden, [t.id]: !s.hidden[t.id] } }) })),
+      anchors: [{ when: "1997", what: "The drought. Tank sealed." }, { when: "Day 1", what: "Water cut. Series opens." }, { when: "Day 9", what: "Ward hearing." }],
+      unplacedN: unplaced, hasUnplaced: !empty,
+      viewTabs: [
+        { id: "story", name: "Story order", icon: "▤" }, { id: "chrono", name: "Chronology", icon: "◷" }, { id: "continuity", name: "Continuity", icon: "⚠", badge: String(flags.length) }
+      ].map((t) => ({ ...t, badge: t.badge || "", bg: view === t.id ? "var(--accent-bg)" : off, ink: view === t.id ? "var(--accent)" : "var(--ink2)", go: () => this.setState({ view: t.id }) })),
+      isEmpty: view === "empty", isGrid: view === "story" || view === "chrono", isContinuity: view === "continuity",
+      showPanel: view === "story" || view === "chrono",
+      axisLabel: isStory ? "Episodes" : "Story time",
+      colTemplate: colKeys.map(() => "minmax(200px,1fr)").join(" "),
+      cols, rows, selScene, flags,
+      headerNote: isStory ? "columns are episodes as written · chips show when each scene happens" : view === "chrono" ? "columns are story days · chips show where each scene sits on the page" : flags.length + " places where page order and story time disagree",
+      footerNote: view === "continuity" ? flags.length + " open" : (view === "chrono" ? "Chronology" : "Story order") + " · " + sel.ref + " selected",
+      rail: [
+        { name: "Writing", icon: "✎", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Characters", icon: "◍", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Locations", icon: "⌖", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Timeline", icon: "◷", bg: on, ink: "var(--ink)", bar: "var(--accent)", badge: empty ? "" : String(flags.length) },
+        { name: "Bible", icon: "◈", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Research", icon: "▧", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Insights", icon: "◎", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Production", icon: "▶", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --day:oklch(0.80 0.09 80); --night:oklch(0.42 0.06 265); --dlg:oklch(0.50 0.17 27); --act:oklch(0.35 0.03 260);
+  --focus:oklch(0.50 0.17 27);
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --day:oklch(0.78 0.09 80); --night:oklch(0.60 0.07 265); --dlg:oklch(0.72 0.14 30); --act:oklch(0.72 0.04 260);
+  --focus:oklch(0.72 0.14 30);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s,opacity .12s}
+input,textarea{font-family:inherit;color:inherit}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ICON RAIL ── -->
+  <div style="width:66px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 5px 10px;gap:3px">
+    <div style="width:28px;height:28px;border-radius:3px;background:var(--ink);color:var(--desk);font-size:10.5px;font-weight:600;letter-spacing:.02em;display:grid;place-items:center;margin-bottom:12px">ML</div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8">
+      <button title="{{ r.name }}" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="position:relative;width:56px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ r.bg }};border:none;border-radius:3px;cursor:pointer;color:{{ r.ink }}">
+        <span style="position:absolute;left:-5px;top:12px;bottom:12px;width:2px;border-radius:1px;background:{{ r.bar }}"></span>
+        <span style="font-size:14px;line-height:1">{{ r.icon }}</span>
+        <span style="font-size:8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;line-height:1;white-space:nowrap">{{ r.name }}</span>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:56px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:13px;color:var(--ink3)">{{ themeIcon }}</button>
+    <div title="Project settings" style="width:56px;height:34px;display:grid;place-items:center;border-radius:3px;cursor:pointer;font-size:14px;color:var(--ink3)">⚙</div>
+    <div style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;margin-top:6px">PP</div>
+  </div>
+
+  <!-- ── NAV ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:250px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="padding:11px 10px 8px;display:flex;align-items:center;gap:6px">
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Monsoon Line</span>
+    </div>
+    <div style="display:flex;gap:2px;padding:0 10px 10px">
+      <sc-for list="{{ scopes }}" as="sc" hint-placeholder-count="2">
+        <button onClick="{{ sc.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:4px 8px;border:1px solid {{ sc.border }};border-radius:3px;cursor:pointer;font-size:11px;background:{{ sc.bg }};color:{{ sc.ink }}">{{ sc.name }}</button>
+      </sc-for>
+    </div>
+    <nav style="flex:1;overflow-y:auto;padding:0 6px 14px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="display:flex;align-items:center;padding:0 8px 3px"><span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Reports</span><span style="font-size:9.5px;color:var(--ink3)">from the draft</span></div>
+        <sc-for list="{{ reportNav }}" as="r" hint-placeholder-count="4">
+          <div onClick="{{ r.select }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:{{ r.bg }};border:1px solid {{ r.border }};border-radius:3px;cursor:pointer">
+            <span style="flex:none;width:14px;font-size:11px;color:var(--ink3)">{{ r.icon }}</span>
+            <span style="flex:1;min-width:0;font-size:12px;color:{{ r.ink }}">{{ r.name }}</span>
+            <span style="flex:none;font-size:10px;color:var(--ink3)">{{ r.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="display:flex;align-items:center;padding:0 8px 3px"><span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Lenses</span><button style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="background:transparent;border:none;padding:0;cursor:pointer;font-size:10px;color:var(--ink3)">＋ lens</button></div>
+        <sc-for list="{{ lensNav }}" as="l" hint-placeholder-count="5">
+          <div onClick="{{ l.select }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:{{ l.bg }};border:1px solid {{ l.border }};border-radius:3px;cursor:pointer">
+            <span style="flex:none;width:18px;height:18px;border-radius:50%;background:{{ l.avBg }};color:#fff;font-size:8px;font-weight:600;display:grid;place-items:center">{{ l.ini }}</span>
+            <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+              <span style="font-size:12px;color:{{ l.ink }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.name }}</span>
+              <span style="font-size:10px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.kind }}</span>
+            </span>
+            <span style="flex:none;font-size:10.5px;color:{{ l.nInk }};font-variant-numeric:tabular-nums">{{ l.n }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </nav>
+    <div style="padding:10px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:5px;font-size:10.5px;color:var(--ink2)">
+      <div style="display:flex;justify-content:space-between"><span>Lenses read</span><span style="font-weight:500;color:var(--ink)">Bible canon · 5 sources</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Last run</span><span style="font-weight:500;color:var(--ink)">Draft 5 · 2h ago</span></div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line)">
+      <span style="flex:none;font-family:var(--serif);font-size:21px;font-weight:500;letter-spacing:-.01em;line-height:1">Insights</span>
+      <span style="flex:1;min-width:0;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ headerNote }}</span>
+      <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:4px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2);white-space:nowrap">Compare with Draft 4</button>
+      <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap"><span style="font-size:10px">✦</span>{{ runLabel }}</button>
+    </header>
+
+    <div style="flex:1;min-height:0;display:flex">
+
+      <!-- ════ EMPTY ════ -->
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px">
+          <div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px;padding:22px 24px 24px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Insights</span>
+              <span style="font-family:var(--serif);font-size:22px;font-weight:500;line-height:1.15">Nothing to measure yet</span>
+              <span style="font-size:12px;line-height:1.55;color:var(--ink2)">Reports need at least one scene with dialogue. Lenses need a draft to read. Write, then come back; everything here computes from the page.</span>
+            </div>
+            <a href="#" style="font-size:12px">Go to Script →</a>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ REPORT: PACING ════ -->
+      <sc-if value="{{ isPacing }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:22px 26px 60px">
+          <div style="max-width:900px;display:flex;flex-direction:column;gap:22px">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <h1 style="margin:0;font-family:var(--serif);font-size:30px;font-weight:500;letter-spacing:-.015em;line-height:1.1">Pacing · Episode 1</h1>
+              <p style="margin:0;font-size:12.5px;line-height:1.55;color:var(--ink2);max-width:66ch;text-wrap:pretty">Scenes in page order. Height is length in eighths; colour is how much of the scene is dialogue. Runs of similar scenes are marked underneath.</p>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
+              <sc-for list="{{ pacingStats }}" as="st" hint-placeholder-count="4">
+                <div style="display:flex;flex-direction:column;gap:3px;padding:11px 13px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+                  <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">{{ st.k }}</span>
+                  <span style="font-family:var(--serif);font-size:22px;font-weight:500;line-height:1.1;font-variant-numeric:tabular-nums">{{ st.v }}</span>
+                  <span style="font-size:10.5px;color:{{ st.subInk }}">{{ st.sub }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;padding:16px 16px 12px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+              <div style="display:flex;align-items:flex-end;gap:3px;height:150px;border-bottom:1px solid var(--line)">
+                <sc-for list="{{ bars }}" as="b" hint-placeholder-count="34">
+                  <div onClick="{{ b.select }}" title="{{ b.title }}" style-hover="opacity:.8" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;cursor:pointer">
+                    <div style="height:{{ b.h }};display:flex;flex-direction:column;border-radius:2px 2px 0 0;overflow:hidden;outline:{{ b.outline }};outline-offset:1px">
+                      <span style="flex:{{ b.dlg }};background:var(--dlg)"></span>
+                      <span style="flex:{{ b.act }};background:var(--act);opacity:.55"></span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:3px">
+                <sc-for list="{{ bars }}" as="b" hint-placeholder-count="34">
+                  <span style="flex:1;text-align:center;font-size:8px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ b.label }}</span>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:3px;height:6px">
+                <sc-for list="{{ bars }}" as="b" hint-placeholder-count="34">
+                  <span style="flex:1;border-radius:1px;background:{{ b.runBg }}"></span>
+                </sc-for>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;padding-top:6px;font-size:10px;color:var(--ink3)">
+                <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--dlg)"></span>Dialogue</span>
+                <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--act);opacity:.55"></span>Action</span>
+                <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--note)"></span>Run of similar scenes</span>
+                <span style="flex:1"></span><span>acts: 1 → Sc 1–11 · 2 → 12–26 · 3 → 27–34</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">What stands out</span>
+              <sc-for list="{{ pacingNotes }}" as="n" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:12px;align-items:start;padding:10px 12px;background:var(--panel);border:1px solid var(--line2);border-radius:3px">
+                  <span style="margin-top:5px;width:7px;height:7px;border-radius:50%;background:{{ n.color }}"></span>
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                    <span style="font-family:var(--serif);font-size:15px;line-height:1.4;text-wrap:pretty">{{ n.t }}</span>
+                    <span style="font-size:11.5px;line-height:1.5;color:var(--ink2)">{{ n.why }}</span>
+                  </div>
+                  <a href="#" style="font-size:11px;white-space:nowrap;padding-top:3px">{{ n.ref }} →</a>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ REPORT: PRESENCE ════ -->
+      <sc-if value="{{ isPresence }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:22px 26px 60px">
+          <div style="max-width:900px;display:flex;flex-direction:column;gap:22px">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <h1 style="margin:0;font-family:var(--serif);font-size:30px;font-weight:500;letter-spacing:-.015em;line-height:1.1">Presence · Series</h1>
+              <p style="margin:0;font-size:12.5px;line-height:1.55;color:var(--ink2);max-width:66ch;text-wrap:pretty">Who is on the page, and how much of it they speak. Presence is scenes they appear in; voice is their share of dialogue lines.</p>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:3px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:minmax(140px,1.2fr) repeat(3,minmax(90px,1fr)) minmax(140px,1.4fr) 90px;gap:12px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">
+                <span>Character</span><span>E1</span><span>E2</span><span>E3</span><span>Voice share</span><span>Gap</span>
+              </div>
+              <sc-for list="{{ presence }}" as="p" hint-placeholder-count="6">
+                <div style-hover="background:var(--hover)" style="display:grid;grid-template-columns:minmax(140px,1.2fr) repeat(3,minmax(90px,1fr)) minmax(140px,1.4fr) 90px;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line2);cursor:pointer">
+                  <span style="display:flex;align-items:center;gap:8px"><span style="width:20px;height:20px;border-radius:50%;background:{{ p.bg }};color:#fff;font-size:8.5px;font-weight:600;display:grid;place-items:center">{{ p.ini }}</span><span style="font-size:12.5px;font-weight:500">{{ p.name }}</span></span>
+                  <sc-for list="{{ p.eps }}" as="e" hint-placeholder-count="3">
+                    <span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:11.5px;font-variant-numeric:tabular-nums;color:{{ e.ink }}">{{ e.v }}</span><span style="height:3px;width:100%;max-width:70px;border-radius:2px;background:var(--line2);overflow:hidden"><span style="display:block;height:100%;width:{{ e.pct }};background:var(--ink2)"></span></span></span>
+                  </sc-for>
+                  <span style="display:flex;align-items:center;gap:8px"><span style="flex:1;height:6px;border-radius:2px;background:var(--line2);overflow:hidden"><span style="display:block;height:100%;width:{{ p.voice }};background:var(--dlg)"></span></span><span style="font-size:11px;font-variant-numeric:tabular-nums;width:34px;text-align:right">{{ p.voice }}</span></span>
+                  <span style="font-size:11px;color:{{ p.gapInk }}">{{ p.gap }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">What stands out</span>
+              <sc-for list="{{ presenceNotes }}" as="n" hint-placeholder-count="2">
+                <div style="display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:12px;align-items:start;padding:10px 12px;background:var(--panel);border:1px solid var(--line2);border-radius:3px">
+                  <span style="margin-top:5px;width:7px;height:7px;border-radius:50%;background:{{ n.color }}"></span>
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-family:var(--serif);font-size:15px;line-height:1.4;text-wrap:pretty">{{ n.t }}</span><span style="font-size:11.5px;line-height:1.5;color:var(--ink2)">{{ n.why }}</span></div>
+                  <a href="#" style="font-size:11px;white-space:nowrap;padding-top:3px">{{ n.ref }} →</a>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ LENS ════ -->
+      <sc-if value="{{ isLens }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:22px 26px 60px">
+          <div style="max-width:760px;display:flex;flex-direction:column;gap:20px">
+            <div style="display:flex;gap:14px;align-items:flex-start">
+              <span style="flex:none;width:44px;height:44px;border-radius:50%;background:{{ lens.avBg }};color:#fff;font-size:14px;font-weight:600;display:grid;place-items:center">{{ lens.ini }}</span>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+                <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink3)"><span>{{ lens.kind }}</span><span>·</span><span>reads {{ lens.reads }}</span><span>·</span><span>ran on Draft 5</span></div>
+                <h1 style="margin:0;font-family:var(--serif);font-size:30px;font-weight:500;letter-spacing:-.015em;line-height:1.1">{{ lens.name }}</h1>
+                <p style="margin:0;font-family:var(--serif);font-size:15px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{{ lens.brief }}</p>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Notes on Episode 1</span>
+                <span style="font-size:10.5px;color:var(--ink3)">{{ lens.notes.length }} · each cites the page and what it read to say so</span>
+                <span style="flex:1"></span>
+                <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line2);border-radius:3px">
+                  <sc-for list="{{ sevFilters }}" as="f" hint-placeholder-count="3">
+                    <button onClick="{{ f.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:2px 8px;border:none;border-radius:3px;cursor:pointer;font-size:10.5px;background:{{ f.bg }};color:{{ f.ink }}">{{ f.name }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <sc-for list="{{ lensNotes }}" as="n" hint-placeholder-count="4">
+                <div style="display:flex;flex-direction:column;gap:9px;padding:13px 15px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+                  <div style="display:flex;align-items:flex-start;gap:10px">
+                    <span style="flex:none;margin-top:5px;width:7px;height:7px;border-radius:50%;background:{{ n.color }}"></span>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                      <div style="display:flex;align-items:baseline;gap:8px;font-size:10.5px;color:var(--ink3)"><span style="font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:{{ n.color }}">{{ n.sev }}</span><a href="#" style="font-family:'Courier Prime',monospace">{{ n.ref }}</a><span>p. {{ n.page }}</span></div>
+                      <span style="font-family:var(--serif);font-size:16px;line-height:1.4;text-wrap:pretty">{{ n.t }}</span>
+                      <span style="font-size:12px;line-height:1.55;color:var(--ink2);text-wrap:pretty">{{ n.why }}</span>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;padding-left:17px;align-items:center">
+                    <span style="font-size:10px;color:var(--ink3)">Read:</span>
+                    <sc-for list="{{ n.sources }}" as="src" hint-placeholder-count="2"><a href="#" style="padding:1px 7px;border-radius:3px;background:var(--sheet);border:1px solid var(--line2);font-size:10px;color:var(--ink2)">{{ src.t }}</a></sc-for>
+                  </div>
+                  <div style="display:flex;gap:6px;padding-left:17px">
+                    <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:var(--ink);color:var(--desk);border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:600">Send to Notes</button>
+                    <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Open scene</button>
+                    <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink3)">Dismiss</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        <aside style="width:272px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:auto">
+          <div style="padding:12px 14px 10px;border-bottom:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">How this lens reads</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--line2)">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:10px;color:var(--ink3)">Cares about</span>
+              <div style="padding:8px 10px;background:var(--sheet);border:1px solid var(--line2);border-radius:3px;font-family:var(--serif);font-size:13px;line-height:1.5;cursor:text">{{ lens.cares }}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:10px;color:var(--ink3)">Ignores</span>
+              <span style="font-size:12px;line-height:1.5;color:var(--ink2)">{{ lens.ignores }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:10px;color:var(--ink3)">Reads before the script</span>
+              <sc-for list="{{ lens.inputs }}" as="i" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:8px;font-size:11.5px"><span style="width:6px;height:6px;border-radius:50%;background:{{ i.dot }}"></span><span style="flex:1">{{ i.t }}</span><span style="font-size:10px;color:var(--ink3)">{{ i.meta }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="padding:12px 14px 10px;border-bottom:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Across drafts</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ lens.history }}" as="h" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:8px;font-size:11.5px"><span style="width:52px;color:var(--ink3)">{{ h.d }}</span><span style="flex:1;height:5px;border-radius:2px;background:var(--line2);overflow:hidden"><span style="display:block;height:100%;width:{{ h.w }};background:{{ h.bg }}"></span></span><span style="width:22px;text-align:right;font-variant-numeric:tabular-nums">{{ h.n }}</span></div>
+            </sc-for>
+            <span style="font-size:10.5px;color:var(--ink3)">{{ lens.trend }}</span>
+          </div>
+          <div style="flex:1"></div>
+          <div style="padding:10px 14px;border-top:1px solid var(--line2);display:flex;gap:6px">
+            <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:5px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Duplicate lens</button>
+            <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:5px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Edit</button>
+          </div>
+        </aside>
+      </sc-if>
+    </div>
+
+    <footer style="height:28px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--ink2);overflow:hidden">
+      <span style="flex:none;white-space:nowrap">Draft 5 · 34 scenes · 104 pp</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ footerNote }}</span>
+      <div style="flex:1;min-width:0"></div>
+      <button onClick="{{ toggleNav }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);white-space:nowrap">{{ navLabel }}</button>
+      <span style="flex:none;display:flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--add)"></span>computed from Draft 5</span>
+      <span style="flex:none;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap">/insights/{{ routeTail }}</span>
+    </footer>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;pacing&quot;,&quot;presence&quot;,&quot;showrunner&quot;,&quot;viewer&quot;,&quot;snp&quot;,&quot;producer&quot;,&quot;aunty&quot;],&quot;default&quot;:&quot;pacing&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;empty&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "light",
+    view: this.props.view || "pacing",
+    scope: "E1", sev: "all", selBar: 5,
+    navOverride: null,
+    w: typeof window === "undefined" ? 1440 : window.innerWidth
+  };
+  componentDidMount() { this._r = () => this.setState({ w: window.innerWidth }); window.addEventListener("resize", this._r); this._r(); }
+  componentWillUnmount() { window.removeEventListener("resize", this._r); }
+  componentDidUpdate(p) { if (p.view !== this.props.view && this.props.view) this.setState({ view: this.props.view }); }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    const navOpen = s.navOverride === null ? s.w >= 1000 : s.navOverride;
+    const empty = this.props.empty === true;
+    const view = empty ? "empty" : s.view;
+
+    // eighths, dialogue share 0-1
+    const sc = [[2,.1],[17,.2],[7,.7],[12,.85],[5,.6],[9,.75],[11,.8],[4,.1],[10,.3],[6,.5],[14,.65],[8,0],[6,.4],[9,.7],[13,.8],[7,.75],[5,.2],[11,.6],[10,.55],[16,.9],[4,0],[8,.3],[12,.7],[9,.65],[6,.1],[15,.85],[7,.5],[10,.6],[5,.2],[13,.8],[11,.75],[8,.3],[18,.9],[6,.05]];
+    const runs = new Set([3,4,5,6, 22,23, 29,30]);
+    const maxE = 18;
+    const bars = sc.map(([e, d], i) => ({
+      label: (i + 1) % 2 ? String(i + 1) : "", h: Math.round(e / maxE * 100) + "%", dlg: d.toFixed(2), act: (1 - d).toFixed(2),
+      title: "Sc " + (i + 1) + " · " + e + "/8 · " + Math.round(d * 100) + "% dialogue",
+      runBg: runs.has(i) ? "var(--note)" : "transparent", outline: s.selBar === i ? "2px solid var(--accent)" : "none",
+      select: () => this.setState({ selBar: i })
+    }));
+    const totalE = sc.reduce((a, x) => a + x[0], 0), avgD = sc.reduce((a, x) => a + x[1], 0) / sc.length;
+
+    const lenses = [
+      { id: "showrunner", ini: "SR", name: "Showrunner", kind: "Built-in · structure", avBg: "oklch(0.35 0.03 260)", n: 5, reads: "Bible canon, Outline, Timeline", brief: "Reads for whether each scene earns its place in the episode and the season. Asks what changes, and whether the audience could tell you.",
+        cares: "Every scene should move a thread or reveal a rule. Two consecutive scenes that do the same job are one scene.", ignores: "Line-level dialogue. Formatting. Tone, unless it contradicts the Bible.",
+        inputs: [{ t: "Bible · canon rules", meta: "16", dot: "var(--add)" }, { t: "Timeline · threads", meta: "4", dot: "var(--add)" }, { t: "Research · readable", meta: "5", dot: "var(--add)" }],
+        history: [{ d: "Draft 3", n: 9, w: "90%", bg: "var(--ink3)" }, { d: "Draft 4", n: 7, w: "70%", bg: "var(--ink3)" }, { d: "Draft 5", n: 5, w: "50%", bg: "var(--accent)" }], trend: "Two fewer than Draft 4. Both closed notes were in Act 1.",
+        notes: [
+          { sev: "structure", color: "var(--accent)", ref: "E1 Sc 4–7", page: "9–17", t: "Four scenes in a row establish that Kadam controls the water. One would do.", why: "Sc 4 states the rule, Sc 5 has neighbours repeat it, Sc 6 and 7 show it. Bible rule 6 is already cited to Sc 4. Consider cutting 5 and folding 7 into 6.", sources: ["Bible · Water · rule 6", "Outline · Act 1"] },
+          { sev: "thread", color: "var(--note)", ref: "E1 Sc 12", page: "30", t: "The 1997 flashback lands before the audience knows the tank matters.", why: "Timeline shows the tank is first mentioned in dialogue at Sc 17. The flashback asks for weight it hasn't earned yet. Either move it after 17 or plant the tank earlier.", sources: ["Timeline · The 1997 drought", "Bible · 1997"] },
+          { sev: "structure", color: "var(--accent)", ref: "E1 Sc 33", page: "98", t: "Longest scene of the episode is also the most dialogue-heavy, right before the end.", why: "18/8 at 90% dialogue. The episode has been building through action; ending on a talk scene reverses that. Check what the last image is.", sources: ["Pacing report"] },
+          { sev: "question", color: "var(--ink3)", ref: "E1 Sc 9", page: "21", t: "Why does Meera mark the bucket with a pencil line?", why: "It reads as a plant. Nothing in E1–E3 pays it off. If it's for E4, fine; otherwise it's a detail that promises something.", sources: ["Scenes · search 'pencil'"] },
+          { sev: "thread", color: "var(--note)", ref: "E1 Sc 5", page: "12", t: "Anil and Farida's thread starts here but neither has a want yet.", why: "They notice each other. Presence report shows Anil speaks 3 lines in E1. A look is not a thread; give one of them a small, specific want.", sources: ["Presence report", "Timeline · Anil & Farida"] }
+        ] },
+      { id: "viewer", ini: "FV", name: "First-time viewer", kind: "Built-in · clarity", avBg: "oklch(0.55 0.10 300)", n: 3, reads: "nothing but the pages", brief: "Knows nothing. Reads the episode once, in order, and reports what it didn't understand.",
+        cares: "Can I follow who wants what? Do I know where I am? Did I need to know something the script assumed?", ignores: "The Bible, the outline, anything not on the page.",
+        inputs: [{ t: "Script · Episode 1", meta: "104 pp", dot: "var(--add)" }],
+        history: [{ d: "Draft 3", n: 6, w: "100%", bg: "var(--ink3)" }, { d: "Draft 4", n: 4, w: "66%", bg: "var(--ink3)" }, { d: "Draft 5", n: 3, w: "50%", bg: "var(--accent)" }], trend: "Steady improvement.",
+        notes: [
+          { sev: "clarity", color: "var(--accent)", ref: "E1 Sc 4", page: "9", t: "I don't know who Kadam is when he starts talking.", why: "He is introduced mid-conversation with no action line. I assumed he was a BMC officer until Sc 6.", sources: ["Script · p. 9"] },
+          { sev: "clarity", color: "var(--note)", ref: "E1 Sc 12", page: "30", t: "Is the girl on the roof Meera?", why: "The slugline says 1997 but nothing in the scene ties her to the adult. A prop or a line would do it.", sources: ["Script · p. 30"] },
+          { sev: "question", color: "var(--ink3)", ref: "E1 Sc 14", page: "36", t: "How does the driver know her name?", why: "Might be the point. Felt like a jump.", sources: ["Script · p. 36"] }
+        ] },
+      { id: "snp", ini: "S&P", name: "Standards", kind: "Built-in · compliance", avBg: "oklch(0.45 0.05 250)", n: 1, reads: "pages only", brief: "Flags content that will be questioned by a platform's standards team, and language that might need certification notes.", cares: "Depictions of real institutions, minors, violence, language.", ignores: "Everything creative.",
+        inputs: [{ t: "Script · Episode 1", meta: "104 pp", dot: "var(--add)" }], history: [{ d: "Draft 3", n: 2, w: "100%", bg: "var(--ink3)" }, { d: "Draft 4", n: 1, w: "50%", bg: "var(--ink3)" }, { d: "Draft 5", n: 1, w: "50%", bg: "var(--accent)" }], trend: "Unchanged.",
+        notes: [{ sev: "compliance", color: "var(--note)", ref: "E1 Sc 4", page: "10", t: "BMC is named as complicit in a billing scheme.", why: "Real municipal body. Platforms will want either a fictional name or a legal read. Flagging early so the choice is yours.", sources: ["Script · p. 10", "Research · BMC tariff"] }] },
+      { id: "producer", ini: "PR", name: "Producer", kind: "Built-in · feasibility", avBg: "oklch(0.55 0.08 75)", n: 2, reads: "Locations, Production", brief: "Reads for what the episode costs to make and where the script asks for more than it needs.", cares: "Location count, night shoots, crowd, water on set.", ignores: "Story.",
+        inputs: [{ t: "Locations", meta: "9", dot: "var(--add)" }, { t: "Production · reels", meta: "3", dot: "var(--add)" }], history: [{ d: "Draft 4", n: 2, w: "100%", bg: "var(--ink3)" }, { d: "Draft 5", n: 2, w: "100%", bg: "var(--accent)" }], trend: "Unchanged.",
+        notes: [{ sev: "cost", color: "var(--note)", ref: "E1 Sc 5, 11, 26", page: "12, 28, 71", t: "Three courtyard night scenes with a crowd.", why: "Each is a separate night. If any two can be the same night, that's a shooting day saved.", sources: ["Locations · Courtyard", "Timeline"] }, { sev: "cost", color: "var(--ink3)", ref: "E1 Sc 3, 14", page: "6, 36", t: "Two tanker scenes; the tanker is the most expensive prop.", why: "Fine, but the E3 tanker no-show scene could reuse footage.", sources: ["Locations · Water tanker stand"] }] },
+      { id: "aunty", ini: "A2", name: "Aunty on the second floor", kind: "Authored by PP · authenticity", avBg: "oklch(0.50 0.17 27)", n: 4, reads: "Research (Sunita interview), Bible", brief: "A woman who has lived in a chawl for forty years reads the script and tells you what would never happen.",
+        cares: "Whether people behave the way people in that building behave. Who would actually say what. What nobody would do in front of neighbours.", ignores: "Structure, pace, anything a producer would say.",
+        inputs: [{ t: "Research · Sunita Pawar interview", meta: "primary", dot: "var(--add)" }, { t: "Bible · How water works", meta: "canon", dot: "var(--add)" }, { t: "Research · Chawl life photos", meta: "not readable", dot: "var(--line)" }],
+        history: [{ d: "Draft 4", n: 6, w: "100%", bg: "var(--ink3)" }, { d: "Draft 5", n: 4, w: "66%", bg: "var(--accent)" }], trend: "Two closed. Both were about who carries water.",
+        notes: [
+          { sev: "authenticity", color: "var(--accent)", ref: "E1 Sc 3", page: "6", t: "Meera wouldn't argue with the driver in front of the line.", why: "Sunita: you don't say it, you plan around it. Arguing costs you your place tomorrow. She'd pay the boy, or she'd say nothing and go to Kadam.", sources: ["Research · Sunita interview, min 9", "Bible · Water · rule 3"] },
+          { sev: "authenticity", color: "var(--note)", ref: "E1 Sc 9", page: "21", t: "Nobody fills a bucket to a line. They fill it to the top and cover it.", why: "The pencil line is a writer's image. If you want a measure, it's the number of vessels, not a mark on one.", sources: ["Research · Sunita interview, min 6"] },
+          { sev: "authenticity", color: "var(--note)", ref: "E1 Sc 5", page: "12", t: "The men wouldn't be in the courtyard at dusk. The women would.", why: "Dusk queue is women and children. Men come home after. Anil can be there if he's unemployed, which tells us something.", sources: ["Research · Sunita interview, min 12"] },
+          { sev: "question", color: "var(--ink3)", ref: "E1 Sc 1", page: "1", t: "Does the corridor have a tap of its own, or is it the floor's?", why: "Bible says one per floor. The scene reads as if it's hers.", sources: ["Bible · Water · rule 1"] }
+        ] }
+    ];
+    const lens = lenses.find((l) => l.id === view) || lenses[0];
+    const isLens = lenses.some((l) => l.id === view);
+    const lensNotes = lens.notes.filter((n) => s.sev === "all" || (s.sev === "high" ? n.color === "var(--accent)" : n.color !== "var(--accent)")).map((n) => ({ ...n, sources: n.sources.map((t) => ({ t })) }));
+
+    const P = (ini, name, bg, eps, voice, gap, gapWarn) => ({ ini, name, bg, voice: voice + "%", gap, gapInk: gapWarn ? "var(--note)" : "var(--ink3)", eps: eps.map((v) => ({ v: v || "—", ink: v ? "var(--ink)" : "var(--ink3)", pct: Math.round(v / 34 * 100) + "%" })) });
+    const presence = [
+      P("M", "Meera", "oklch(0.50 0.17 27)", [28, 24, 27], 41, "—"),
+      P("A", "Anil", "oklch(0.55 0.10 300)", [9, 14, 11], 14, "Sc 6–19 in E1", true),
+      P("K", "Kadam", "oklch(0.45 0.05 250)", [4, 6, 8], 12, "—"),
+      P("F", "Farida", "oklch(0.48 0.10 150)", [1, 9, 2], 9, "all of E3 but Sc 30", true),
+      P("D", "Driver", "oklch(0.55 0.08 75)", [3, 3, 1], 4, "—"),
+      P("KM", "Kadam's man", "oklch(0.40 0.02 260)", [2, 4, 5], 2, "—")
+    ];
+
+    const reports = [{ id: "pacing", name: "Pacing", icon: "▮", meta: "E1" }, { id: "presence", name: "Presence", icon: "◍", meta: "series" }, { id: "dialogue", name: "Dialogue", icon: "❝", meta: "E1" }, { id: "locations", name: "Where it lives", icon: "⌖", meta: "series" }];
+
+    return {
+      theme: s.theme, themeIcon: dark ? "☀" : "☾", toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      navOpen, navLabel: navOpen ? "Hide nav" : "Show nav", toggleNav: () => this.setState({ navOverride: !navOpen }),
+      scopes: [["E1", "Episode 1"], ["series", "Series"]].map(([id, name]) => ({ name, bg: s.scope === id ? on : off, border: s.scope === id ? "var(--line)" : "var(--line2)", ink: s.scope === id ? "var(--ink)" : "var(--ink2)", go: () => this.setState({ scope: id }) })),
+      reportNav: reports.map((r) => ({ ...r, bg: view === r.id ? "var(--accent-bg)" : off, border: view === r.id ? "var(--accent-line)" : "transparent", ink: view === r.id ? "var(--ink)" : "var(--ink2)", select: () => this.setState({ view: r.id === "dialogue" || r.id === "locations" ? "pacing" : r.id }) })),
+      lensNav: lenses.map((l) => ({ ...l, bg: view === l.id ? "var(--accent-bg)" : off, border: view === l.id ? "var(--accent-line)" : "transparent", ink: view === l.id ? "var(--ink)" : "var(--ink2)", nInk: l.n ? "var(--ink)" : "var(--ink3)", select: () => this.setState({ view: l.id, sev: "all" }) })),
+      isEmpty: view === "empty", isPacing: view === "pacing", isPresence: view === "presence", isLens: isLens,
+      runLabel: isLens ? "Run on Draft 5" : "Recompute",
+      bars, pacingStats: [
+        { k: "Length", v: Math.floor(totalE / 8) + " " + (totalE % 8) + "/8 pp", sub: "34 scenes · avg " + (totalE / 34 / 8).toFixed(1) + " pp", subInk: "var(--ink3)" },
+        { k: "Dialogue", v: Math.round(avgD * 100) + "%", sub: "of the page, by line", subInk: "var(--ink3)" },
+        { k: "Longest run", v: "4 scenes", sub: "Sc 4–7 · all dialogue-heavy", subInk: "var(--note)" },
+        { k: "Act 2", v: "58%", sub: "of pages · usually 45–55", subInk: "var(--note)" }
+      ],
+      pacingNotes: [
+        { color: "var(--note)", t: "Sc 4–7 are four dialogue scenes in a row, 39 pages in.", why: "Same location type, same register. The Showrunner lens says one would do; either way, break the run with an action beat.", ref: "E1 Sc 4" },
+        { color: "var(--note)", t: "Act 2 carries 58% of the pages.", why: "Act 1 closes at Sc 11 (p. 28). Act 3 opens at Sc 27 (p. 87). The middle is long for a 45-minute slot.", ref: "Outline" },
+        { color: "var(--ink3)", t: "Sc 33 is the longest scene and 90% dialogue.", why: "Placed second to last. Check that the final image still lands after it.", ref: "E1 Sc 33" }
+      ],
+      presence, presenceNotes: [
+        { color: "var(--note)", t: "Anil disappears for 14 scenes in E1.", why: "Sc 6 to Sc 19. His thread starts at Sc 5, then goes quiet for 40 pages. A viewer will have forgotten him.", ref: "E1 Sc 5" },
+        { color: "var(--note)", t: "Farida has one scene in E1 and two in E3.", why: "E2 is hers (9 scenes). If she matters in the finale, E3 needs to keep her present.", ref: "Presence" }
+      ],
+      lens: { ...lens, inputs: lens.inputs, history: lens.history }, lensNotes,
+      sevFilters: [["all", "All"], ["high", "Strong"], ["low", "Softer"]].map(([id, name]) => ({ name, bg: s.sev === id ? on : off, ink: s.sev === id ? "var(--ink)" : "var(--ink3)", go: () => this.setState({ sev: id }) })),
+      headerNote: isLens ? lens.notes.length + " notes on Episode 1 · every note cites what it read" : view === "pacing" ? "computed from Draft 5 · nothing here is an opinion" : view === "presence" ? "who is on the page, per episode" : "",
+      footerNote: isLens ? lens.name + " · " + lensNotes.length + " shown" : view === "pacing" ? "Pacing · Sc " + (s.selBar + 1) + " selected" : "Presence",
+      routeTail: isLens ? "lens/" + lens.id : view,
+      rail: [
+        { name: "Writing", icon: "✎", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Characters", icon: "◍", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Locations", icon: "⌖", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Timeline", icon: "◷", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Bible", icon: "◈", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Research", icon: "▧", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Insights", icon: "◎", bg: on, ink: "var(--ink)", bar: "var(--accent)" },
+        { name: "Production", icon: "▶", bg: off, ink: "var(--ink2)", bar: "transparent" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

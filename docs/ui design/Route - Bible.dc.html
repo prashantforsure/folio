@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --focus:oklch(0.50 0.17 27);
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --focus:oklch(0.72 0.14 30);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s,opacity .12s}
+input{font-family:inherit;color:inherit}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ICON RAIL ── -->
+  <div style="width:66px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 5px 10px;gap:3px">
+    <div style="width:28px;height:28px;border-radius:3px;background:var(--ink);color:var(--desk);font-size:10.5px;font-weight:600;letter-spacing:.02em;display:grid;place-items:center;margin-bottom:12px">ML</div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8">
+      <button title="{{ r.name }}" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="position:relative;width:56px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ r.bg }};border:none;border-radius:3px;cursor:pointer;color:{{ r.ink }}">
+        <span style="position:absolute;left:-5px;top:12px;bottom:12px;width:2px;border-radius:1px;background:{{ r.bar }}"></span>
+        <span style="font-size:14px;line-height:1">{{ r.icon }}</span>
+        <span style="font-size:8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;line-height:1;white-space:nowrap">{{ r.name }}</span>
+        <sc-if value="{{ r.badge }}" hint-placeholder-val="{{ false }}">
+          <span style="position:absolute;top:4px;right:6px;min-width:13px;height:13px;padding:0 3px;border-radius:3px;background:var(--note);color:var(--rail);font-size:8.5px;font-weight:700;display:grid;place-items:center">{{ r.badge }}</span>
+        </sc-if>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:56px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:13px;color:var(--ink3)">{{ themeIcon }}</button>
+    <div title="Project settings" style="width:56px;height:34px;display:grid;place-items:center;border-radius:3px;cursor:pointer;font-size:14px;color:var(--ink3)">⚙</div>
+    <div style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;margin-top:6px">PP</div>
+  </div>
+
+  <!-- ── BIBLE NAV ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:252px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="padding:11px 10px 8px;display:flex;align-items:center;gap:6px">
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Monsoon Line</span>
+      <button title="New entry" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:14px">＋</button>
+    </div>
+    <div style="padding:0 10px 10px">
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 9px;background:var(--sheet);border:1px solid var(--line2);border-radius:3px">
+        <span style="font-size:11px;color:var(--ink3)">⌕</span>
+        <input placeholder="Search the bible" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font-size:11.5px;color:var(--ink)">
+      </div>
+    </div>
+    <nav style="flex:1;overflow-y:auto;padding:0 6px 14px;display:flex;flex-direction:column;gap:10px">
+      <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <div style="display:flex;align-items:center;padding:0 8px 3px">
+            <span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">{{ sec.name }}</span>
+            <span style="font-size:9.5px;color:var(--ink3)">{{ sec.n }}</span>
+          </div>
+          <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="2">
+            <div onClick="{{ it.select }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:{{ it.bg }};border:1px solid {{ it.border }};border-radius:3px;cursor:pointer">
+              <span style="flex:1;min-width:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ it.ink }}">{{ it.title }}</span>
+              <sc-if value="{{ it.warn }}" hint-placeholder-val="{{ false }}"><span title="Contradicted in the script" style="flex:none;width:6px;height:6px;border-radius:50%;background:var(--note)"></span></sc-if>
+              <span style="flex:none;font-size:9.5px;color:{{ it.statusInk }}">{{ it.status }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </nav>
+    <div style="padding:10px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:5px;font-size:10.5px;color:var(--ink2)">
+      <div style="display:flex;justify-content:space-between"><span>Canon facts</span><span style="font-weight:500;color:var(--ink)">{{ factTotal }}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Contradicted in script</span><span style="font-weight:500;color:var(--note)">{{ conflictN }}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Readable by Insights</span><span style="font-weight:500;color:var(--ink)">on</span></div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line)">
+      <span style="flex:none;font-family:var(--serif);font-size:21px;font-weight:500;letter-spacing:-.01em;line-height:1">Bible</span>
+      <span style="flex:1;min-width:0;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ headerNote }}</span>
+      <div style="flex:none;display:flex;padding:2px;border:1px solid var(--line2);border-radius:3px;gap:2px">
+        <sc-for list="{{ viewTabs }}" as="t" hint-placeholder-count="3">
+          <button onClick="{{ t.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:none;border-radius:3px;cursor:pointer;font-size:11.5px;background:{{ t.bg }};color:{{ t.ink }};white-space:nowrap">
+            <span style="font-size:10px;opacity:.7">{{ t.icon }}</span>{{ t.name }}
+            <sc-if value="{{ t.badge }}" hint-placeholder-val="{{ false }}"><span style="min-width:14px;height:14px;padding:0 4px;border-radius:3px;background:var(--note);color:var(--rail);font-size:9px;font-weight:700;display:grid;place-items:center">{{ t.badge }}</span></sc-if>
+          </button>
+        </sc-for>
+      </div>
+      <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:4px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2);white-space:nowrap">Export bible <span style="font-size:9px;color:var(--ink3)">PDF</span></button>
+      <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap"><span style="font-size:11px;opacity:.75">＋</span>Entry</button>
+    </header>
+
+    <div style="flex:1;min-height:0;display:flex">
+
+      <!-- ════ EMPTY ════ -->
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px">
+          <div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px;padding:22px 24px 24px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Bible · 0 entries</span>
+              <span style="font-family:var(--serif);font-size:22px;font-weight:500;line-height:1.15">The rules of the world live here</span>
+              <span style="font-size:12px;line-height:1.55;color:var(--ink2)">How things work, what happened before page one, what words mean. Write a rule once, cite where the script establishes it, and get told when a later scene breaks it.</span>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:12px;font-weight:600"><span style="font-size:10px">✦</span>Draft from the script</button>
+              <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink2)">Start with sections</button>
+            </div>
+            <span style="font-size:10.5px;color:var(--ink3)">Drafting reads 3 episodes and proposes premise, rules, history and a glossary. Nothing is canon until you mark it.</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ ENTRY ════ -->
+      <sc-if value="{{ isEntry }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:22px 26px 60px">
+          <div style="max-width:720px;display:flex;flex-direction:column;gap:22px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink3)">
+                <span>{{ entry.section }}</span><span>·</span>
+                <span style="display:inline-flex;align-items:center;gap:5px;color:{{ entry.statusInk }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ entry.statusInk }}"></span>{{ entry.statusLabel }}</span>
+                <span>·</span><span>edited {{ entry.edited }}</span>
+              </div>
+              <h1 style="margin:0;font-family:var(--serif);font-size:34px;font-weight:500;letter-spacing:-.015em;line-height:1.05;text-wrap:pretty">{{ entry.title }}</h1>
+              <p style="margin:0;font-family:var(--serif);font-size:16px;line-height:1.55;color:var(--ink2);text-wrap:pretty">{{ entry.lede }}</p>
+            </div>
+
+            <sc-if value="{{ entry.isPitch }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">One page</span>
+                  <span style="font-size:10.5px;color:var(--ink3)">reads as a document when exported</span>
+                  <span style="flex:1"></span>
+                  <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:3px 9px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--ink2);white-space:nowrap">Export pitch <span style="font-size:9px;color:var(--ink3)">PDF</span></button>
+                </div>
+                <div style="display:flex;flex-direction:column;border-top:1px solid var(--line)">
+                  <sc-for list="{{ entry.fields }}" as="f" hint-placeholder-count="7">
+                    <div style="display:grid;grid-template-columns:120px minmax(0,1fr);gap:16px;align-items:start;padding:12px 0;border-bottom:1px solid var(--line2)">
+                      <span style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);padding-top:4px">{{ f.k }}</span>
+                      <span style-hover="background:var(--hover)" style="font-family:var(--serif);font-size:15.5px;line-height:1.5;text-wrap:pretty;cursor:text;margin:-4px -6px;padding:4px 6px;border-radius:3px">{{ f.v }}</span>
+                    </div>
+                  </sc-for>
+                  <div style-hover="color:var(--ink)" style="padding:10px 0;font-size:12px;color:var(--ink3);cursor:text">Add a field…</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ entry.isRules }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Rules</span>
+                <span style="font-size:10.5px;color:var(--ink3)">each cites the scene that establishes it</span>
+              </div>
+              <div style="display:flex;flex-direction:column;border-top:1px solid var(--line)">
+                <sc-for list="{{ entry.facts }}" as="f" hint-placeholder-count="5">
+                  <div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:12px;align-items:start;padding:11px 0;border-bottom:1px solid var(--line2);background:{{ f.bg }}">
+                    <span style="font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums;padding-top:3px">{{ f.n }}</span>
+                    <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                      <span style="font-family:var(--serif);font-size:15.5px;line-height:1.45;text-wrap:pretty">{{ f.t }}</span>
+                      <sc-if value="{{ f.hasConflict }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border-radius:3px;background:var(--note-bg);border:1px solid var(--note)">
+                          <span style="flex:none;font-size:11px;color:var(--note)">⚠</span>
+                          <span style="flex:1;font-size:11.5px;line-height:1.5">{{ f.conflict }}</span>
+                          <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 8px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--ink2);white-space:nowrap">Update rule</button>
+                          <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 8px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--ink3);white-space:nowrap">Fix scene</button>
+                        </div>
+                      </sc-if>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:150px">
+                      <sc-for list="{{ f.cites }}" as="c" hint-placeholder-count="1">
+                        <a href="#" style="padding:1px 6px;border-radius:3px;background:var(--sheet);border:1px solid var(--line2);font-size:10px;color:var(--ink2);white-space:nowrap">{{ c.r }}</a>
+                      </sc-for>
+                      <sc-if value="{{ f.uncited }}" hint-placeholder-val="{{ false }}"><span style="padding:1px 6px;border-radius:3px;border:1px dashed var(--line);font-size:10px;color:var(--ink3);white-space:nowrap">not yet on the page</span></sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+                <div style-hover="color:var(--ink)" style="padding:10px 0 10px 34px;font-size:12px;color:var(--ink3);cursor:text">Add a rule…</div>
+              </div>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ entry.isRules }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Notes</span>
+              <sc-for list="{{ entry.notes }}" as="p" hint-placeholder-count="2">
+                <p style="margin:0;font-family:var(--serif);font-size:15px;line-height:1.6;color:var(--ink);text-wrap:pretty">{{ p.t }}</p>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Open questions</span>
+              <sc-for list="{{ entry.questions }}" as="q" hint-placeholder-count="2">
+                <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line2)">
+                  <span style="flex:none;margin-top:4px;width:12px;height:12px;border:1px solid var(--line);border-radius:2px"></span>
+                  <span style="flex:1;font-size:13px;line-height:1.5">{{ q.t }}</span>
+                  <span style="flex:none;font-size:10.5px;color:var(--ink3)">{{ q.who }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <aside style="width:264px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:auto">
+          <div style="padding:12px 14px 10px;border-bottom:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Status</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--line2)">
+            <div style="display:flex;padding:2px;border:1px solid var(--line2);border-radius:3px;gap:2px">
+              <sc-for list="{{ statusTabs }}" as="st" hint-placeholder-count="3">
+                <button onClick="{{ st.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:4px 6px;border:none;border-radius:3px;cursor:pointer;font-size:11px;background:{{ st.bg }};color:{{ st.ink }}">{{ st.name }}</button>
+              </sc-for>
+            </div>
+            <span style="font-size:10.5px;line-height:1.5;color:var(--ink3)">{{ statusNote }}</span>
+          </div>
+          <div style="padding:12px 14px 10px;border-bottom:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Linked</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line2)">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:10px;color:var(--ink3)">Characters</span>
+              <div style="display:flex;flex-wrap:wrap;gap:5px"><sc-for list="{{ entry.chars }}" as="c" hint-placeholder-count="2"><a href="#" style="padding:2px 8px;border-radius:3px;background:var(--sel);font-size:10.5px;color:var(--ink)">{{ c.n }}</a></sc-for></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:10px;color:var(--ink3)">Locations</span>
+              <div style="display:flex;flex-wrap:wrap;gap:5px"><sc-for list="{{ entry.locs }}" as="c" hint-placeholder-count="2"><a href="#" style="padding:2px 8px;border-radius:3px;background:var(--sel);font-size:10.5px;color:var(--ink)">{{ c.n }}</a></sc-for></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:10px;color:var(--ink3)">Also see</span>
+              <sc-for list="{{ entry.related }}" as="r" hint-placeholder-count="2"><a href="#" onClick="{{ r.go }}" style="font-size:11.5px">{{ r.t }} →</a></sc-for>
+            </div>
+          </div>
+          <div style="padding:12px 14px 10px;border-bottom:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">In the script</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;font-size:11.5px"><span style="color:var(--ink2)">Scenes that touch this</span><span style="font-weight:500;font-variant-numeric:tabular-nums">{{ entry.mentions }}</span></div>
+            <div style="display:flex;align-items:flex-end;gap:4px;height:36px">
+              <sc-for list="{{ entry.perEp }}" as="e" hint-placeholder-count="4">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end">
+                  <span style="width:100%;height:{{ e.h }};background:{{ e.bg }};border-radius:2px 2px 0 0"></span>
+                  <span style="font-size:9px;color:var(--ink3)">{{ e.ep }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <a href="#" style="font-size:11px">Show mentions in Script →</a>
+          </div>
+          <div style="flex:1"></div>
+          <div style="padding:10px 14px;border-top:1px solid var(--line2);display:flex;gap:6px">
+            <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:5px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">History</button>
+            <button style-hover="background:var(--del-bg);color:var(--del)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:5px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink3)">Retire</button>
+          </div>
+        </aside>
+      </sc-if>
+
+      <!-- ════ CANON CHECK ════ -->
+      <sc-if value="{{ isCheck }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:20px 22px 60px">
+          <div style="max-width:820px;display:flex;flex-direction:column;gap:14px">
+            <p style="margin:0;font-size:11.5px;line-height:1.5;color:var(--ink2);max-width:70ch">Every canon rule read against the current draft. A conflict means a scene says something the rule forbids. Decide which one is right.</p>
+            <sc-for list="{{ conflicts }}" as="c" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:10px;padding:13px 15px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+                <div style="display:flex;align-items:flex-start;gap:10px">
+                  <span style="flex:none;margin-top:4px;width:7px;height:7px;border-radius:50%;background:var(--note)"></span>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                    <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">{{ c.entry }}</span>
+                    <span style="font-family:var(--serif);font-size:16px;line-height:1.35;text-wrap:pretty">{{ c.rule }}</span>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-left:17px">
+                  <div style="display:flex;flex-direction:column;gap:3px;padding:8px 10px;background:var(--sheet);border:1px solid var(--line2);border-radius:3px">
+                    <span style="font-size:10px;color:var(--ink3)">Established · {{ c.estRef }}</span>
+                    <span style="font-family:'Courier Prime',monospace;font-size:11px;line-height:1.5;color:var(--ink2)">{{ c.est }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:3px;padding:8px 10px;background:var(--note-bg);border:1px solid var(--note);border-radius:3px">
+                    <span style="font-size:10px;color:var(--note)">Contradicts · {{ c.conRef }}</span>
+                    <span style="font-family:'Courier Prime',monospace;font-size:11px;line-height:1.5;color:var(--ink)">{{ c.con }}</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px;padding-left:17px">
+                  <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:var(--ink);color:var(--desk);border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:600">Rule is right · flag scene</button>
+                  <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Scene is right · update rule</button>
+                  <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink3)">Both fine</button>
+                </div>
+              </div>
+            </sc-for>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--add-bg);border:1px solid var(--line2);border-radius:3px;font-size:11.5px">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--add)"></span>{{ okN }} other rules hold across all 3 episodes.
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ GLOSSARY ════ -->
+      <sc-if value="{{ isGlossary }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:20px 22px 60px">
+          <div style="max-width:820px;display:flex;flex-direction:column;gap:12px">
+            <p style="margin:0;font-size:11.5px;line-height:1.5;color:var(--ink2);max-width:70ch">Words the audience has to learn. Each shows where it is first said and how often it recurs; terms used once may need a second landing.</p>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:3px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:150px minmax(0,1fr) 90px 60px;gap:12px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">
+                <span>Term</span><span>Meaning in this story</span><span>First said</span><span>Uses</span>
+              </div>
+              <sc-for list="{{ glossary }}" as="g" hint-placeholder-count="7">
+                <div style-hover="background:var(--hover)" style="display:grid;grid-template-columns:150px minmax(0,1fr) 90px 60px;gap:12px;align-items:start;padding:10px 14px;border-bottom:1px solid var(--line2);cursor:pointer">
+                  <span style="font-family:var(--serif);font-size:15px;font-weight:500;line-height:1.3">{{ g.term }}</span>
+                  <span style="font-size:12px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{{ g.def }}</span>
+                  <span style="font-size:11px;color:var(--ink2);padding-top:2px">{{ g.first }}</span>
+                  <span style="font-size:11px;padding-top:2px;color:{{ g.usesInk }};font-variant-numeric:tabular-nums">{{ g.uses }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <footer style="height:28px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--ink2);overflow:hidden">
+      <span style="flex:none;white-space:nowrap"><b style="font-weight:600;color:var(--ink)">{{ entryTotal }}</b> entries · {{ factTotal }} rules · {{ glossaryN }} terms</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ footerNote }}</span>
+      <div style="flex:1;min-width:0"></div>
+      <button onClick="{{ toggleNav }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);white-space:nowrap">{{ navLabel }}</button>
+      <span style="flex:none;display:flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--add)"></span>saved 6s ago</span>
+      <span style="flex:none;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap">/bible/{{ entry.id }}</span>
+    </footer>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;entry&quot;,&quot;check&quot;,&quot;glossary&quot;],&quot;default&quot;:&quot;entry&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;empty&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "light",
+    view: this.props.view || "entry",
+    sel: "water",
+    status: {},
+    navOverride: null,
+    w: typeof window === "undefined" ? 1440 : window.innerWidth
+  };
+  componentDidMount() {
+    this._r = () => this.setState({ w: window.innerWidth });
+    window.addEventListener("resize", this._r); this._r();
+  }
+  componentWillUnmount() { window.removeEventListener("resize", this._r); }
+  componentDidUpdate(p) { if (p.view !== this.props.view && this.props.view) this.setState({ view: this.props.view }); }
+
+  data() {
+    const F = (t, cites, conflict) => ({ t, cites: cites || [], conflict: conflict || "" });
+    return [
+      { sec: "Premise", id: "pitch", title: "Pitch", status: "canon", kind: "pitch", lede: "The producer-facing page. Short fields, exportable on its own, kept apart from the rules so it can be blunt about market without leaking into the writing.",
+        fields: [
+          ["Logline", "When a Mumbai chawl loses its water for nine days, a laundress in the queue learns who controls the tanker, and what it costs to take that control from him."],
+          ["Genre", "Social drama · slow-burn thriller"],
+          ["Format", "Limited series · 6 × 45 min · Hindi with Marathi"],
+          ["Audience", "Adults 25–45 who watched Delhi Crime and Paatal Lok; streaming-first, subtitles expected."],
+          ["Comparables", "Delhi Crime for tone. Kota Factory for building-as-world. Neither has water."],
+          ["Positioning", "The first Indian series where the antagonist is a utility. Cheap to shoot: one building, one street, one truck."],
+          ["Status", "Episodes 1–3 drafted, E4 in outline. Bible and timeline current."]
+        ],
+        facts: [], notes: [], questions: [{ t: "Is 6 × 45 still the ask, or has it moved to 8 × 30?", who: "PP" }], chars: [], locs: [], mentions: 0, perEp: [0, 0, 0, 0], edited: "today" },
+      { sec: "Premise", id: "premise", title: "What the series is about", status: "canon", lede: "A Mumbai chawl loses its water for nine days. The people who control the tanker learn what they can charge for it; the people in the queue learn what they will pay.",
+        facts: [F("Water is never the villain. People are.", ["E1 Sc 4"]), F("Nobody leaves the building. The world is the chawl and the street outside it.", ["E1 Sc 1", "E3 Sc 30"])],
+        notes: ["The tone is dry rather than desperate. Scenes end on a practical decision, not a reaction shot."], questions: [{ t: "Is E4 the end, or a season break?", who: "PP" }], chars: ["Meera"], locs: ["Kamathi Chawl"], mentions: 34, perEp: [8, 8, 9, 2], edited: "3 days ago" },
+      { sec: "How things work", id: "water", title: "How water works in the chawl", status: "canon", lede: "One shared tap per floor. Pressure for ninety minutes in the morning, if at all. When the pipe fails, the tanker is the only source, and the tanker answers to Kadam.",
+        facts: [
+          F("Municipal supply reaches the chawl for 06:00–07:30 only. Outside that window the taps are dry.", ["E1 Sc 1", "E1 Sc 3"]),
+          F("The tanker comes once, in the morning, and never waits.", ["E1 Sc 3", "E1 Sc 14"], "E3 Sc 8 has Meera waiting for a 09:00 tanker that never comes. Either the schedule slipped on purpose, or the rule needs a window."),
+          F("Every family gets two buckets per tanker visit. A third costs forty rupees, cash, to the driver.", ["E1 Sc 3"]),
+          F("The rooftop tank has been sealed since 1997. Nobody living in the building has seen inside it.", ["E1 Sc 12"]),
+          F("Illegal motor connections exist on the ground floor and everyone knows whose.", []),
+          F("Kadam's water charge is added to rent, not billed separately, so it never appears on a BMC statement.", ["E1 Sc 4", "E2 Sc 9"])
+        ],
+        notes: ["The rules should feel like weather: nobody explains them, people just plan around them. If a scene needs to state a rule aloud, it should be because someone is breaking it.", "Rule 5 has not been dramatised yet. It's the lever for E4."],
+        questions: [{ t: "Does the 06:00 window change during the monsoon or is that the point of the title?", who: "PP" }, { t: "Who physically opens the tank in E3 Sc 17, and does that need a key we've never seen?", who: "AR" }],
+        chars: ["Meera", "Kadam", "Driver"], locs: ["Kamathi Chawl", "Water tanker stand"], mentions: 19, perEp: [7, 5, 6, 1], edited: "yesterday" },
+      { sec: "How things work", id: "billing", title: "Kadam's operation", status: "canon", lede: "Kadam owns four rooms and manages thirty-one. The water charge is his, not the city's.",
+        facts: [F("Kadam never touches money on screen. His man does.", ["E2 Sc 11"]), F("The ward office knows and does nothing until a paper forces it.", ["E2 Sc 9"])],
+        notes: ["He is reasonable in every scene. That is what should be frightening."], questions: [], chars: ["Kadam", "Kadam's man"], locs: ["Kadam's office", "Ward office"], mentions: 11, perEp: [2, 4, 5, 0], edited: "4 days ago" },
+      { sec: "History", id: "drought", title: "The 1997 drought", status: "canon", lede: "The summer the building's tank was sealed. Meera was nine.",
+        facts: [F("The tank was sealed by the landlord's father with the tenants' consent, on paper.", ["E3 Sc 22"]), F("Meera's father signed. She watched.", ["E3 Sc 22"], "E1 Sc 12 shows Young Meera alone on the roof with no adults from the building present. If her father signs in E3, he should be visible or accounted for in E1.")],
+        notes: ["Two flashbacks total. No more; the past should be a wound, not a subplot."], questions: [{ t: "Did anyone die in 1997, or is the loss purely the tank?", who: "PP" }], chars: ["Meera", "Young Meera"], locs: ["Kamathi Chawl"], mentions: 4, perEp: [1, 0, 3, 0], edited: "1 week ago" },
+      { sec: "History", id: "building", title: "The building before Meera", status: "draft", lede: "Built 1931 for mill workers. Three owners. One court case, still open.", facts: [F("The 2009 redevelopment notice was never withdrawn.", [])], notes: [], questions: [{ t: "Does the redevelopment thread belong in this season?", who: "PP" }], chars: [], locs: ["Kamathi Chawl"], mentions: 0, perEp: [0, 0, 0, 0], edited: "2 weeks ago" },
+      { sec: "Themes", id: "scarcity", title: "Scarcity as leverage", status: "canon", lede: "Whoever controls the shortage controls the people. The series watches that control move from Kadam to Meera and asks whether it changes her.",
+        facts: [F("Meera never asks for water. She asks for information.", ["E1 Sc 4", "E2 Sc 9"]), F("Anil is the only character who gives something away without being asked.", ["E2 Sc 6"])],
+        notes: ["Avoid speeches. The theme is carried by who holds the bucket in each scene."], questions: [], chars: ["Meera", "Anil"], locs: [], mentions: 14, perEp: [4, 5, 5, 0], edited: "5 days ago" },
+      { sec: "Themes", id: "sound", title: "Sound carries", status: "draft", lede: "The building has no privacy. Every scene should be overhearable by someone.", facts: [F("At least one scene per episode is heard, not seen, by a third party.", ["E1 Sc 5", "E2 Sc 11"])], notes: [], questions: [], chars: [], locs: ["Kamathi Chawl"], mentions: 6, perEp: [2, 2, 2, 0], edited: "1 week ago" }
+    ];
+  }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    const navOpen = s.navOverride === null ? s.w >= 1000 : s.navOverride;
+    const empty = this.props.empty === true;
+    const view = empty ? "empty" : s.view;
+    const all = this.data();
+    const statusOf = (e) => s.status[e.id] || e.status;
+    const statusMeta = { canon: ["Canon", "var(--add)"], draft: ["Draft", "var(--ink3)"], retired: ["Retired", "var(--del)"] };
+
+    const secOrder = ["Premise", "How things work", "History", "Themes"];
+    const sections = secOrder.map((name) => {
+      const items = all.filter((e) => e.sec === name);
+      return { name, n: items.length, items: items.map((e) => {
+        const isSel = e.id === s.sel, st = statusOf(e);
+        return { title: e.title, warn: e.facts.some((f) => f.conflict), status: e.kind === "pitch" ? "Export" : statusMeta[st][0], statusInk: e.kind === "pitch" ? "var(--accent)" : statusMeta[st][1],
+          bg: isSel ? "var(--accent-bg)" : off, border: isSel ? "var(--accent-line)" : "transparent", ink: isSel ? "var(--ink)" : "var(--ink2)",
+          select: () => this.setState({ sel: e.id, view: "entry" }) };
+      }) };
+    });
+    sections.push({ name: "Reference", n: 1, items: [{ title: "Glossary", warn: false, status: "7 terms", statusInk: "var(--ink3)", bg: view === "glossary" ? "var(--accent-bg)" : off, border: view === "glossary" ? "var(--accent-line)" : "transparent", ink: view === "glossary" ? "var(--ink)" : "var(--ink2)", select: () => this.setState({ view: "glossary" }) }] });
+
+    const e = all.find((x) => x.id === s.sel) || all[1];
+    const st = statusOf(e);
+    const entry = {
+      id: e.id, section: e.sec, title: e.title, lede: e.lede, edited: e.edited,
+      isPitch: e.kind === "pitch", isRules: e.kind !== "pitch",
+      fields: (e.fields || []).map(([k, v]) => ({ k, v })),
+      statusLabel: statusMeta[st][0], statusInk: statusMeta[st][1],
+      facts: e.facts.map((f, i) => ({ n: i + 1, t: f.t, cites: f.cites.map((r) => ({ r })), uncited: !f.cites.length, hasConflict: !!f.conflict, conflict: f.conflict, bg: f.conflict ? "var(--note-bg)" : "transparent" })),
+      notes: e.notes.map((t) => ({ t })), questions: e.questions,
+      chars: e.chars.map((n) => ({ n })), locs: e.locs.map((n) => ({ n })),
+      related: all.filter((x) => x.id !== e.id && x.sec === e.sec).slice(0, 2).map((x) => ({ t: x.title, go: () => this.setState({ sel: x.id }) })),
+      mentions: e.mentions, perEp: e.perEp.map((n, i) => ({ ep: "E" + (i + 1), h: (n ? Math.max(10, Math.round(n / 9 * 100)) : 3) + "%", bg: n ? "var(--ink2)" : "var(--line)" }))
+    };
+
+    const conflicts = [];
+    for (const x of all) for (const f of x.facts) if (f.conflict) conflicts.push({ entry: x.title, rule: f.t, estRef: f.cites[0] || "—", est: x.id === "water" ? "The tanker's horn at 06:40. MEERA is already fourth in line." : "MEERA (9) alone at the tank as men in shirts seal the hatch.", conRef: x.id === "water" ? "E3 Sc 8" : "E1 Sc 12", con: f.conflict.split(".")[0] + "." });
+    const factTotal = all.reduce((a, x) => a + x.facts.length, 0);
+
+    const glossary = [
+      ["Chawl", "A tenement block of single rooms off shared corridors. Here: the whole world.", "E1 Sc 1", 41],
+      ["Kholi", "One family's room. Ten by twelve feet. Where you sleep, cook, and store water.", "E1 Sc 9", 9],
+      ["Paani ka time", "The ninety minutes when the tap might run. Said as a clock, not a hope.", "E1 Sc 1", 12],
+      ["Tanker", "The private truck that replaces the pipe. Owned by nobody you can name.", "E1 Sc 3", 22],
+      ["Valve-man", "Kadam's employee who decides which floor gets pressure. Never named.", "E2 Sc 11", 5],
+      ["BMC", "The municipal corporation. The bill comes from them; the water doesn't.", "E1 Sc 4", 8],
+      ["The tank", "The sealed rooftop tank. Always with the article.", "E1 Sc 12", 3]
+    ].map(([term, def, first, uses]) => ({ term, def, first, uses, usesInk: uses < 4 ? "var(--note)" : "var(--ink)" }));
+
+    return {
+      theme: s.theme, themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      navOpen, navLabel: navOpen ? "Hide nav" : "Show nav", toggleNav: () => this.setState({ navOverride: !navOpen }),
+      sections: empty ? [] : sections,
+      entryTotal: empty ? 0 : all.length, factTotal: empty ? 0 : factTotal, conflictN: conflicts.length, glossaryN: glossary.length, okN: factTotal - conflicts.length,
+      viewTabs: [
+        { id: "entry", name: "Entry", icon: "▤" }, { id: "check", name: "Canon check", icon: "⚠", badge: String(conflicts.length) }, { id: "glossary", name: "Glossary", icon: "≡" }
+      ].map((t) => ({ ...t, badge: t.badge || "", bg: view === t.id ? "var(--accent-bg)" : off, ink: view === t.id ? "var(--accent)" : "var(--ink2)", go: () => this.setState({ view: t.id }) })),
+      isEmpty: view === "empty", isEntry: view === "entry", isCheck: view === "check", isGlossary: view === "glossary",
+      entry, conflicts, glossary,
+      statusTabs: ["canon", "draft", "retired"].map((id) => ({ name: statusMeta[id][0], bg: st === id ? "var(--sel)" : off, ink: st === id ? "var(--ink)" : "var(--ink3)", go: () => this.setState({ status: { ...s.status, [e.id]: id } }) })),
+      statusNote: st === "canon" ? "Canon rules are checked against every draft and readable by Insights." : st === "draft" ? "Drafts aren't checked or read by Insights until promoted." : "Retired entries stay for history but are ignored.",
+      headerNote: view === "entry" ? "project-wide · rules cite the scene that establishes them" : view === "check" ? conflicts.length + " rules contradicted by the current draft" : view === "glossary" ? glossary.length + " terms the audience has to learn" : "",
+      footerNote: view === "entry" ? (e.kind === "pitch" ? "Pitch · " + e.fields.length + " fields · exportable" : e.title + " · " + e.facts.length + " rules · " + statusMeta[st][0]) : view === "check" ? conflicts.length + " open" : view === "glossary" ? "Glossary" : "Empty",
+      rail: [
+        { name: "Writing", icon: "✎", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Characters", icon: "◍", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Locations", icon: "⌖", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Timeline", icon: "◷", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Bible", icon: "◈", bg: on, ink: "var(--ink)", bar: "var(--accent)", badge: empty ? "" : String(conflicts.length) },
+        { name: "Research", icon: "▧", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Insights", icon: "◎", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Production", icon: "▶", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

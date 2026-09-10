@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --mark:oklch(0.88 0.10 85); --frame-a:oklch(0.32 0.02 50); --frame-b:oklch(0.16 0.01 50);
+  --focus:oklch(0.50 0.17 27);
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --mark:oklch(0.45 0.08 85); --frame-a:oklch(0.30 0.02 50); --frame-b:oklch(0.14 0.01 50);
+  --focus:oklch(0.72 0.14 30);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s,opacity .12s}
+input{font-family:inherit;color:inherit}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ICON RAIL ── -->
+  <div style="width:66px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 5px 10px;gap:3px">
+    <div style="width:28px;height:28px;border-radius:3px;background:var(--ink);color:var(--desk);font-size:10.5px;font-weight:600;letter-spacing:.02em;display:grid;place-items:center;margin-bottom:12px">ML</div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8">
+      <button title="{{ r.name }}" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="position:relative;width:56px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ r.bg }};border:none;border-radius:3px;cursor:pointer;color:{{ r.ink }}">
+        <span style="position:absolute;left:-5px;top:12px;bottom:12px;width:2px;border-radius:1px;background:{{ r.bar }}"></span>
+        <span style="font-size:14px;line-height:1">{{ r.icon }}</span>
+        <span style="font-size:8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;line-height:1;white-space:nowrap">{{ r.name }}</span>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:56px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:13px;color:var(--ink3)">{{ themeIcon }}</button>
+    <div title="Project settings" style="width:56px;height:34px;display:grid;place-items:center;border-radius:3px;cursor:pointer;font-size:14px;color:var(--ink3)">⚙</div>
+    <div style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;margin-top:6px">PP</div>
+  </div>
+
+  <!-- ── NAV ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:250px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="padding:11px 10px 8px;display:flex;align-items:center;gap:6px">
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Monsoon Line</span>
+      <button title="New collection" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:14px">＋</button>
+    </div>
+    <div style="padding:0 10px 10px">
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 9px;background:var(--sheet);border:1px solid var(--line2);border-radius:3px">
+        <span style="font-size:11px;color:var(--ink3)">⌕</span>
+        <input placeholder="Search sources and clips" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font-size:11.5px;color:var(--ink)">
+      </div>
+    </div>
+    <nav style="flex:1;overflow-y:auto;padding:0 6px 14px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="display:flex;align-items:center;padding:0 8px 3px"><span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Collections</span></div>
+        <sc-for list="{{ collections }}" as="c" hint-placeholder-count="5">
+          <div onClick="{{ c.select }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:{{ c.bg }};border:1px solid {{ c.border }};border-radius:3px;cursor:pointer">
+            <span style="flex:1;min-width:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ c.ink }}">{{ c.name }}</span>
+            <span style="flex:none;font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ c.n }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="display:flex;align-items:center;padding:0 8px 3px"><span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Type</span></div>
+        <sc-for list="{{ types }}" as="t" hint-placeholder-count="5">
+          <div onClick="{{ t.select }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:{{ t.bg }};border-radius:3px;cursor:pointer">
+            <span style="flex:none;width:14px;font-size:11px;color:var(--ink3)">{{ t.icon }}</span>
+            <span style="flex:1;font-size:11.5px;color:{{ t.ink }}">{{ t.name }}</span>
+            <span style="flex:none;font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ t.n }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </nav>
+    <div style="padding:10px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:5px;font-size:10.5px;color:var(--ink2)">
+      <div style="display:flex;justify-content:space-between"><span>Readable by Insights</span><span style="font-weight:500;color:var(--ink)">{{ readableN }} of {{ total }}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Clips feeding Bible</span><span style="font-weight:500;color:var(--ink)">{{ clipBible }}</span></div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line)">
+      <span style="flex:none;font-family:var(--serif);font-size:21px;font-weight:500;letter-spacing:-.01em;line-height:1">Research</span>
+      <span style="flex:1;min-width:0;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ headerNote }}</span>
+      <div style="flex:none;display:flex;padding:2px;border:1px solid var(--line2);border-radius:3px;gap:2px">
+        <sc-for list="{{ viewTabs }}" as="t" hint-placeholder-count="3">
+          <button onClick="{{ t.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:none;border-radius:3px;cursor:pointer;font-size:11.5px;background:{{ t.bg }};color:{{ t.ink }};white-space:nowrap"><span style="font-size:10px;opacity:.7">{{ t.icon }}</span>{{ t.name }}</button>
+        </sc-for>
+      </div>
+      <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:4px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2);white-space:nowrap">Paste link</button>
+      <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap"><span style="font-size:11px;opacity:.75">＋</span>Add source</button>
+    </header>
+
+    <div style="flex:1;min-height:0;display:flex">
+
+      <!-- ════ EMPTY ════ -->
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px">
+          <div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px;padding:22px 24px 24px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Research · 0 sources</span>
+              <span style="font-family:var(--serif);font-size:22px;font-weight:500;line-height:1.15">Nothing to draw on yet</span>
+              <span style="font-size:12px;line-height:1.55;color:var(--ink2)">Drop articles, PDFs, photos, interview recordings. Clip the lines that matter and send them to a Bible rule or a scene. Sources you mark readable become facts Insights can check against.</span>
+            </div>
+            <div style-hover="border-color:var(--accent-line)" style="padding:22px;border:1px dashed var(--line);border-radius:3px;text-align:center;font-size:12px;color:var(--ink2);cursor:pointer">Drop files here<span style="display:block;margin-top:3px;font-size:10.5px;color:var(--ink3)">PDF, images, audio, .txt, or a link</span></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ LIBRARY ════ -->
+      <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:18px 22px 60px">
+          <div style="max-width:1000px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:baseline;gap:8px;padding:0 2px">
+              <span style="font-family:var(--serif);font-size:18px;font-weight:500">{{ libTitle }}</span>
+              <span style="font-size:10.5px;color:var(--ink3)">{{ libCount }} sources</span>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:3px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:28px minmax(0,2fr) 110px 70px minmax(0,1.3fr) 70px;gap:12px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">
+                <span></span><span>Source</span><span>Added</span><span>Clips</span><span>Feeds</span><span>Readable</span>
+              </div>
+              <sc-for list="{{ items }}" as="it" hint-placeholder-count="8">
+                <div onClick="{{ it.open }}" style-hover="background:var(--hover)" style="display:grid;grid-template-columns:28px minmax(0,2fr) 110px 70px minmax(0,1.3fr) 70px;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line2);cursor:pointer">
+                  <span style="width:24px;height:24px;display:grid;place-items:center;border-radius:3px;background:{{ it.iconBg }};font-size:11px;color:var(--ink2)">{{ it.icon }}</span>
+                  <span style="min-width:0;display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.title }}</span>
+                    <span style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.src }} · {{ it.meta }}</span>
+                  </span>
+                  <span style="font-size:11px;color:var(--ink2)">{{ it.added }}</span>
+                  <span style="font-size:11.5px;font-variant-numeric:tabular-nums;color:{{ it.clipInk }}">{{ it.clips }}</span>
+                  <span style="display:flex;gap:4px;flex-wrap:wrap"><sc-for list="{{ it.feeds }}" as="f" hint-placeholder-count="1"><span style="padding:1px 6px;border-radius:3px;background:var(--sel);font-size:9.5px;color:var(--ink2);white-space:nowrap">{{ f.t }}</span></sc-for></span>
+                  <span title="Insights may read this" style="display:flex;align-items:center;gap:6px"><span style="width:26px;height:14px;border-radius:7px;background:{{ it.togBg }};position:relative"><span style="position:absolute;top:2px;left:{{ it.togX }};width:10px;height:10px;border-radius:50%;background:var(--sheet)"></span></span></span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ SOURCE ════ -->
+      <sc-if value="{{ isSource }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:22px 26px 60px">
+          <div style="max-width:700px;display:flex;flex-direction:column;gap:18px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink3)"><a href="#" onClick="{{ backToLibrary }}">Library</a><span>›</span><span>{{ doc.collection }}</span><span>·</span><span>{{ doc.kind }}</span></div>
+              <h1 style="margin:0;font-family:var(--serif);font-size:30px;font-weight:500;letter-spacing:-.015em;line-height:1.1;text-wrap:pretty">{{ doc.title }}</h1>
+              <span style="font-size:12px;color:var(--ink2)">{{ doc.byline }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border:1px solid var(--line2);border-radius:3px;font-size:11px;color:var(--ink2)">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--note)"></span>Select any passage to clip it. {{ doc.clipN }} clips so far.
+              <span style="flex:1"></span>
+              <span style="color:var(--ink3)">Highlighted = clipped</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px;font-family:var(--serif);font-size:16px;line-height:1.65;color:var(--ink)">
+              <sc-for list="{{ doc.paras }}" as="p" hint-placeholder-count="5">
+                <p style="margin:0;text-wrap:pretty">
+                  <sc-for list="{{ p.parts }}" as="x" hint-placeholder-count="2"><span style="background:{{ x.bg }};box-shadow:{{ x.shadow }};border-radius:2px;cursor:{{ x.cursor }}">{{ x.t }}</span></sc-for>
+                </p>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        <aside style="width:272px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:auto">
+          <div style="padding:12px 14px 10px;border-bottom:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Source</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line2);font-size:11.5px">
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--ink3)">Origin</span><a href="#" style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ doc.origin }}</a></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--ink3)">Added</span><span>{{ doc.added }}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--ink3)">Trust</span><span style="color:{{ doc.trustInk }}">{{ doc.trust }}</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center"><span style="color:var(--ink3)">Readable by Insights</span><span style="width:26px;height:14px;border-radius:7px;background:var(--add);position:relative"><span style="position:absolute;top:2px;left:14px;width:10px;height:10px;border-radius:50%;background:var(--sheet)"></span></span></div>
+          </div>
+          <div style="padding:12px 14px 10px;border-bottom:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Clips · {{ doc.clipN }}</div>
+          <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ doc.clips }}" as="c" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:6px;padding:9px 10px;background:var(--sheet);border:1px solid var(--line2);border-radius:3px">
+                <span style="font-family:var(--serif);font-size:12.5px;line-height:1.45;color:var(--ink)">“{{ c.t }}”</span>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+                  <sc-for list="{{ c.to }}" as="d" hint-placeholder-count="1"><a href="#" style="padding:1px 6px;border-radius:3px;background:var(--accent-bg);font-size:9.5px;color:var(--accent);white-space:nowrap">→ {{ d.t }}</a></sc-for>
+                  <sc-if value="{{ c.unsent }}" hint-placeholder-val="{{ false }}">
+                    <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:1px 7px;background:transparent;border:1px dashed var(--line);border-radius:3px;cursor:pointer;font-size:9.5px;color:var(--ink3)">Send to Bible</button>
+                    <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:1px 7px;background:transparent;border:1px dashed var(--line);border-radius:3px;cursor:pointer;font-size:9.5px;color:var(--ink3)">Note on scene</button>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </aside>
+      </sc-if>
+
+      <!-- ════ CLIPS ════ -->
+      <sc-if value="{{ isClips }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:20px 22px 60px">
+          <div style="max-width:820px;display:flex;flex-direction:column;gap:12px">
+            <p style="margin:0;font-size:11.5px;line-height:1.5;color:var(--ink2);max-width:70ch">Every passage you clipped, with where it went. Clips that went nowhere are the ones worth a second look before the next draft.</p>
+            <sc-for list="{{ allClips }}" as="c" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+                <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                  <span style="font-family:var(--serif);font-size:14.5px;line-height:1.45;text-wrap:pretty">“{{ c.t }}”</span>
+                  <span style="font-size:10.5px;color:var(--ink3)">{{ c.src }}</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
+                  <sc-for list="{{ c.to }}" as="d" hint-placeholder-count="1"><a href="#" style="padding:2px 8px;border-radius:3px;background:var(--accent-bg);font-size:10.5px;color:var(--accent)">→ {{ d.t }}</a></sc-for>
+                  <sc-if value="{{ c.unsent }}" hint-placeholder-val="{{ false }}"><span style="padding:2px 8px;border-radius:3px;background:var(--note-bg);font-size:10.5px;color:var(--note)">Not used yet</span></sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <footer style="height:28px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--ink2);overflow:hidden">
+      <span style="flex:none;white-space:nowrap"><b style="font-weight:600;color:var(--ink)">{{ total }}</b> sources · {{ clipTotal }} clips · {{ readableN }} readable</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ footerNote }}</span>
+      <div style="flex:1;min-width:0"></div>
+      <button onClick="{{ toggleNav }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);white-space:nowrap">{{ navLabel }}</button>
+      <span style="flex:none;display:flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--add)"></span>saved 6s ago</span>
+      <span style="flex:none;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap">/research</span>
+    </footer>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;library&quot;,&quot;source&quot;,&quot;clips&quot;],&quot;default&quot;:&quot;library&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;empty&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "light",
+    view: this.props.view || "library",
+    coll: "all", type: "all", sel: "interview",
+    navOverride: null,
+    w: typeof window === "undefined" ? 1440 : window.innerWidth
+  };
+  componentDidMount() { this._r = () => this.setState({ w: window.innerWidth }); window.addEventListener("resize", this._r); this._r(); }
+  componentWillUnmount() { window.removeEventListener("resize", this._r); }
+  componentDidUpdate(p) { if (p.view !== this.props.view && this.props.view) this.setState({ view: this.props.view }); }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    const navOpen = s.navOverride === null ? s.w >= 1000 : s.navOverride;
+    const empty = this.props.empty === true;
+    const view = empty ? "empty" : s.view;
+
+    const typeIcon = { article: "¶", pdf: "▤", image: "▣", interview: "◉", clip: "▶" };
+    const items = [
+      { id: "interview", type: "interview", coll: "Chawl life", title: "Interview · Sunita Pawar, 61, Kamathipura", src: "Recorded 14 Aug", meta: "48 min · transcribed", added: "3 weeks ago", clips: 6, readable: true, feeds: ["Bible · Water", "E1 Sc 3"] },
+      { id: "bmc", type: "pdf", coll: "BMC billing", title: "BMC water tariff schedule 2024–25", src: "mcgm.gov.in", meta: "PDF · 31 pp", added: "3 weeks ago", clips: 3, readable: true, feeds: ["Bible · Kadam"] },
+      { id: "tanker", type: "article", coll: "Water in Mumbai", title: "Inside Mumbai's private tanker economy", src: "Scroll.in", meta: "article · 2,400 words", added: "1 month ago", clips: 4, readable: true, feeds: ["Bible · Water", "E1 Sc 4"] },
+      { id: "photos", type: "image", coll: "Chawl life", title: "Chawl corridor reference · 14 photos", src: "own", meta: "images", added: "1 month ago", clips: 0, readable: false, feeds: ["Locations · Chawl"] },
+      { id: "drought", type: "article", coll: "1997 drought", title: "The summer the tanks were sealed", src: "Mumbai Mirror archive", meta: "article · 1997", added: "2 weeks ago", clips: 2, readable: true, feeds: ["Bible · 1997"] },
+      { id: "tiffin", type: "clip", coll: "Tiffin trade", title: "Dabbawala route, Grant Road to Fort", src: "YouTube", meta: "video · 11 min", added: "2 weeks ago", clips: 1, readable: false, feeds: [] },
+      { id: "sound", type: "clip", coll: "Chawl life", title: "Ambient · chawl courtyard 6am", src: "own", meta: "audio · 4 min", added: "1 week ago", clips: 0, readable: false, feeds: ["Production"] },
+      { id: "meter", type: "image", coll: "BMC billing", title: "Water meter and bill, Kamathi building", src: "own", meta: "2 images", added: "1 week ago", clips: 0, readable: false, feeds: [] }
+    ];
+    const colls = ["Water in Mumbai", "Chawl life", "BMC billing", "1997 drought", "Tiffin trade"];
+    const shown = items.filter((i) => (s.coll === "all" || i.coll === s.coll) && (s.type === "all" || i.type === s.type));
+    const doc0 = items.find((i) => i.id === s.sel) || items[0];
+
+    const clipsData = [
+      { t: "Two buckets. If you want a third you pay the boy forty rupees and you don't ask whose boy he is.", src: "Interview · Sunita Pawar", to: ["Bible · Water · rule 3", "E1 Sc 3"] },
+      { t: "The tanker doesn't wait. If you're not down by the time the horn goes, that's your morning gone.", src: "Interview · Sunita Pawar", to: ["Bible · Water · rule 2"] },
+      { t: "Nobody has opened that tank since the drought. The landlord's father sealed it and everyone signed.", src: "Interview · Sunita Pawar", to: ["Bible · 1997"] },
+      { t: "The charge for water comes with the rent. It never shows on the corporation bill because it isn't the corporation's.", src: "Interview · Sunita Pawar", to: ["Bible · Water · rule 6"] },
+      { t: "Metered supply is billed at slab rates; unmetered connections attract a flat charge per tap.", src: "BMC tariff schedule", to: ["Bible · Kadam"] },
+      { t: "The valve-man decides which floor gets pressure. Everyone knows his face. Nobody knows his name.", src: "Interview · Sunita Pawar", to: [] },
+      { t: "Operators buy from borewells outside the city limits and sell at roughly eight times cost.", src: "Scroll.in · tanker economy", to: [] }
+    ];
+
+    const P = (t, mark) => ({ t, bg: mark ? "var(--mark)" : "transparent", shadow: mark ? "0 0 0 2px var(--mark)" : "none", cursor: mark ? "pointer" : "text" });
+    const doc = {
+      title: "Sunita Pawar on the queue", collection: "Chawl life", kind: "Interview transcript", byline: "Recorded 14 Aug at her kholi, second floor. Marathi, translated by AR. 48 minutes; this is minutes 6–14.",
+      origin: "own recording", added: "3 weeks ago", trust: "Primary", trustInk: "var(--add)", clipN: 6,
+      paras: [
+        { parts: [P("We used to get water at six. Six to seven-thirty, if the pressure came. You'd hear it before you saw it, the pipe knocking. That was the alarm clock for the whole building.")] },
+        { parts: [P("When it stopped, the tanker started. "), P("The tanker doesn't wait. If you're not down by the time the horn goes, that's your morning gone.", true), P(" People started leaving buckets at night to hold a place. Then people started moving other people's buckets.")] },
+        { parts: [P("Two buckets. If you want a third you pay the boy forty rupees and you don't ask whose boy he is.", true), P(" Everyone knew. You don't say it, you just plan around it.")] },
+        { parts: [P("The rooftop? "), P("Nobody has opened that tank since the drought. The landlord's father sealed it and everyone signed.", true), P(" My husband signed. I was carrying my son. I didn't go up.")] },
+        { parts: [P("And the money. "), P("The charge for water comes with the rent. It never shows on the corporation bill because it isn't the corporation's.", true), P(" You ask Kadam and he shows you a paper. It's always the right paper.")] },
+        { parts: [P("There's a man who comes at night. "), P("The valve-man decides which floor gets pressure. Everyone knows his face. Nobody knows his name.", true)] }
+      ],
+      clips: clipsData.filter((c) => c.src.startsWith("Interview")).map((c) => ({ t: c.t, to: c.to.map((t) => ({ t })), unsent: !c.to.length }))
+    };
+
+    const mkItem = (i) => ({
+      ...i, icon: typeIcon[i.type], iconBg: i.readable ? "var(--add-bg)" : "var(--sel)",
+      clipInk: i.clips ? "var(--ink)" : "var(--ink3)", clips: i.clips || "—",
+      feeds: i.feeds.map((t) => ({ t })), togBg: i.readable ? "var(--add)" : "var(--line)", togX: i.readable ? "14px" : "2px",
+      open: () => this.setState({ sel: i.id, view: "source" })
+    });
+
+    return {
+      theme: s.theme, themeIcon: dark ? "☀" : "☾", toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      navOpen, navLabel: navOpen ? "Hide nav" : "Show nav", toggleNav: () => this.setState({ navOverride: !navOpen }),
+      collections: [["all", "Everything", items.length], ...colls.map((c) => [c, c, items.filter((i) => i.coll === c).length])].map(([id, name, n]) => ({ name, n, bg: s.coll === id ? "var(--accent-bg)" : off, border: s.coll === id ? "var(--accent-line)" : "transparent", ink: s.coll === id ? "var(--ink)" : "var(--ink2)", select: () => this.setState({ coll: id, view: "library" }) })),
+      types: [["all", "All", "≡"], ["article", "Articles", "¶"], ["pdf", "Documents", "▤"], ["image", "Images", "▣"], ["interview", "Interviews", "◉"], ["clip", "Audio & video", "▶"]].map(([id, name, icon]) => ({ name, icon, n: id === "all" ? items.length : items.filter((i) => i.type === id).length, bg: s.type === id ? on : off, ink: s.type === id ? "var(--ink)" : "var(--ink2)", select: () => this.setState({ type: id, view: "library" }) })),
+      total: empty ? 0 : items.length, readableN: items.filter((i) => i.readable).length, clipTotal: clipsData.length, clipBible: clipsData.filter((c) => c.to.some((t) => t.startsWith("Bible"))).length,
+      viewTabs: [{ id: "library", name: "Library", icon: "▦" }, { id: "source", name: "Source", icon: "▤" }, { id: "clips", name: "Clips", icon: "❝" }].map((t) => ({ ...t, bg: view === t.id ? "var(--accent-bg)" : off, ink: view === t.id ? "var(--accent)" : "var(--ink2)", go: () => this.setState({ view: t.id }) })),
+      isEmpty: view === "empty", isLibrary: view === "library", isSource: view === "source", isClips: view === "clips",
+      libTitle: s.coll === "all" ? "Everything" : s.coll, libCount: shown.length, items: shown.map(mkItem),
+      doc, backToLibrary: () => this.setState({ view: "library" }),
+      allClips: clipsData.map((c) => ({ ...c, to: c.to.map((t) => ({ t })), unsent: !c.to.length })),
+      headerNote: view === "library" ? "project-wide · sources feed Bible rules, scene notes and Production" : view === "source" ? doc0.title : view === "clips" ? clipsData.length + " clips · " + clipsData.filter((c) => !c.to.length).length + " not used yet" : "",
+      footerNote: view === "source" ? doc0.title : view === "clips" ? "All clips" : (s.coll === "all" ? "Everything" : s.coll) + " · " + shown.length + " shown",
+      rail: [
+        { name: "Writing", icon: "✎", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Characters", icon: "◍", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Locations", icon: "⌖", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Timeline", icon: "◷", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Bible", icon: "◈", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Research", icon: "▧", bg: on, ink: "var(--ink)", bar: "var(--accent)" },
+        { name: "Insights", icon: "◎", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Production", icon: "▶", bg: off, ink: "var(--ink2)", bar: "transparent" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

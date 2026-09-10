@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#f3f1ed; --panel:#fbfaf8; --panel2:#f7f5f1; --line:rgba(30,26,20,.10); --line2:rgba(30,26,20,.055);
+  --ink:#221f1a; --ink2:rgba(34,31,26,.64); --ink3:rgba(34,31,26,.40);
+  --sheet:#ffffff; --sheet-ink:#191713; --sheet-line:rgba(0,0,0,.10); --sheet-edge:rgba(0,0,0,.14);
+  --hover:rgba(30,26,20,.055); --sel:rgba(30,26,20,.085);
+  --accent:oklch(0.52 0.13 285); --accent-bg:oklch(0.52 0.13 285 / .09); --accent-line:oklch(0.52 0.13 285 / .28);
+  --add:oklch(0.50 0.11 150); --add-bg:oklch(0.50 0.11 150 / .10);
+  --del:oklch(0.52 0.14 25); --del-bg:oklch(0.52 0.14 25 / .09);
+  --note:oklch(0.58 0.10 75); --note-bg:oklch(0.58 0.10 75 / .11);
+  --focus:oklch(0.58 0.14 250); --shadow:0 1px 2px rgba(20,16,10,.05),0 8px 28px rgba(20,16,10,.07);
+}
+[data-theme="dark"]{
+  --desk:#121211; --panel:#1a1a18; --panel2:#201f1d; --line:rgba(240,235,225,.11); --line2:rgba(240,235,225,.06);
+  --ink:#e7e2d8; --ink2:rgba(231,226,216,.62); --ink3:rgba(231,226,216,.36);
+  --sheet:#252420; --sheet-ink:#ded8cd; --sheet-line:rgba(255,255,255,.10); --sheet-edge:rgba(255,255,255,.07);
+  --hover:rgba(240,235,225,.06); --sel:rgba(240,235,225,.10);
+  --accent:oklch(0.76 0.11 285); --accent-bg:oklch(0.76 0.11 285 / .13); --accent-line:oklch(0.76 0.11 285 / .34);
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --focus:oklch(0.74 0.12 250); --shadow:0 1px 2px rgba(0,0,0,.35),0 10px 34px rgba(0,0,0,.42);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit}
+::selection{background:var(--sel)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="min-height:100vh;background:var(--desk);color:var(--ink);display:flex;flex-direction:column">
+
+  <div style="display:flex;flex:1;min-height:0;min-width:0">
+
+    <!-- ─────────── SIDEBAR ─────────── -->
+    <aside style="width:246px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:100vh">
+      <div style="padding:10px 10px 6px">
+        <button onClick="{{ goProjects }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:100%;display:flex;align-items:center;gap:8px;padding:6px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;text-align:left">
+          <span style="width:20px;height:20px;flex:none;border-radius:5px;background:var(--ink);color:var(--desk);font-size:10.5px;font-weight:600;display:grid;place-items:center;letter-spacing:-.02em">ML</span>
+          <span style="display:flex;flex-direction:column;gap:1px;min-width:0">
+            <span style="font-size:12.5px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Monsoon Line</span>
+            <span style="font-size:10px;color:var(--ink3)">Series · 6 episodes</span>
+          </span>
+        </button>
+      </div>
+
+      <div style="padding:2px 10px 8px">
+        <button onClick="{{ openPalette }}" style-hover="background:var(--hover);border-color:var(--line)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;background:transparent;border:1px solid var(--line2);border-radius:6px;cursor:pointer;color:var(--ink3);font-size:11.5px">
+          <span>Search or jump to…</span>
+          <span style="font-size:10px;letter-spacing:.02em;color:var(--ink3)">⌘K</span>
+        </button>
+      </div>
+
+      <nav style="flex:1;overflow-y:auto;padding:0 6px 14px;display:flex;flex-direction:column;gap:14px">
+
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 8px 4px">
+            <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Episode</span>
+            <span style="font-size:9.5px;color:var(--ink3)">E3</span>
+          </div>
+          <button onClick="{{ goEditor }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;text-align:left;background:var(--sel);font-weight:500">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">▤</span>Script
+            <span style="margin-left:auto;font-size:10px;color:var(--ink3)">118pp</span>
+          </button>
+          <button onClick="{{ goBoard }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;text-align:left">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">▢</span>Scenes
+            <span style="margin-left:auto;font-size:10px;color:var(--ink3)">41</span>
+          </button>
+          <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;text-align:left">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">⋮</span>Outline
+          </button>
+          <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;text-align:left">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">◧</span>Shots
+          </button>
+
+          <div style="height:6px"></div>
+          <button onClick="{{ toggleEps }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:11px;color:var(--ink2);text-align:left">
+            <span style="font-size:8px;color:var(--ink3)">{{ epsCaret }}</span>Switch episode
+          </button>
+          <sc-if value="{{ epsOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:1px;padding-left:8px;margin-left:8px;border-left:1px solid var(--line2)">
+              <sc-for list="{{ episodes }}" as="ep" hint-placeholder-count="3">
+                <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:baseline;gap:8px;padding:4px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:11.5px;text-align:left;color:var(--ink2)">
+                  <span style="width:18px;color:var(--ink3);font-size:10px">{{ ep.no }}</span>
+                  <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ep.title }}</span>
+                  <span style="font-size:9.5px;color:var(--ink3)">{{ ep.pp }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 8px 4px">
+            <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Project</span>
+            <span style="font-size:9.5px;color:var(--ink3)">all episodes</span>
+          </div>
+          <button onClick="{{ goChars }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;text-align:left">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">◍</span>Characters
+            <span style="margin-left:auto;font-size:10px;color:var(--ink3)">23</span>
+          </button>
+          <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;text-align:left">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">⌖</span>Locations
+            <span style="margin-left:auto;font-size:10px;color:var(--ink3)">17</span>
+          </button>
+          <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;text-align:left">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">◇</span>Props
+            <span style="margin-left:auto;padding:1px 5px;border-radius:4px;background:var(--note-bg);color:var(--note);font-size:9.5px;font-weight:600">8 proposed</span>
+          </button>
+          <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;text-align:left">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">◈</span>Worldview
+          </button>
+          <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;text-align:left">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">▧</span>Knowledge
+          </button>
+        </div>
+      </nav>
+
+      <div style="padding:8px 10px 10px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;flex-direction:column;gap:5px;padding:7px 8px;border:1px solid var(--line2);border-radius:7px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-size:10.5px;color:var(--ink2)">Credits</span>
+            <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">4,180</span>
+          </div>
+          <div style="height:3px;border-radius:2px;background:var(--line);overflow:hidden">
+            <div style="width:62%;height:100%;background:var(--accent)"></div>
+          </div>
+          <span style="font-size:9.5px;color:var(--ink3)">≈ 9 full-draft passes · resets 1 Oct</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button onClick="{{ goSettings }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;display:flex;align-items:center;gap:8px;padding:5px 8px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:12px;text-align:left;color:var(--ink2)">
+            <span style="width:13px;font-size:11px;text-align:center">⚙</span>Settings
+          </button>
+          <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:26px;height:26px;flex:none;display:grid;place-items:center;background:transparent;border:1px solid var(--line2);border-radius:6px;cursor:pointer;font-size:11px;color:var(--ink2)">{{ themeIcon }}</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ─────────── MAIN ─────────── -->
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh">
+
+      <header style="height:44px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--desk)">
+        <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink3);min-width:0">
+          <span>Monsoon Line</span><span>/</span>
+          <span style="color:var(--ink2)">{{ crumbMid }}</span><span>/</span>
+          <span style="color:var(--ink);font-weight:500;white-space:nowrap">{{ crumbLast }}</span>
+        </div>
+        <div style="flex:1"></div>
+        <sc-if value="{{ isEditor }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;padding:2px;border:1px solid var(--line2);border-radius:7px;gap:2px">
+              <button onClick="{{ setContinuous }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;border:none;border-radius:5px;cursor:pointer;font-size:11px;background:{{ contBg }};color:{{ contInk }}">Continuous</button>
+              <button onClick="{{ setPaged }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;border:none;border-radius:5px;cursor:pointer;font-size:11px;background:{{ pagedBg }};color:{{ pagedInk }}">Paged</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:-6px">
+              <span style="width:22px;height:22px;border-radius:50%;background:oklch(0.62 0.09 200);color:#fff;font-size:9.5px;font-weight:600;display:grid;place-items:center;border:1.5px solid var(--desk)">RK</span>
+              <span style="width:22px;height:22px;border-radius:50%;background:oklch(0.60 0.10 30);color:#fff;font-size:9.5px;font-weight:600;display:grid;place-items:center;border:1.5px solid var(--desk);margin-left:-6px">AS</span>
+            </div>
+            <button onClick="{{ toggleComposer }}" style-hover="background:var(--sel)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:4px 10px;background:transparent;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:11.5px;color:var(--ink2)">{{ composerLabel }}</button>
+          </div>
+        </sc-if>
+      </header>
+
+      <!-- ══ EDITOR ══ -->
+      <sc-if value="{{ isEditor }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-height:0;display:flex;min-width:0">
+          <div style="flex:1;min-width:0;overflow:auto;padding:26px 0 120px;display:flex;flex-direction:column;align-items:center;gap:20px">
+
+            <div style="width:816px;flex:none;background:var(--sheet);border:1px solid var(--sheet-edge);border-radius:2px;box-shadow:var(--shadow);padding:96px 0 0;position:relative;font-family:'Courier Prime',Courier,monospace;font-size:16px;line-height:16px;color:var(--sheet-ink)">
+
+              <div style="position:absolute;top:48px;right:96px;font-size:16px;line-height:16px;color:var(--sheet-ink);user-select:none;-webkit-user-select:none;pointer-events:none">3.</div>
+
+              <div style="padding:0 96px 0 144px;text-transform:uppercase;letter-spacing:0">INT. CHAWL CORRIDOR - DAY</div>
+              <div style="height:32px"></div>
+              <div style="padding:0 96px 0 144px">Wet washing hangs the length of the corridor. MEERA, 34, moves through it sideways, a steel tiffin held flat above her head.</div>
+              <div style="height:16px"></div>
+
+              <div style="display:flex;align-items:flex-start;gap:0;position:relative">
+                <div style="flex:1;padding:0 96px 0 144px">A tap coughs somewhere below. She stops. Listens.</div>
+                <div style="position:absolute;left:14px;top:-2px;display:flex;gap:2px;opacity:.0" style-hover="opacity:1">
+                  <span style="width:18px;height:18px;border-radius:4px;display:grid;place-items:center;background:var(--hover);font-family:'Instrument Sans',sans-serif;font-size:10px;color:var(--ink3)">＋</span>
+                </div>
+              </div>
+              <div style="height:16px"></div>
+
+              <div style="padding-left:355px;padding-right:96px;text-transform:uppercase">MEERA</div>
+              <div style="padding-left:298px;padding-right:278px">(not looking up)</div>
+              <div style="padding-left:240px;padding-right:240px">Teen baje tak paani nahi aayega. Bucket bhar lo, warna raat kaategi.</div>
+              <div style="height:16px"></div>
+              <div style="padding-left:240px;padding-right:240px;color:var(--sheet-ink);opacity:.9;font-style:italic">The water won't come till three.</div>
+              <div style="height:16px"></div>
+
+              <!-- Comment element: non-exporting, excluded from pagination -->
+              <div style="margin:0 96px 0 144px;padding:5px 10px 6px;border-left:2px solid var(--note);background:var(--note-bg);border-radius:0 4px 4px 0">
+                <div style="display:flex;align-items:center;gap:6px;font-family:'Instrument Sans',sans-serif;font-size:9px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--note);margin-bottom:2px">
+                  <span>Comment</span><span style="font-weight:400;letter-spacing:.02em;text-transform:none;opacity:.85">not exported · not paginated</span>
+                </div>
+                <div style="font-size:16px;line-height:16px">Does the tiffin pay off in E2, or is it just business?</div>
+              </div>
+              <div style="height:16px"></div>
+
+              <!-- Pending AI changeset: hunk 1 -->
+              <div style="position:relative;border-left:2px solid var(--accent-line);margin-left:-2px">
+                <div style="position:absolute;left:-2px;top:-24px;display:flex;align-items:center;gap:8px;padding:2px 8px;background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:5px;font-family:'Instrument Sans',sans-serif;font-size:9.5px;line-height:1.4;color:var(--accent);font-weight:600;letter-spacing:.04em;text-transform:uppercase">
+                  <span>Pending · Dialogue Pass</span>
+                  <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.8">2 hunks in Scene 4</span>
+                </div>
+                <div style="padding-left:355px;padding-right:96px;text-transform:uppercase">RAJU</div>
+                <div style="padding-left:240px;padding-right:240px;background:var(--del-bg);text-decoration:line-through;text-decoration-color:var(--del);text-decoration-thickness:1px">Main dekh loonga, aap chinta mat karo.</div>
+                <div style="padding-left:240px;padding-right:240px;background:var(--add-bg)">Aap rehne do. Main kar loonga.</div>
+                <div style="display:flex;align-items:center;gap:6px;padding:6px 0 8px 240px;font-family:'Instrument Sans',sans-serif">
+                  <button onClick="{{ acceptHunk }}" style-hover="background:var(--add);color:var(--sheet)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:var(--add-bg);border:1px solid var(--add);border-radius:5px;cursor:pointer;font-size:10.5px;font-weight:600;color:var(--add)">Accept ⏎</button>
+                  <button onClick="{{ rejectHunk }}" style-hover="background:var(--del-bg)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:transparent;border:1px solid var(--sheet-line);border-radius:5px;cursor:pointer;font-size:10.5px;color:var(--ink2)">Reject ⌫</button>
+                  <span style="font-size:10px;color:var(--ink3)">node d41c · shorter, drops the reassurance</span>
+                </div>
+              </div>
+
+              <div style="height:16px"></div>
+              <div style="padding-left:576px;padding-right:96px;text-transform:uppercase">CUT TO:</div>
+              <div style="height:32px"></div>
+              <div style="padding:0 96px 0 144px;text-transform:uppercase">INT. STAIRWELL - CONTINUOUS</div>
+              <div style="height:32px"></div>
+              <div style="padding:0 96px 0 144px">Meera takes the stairs two at a time. Below her, a queue of buckets has already started, blue and red and one of them cracked.</div>
+              <div style="height:16px"></div>
+
+              <!-- ALL-CAPS offer -->
+              <div style="position:relative">
+                <div style="padding:0 96px 0 144px">A DOOR SLAMS SOMEWHERE ABOVE</div>
+                <div style="position:absolute;left:144px;top:20px;z-index:5;display:flex;align-items:center;gap:8px;padding:5px 8px 5px 10px;background:var(--panel);border:1px solid var(--line);border-radius:7px;box-shadow:var(--shadow);font-family:'Instrument Sans',sans-serif">
+                  <span style="font-size:11px;color:var(--ink2)">Make this a <b style="font-weight:600;color:var(--ink)">Character</b> cue?</span>
+                  <span style="padding:1px 5px;border:1px solid var(--line);border-radius:4px;font-size:9.5px;color:var(--ink3)">Tab</span>
+                  <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:2px 6px;background:transparent;border:none;border-radius:4px;cursor:pointer;font-size:10.5px;color:var(--ink3)">Dismiss ⎋</button>
+                </div>
+              </div>
+              <div style="height:64px"></div>
+
+              <sc-if value="{{ isPaged }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <div style="padding-left:240px;padding-right:240px;user-select:none;-webkit-user-select:none;pointer-events:none">(MORE)</div>
+                  <div style="height:16px"></div>
+                  <div style="position:relative;margin:0;padding:22px 0 0;border-top:1px dashed var(--sheet-line);user-select:none;-webkit-user-select:none;pointer-events:none">
+                    <div style="position:absolute;top:6px;right:96px;font-size:16px;line-height:16px">4.</div>
+                    <div style="padding-left:355px;padding-right:96px;text-transform:uppercase">MEERA (CONT'D)</div>
+                  </div>
+                  <div style="padding-left:240px;padding-right:240px">Neeche jaake dekho. Cracked wala mera nahi hai.</div>
+                </div>
+              </sc-if>
+              <div style="height:96px"></div>
+            </div>
+
+            <div style="width:816px;font-size:10.5px;color:var(--ink3);display:flex;gap:14px;padding-bottom:8px">
+              <span>Page 3 of 118</span><span>·</span><span>Courier 12pt · 55 lines · US Letter</span><span>·</span><span>Comments excluded from pagination</span>
+            </div>
+          </div>
+
+          <!-- AI composer rail -->
+          <sc-if value="{{ composerOpen }}" hint-placeholder-val="{{ true }}">
+            <aside style="width:330px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0">
+              <div style="padding:12px 14px 10px;border-bottom:1px solid var(--line2);display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:12px;font-weight:600;letter-spacing:-.01em">Composer</span>
+                <button onClick="{{ toggleComposer }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:5px;cursor:pointer;color:var(--ink3);font-size:12px">✕</button>
+              </div>
+
+              <div style="flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;flex-direction:column;gap:7px;padding:10px;border:1px solid var(--accent-line);border-radius:8px;background:var(--accent-bg)">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <span style="font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)">Pending changeset</span>
+                    <span style="font-size:10px;color:var(--ink2)">2 hunks</span>
+                  </div>
+                  <p style="margin:0;font-size:11.5px;line-height:1.45;color:var(--ink2)">Nothing has touched the document. Accept per hunk in the page; one undo reverts the whole operation.</p>
+                  <div style="display:flex;gap:6px">
+                    <button style-hover="opacity:.88" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:5px 8px;background:var(--ink);color:var(--desk);border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:500">Accept all</button>
+                    <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:5px 8px;background:transparent;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:11px;color:var(--ink2)">Reject all</button>
+                  </div>
+                  <span style="font-size:9.5px;color:var(--ink3)">Rejected hunks stay in provenance as evidence of review.</span>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <span style="font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">Lens</span>
+                  <sc-for list="{{ advisors }}" as="a" hint-placeholder-count="4">
+                    <button onClick="{{ pickAdvisor }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;flex-direction:column;gap:2px;padding:7px 9px;background:{{ a.bg }};border:1px solid {{ a.bd }};border-radius:7px;cursor:pointer;text-align:left">
+                      <span style="font-size:11.5px;font-weight:500">{{ a.name }}</span>
+                      <span style="font-size:10px;color:var(--ink3)">{{ a.can }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <span style="font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">Provenance</span>
+                  <div style="display:flex;flex-direction:column;gap:8px;padding-left:9px;border-left:1px solid var(--line)">
+                    <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11px">Dialogue Pass · Scene 4</span><span style="font-size:10px;color:var(--ink3)">14:02 · 3 accepted, 1 rejected</span></div>
+                    <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11px">Structure · Act 2</span><span style="font-size:10px;color:var(--ink3)">Yesterday · annotations only</span></div>
+                    <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11px">Prop extraction · Scenes 30-41</span><span style="font-size:10px;color:var(--ink3)">Yesterday · 8 proposed, none accepted</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="flex:none;padding:10px 14px 12px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                  <button onClick="{{ cycleScope }}" style-hover="background:var(--sel)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:3px 8px;background:var(--hover);border:1px solid var(--line);border-radius:20px;cursor:pointer;font-size:11px">
+                    <span style="width:5px;height:5px;border-radius:50%;background:var(--accent)"></span>
+                    <span style="font-weight:500">{{ scopeLabel }}</span>
+                    <span style="color:var(--ink3);font-size:10px">{{ scopeSize }}</span>
+                  </button>
+                  <span style="font-size:10px;color:var(--ink3)">from cursor · click to change</span>
+                </div>
+                <sc-if value="{{ scopeIsFull }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:7px 9px;border:1px solid var(--del);border-radius:7px;background:var(--del-bg);display:flex;flex-direction:column;gap:4px">
+                    <span style="font-size:11px;font-weight:600;color:var(--del)">Full draft · 118pp</span>
+                    <span style="font-size:10.5px;line-height:1.4;color:var(--ink2)">Est. 1,400 credits and a diff of roughly 240 hunks. Runs on the job queue; you can keep writing.</span>
+                    <button style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="align-self:flex-start;padding:3px 9px;background:transparent;border:1px solid var(--del);border-radius:5px;cursor:pointer;font-size:10.5px;font-weight:600;color:var(--del)">Type RUN to confirm</button>
+                  </div>
+                </sc-if>
+                <div style="display:flex;flex-direction:column;gap:7px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--desk)">
+                  <span style="font-size:12px;color:var(--ink3)">Tighten Raju's replies in this scene — he's over-explaining.</span>
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <span style="font-size:10px;color:var(--ink3)">@scene · @character to add targets</span>
+                    <button style-hover="opacity:.88" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:4px 11px;background:var(--ink);color:var(--desk);border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:500">Run ⌘⏎</button>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </sc-if>
+        </div>
+
+        <!-- status bar -->
+        <footer style="height:26px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--ink2)">
+          <span style="font-variant-numeric:tabular-nums">Pg <b style="font-weight:600;color:var(--ink)">3</b> / 118</span>
+          <span style="color:var(--ink3)">·</span>
+          <span>{{ modeLabel }}</span>
+          <span style="color:var(--ink3)">·</span>
+          <span>Dialogue <span style="color:var(--ink3)">⌘5</span></span>
+          <span style="color:var(--ink3)">·</span>
+          <span>Scene 4 · 2/8 pg</span>
+          <div style="flex:1"></div>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:oklch(0.62 0.09 200)"></span>Rukmini in Scene 12</span>
+          <span style="color:var(--ink3)">·</span>
+          <span>Rev. Blue · saved 12s ago</span>
+        </footer>
+      </sc-if>
+
+      <!-- ══ SCENE BOARD ══ -->
+      <sc-if value="{{ isBoard }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;overflow:auto;padding:20px 22px 60px">
+          <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px">
+            <h1 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-.02em">Scenes</h1>
+            <span style="font-size:11.5px;color:var(--ink3)">41 scenes · 118 pages · derived from scene headings</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin:14px 0 16px;flex-wrap:wrap">
+            <span style="display:flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line);border-radius:20px;font-size:10.5px;color:var(--ink2)"><span style="width:5px;height:5px;border-radius:50%;background:var(--note)"></span>Snapshot 40s behind the editor</span>
+            <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:transparent;border:1px solid var(--line);border-radius:20px;cursor:pointer;font-size:10.5px;color:var(--ink2)">Refresh</button>
+            <div style="flex:1"></div>
+            <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:transparent;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:10.5px;color:var(--ink2)">Group: Act</button>
+            <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:transparent;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:10.5px;color:var(--ink2)">INT/EXT</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px">
+            <sc-for list="{{ scenes }}" as="s" hint-placeholder-count="8">
+              <button style-hover="border-color:var(--ink3)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;flex-direction:column;gap:7px;padding:11px 12px 10px;background:var(--panel);border:1px solid var(--line);border-radius:9px;cursor:pointer;text-align:left">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                  <span style="font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ s.no }}</span>
+                  <span style="font-size:10px;color:var(--ink3)">{{ s.eighths }}</span>
+                </div>
+                <span style="font-family:'Courier Prime',monospace;font-size:12px;line-height:1.35;text-transform:uppercase;color:var(--ink)">{{ s.head }}</span>
+                <span style="font-size:11.5px;line-height:1.45;color:var(--ink2)">{{ s.synopsis }}</span>
+                <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:1px">
+                  <sc-for list="{{ s.cast }}" as="c" hint-placeholder-count="2">
+                    <span style="padding:1px 6px;border-radius:4px;background:var(--hover);font-size:9.5px;color:var(--ink2)">{{ c }}</span>
+                  </sc-for>
+                </div>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ CHARACTERS ══ -->
+      <sc-if value="{{ isChars }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-height:0;display:flex;min-width:0">
+          <div style="width:300px;flex:none;border-right:1px solid var(--line);overflow-y:auto;padding:16px 12px 40px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;padding:0 4px 10px">
+              <h1 style="margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em">Characters</h1>
+              <span style="font-size:10px;color:var(--ink3)">project · 6 episodes</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <sc-for list="{{ chars }}" as="c" hint-placeholder-count="6">
+                <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:9px;padding:7px 8px;background:{{ c.bg }};border:none;border-radius:7px;cursor:pointer;text-align:left">
+                  <span style="width:24px;height:24px;flex:none;border-radius:50%;background:var(--sel);font-size:9.5px;font-weight:600;display:grid;place-items:center;color:var(--ink2)">{{ c.ini }}</span>
+                  <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+                    <span style="font-family:'Courier Prime',monospace;font-size:12px;text-transform:uppercase">{{ c.name }}</span>
+                    <span style="font-size:10px;color:var(--ink3)">{{ c.meta }}</span>
+                  </span>
+                  <sc-if value="{{ c.flag }}" hint-placeholder-val="{{ false }}">
+                    <span style="padding:1px 5px;border-radius:4px;background:var(--note-bg);color:var(--note);font-size:9px;font-weight:600">{{ c.flagText }}</span>
+                  </sc-if>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:0;overflow-y:auto;padding:22px 26px 60px">
+            <div style="max-width:640px;display:flex;flex-direction:column;gap:18px">
+              <div style="display:flex;align-items:flex-start;gap:14px">
+                <div style="width:76px;height:76px;flex:none;border-radius:10px;background:repeating-linear-gradient(45deg,var(--hover) 0 6px,transparent 6px 12px);border:1px solid var(--line);display:grid;place-items:center">
+                  <span style="font-family:ui-monospace,monospace;font-size:8px;color:var(--ink3);text-align:center;line-height:1.3">portrait<br>drop here</span>
+                </div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+                  <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                    <h2 style="margin:0;font-family:'Courier Prime',monospace;font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:.01em">SHALINI</h2>
+                    <span style="padding:2px 7px;border-radius:5px;background:var(--note-bg);color:var(--note);font-size:10px;font-weight:600">0 appearances</span>
+                  </div>
+                  <span style="font-size:11px;color:var(--ink3);font-family:ui-monospace,monospace">uuid 7f1a-9c02 · name is an attribute, not the key</span>
+                  <p style="margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink2);max-width:52ch">Meera's older sister. Left the chawl in 2011 and has not called since. Cut from every scene in the current draft; the record, bio and casting notes are kept.</p>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:8px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel)">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="width:5px;height:5px;border-radius:50%;background:var(--del)"></span>
+                  <span style="font-size:11.5px;font-weight:600">Unresolved cue</span>
+                  <span style="font-size:11px;color:var(--ink3)">E3 · Scene 27 · page 79</span>
+                </div>
+                <div style="font-family:'Courier Prime',monospace;font-size:13px;padding:6px 10px;background:var(--desk);border-radius:6px;text-transform:uppercase">SHALINI'S VOICE (V.O.)</div>
+                <p style="margin:0;font-size:11.5px;line-height:1.5;color:var(--ink2)">The modifier is stripped before lookup, so this cue points at no entity. It is not a second person.</p>
+                <div style="display:flex;gap:7px;flex-wrap:wrap">
+                  <button style-hover="opacity:.88" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:4px 10px;background:var(--ink);color:var(--desk);border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:500">Link to SHALINI</button>
+                  <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:4px 10px;background:transparent;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:11px;color:var(--ink2)">Create new character</button>
+                  <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:4px 10px;background:transparent;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:11px;color:var(--ink2)">Merge…</button>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:9px">
+                <span style="font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">Appearances</span>
+                <div style="padding:22px 14px;border:1px dashed var(--line);border-radius:9px;text-align:center">
+                  <p style="margin:0;font-size:12px;color:var(--ink3)">No scenes in any episode. Derivation reconciles — it never rebuilds, so this record survives.</p>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">Rename</span>
+                <div style="padding:11px 12px;border:1px solid var(--accent-line);border-radius:9px;background:var(--accent-bg);display:flex;flex-direction:column;gap:6px">
+                  <span style="font-size:12px;font-weight:600">Renaming here rewrites every cue, in all 6 episodes, silently.</span>
+                  <span style="font-size:11.5px;line-height:1.5;color:var(--ink2)">Bio, portrait, relationships and casting are preserved. Typing over a cue in the script asks first instead.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ PROJECTS ══ -->
+      <sc-if value="{{ isProjects }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;overflow:auto;padding:22px 24px 60px">
+          <div style="max-width:1040px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:baseline;gap:12px">
+              <h1 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-.02em">Projects</h1>
+              <span style="font-size:11.5px;color:var(--ink3)">41 projects · 3 in trash</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel)">
+                <span style="color:var(--ink3);font-size:11px">⌕</span>
+                <span style="font-size:12px;color:var(--ink3)">Title, character, location, tag…</span>
+              </div>
+              <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 10px;background:transparent;border:1px solid var(--line);border-radius:7px;cursor:pointer;font-size:11.5px;color:var(--ink2)">Sort: Last edited</button>
+              <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 10px;background:transparent;border:1px solid var(--line);border-radius:7px;cursor:pointer;font-size:11.5px;color:var(--ink2)">Tags: 2</button>
+              <button style-hover="opacity:.88" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 12px;background:var(--ink);color:var(--desk);border:none;border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:500">New project</button>
+            </div>
+            <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)">
+              <sc-for list="{{ projects }}" as="p" hint-placeholder-count="5">
+                <button onClick="{{ goEditor }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:inset 0 0 0 2px var(--focus)" style="width:100%;display:flex;align-items:center;gap:14px;padding:11px 14px;background:transparent;border:none;border-bottom:1px solid var(--line2);cursor:pointer;text-align:left">
+                  <span style="width:28px;height:28px;flex:none;border-radius:6px;background:var(--sel);font-size:10px;font-weight:600;display:grid;place-items:center;color:var(--ink2)">{{ p.ini }}</span>
+                  <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                    <span style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:500;letter-spacing:-.01em">{{ p.title }}</span><span style="padding:1px 6px;border-radius:4px;background:var(--hover);font-size:9.5px;color:var(--ink3)">{{ p.tag }}</span></span>
+                    <span style="font-size:11px;color:var(--ink3)">{{ p.meta }}</span>
+                  </span>
+                  <span style="font-size:11px;color:var(--ink3);white-space:nowrap;font-variant-numeric:tabular-nums">{{ p.pages }}</span>
+                  <span style="width:120px;font-size:11px;color:var(--ink3);text-align:right;white-space:nowrap">{{ p.edited }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ SETTINGS ══ -->
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-height:0;display:flex;min-width:0">
+          <div style="width:210px;flex:none;border-right:1px solid var(--line);padding:18px 10px;display:flex;flex-direction:column;gap:2px">
+            <span style="padding:0 8px 8px;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">Settings</span>
+            <sc-for list="{{ settingsNav }}" as="s" hint-placeholder-count="6">
+              <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:{{ s.bg }};border:none;border-radius:6px;cursor:pointer;font-size:12px;text-align:left">
+                <span>{{ s.name }}</span><span style="font-size:9.5px;color:var(--ink3);font-family:ui-monospace,monospace">{{ s.route }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:22px 26px 60px">
+            <div style="max-width:600px;display:flex;flex-direction:column;gap:20px">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <h1 style="margin:0;font-size:18px;font-weight:600;letter-spacing:-.02em">Format &amp; language</h1>
+                <span style="font-size:11.5px;color:var(--ink3)">/settings/format · directly linkable, survives refresh</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:14px;border-bottom:1px solid var(--line2)">
+                  <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12.5px;font-weight:500">Page geometry</span><span style="font-size:11.5px;color:var(--ink3)">US Letter · Courier 12pt · 55 lines · 6.0in text block</span></div>
+                  <span style="padding:3px 8px;border:1px solid var(--line);border-radius:6px;font-size:10.5px;color:var(--ink3);white-space:nowrap">Fixed</span>
+                </div>
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:14px;border-bottom:1px solid var(--line2)">
+                  <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12.5px;font-weight:500">Element language</span><span style="font-size:11.5px;color:var(--ink3)">Dialogue and Subtitle may differ from Action</span></div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+                    <span style="padding:3px 8px;border:1px solid var(--line);border-radius:6px;font-size:10.5px">Action · English</span>
+                    <span style="padding:3px 8px;border:1px solid var(--accent-line);background:var(--accent-bg);border-radius:6px;font-size:10.5px;color:var(--accent)">Dialogue · Hinglish</span>
+                    <span style="padding:3px 8px;border:1px solid var(--line);border-radius:6px;font-size:10.5px">Subtitle · देवनागरी</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:14px;border-bottom:1px solid var(--line2)">
+                  <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12.5px;font-weight:500">Pagination mode</span><span style="font-size:11.5px;color:var(--ink3)">Two modes. Page count is always live in both.</span></div>
+                  <div style="display:flex;padding:2px;border:1px solid var(--line2);border-radius:7px;gap:2px">
+                    <span style="padding:3px 9px;border-radius:5px;font-size:11px;background:var(--sel)">Continuous</span>
+                    <span style="padding:3px 9px;border-radius:5px;font-size:11px;color:var(--ink3)">Paged</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px">
+                  <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12.5px;font-weight:500">Theme</span><span style="font-size:11.5px;color:var(--ink3)">The page sheet is tinted in dark, never white</span></div>
+                  <div style="display:flex;padding:2px;border:1px solid var(--line2);border-radius:7px;gap:2px">
+                    <button onClick="{{ setLight }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;border:none;border-radius:5px;cursor:pointer;font-size:11px;background:{{ lightBg }};color:{{ lightInk }}">Light</button>
+                    <button onClick="{{ setDark }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;border:none;border-radius:5px;cursor:pointer;font-size:11px;background:{{ darkBg }};color:{{ darkInk }}">Dark</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+                <span style="font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">The sheet in both themes</span>
+                <div style="display:flex;gap:14px;flex-wrap:wrap">
+                  <div data-theme="light" style="flex:1;min-width:220px;padding:14px;border-radius:9px;background:var(--desk);border:1px solid var(--line)">
+                    <div style="background:var(--sheet);border:1px solid var(--sheet-edge);border-radius:2px;padding:14px 16px;font-family:'Courier Prime',monospace;font-size:11px;line-height:14px;color:var(--sheet-ink)">
+                      <div style="text-transform:uppercase">INT. CHAWL CORRIDOR - DAY</div>
+                      <div style="height:14px"></div>
+                      <div>Wet washing hangs the length of<br>the corridor.</div>
+                      <div style="height:14px"></div>
+                      <div style="padding-left:78px;text-transform:uppercase">MEERA</div>
+                      <div style="padding-left:46px">Bucket bhar lo.</div>
+                    </div>
+                    <span style="display:block;margin-top:8px;font-size:10px;color:var(--ink3)">Light · #ffffff sheet</span>
+                  </div>
+                  <div data-theme="dark" style="flex:1;min-width:220px;padding:14px;border-radius:9px;background:var(--desk);border:1px solid var(--line)">
+                    <div style="background:var(--sheet);border:1px solid var(--sheet-edge);border-radius:2px;padding:14px 16px;font-family:'Courier Prime',monospace;font-size:11px;line-height:14px;color:var(--sheet-ink)">
+                      <div style="text-transform:uppercase">INT. CHAWL CORRIDOR - DAY</div>
+                      <div style="height:14px"></div>
+                      <div>Wet washing hangs the length of<br>the corridor.</div>
+                      <div style="height:14px"></div>
+                      <div style="padding-left:78px;text-transform:uppercase">MEERA</div>
+                      <div style="padding-left:46px">Bucket bhar lo.</div>
+                    </div>
+                    <span style="display:block;margin-top:8px;font-size:10px;color:var(--ink3)">Dark · tinted sheet, same geometry</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </main>
+  </div>
+
+  <!-- ══ COMMAND PALETTE ══ -->
+  <sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePalette }}" style="position:fixed;inset:0;background:rgba(15,12,8,.28);display:flex;justify-content:center;align-items:flex-start;padding-top:14vh;z-index:80">
+      <div onClick="{{ stop }}" style="width:520px;max-width:92vw;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line2)">
+          <span style="color:var(--ink3);font-size:12px">⌕</span>
+          <span style="flex:1;font-size:14px;color:var(--ink)">chawl<span style="opacity:.5">|</span></span>
+          <span style="font-size:10px;color:var(--ink3)">⎋ to close</span>
+        </div>
+        <div style="max-height:340px;overflow-y:auto;padding:6px">
+          <sc-for list="{{ paletteGroups }}" as="g" hint-placeholder-count="3">
+            <div style="padding:4px 0">
+              <div style="padding:4px 9px;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">{{ g.name }}</div>
+              <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="2">
+                <div style="display:flex;align-items:center;gap:10px;padding:6px 9px;border-radius:7px;background:{{ i.bg }};cursor:pointer">
+                  <span style="width:14px;text-align:center;font-size:10px;color:var(--ink3)">{{ i.icon }}</span>
+                  <span style="flex:1;min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ i.label }}</span>
+                  <span style="font-size:10px;color:var(--ink3);white-space:nowrap">{{ i.hint }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;editor&quot;,&quot;board&quot;,&quot;chars&quot;,&quot;projects&quot;,&quot;settings&quot;],&quot;default&quot;:&quot;editor&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Mock state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Mock state&quot;},&quot;pageMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;paged&quot;,&quot;continuous&quot;],&quot;default&quot;:&quot;paged&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Mock state&quot;},&quot;showComposer&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Mock state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    screen: this.props.screen || "editor",
+    theme: this.props.theme || "light",
+    mode: this.props.pageMode || "paged",
+    composer: this.props.showComposer !== false,
+    palette: false,
+    epsOpen: true,
+    scope: 1
+  };
+
+  componentDidMount() {
+    this._key = (e) => {
+      const k = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && k === "k") { e.preventDefault(); this.setState({ palette: true }); }
+      if (k === "escape") this.setState({ palette: false });
+    };
+    window.addEventListener("keydown", this._key);
+  }
+  componentWillUnmount() { window.removeEventListener("keydown", this._key); }
+
+  go(screen) { return () => this.setState({ screen }); }
+
+  renderVals() {
+    const s = this.state;
+    const dark = s.theme === "dark";
+    const crumbs = {
+      editor: ["Episode 3 · Chawl Water", "Script"],
+      board: ["Episode 3 · Chawl Water", "Scenes"],
+      chars: ["Project", "Characters"],
+      projects: ["Workspace", "All projects"],
+      settings: ["Account", "Format & language"]
+    }[s.screen] || ["", ""];
+
+    const scopes = [
+      { label: "Selection", size: "4 nodes" },
+      { label: "Scene 4", size: "2/8 pg · 11 nodes" },
+      { label: "Act 2", size: "38pp" },
+      { label: "Full draft", size: "118pp" }
+    ];
+    const sc = scopes[s.scope % scopes.length];
+
+    const on = "var(--sel)", off = "transparent", onI = "var(--ink)", offI = "var(--ink3)";
+
+    return {
+      theme: s.theme,
+      themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      setLight: () => this.setState({ theme: "light" }),
+      setDark: () => this.setState({ theme: "dark" }),
+      lightBg: dark ? off : on, lightInk: dark ? offI : onI,
+      darkBg: dark ? on : off, darkInk: dark ? onI : offI,
+
+      isEditor: s.screen === "editor",
+      isBoard: s.screen === "board",
+      isChars: s.screen === "chars",
+      isProjects: s.screen === "projects",
+      isSettings: s.screen === "settings",
+      goEditor: this.go("editor"), goBoard: this.go("board"), goChars: this.go("chars"),
+      goProjects: this.go("projects"), goSettings: this.go("settings"),
+
+      crumbMid: crumbs[0], crumbLast: crumbs[1],
+
+      isPaged: s.mode === "paged",
+      modeLabel: s.mode === "paged" ? "Paged" : "Continuous",
+      setPaged: () => this.setState({ mode: "paged" }),
+      setContinuous: () => this.setState({ mode: "continuous" }),
+      pagedBg: s.mode === "paged" ? on : off, pagedInk: s.mode === "paged" ? onI : offI,
+      contBg: s.mode === "continuous" ? on : off, contInk: s.mode === "continuous" ? onI : offI,
+
+      composerOpen: s.composer,
+      composerLabel: s.composer ? "Hide composer" : "Composer ⌘J",
+      toggleComposer: () => this.setState({ composer: !s.composer }),
+
+      scopeLabel: sc.label, scopeSize: sc.size, scopeIsFull: sc.label === "Full draft",
+      cycleScope: () => this.setState({ scope: s.scope + 1 }),
+
+      acceptHunk: () => {}, rejectHunk: () => {}, pickAdvisor: () => {},
+
+      epsOpen: s.epsOpen, epsCaret: s.epsOpen ? "▾" : "▸",
+      toggleEps: () => this.setState({ epsOpen: !s.epsOpen }),
+
+      paletteOpen: s.palette,
+      openPalette: () => this.setState({ palette: true }),
+      closePalette: () => this.setState({ palette: false }),
+      stop: (e) => e.stopPropagation(),
+
+      episodes: [
+        { no: "E1", title: "Standpipe", pp: "104" },
+        { no: "E2", title: "The Tiffin", pp: "97" },
+        { no: "E3", title: "Chawl Water", pp: "118" },
+        { no: "E4", title: "Blue Bucket", pp: "12" }
+      ],
+
+      advisors: [
+        { name: "Dialogue Pass", can: "reads · rewrites dialogue nodes", bg: "var(--sel)", bd: "var(--line)" },
+        { name: "Structure", can: "reads · annotates only — cannot rewrite", bg: "transparent", bd: "var(--line2)" },
+        { name: "Character Arc", can: "reads script + character records", bg: "transparent", bd: "var(--line2)" },
+        { name: "Script Doctor", can: "reads · rewrites any element", bg: "transparent", bd: "var(--line2)" }
+      ],
+
+      scenes: [
+        { no: "1", eighths: "1 2/8", head: "EXT. CHAWL COURTYARD - DAWN", synopsis: "The queue forms before the tap does. Meera counts buckets from the third floor.", cast: ["MEERA", "RAJU"] },
+        { no: "2", eighths: "5/8", head: "INT. MEERA'S ROOM - DAWN", synopsis: "She wakes her son with her foot, not her voice.", cast: ["MEERA", "ARUN"] },
+        { no: "3", eighths: "2/8", head: "INT. CHAWL CORRIDOR - DAY", synopsis: "Washing, sideways, tiffin overhead. A tap coughs below.", cast: ["MEERA"] },
+        { no: "4", eighths: "2 1/8", head: "INT. STAIRWELL - CONTINUOUS", synopsis: "Raju offers to handle the landlord. Meera does not want it handled.", cast: ["MEERA", "RAJU"] },
+        { no: "5", eighths: "7/8", head: "EXT. WATER TANKER - DAY", synopsis: "Forty families, one hose, and a man with a register.", cast: ["RAJU", "TANKER MAN"] },
+        { no: "6", eighths: "1 4/8", head: "INT. LANDLORD'S OFFICE - AFTERNOON", synopsis: "The rent book and the water bill are the same book.", cast: ["MEERA", "GOKHALE"] },
+        { no: "7", eighths: "3/8", head: "EXT. TERRACE - DUSK", synopsis: "Arun floats a paper boat in the overflow tank.", cast: ["ARUN"] },
+        { no: "8", eighths: "1 1/8", head: "INT. CHAWL CORRIDOR - NIGHT", synopsis: "Buckets outside every door, all of them full, none of them hers.", cast: ["MEERA", "RUKMINI"] }
+      ],
+
+      chars: [
+        { ini: "ME", name: "Meera", meta: "34 · 31 scenes · 6 episodes", bg: "transparent", flag: false, flagText: "" },
+        { ini: "RA", name: "Raju", meta: "40 · 22 scenes", bg: "transparent", flag: false, flagText: "" },
+        { ini: "AR", name: "Arun", meta: "9 · 14 scenes", bg: "transparent", flag: false, flagText: "" },
+        { ini: "SH", name: "Shalini", meta: "0 scenes · record kept", bg: "var(--sel)", flag: true, flagText: "0" },
+        { ini: "RU", name: "Rukmini", meta: "58 · 9 scenes", bg: "transparent", flag: false, flagText: "" },
+        { ini: "GO", name: "Gokhale", meta: "51 · 6 scenes", bg: "transparent", flag: false, flagText: "" },
+        { ini: "AD", name: "Ade / Adebayo", meta: "2 records · same cue text", bg: "transparent", flag: true, flagText: "merge" }
+      ],
+
+      projects: [
+        { ini: "ML", title: "Monsoon Line", tag: "series", meta: "6 episodes · 41 scenes · 23 characters", pages: "118 pp", edited: "12 seconds ago" },
+        { ini: "TB", title: "The Ballast Room", tag: "feature", meta: "1 episode · 62 scenes · 14 characters", pages: "97 pp", edited: "Yesterday, 23:40" },
+        { ini: "KP", title: "Kaali Peeli", tag: "series", meta: "3 episodes · 28 scenes · 11 characters", pages: "74 pp", edited: "28 Aug 2026" },
+        { ini: "NO", title: "No Standing Water", tag: "short", meta: "1 episode · 9 scenes · 4 characters", pages: "14 pp", edited: "11 Aug 2026" },
+        { ini: "DS", title: "Dus Rupaiya", tag: "feature · imported .fdx", meta: "1 episode · 88 scenes · 31 characters", pages: "121 pp", edited: "4 Jul 2026" }
+      ],
+
+      settingsNav: [
+        { name: "Account", route: "/account", bg: "transparent" },
+        { name: "Format & language", route: "/format", bg: "var(--sel)" },
+        { name: "Collaborators", route: "/people", bg: "transparent" },
+        { name: "Plan & credits", route: "/billing", bg: "transparent" },
+        { name: "Import & export", route: "/transfer", bg: "transparent" },
+        { name: "Keyboard", route: "/keys", bg: "transparent" }
+      ],
+
+      paletteGroups: [
+        { name: "Scenes", items: [
+          { icon: "▢", label: "3. INT. CHAWL CORRIDOR - DAY", hint: "E3 · pg 3", bg: "var(--sel)" },
+          { icon: "▢", label: "8. INT. CHAWL CORRIDOR - NIGHT", hint: "E3 · pg 21", bg: "transparent" },
+          { icon: "▢", label: "1. EXT. CHAWL COURTYARD - DAWN", hint: "E3 · pg 1", bg: "transparent" }
+        ]},
+        { name: "Locations", items: [
+          { icon: "⌖", label: "Chawl corridor", hint: "project · 9 scenes", bg: "transparent" }
+        ]},
+        { name: "Actions", items: [
+          { icon: "⌘", label: "Export .fdx — current episode", hint: "queued job", bg: "transparent" },
+          { icon: "⌘", label: "Switch to Paged mode", hint: "instant · free", bg: "transparent" }
+        ]}
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

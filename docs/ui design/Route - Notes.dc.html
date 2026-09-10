@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --sheet-ink:#171310; --sheet-line:rgba(0,0,0,.12); --sheet-edge:rgba(0,0,0,.16);
+  --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --focus:oklch(0.50 0.17 27); --shadow:none;
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --sheet-ink:#e2dbcf; --sheet-line:rgba(255,255,255,.11); --sheet-edge:rgba(255,255,255,.08);
+  --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --focus:oklch(0.72 0.14 30); --shadow:none;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ICON RAIL ── -->
+  <div style="width:66px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 5px 10px;gap:3px">
+    <div style="width:28px;height:28px;border-radius:3px;background:var(--ink);color:var(--desk);font-size:10.5px;font-weight:600;letter-spacing:.02em;display:grid;place-items:center;margin-bottom:12px">NM</div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8">
+      <button title="{{ r.name }}" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="position:relative;width:56px;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ r.bg }};border:none;border-radius:3px;cursor:pointer;color:{{ r.ink }}">
+        <span style="position:absolute;left:-5px;top:13px;bottom:13px;width:2px;border-radius:1px;background:{{ r.bar }}"></span>
+        <span style="font-size:14px;line-height:1">{{ r.icon }}</span>
+        <span style="font-size:8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;line-height:1;white-space:nowrap">{{ r.name }}</span>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:56px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:13px;color:var(--ink3)">{{ themeIcon }}</button>
+    <div title="Project settings" style="width:56px;height:34px;display:grid;place-items:center;border-radius:3px;cursor:pointer;font-size:14px;color:var(--ink3)">⚙</div>
+    <div style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;margin-top:6px">PP</div>
+  </div>
+
+  <!-- ── EPISODE NAV ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:238px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="padding:11px 10px 8px;display:flex;align-items:center;gap:6px">
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Not Magic, Just This</span>
+      <button title="New episode" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:13px">＋</button>
+      <button title="Project actions" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:13px">⋯</button>
+    </div>
+    <div style="padding:0 10px 10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border:1px solid var(--line2);border-radius:3px;color:var(--ink3);font-size:11.5px;cursor:pointer">
+        <span>Search or jump to…</span><span style="font-size:10px">⌘K</span>
+      </div>
+    </div>
+
+    <nav style="flex:1;overflow-y:auto;padding:0 6px 14px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="padding:0 8px 5px;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Ep 1</div>
+        <sc-for list="{{ epNav }}" as="n" hint-placeholder-count="7">
+          <div style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:{{ n.bg }};border-radius:3px;cursor:pointer;font-size:12.5px;font-weight:{{ n.w }}">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">{{ n.icon }}</span>{{ n.name }}
+            <span style="margin-left:auto;font-size:10px;color:var(--ink3)">{{ n.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="padding:0 8px 5px;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Filter</div>
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+          <div onClick="{{ f.go }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:{{ f.bg }};border-radius:3px;cursor:pointer;font-size:12px;color:{{ f.ink }}">
+            <span style="width:13px;color:var(--ink3);font-size:11px;text-align:center">{{ f.icon }}</span>{{ f.name }}
+            <span style="margin-left:auto;font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ f.count }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="padding:0 8px 5px;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">People</div>
+        <sc-for list="{{ people }}" as="p" hint-placeholder-count="3">
+          <div onClick="{{ p.go }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:{{ p.bg }};border-radius:3px;cursor:pointer;font-size:12px">
+            <span style="width:16px;height:16px;flex:none;border-radius:50%;background:{{ p.color }};color:#fff;font-size:7.5px;font-weight:600;display:grid;place-items:center">{{ p.ini }}</span>{{ p.name }}
+            <span style="margin-left:auto;font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ p.count }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </nav>
+
+    <div style="padding:8px 10px 10px;border-top:1px solid var(--line2)">
+      <div style="display:flex;flex-direction:column;gap:5px;padding:7px 8px;border:1px solid var(--line2);border-radius:3px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span style="font-size:10.5px;color:var(--ink2)">Resolved</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">{{ resolvedLabel }}</span>
+        </div>
+        <div style="height:3px;border-radius:2px;background:var(--line);overflow:hidden"><div style="width:{{ resolvedPct }};height:100%;background:var(--accent)"></div></div>
+        <span style="font-size:9.5px;color:var(--ink3)">{{ openCount }} open before the table read</span>
+      </div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:7px;overflow:hidden">
+        <span style="flex:none;font-family:var(--serif);font-size:21px;font-weight:500;letter-spacing:-.01em;line-height:1">Notes</span>
+        <span style="flex:none;padding:1px 6px;border-radius:3px;background:var(--sel);font-size:10px;font-weight:600;color:var(--ink2);font-variant-numeric:tabular-nums">{{ shownCount }}</span>
+      </div>
+      <div style="flex:none;display:flex;padding:2px;border:1px solid var(--line2);border-radius:3px;gap:2px">
+        <sc-for list="{{ groupTabs }}" as="t" hint-placeholder-count="2">
+          <button onClick="{{ t.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:none;border-radius:3px;cursor:pointer;font-size:11.5px;background:{{ t.bg }};color:{{ t.ink }};white-space:nowrap">
+            <span style="font-size:10px;opacity:.7">{{ t.icon }}</span>{{ t.name }}
+          </button>
+        </sc-for>
+      </div>
+      <div style="flex:1;min-width:0"></div>
+      <button title="Export notes" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:26px;height:26px;display:grid;place-items:center;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink2)">⤒</button>
+      <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap">
+        <span style="font-size:11px;opacity:.75">＋</span>General note
+      </button>
+    </header>
+
+    <div style="flex:1;min-height:0;display:flex;min-width:0">
+      <!-- thread list -->
+      <div style="flex:1;min-width:0;overflow:auto;padding:18px 20px 40px">
+        <div style="max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:22px">
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:baseline;gap:10px;padding:0 2px">
+                <span style="font-family:var(--serif);font-size:17px;font-weight:500">{{ g.title }}</span>
+                <span style="flex:1;min-width:0;font-family:'Courier Prime',monospace;font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.sub }}</span>
+                <span style="flex:none;font-size:10px;color:var(--ink3);white-space:nowrap">{{ g.count }}</span>
+              </div>
+              <sc-for list="{{ g.items }}" as="t" hint-placeholder-count="2">
+                <div onClick="{{ t.select }}" style-hover="border-color:var(--ink)" style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;padding:12px 14px;background:var(--panel);border:1px solid {{ t.border }};border-left:3px solid {{ t.edge }};border-radius:3px;cursor:pointer;opacity:{{ t.opacity }}">
+                  <span style="width:26px;height:26px;border-radius:50%;background:{{ t.color }};color:#fff;font-size:9.5px;font-weight:600;display:grid;place-items:center;margin-top:1px">{{ t.ini }}</span>
+                  <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                    <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+                      <span style="font-size:12px;font-weight:600">{{ t.who }}</span>
+                      <span style="font-size:10.5px;color:var(--ink3);white-space:nowrap">{{ t.when }}</span>
+                      <span style="padding:1px 6px;border-radius:3px;background:{{ t.kindBg }};color:{{ t.kindInk }};font-size:9.5px;font-weight:600;white-space:nowrap">{{ t.kind }}</span>
+                      <span style="margin-left:auto;font-family:'Courier Prime',monospace;font-size:10px;color:var(--ink3);white-space:nowrap">{{ t.at }}</span>
+                    </div>
+                    <sc-if value="{{ t.hasQuote }}" hint-placeholder-val="{{ true }}">
+                      <div style="padding:6px 10px;border-left:2px solid var(--line);font-family:'Courier Prime',monospace;font-size:11.5px;line-height:1.5;color:var(--ink2);background:var(--hover);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.quote }}</div>
+                    </sc-if>
+                    <p style="margin:0;font-size:12.5px;line-height:1.5">{{ t.body }}</p>
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                      <sc-if value="{{ t.hasReplies }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-size:10.5px;color:var(--ink3);white-space:nowrap">{{ t.replies }} replies</span>
+                        <span style="font-size:10.5px;color:var(--ink3)">·</span>
+                      </sc-if>
+                      <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 8px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--ink2);white-space:nowrap">Reply</button>
+                      <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 8px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--ink2);white-space:nowrap">Jump to line</button>
+                      <button onClick="{{ t.toggle }}" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 8px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:10.5px;color:{{ t.resolveInk }};white-space:nowrap">{{ t.resolveLabel }}</button>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noneShown }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:60px 20px">
+              <span style="font-family:var(--serif);font-size:20px;font-weight:500">Nothing here</span>
+              <span style="font-size:11.5px;color:var(--ink3)">No notes match this filter.</span>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <!-- context panel -->
+      <sc-if value="{{ sideOpen }}" hint-placeholder-val="{{ true }}">
+      <aside style="width:296px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0">
+        <div style="flex:none;height:46px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line2)">
+          <span style="flex:1;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em">In context</span>
+          <span style="font-family:'Courier Prime',monospace;font-size:10px;color:var(--ink3)">{{ sel.at }}</span>
+        </div>
+        <div style="flex:1;min-height:0;overflow-y:auto;padding:14px 12px 24px;display:flex;flex-direction:column;gap:14px">
+          <div style="background:var(--sheet);border:1px solid var(--sheet-edge);border-radius:2px;padding:18px 16px;font-family:'Courier Prime',monospace;font-size:10.5px;line-height:1.7;color:var(--sheet-ink)">
+            <sc-for list="{{ sel.context }}" as="c" hint-placeholder-count="5">
+              <div style="padding-left:{{ c.pad }};text-transform:{{ c.tt }};background:{{ c.bg }};color:{{ c.ink }}">{{ c.text }}</div>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">Thread</span>
+            <div style="display:flex;flex-direction:column;gap:8px;padding-left:9px;border-left:1px solid var(--line)">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <span style="font-size:11px;font-weight:600">{{ sel.who }} <span style="font-weight:400;color:var(--ink3)">{{ sel.when }}</span></span>
+                <span style="font-size:11.5px;line-height:1.5;color:var(--ink2)">{{ sel.body }}</span>
+              </div>
+              <sc-for list="{{ sel.thread }}" as="r" hint-placeholder-count="1">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:11px;font-weight:600">{{ r.who }} <span style="font-weight:400;color:var(--ink3)">{{ r.when }}</span></span>
+                  <span style="font-size:11.5px;line-height:1.5;color:var(--ink2)">{{ r.body }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="min-height:64px;padding:8px 10px;border:1px solid var(--line);border-radius:3px;font-size:11.5px;color:var(--ink3);background:var(--sheet)">Reply… <span style="color:var(--ink3)">@ to mention</span></div>
+            <div style="display:flex;gap:6px;justify-content:flex-end">
+              <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 9px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Open in script</button>
+              <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:600">Reply</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+      </sc-if>
+    </div>
+
+    <footer style="height:28px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--ink2);overflow:hidden">
+      <span style="flex:none;white-space:nowrap"><b style="font-weight:600;color:var(--ink)">{{ openCount }}</b> open · {{ resolvedCount }} resolved</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="flex:none;white-space:nowrap">{{ filterLabel }}</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ groupLabel }}</span>
+      <div style="flex:1;min-width:0"></div>
+      <button onClick="{{ toggleNav }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);white-space:nowrap">{{ navLabel }}</button>
+      <button onClick="{{ toggleSide }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);white-space:nowrap">{{ sideLabel }}</button>
+      <span style="flex:none;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap">ep_001/notes</span>
+    </footer>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;filter&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;open&quot;,&quot;mine&quot;,&quot;resolved&quot;,&quot;all&quot;],&quot;default&quot;:&quot;open&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "light",
+    filter: this.props.filter || "open",
+    person: null,
+    group: "route",
+    selected: 1,
+    resolved: { 3: true, 6: true },
+    navOverride: null, sideOverride: null,
+    w: typeof window === "undefined" ? 1440 : window.innerWidth
+  };
+
+  componentDidMount() {
+    this._resize = () => this.setState({ w: window.innerWidth });
+    window.addEventListener("resize", this._resize);
+    this._resize();
+  }
+  componentWillUnmount() { window.removeEventListener("resize", this._resize); }
+
+  seg(list, cur, key) {
+    const view = key === "group";
+    const on = view ? "var(--accent-bg)" : "var(--sel)", off = "transparent";
+    return list.map((it) => ({
+      ...it, bg: cur === it.id ? on : off,
+      ink: cur === it.id ? (view ? "var(--accent)" : "var(--ink)") : "var(--ink2)",
+      go: () => this.setState({ [key]: it.id })
+    }));
+  }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    const navOpen = s.navOverride === null ? s.w >= 1000 : s.navOverride;
+    const sideOpen = s.sideOverride === null ? s.w >= 1280 : s.sideOverride;
+
+    const ppl = {
+      ravi: { name: "Ravi Menon", ini: "RM", color: "oklch(0.55 0.12 240)" },
+      priya: { name: "Priya P.", ini: "PP", color: "oklch(0.55 0.10 300)" },
+      dana: { name: "Dana O.", ini: "DO", color: "oklch(0.55 0.12 150)" }
+    };
+    const kinds = {
+      note: { label: "Note", bg: "var(--sel)", ink: "var(--ink2)" },
+      question: { label: "Question", bg: "var(--note-bg)", ink: "var(--note)" },
+      cut: { label: "Suggest cut", bg: "var(--del-bg)", ink: "var(--del)" },
+      praise: { label: "Keep", bg: "var(--add-bg)", ink: "var(--add)" }
+    };
+    const C = (text, kind, hi) => ({
+      text, pad: kind === "char" ? "34%" : kind === "dlg" ? "18%" : kind === "paren" ? "26%" : "0",
+      tt: kind === "char" || kind === "heading" ? "uppercase" : "none",
+      bg: hi ? "var(--note-bg)" : "transparent", ink: kind === "paren" ? "var(--ink2)" : "var(--sheet-ink)"
+    });
+
+    const raw = [
+      { id: 1, who: "ravi", when: "2h ago", kind: "question", route: "Script", at: "Sc 1 · pg 1", scene: "Scene 1", quote: "Ade stands still. Then he yanks off his boots and hurls them.",
+        body: "Does the tiffin pay off in E2, or is it just business? If it's business, cut the insert.", replies: 2,
+        thread: [{ who: "Priya P.", when: "1h ago", body: "It pays off — E2 opens on the tiffin in the bin." }, { who: "Ravi Menon", when: "40m ago", body: "Then keep it, but lose the second look." }],
+        context: [C("EXT. COMMUNITY PITCH - DUSK", "heading"), C("The fourth ball hits the post and bounces out, dead."), C("Ade stands still. Then he yanks off his boots and hurls them.", "action", true), C("ADE", "char"), C("(to himself, spitting)", "paren"), C("Not good enough. Never was.", "dlg")] },
+      { id: 2, who: "dana", when: "3h ago", kind: "cut", route: "Script", at: "Sc 2 · pg 5", scene: "Scene 2", quote: "(bitter)",
+        body: "Parenthetical is doing the actor's job. The line already reads bitter.", replies: 0, thread: [],
+        context: [C("ADE", "char"), C("(bitter)", "paren", true), C("Then he had talent. I've got nothing.", "dlg"), C("OLD MAN", "char"), C("He had a ball. Same as you.", "dlg")] },
+      { id: 3, who: "priya", when: "Yesterday", kind: "note", route: "Script", at: "Sc 2 · pg 6", scene: "Scene 2", quote: "I knew a man. Shorter than you. Slower.",
+        body: "Trim to one line for Draft 5. The speech is carrying too much.", replies: 1, thread: [{ who: "Dana O.", when: "Yesterday", body: "Agree. One line, then the ball." }],
+        context: [C("OLD MAN", "char"), C("I knew a man. Shorter than you. Slower.", "dlg", true), C("ADE", "char"), C("I said I'm done.", "dlg")] },
+      { id: 4, who: "ravi", when: "Yesterday", kind: "question", route: "Beats", at: "Beat 6", scene: "", quote: "",
+        body: "Decision Point is still unplaced. Does it merge into Final Image or sit before it?", replies: 0, thread: [],
+        context: [C("6 · Decision Point", "heading"), C("Held back for the second pass — where it sits depends on whether beat 5 and 6 merge.", "action", true)] },
+      { id: 5, who: "dana", when: "2d ago", kind: "praise", route: "Outline", at: "Worldview · 2", scene: "", quote: "The pitch is the only place the town is honest.",
+        body: "This is the thesis. Make sure Scene 3 earns it visually — the floodlights flicker is right.", replies: 0, thread: [],
+        context: [C("Overall worldview", "heading"), C("The pitch is the only place the town is honest.", "action", true)] },
+      { id: 6, who: "priya", when: "3d ago", kind: "note", route: "Storyboard", at: "Sc 1 · Shot 01-02", scene: "Scene 1", quote: "",
+        body: "Handheld here, but lock off for 01-03 so the turn lands.", replies: 0, thread: [],
+        context: [C("SHOT 01-02 · MS · Handheld", "heading"), C("Fourth ball hits the post; he stops, tugs at his boot.", "action", true)] }
+    ];
+
+    const all = raw.map((t) => {
+      const p = ppl[t.who], k = kinds[t.kind], done = !!s.resolved[t.id], isSel = t.id === s.selected;
+      return {
+        ...t, who: p.name, ini: p.ini, color: p.color, personId: t.who,
+        kind: k.label, kindBg: k.bg, kindInk: k.ink,
+        hasQuote: t.quote.length > 0, hasReplies: t.replies > 0,
+        done, opacity: done ? ".6" : "1",
+        border: isSel ? "var(--accent-line)" : "var(--line)",
+        edge: done ? "var(--line)" : isSel ? "var(--accent)" : k.ink,
+        resolveLabel: done ? "Reopen" : "Resolve",
+        resolveInk: done ? "var(--ink2)" : "var(--add)",
+        select: () => this.setState({ selected: t.id }),
+        toggle: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState((st) => ({ resolved: { ...st.resolved, [t.id]: !st.resolved[t.id] } })); }
+      };
+    });
+
+    let shown = all.filter((t) => s.filter === "all" ? true : s.filter === "open" ? !t.done : s.filter === "resolved" ? t.done : s.filter === "mine" ? t.personId === "priya" : true);
+    if (s.person) shown = shown.filter((t) => t.personId === s.person);
+
+    const groupKey = s.group === "route" ? (t) => t.route : (t) => t.scene || "Project-wide";
+    const subFor = { Script: "ep_001/script", Beats: "ep_001/beats", Outline: "ep_001/outline", Storyboard: "ep_001/storyboard", "Scene 1": "EXT. COMMUNITY PITCH - DUSK", "Scene 2": "EXT. COMMUNITY PITCH - MOMENTS LATER", "Project-wide": "outline · beats · boards" };
+    const order = [];
+    shown.forEach((t) => { const k = groupKey(t); if (!order.includes(k)) order.push(k); });
+    const groups = order.map((k) => {
+      const items = shown.filter((t) => groupKey(t) === k);
+      return { title: k, sub: subFor[k] || "", count: items.length + (items.length === 1 ? " note" : " notes"), items };
+    });
+
+    const openCount = all.filter((t) => !t.done).length, resolvedCount = all.length - openCount;
+    const sel = all.find((t) => t.id === s.selected) || all[0];
+    const countBy = (fn) => all.filter(fn).length;
+
+    return {
+      theme: s.theme, themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      navOpen, navLabel: navOpen ? "Hide nav" : "Show nav",
+      toggleNav: () => this.setState({ navOverride: !navOpen }),
+      sideOpen, sideLabel: sideOpen ? "Hide context" : "Show context",
+      toggleSide: () => this.setState({ sideOverride: !sideOpen }),
+
+      groupTabs: this.seg([{ id: "route", name: "By route", icon: "▤" }, { id: "scene", name: "By scene", icon: "▢" }], s.group, "group"),
+      groupLabel: s.group === "route" ? "Grouped by route" : "Grouped by scene",
+      filters: [
+        { id: "open", name: "Open", icon: "○", count: openCount },
+        { id: "mine", name: "Assigned to me", icon: "◍", count: countBy((t) => t.personId === "priya") },
+        { id: "resolved", name: "Resolved", icon: "✓", count: resolvedCount },
+        { id: "all", name: "All notes", icon: "≡", count: all.length }
+      ].map((f) => ({ ...f, bg: s.filter === f.id ? on : off, ink: s.filter === f.id ? "var(--ink)" : "var(--ink2)", go: () => this.setState({ filter: f.id, person: null }) })),
+      filterLabel: { open: "Open", mine: "Assigned to me", resolved: "Resolved", all: "All notes" }[s.filter],
+      people: Object.keys(ppl).map((id) => ({
+        ...ppl[id], count: countBy((t) => t.personId === id),
+        bg: s.person === id ? on : off,
+        go: () => this.setState({ person: s.person === id ? null : id })
+      })),
+
+      groups, shownCount: shown.length, noneShown: shown.length === 0,
+      openCount, resolvedCount,
+      resolvedLabel: resolvedCount + " / " + all.length,
+      resolvedPct: Math.round((resolvedCount / all.length) * 100) + "%",
+      sel,
+
+      rail: [
+        { name: "Writing", icon: "✎", bg: on, ink: "var(--ink)", bar: "var(--accent)" },
+        { name: "Characters", icon: "◍", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Locations", icon: "⌖", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Timeline", icon: "◷", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Bible", icon: "◈", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Research", icon: "▧", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Insights", icon: "◎", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Production", icon: "▶", bg: off, ink: "var(--ink2)", bar: "transparent" }
+      ],
+      epNav: [
+        { name: "Script", icon: "▤", meta: "14pp", bg: off, w: "400" },
+        { name: "Outline", icon: "▥", meta: "prose", bg: off, w: "400" },
+        { name: "Beats", icon: "⧗", meta: "6", bg: off, w: "400" },
+        { name: "Storyboard", icon: "▦", meta: "3 shots", bg: off, w: "400" },
+        { name: "Scenes", icon: "▢", meta: "3", bg: off, w: "400" },
+        { name: "Revisions", icon: "⇄", meta: "Draft 5", bg: off, w: "400" },
+        { name: "Notes", icon: "❝", meta: openCount + " open", bg: on, w: "500" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

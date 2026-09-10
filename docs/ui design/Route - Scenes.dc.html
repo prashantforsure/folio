@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --sheet-ink:#171310; --sheet-line:rgba(0,0,0,.12); --sheet-edge:rgba(0,0,0,.16);
+  --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --frame-a:oklch(0.32 0.02 50); --frame-b:oklch(0.16 0.01 50);
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --focus:oklch(0.50 0.17 27); --shadow:none;
+  --grid:rgba(40,30,18,.16); --slate:#1d1915; --slate-ink:#efe9df;
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --sheet-ink:#e2dbcf; --sheet-line:rgba(255,255,255,.11); --sheet-edge:rgba(255,255,255,.08);
+  --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --frame-a:oklch(0.30 0.02 50); --frame-b:oklch(0.14 0.01 50);
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --focus:oklch(0.72 0.14 30); --shadow:none;
+  --grid:rgba(240,232,220,.18); --slate:#ebe4d8; --slate-ink:#151311;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s,transform .12s}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ICON RAIL ── -->
+  <div style="width:66px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 5px 10px;gap:3px">
+    <div style="width:28px;height:28px;border-radius:3px;background:var(--ink);color:var(--desk);font-size:10.5px;font-weight:600;letter-spacing:.02em;display:grid;place-items:center;margin-bottom:12px">NM</div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8">
+      <button title="{{ r.name }}" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="position:relative;width:56px;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ r.bg }};border:none;border-radius:3px;cursor:pointer;color:{{ r.ink }}">
+        <span style="position:absolute;left:-5px;top:13px;bottom:13px;width:2px;border-radius:1px;background:{{ r.bar }}"></span>
+        <span style="font-size:14px;line-height:1">{{ r.icon }}</span>
+        <span style="font-size:8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;line-height:1;white-space:nowrap">{{ r.name }}</span>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:56px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:13px;color:var(--ink3)">{{ themeIcon }}</button>
+    <div title="Project settings" style="width:56px;height:34px;display:grid;place-items:center;border-radius:3px;cursor:pointer;font-size:14px;color:var(--ink3)">⚙</div>
+    <div style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;margin-top:6px">PP</div>
+  </div>
+
+  <!-- ── EPISODE NAV ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:238px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="padding:11px 10px 8px;display:flex;align-items:center;gap:6px">
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Not Magic, Just This</span>
+      <button title="New episode" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:13px">＋</button>
+      <button title="Project actions" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:13px">⋯</button>
+    </div>
+    <div style="padding:0 10px 10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border:1px solid var(--line2);border-radius:3px;color:var(--ink3);font-size:11.5px;cursor:pointer">
+        <span>Search or jump to…</span><span style="font-size:10px">⌘K</span>
+      </div>
+    </div>
+
+    <nav style="flex:1;overflow-y:auto;padding:0 6px 14px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="padding:0 8px 5px;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Ep 1</div>
+        <sc-for list="{{ epNav }}" as="n" hint-placeholder-count="7">
+          <div style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:{{ n.bg }};border-radius:3px;cursor:pointer;font-size:12.5px;font-weight:{{ n.w }}">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">{{ n.icon }}</span>{{ n.name }}
+            <span style="margin-left:auto;font-size:10px;color:var(--ink3)">{{ n.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:center;padding:0 8px 3px">
+          <span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Scenes</span>
+          <span style="flex:none;font-size:9.5px;color:var(--ink3)">drag to reorder</span>
+        </div>
+        <sc-for list="{{ scenes }}" as="s" hint-placeholder-count="3">
+          <div onClick="{{ s.select }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:8px 9px;background:{{ s.navBg }};border:1px solid {{ s.navBorder }};border-radius:3px;cursor:pointer">
+            <span title="Drag" style="flex:none;font-size:10px;color:var(--ink3);cursor:grab">⠿</span>
+            <span style="flex:none;font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ s.n }}.</span>
+            <span style="flex:1;min-width:0;font-family:'Courier Prime',monospace;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ s.navInk }}">{{ s.loc }}</span>
+            <span style="flex:none;font-family:'Courier Prime',monospace;font-size:9.5px;color:var(--ink3)">{{ s.dn }}</span>
+          </div>
+        </sc-for>
+        <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="margin-top:2px;display:flex;align-items:center;gap:7px;padding:7px 9px;background:transparent;border:1px dashed var(--line);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink3)">
+          <span style="font-size:12px">＋</span>New scene
+        </button>
+      </div>
+    </nav>
+
+    <div style="padding:8px 10px 10px;border-top:1px solid var(--line2)">
+      <div style="display:flex;flex-direction:column;gap:5px;padding:7px 8px;border:1px solid var(--line2);border-radius:3px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span style="font-size:10.5px;color:var(--ink2)">Described</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">{{ describedLabel }}</span>
+        </div>
+        <div style="height:3px;border-radius:2px;background:var(--line);overflow:hidden"><div style="width:{{ describedPct }};height:100%;background:var(--accent)"></div></div>
+        <span style="font-size:9.5px;color:var(--ink3)">{{ describedNote }}</span>
+      </div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:7px;overflow:hidden">
+        <span style="flex:none;font-family:var(--serif);font-size:21px;font-weight:500;letter-spacing:-.01em;line-height:1">Scene Board</span>
+        <span style="flex:none;padding:1px 6px;border-radius:3px;background:var(--sel);font-size:10px;font-weight:600;color:var(--ink2);font-variant-numeric:tabular-nums">3</span>
+      </div>
+      <div style="flex:none;display:flex;padding:2px;border:1px solid var(--line2);border-radius:3px;gap:2px">
+        <sc-for list="{{ viewTabs }}" as="t" hint-placeholder-count="3">
+          <button onClick="{{ t.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:none;border-radius:3px;cursor:pointer;font-size:11.5px;background:{{ t.bg }};color:{{ t.ink }};white-space:nowrap">
+            <span style="font-size:10px;opacity:.7">{{ t.icon }}</span>{{ t.name }}
+          </button>
+        </sc-for>
+      </div>
+      <div style="flex:1;min-width:0"></div>
+      <button title="Export scene report" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:26px;height:26px;display:grid;place-items:center;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink2)">⤒</button>
+      <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap">
+        <span style="font-size:11px;opacity:.75">＋</span>New scene
+      </button>
+    </header>
+
+    <!-- ════ CARDS (canvas) ════ -->
+    <sc-if value="{{ isCards }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+        <span style="position:absolute;top:0;bottom:14px;right:0;width:56px;z-index:3;pointer-events:none;background:linear-gradient(to right,transparent,var(--desk))"></span>
+
+        <!-- canvas toolbar -->
+        <div style="position:absolute;top:12px;right:14px;z-index:4;display:flex;align-items:center;gap:1px;padding:3px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+          <sc-for list="{{ canvasTools }}" as="t" hint-placeholder-count="6">
+            <button onClick="{{ t.go }}" title="{{ t.title }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:28px;height:26px;display:grid;place-items:center;background:{{ t.bg }};border:none;border-radius:3px;cursor:pointer;font-size:12px;color:{{ t.ink }}">{{ t.icon }}</button>
+          </sc-for>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto;padding:60px 64px 32px 24px;scroll-snap-type:x proximity;scroll-padding-left:24px;background-color:var(--desk);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:{{ gridSize }} {{ gridSize }};background-position:8px 8px">
+          <div style="display:flex;gap:{{ cardGap }};min-width:min-content;align-items:flex-start">
+            <sc-for list="{{ scenes }}" as="s" hint-placeholder-count="3">
+              <div onClick="{{ s.select }}" style-hover="border-color:var(--ink)" style="width:{{ cardW }};flex:none;scroll-snap-align:start;display:flex;flex-direction:column;background:var(--panel);border:1px solid {{ s.colBorder }};border-radius:3px;overflow:hidden;cursor:default">
+                <div style="height:3px;flex:none;background:{{ s.stripeColor }}"></div>
+
+                <!-- script preview -->
+                <div style="position:relative;margin:12px 12px 0;height:{{ previewH }};overflow:hidden;background:var(--sheet);border:1px solid var(--sheet-edge);border-radius:2px;padding:14px 18px;font-family:'Courier Prime',monospace;font-size:6.5px;line-height:1.6;color:var(--sheet-ink)">
+                  <div style="text-transform:uppercase">{{ s.heading }}</div>
+                  <div style="height:5px"></div>
+                  <sc-for list="{{ s.preview }}" as="p" hint-placeholder-count="6">
+                    <div style="padding-left:{{ p.pad }};padding-right:{{ p.padR }};text-transform:{{ p.tt }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ p.ink }}">{{ p.text }}</div>
+                  </sc-for>
+                  <span style="position:absolute;left:0;right:0;bottom:0;height:34px;background:linear-gradient(to bottom,transparent,var(--sheet))"></span>
+                  <span style="position:absolute;top:8px;right:10px;font-family:ui-monospace,monospace;font-size:7px;color:var(--ink3)">pg {{ s.page }}</span>
+                </div>
+
+                <div style="padding:12px 13px 13px;display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;flex-direction:column;gap:3px">
+                    <div style="display:flex;align-items:baseline;gap:8px">
+                      <span style="flex:none;font-family:var(--serif);font-size:20px;line-height:1;font-weight:500;color:var(--ink3)">{{ s.no }}</span>
+                      <span style="flex:1;min-width:0;font-family:'Courier Prime',monospace;font-size:14px;font-weight:700;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.heading }}</span>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    <sc-for list="{{ s.stats }}" as="st" hint-placeholder-count="3">
+                      <span title="{{ st.title }}" style="display:flex;align-items:center;gap:5px;padding:2px 7px;border:1px solid var(--line2);border-radius:3px;font-size:10px;color:var(--ink2);white-space:nowrap">
+                        <span style="font-size:9.5px;color:var(--ink3)">{{ st.icon }}</span>{{ st.v }}
+                      </span>
+                    </sc-for>
+                  </div>
+
+                  <sc-if value="{{ s.hasDesc }}" hint-placeholder-val="{{ true }}">
+                    <p style="margin:0;font-size:11.5px;line-height:1.55;color:var(--ink2)">{{ s.desc }}</p>
+                  </sc-if>
+                  <sc-if value="{{ s.noDesc }}" hint-placeholder-val="{{ false }}">
+                    <button style-hover="border-color:var(--accent-line);background:var(--accent-bg)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:var(--hover);border:1px dashed var(--line);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink3);text-align:left">
+                      <span style="font-size:10px;color:var(--accent)">✦</span>No description yet · summarise from the page
+                    </button>
+                  </sc-if>
+
+                  <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    <sc-for list="{{ s.cast }}" as="c" hint-placeholder-count="2">
+                      <span style="padding:1px 6px;border-radius:3px;background:var(--accent-bg);border:1px solid var(--accent-line);font-size:10px;color:var(--accent);white-space:nowrap">{{ c }}</span>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:6px;padding:10px 12px 12px;border-top:1px solid var(--line2)">
+                  <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 8px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink2)">
+                    <span style="font-size:10px;opacity:.7">✎</span>Edit
+                  </button>
+                  <button style-hover="background:var(--accent-bg)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 8px;background:transparent;color:var(--accent);border:1px solid var(--accent-line);border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:500;white-space:nowrap">
+                    <span style="font-size:10px">⚑</span>Go to Production
+                  </button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ════ INDEX CARDS (corkboard) ════ -->
+    <sc-if value="{{ isIndex }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;min-width:0">
+        <div style="flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;height:40px;border-bottom:1px solid var(--line2);background:var(--panel)">
+          <span style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">Colour by</span>
+          <div style="display:flex;padding:2px;border:1px solid var(--line2);border-radius:3px;gap:2px">
+            <sc-for list="{{ colorTabs }}" as="c" hint-placeholder-count="3">
+              <button onClick="{{ c.go }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;border:none;border-radius:3px;cursor:pointer;font-size:10.5px;background:{{ c.bg }};color:{{ c.ink }}">{{ c.name }}</button>
+            </sc-for>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-left:6px">
+            <sc-for list="{{ colorLegend }}" as="l" hint-placeholder-count="3">
+              <span style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink2);white-space:nowrap"><span style="width:8px;height:8px;border-radius:2px;background:{{ l.color }}"></span>{{ l.name }}</span>
+            </sc-for>
+          </div>
+          <div style="flex:1;min-width:0"></div>
+          <span style="font-size:10.5px;color:var(--ink3);white-space:nowrap">Drag a card between acts · reordering here renumbers the script</span>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto;padding:22px 24px 40px;background-color:var(--desk);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:22px 22px;background-position:8px 8px">
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(250px,1fr));gap:18px;min-width:790px;align-items:start">
+            <sc-for list="{{ actCols }}" as="a" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;align-items:baseline;gap:8px;padding:0 4px 8px;border-bottom:1px solid var(--line)">
+                  <span style="font-family:var(--serif);font-size:19px;font-weight:500;line-height:1">{{ a.name }}</span>
+                  <span style="font-size:10.5px;color:var(--ink3)">{{ a.count }}</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,monospace;font-size:10px;color:var(--ink3)">{{ a.eighths }}</span>
+                </div>
+                <sc-if value="{{ a.hasCards }}" hint-placeholder-val="{{ true }}">
+                  <sc-for list="{{ a.cards }}" as="c" hint-placeholder-count="1">
+                    <div onClick="{{ c.select }}" style-hover="transform:rotate(0deg) translateY(-2px);border-color:var(--ink)" style="position:relative;display:flex;flex-direction:column;background:var(--sheet);border:1px solid {{ c.colBorder }};border-radius:2px;transform:rotate({{ c.rot }});cursor:grab;transition:transform .15s,border-color .12s">
+                      <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--sheet-line);background:{{ c.color }};color:#fff">
+                        <span style="font-family:var(--serif);font-size:16px;line-height:1;font-weight:500">{{ c.no }}</span>
+                        <span style="flex:1;min-width:0;font-family:'Courier Prime',monospace;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.heading }}</span>
+                        <span title="Drag" style="flex:none;font-size:11px;opacity:.7">⠿</span>
+                      </div>
+                      <div style="padding:12px 12px 10px;display:flex;flex-direction:column;gap:9px;background-image:repeating-linear-gradient(to bottom,transparent 0 21px,var(--sheet-line) 21px 22px);background-position:0 8px">
+                        <p style="margin:0;font-family:var(--serif);font-size:14px;line-height:22px;color:{{ c.synInk }};min-height:66px">{{ c.synopsis }}</p>
+                        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:4px;background:var(--sheet)">
+                          <span style="padding:1px 6px;border-radius:3px;background:var(--hover);font-size:9.5px;color:var(--ink2);white-space:nowrap">{{ c.tag }}</span>
+                          <span style="font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap">{{ c.eighths }} · pg {{ c.page }}</span>
+                          <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+                            <sc-for list="{{ c.cast }}" as="m" hint-placeholder-count="2">
+                              <span style="font-size:9.5px;color:var(--accent);white-space:nowrap">{{ m }}</span>
+                            </sc-for>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+                <sc-if value="{{ a.noCards }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:26px 12px;border:1px dashed var(--line);border-radius:2px;display:grid;place-items:center;font-size:11px;color:var(--ink3);text-align:center">Drop a scene here</div>
+                </sc-if>
+                <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;justify-content:center;gap:7px;padding:8px;background:transparent;border:1px dashed var(--line);border-radius:2px;cursor:pointer;font-size:11px;color:var(--ink3)">
+                  <span style="font-size:12px">＋</span>New card
+                </button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ════ SCENE LIST ════ -->
+    <sc-if value="{{ isList }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;overflow:auto">
+        <div style="min-width:960px">
+          <div style="position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:9px 16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">
+            <span style="width:28px;flex:none">#</span>
+            <span style="width:260px;flex:none">Heading</span>
+            <span style="width:56px;flex:none">I/E</span>
+            <span style="width:66px;flex:none">Time</span>
+            <span style="width:56px;flex:none">Pages</span>
+            <span style="width:56px;flex:none">Lines</span>
+            <span style="width:150px;flex:none">Cast</span>
+            <span style="flex:1;min-width:0">Description</span>
+            <span style="width:70px;flex:none;text-align:right">Status</span>
+          </div>
+          <sc-for list="{{ scenes }}" as="s" hint-placeholder-count="3">
+            <div onClick="{{ s.select }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line2);background:{{ s.rowBg }};cursor:pointer">
+              <span style="width:28px;flex:none;font-family:var(--serif);font-size:16px;color:var(--ink3)">{{ s.no }}</span>
+              <span style="width:260px;flex:none;font-family:'Courier Prime',monospace;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.heading }}</span>
+              <span style="width:56px;flex:none;font-family:'Courier Prime',monospace;font-size:11.5px;color:var(--ink2)">{{ s.ie }}</span>
+              <span style="width:66px;flex:none;font-family:'Courier Prime',monospace;font-size:11.5px;color:var(--ink2)">{{ s.dn }}</span>
+              <span style="width:56px;flex:none;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink2)">{{ s.eighths }}</span>
+              <span style="width:56px;flex:none;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink2)">{{ s.lines }}</span>
+              <span style="width:150px;flex:none;display:flex;gap:5px;flex-wrap:wrap">
+                <sc-for list="{{ s.cast }}" as="c" hint-placeholder-count="2">
+                  <span style="padding:1px 6px;border-radius:3px;background:var(--accent-bg);border:1px solid var(--accent-line);font-size:9.5px;color:var(--accent);white-space:nowrap">{{ c }}</span>
+                </sc-for>
+              </span>
+              <span style="flex:1;min-width:0;font-size:11.5px;line-height:1.45;color:{{ s.descInk }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.descOrEmpty }}</span>
+              <span style="width:70px;flex:none;text-align:right;font-size:10px;color:{{ s.statusInk }}">{{ s.status }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <footer style="height:28px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--ink2);overflow:hidden">
+      <span style="flex:none;white-space:nowrap">3 scenes · <b style="font-weight:600;color:var(--ink)">{{ totalEighths }}</b> pages</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="flex:none;white-space:nowrap">{{ viewLabel }}</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ selectedLabel }}</span>
+      <div style="flex:1;min-width:0"></div>
+      <button onClick="{{ toggleNav }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);white-space:nowrap">{{ navLabel }}</button>
+      <span style="flex:none;padding:2px 7px;border:1px solid var(--line2);border-radius:3px;font-size:10px;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap">{{ zoomLabel }}</span>
+      <span style="flex:none;display:flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--add)"></span>saved 3s ago</span>
+      <span style="flex:none;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap">ep_001/scenes</span>
+    </footer>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cards&quot;,&quot;index&quot;,&quot;list&quot;],&quot;default&quot;:&quot;cards&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "light",
+    view: this.props.view || "cards",
+    scene: 1,
+    scale: 1,
+    tool: "select",
+    colorBy: "act",
+    navOverride: null,
+    w: typeof window === "undefined" ? 1440 : window.innerWidth
+  };
+
+  componentDidMount() {
+    this._resize = () => this.setState({ w: window.innerWidth });
+    window.addEventListener("resize", this._resize);
+    this._resize();
+  }
+  componentWillUnmount() { window.removeEventListener("resize", this._resize); }
+
+  seg(list, cur, key) {
+    const view = key === "view";
+    const on = view ? "var(--accent-bg)" : "var(--sel)", off = "transparent";
+    return list.map((it) => ({
+      ...it, bg: cur === it.id ? on : off,
+      ink: cur === it.id ? (view ? "var(--accent)" : "var(--ink)") : "var(--ink2)",
+      go: () => this.setState({ [key]: it.id })
+    }));
+  }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    const navOpen = s.navOverride === null ? s.w >= 1000 : s.navOverride;
+
+    const L = (text, kind) => {
+      const k = kind || "action";
+      return {
+        text,
+        pad: k === "char" ? "38%" : k === "paren" ? "30%" : k === "dlg" ? "22%" : "0",
+        padR: k === "dlg" ? "22%" : k === "paren" ? "30%" : "0",
+        tt: k === "char" ? "uppercase" : "none",
+        ink: k === "paren" ? "var(--ink2)" : "var(--sheet-ink)"
+      };
+    };
+
+    const raw = [
+      {
+        n: "1", no: "01", ie: "EXT", loc: "COMMUNITY PITCH", dn: "DUSK", page: "1", eighths: "4/8", lines: 3, chars: 2,
+        cast: ["@Ade", "@Old Man"],
+        desc: "Floodlights over an empty pitch. Ade drills free kicks alone and misses each one worse than the last, until he pulls his boots off and walks.",
+        preview: [
+          L("Floodlights buzz on over an empty pitch. Seventeen-year-old ADE lines up a ball."),
+          L("He strikes. The ball curls and sails wide."),
+          L("He jogs, places another ball, strikes again — over the bar."),
+          L("ADE", "char"), L("(to himself, spitting)", "paren"), L("Not good enough. Never was.", "dlg"),
+          L("The fourth ball hits the post and bounces out, dead."),
+          L("Ade stands still. Then he yanks off his boots and hurls them.")
+        ]
+      },
+      {
+        n: "2", no: "02", ie: "EXT", loc: "COMMUNITY PITCH", dn: "MOMENTS LATER", page: "4", eighths: "7/8", lines: 7, chars: 2,
+        cast: ["@Ade", "@Old Man"],
+        desc: "",
+        preview: [
+          L("Ade turns. An OLD MAN sits on the bench at the touchline, a flat ball at his feet."),
+          L("ADE", "char"), L("I said I'm done.", "dlg"),
+          L("OLD MAN", "char"), L("I knew a man. Shorter than you. Slower.", "dlg"),
+          L("ADE", "char"), L("(bitter)", "paren"), L("Then he had talent. I've got nothing.", "dlg"),
+          L("OLD MAN", "char"), L("He had a ball. Same as you.", "dlg")
+        ]
+      },
+      {
+        n: "3", no: "03", ie: "EXT", loc: "COMMUNITY PITCH", dn: "NIGHT", page: "11", eighths: "4/8", lines: 2, chars: 1,
+        cast: ["@Ade"],
+        desc: "One strike, dead corner. Ade picks the old ball back up and returns to his mark.",
+        preview: [
+          L("Ade places the old, half-flat ball on the spot. The floodlights flicker."),
+          L("Run-up. Strike."),
+          L("The ball clips the crossbar and drops, kissing the net inside the post."),
+          L("ADE", "char"), L("…I did that.", "dlg"),
+          L("The old man nods once from the bench, rises, and walks out of the light."),
+          L("Ade pulls on his boots. He retrieves the old ball from the net.")
+        ]
+      }
+    ];
+
+    const scenes = raw.map((sc) => {
+      const isSel = Number(sc.n) === s.scene;
+      const hasDesc = sc.desc.length > 0;
+      return {
+        ...sc,
+        heading: sc.ie + ". " + sc.loc + " - " + sc.dn,
+        hasDesc, noDesc: !hasDesc,
+        descOrEmpty: hasDesc ? sc.desc : "No description yet",
+        descInk: hasDesc ? "var(--ink2)" : "var(--ink3)",
+        status: hasDesc ? "Ready" : "Draft",
+        statusInk: hasDesc ? "var(--add)" : "var(--note)",
+        stats: [
+          { icon: "◍", v: sc.chars + " chars", title: "Speaking characters" },
+          { icon: "❝", v: sc.lines + " lines", title: "Dialogue lines" },
+          { icon: "▤", v: sc.eighths, title: "Page eighths" }
+        ],
+        navBg: isSel ? "var(--accent-bg)" : "transparent",
+        navBorder: isSel ? "var(--accent-line)" : "var(--line2)",
+        navInk: isSel ? "var(--ink)" : "var(--ink2)",
+        rowBg: isSel ? "var(--accent-bg)" : "transparent",
+        colBorder: isSel ? "var(--accent-line)" : "var(--line)",
+        stripeColor: isSel ? "var(--accent)" : "var(--ink)",
+        select: () => this.setState({ scene: Number(sc.n) })
+      };
+    });
+
+    const acts = { "1": "Act I", "2": "Act II", "3": "Act III" };
+    const story = { "1": "A · Ade alone", "2": "B · The old man", "3": "A · Ade alone" };
+    const lead = { "1": "Ade", "2": "Old Man", "3": "Ade" };
+    const palette = {
+      act: { "Act I": "oklch(0.62 0.12 75)", "Act II": "oklch(0.55 0.12 250)", "Act III": "oklch(0.52 0.14 25)" },
+      char: { "Ade": "oklch(0.55 0.12 250)", "Old Man": "oklch(0.52 0.12 150)" },
+      story: { "A · Ade alone": "oklch(0.55 0.12 250)", "B · The old man": "oklch(0.62 0.12 75)" }
+    };
+    const keyFor = (sc) => s.colorBy === "act" ? acts[sc.n] : s.colorBy === "char" ? lead[sc.n] : story[sc.n];
+    const legend = Object.keys(palette[s.colorBy]).map((k) => ({ name: k, color: palette[s.colorBy][k] }));
+    const indexCards = scenes.map((sc) => ({
+      ...sc, tag: keyFor(sc), color: palette[s.colorBy][keyFor(sc)],
+      act: acts[sc.n], storyline: story[sc.n],
+      synopsis: sc.hasDesc ? sc.desc : "No synopsis yet — write one here or pull it from the page.",
+      synInk: sc.hasDesc ? "var(--sheet-ink)" : "var(--ink3)",
+      rot: (Number(sc.n) % 2 ? -0.6 : 0.5) + "deg"
+    }));
+    const actCols = ["Act I", "Act II", "Act III"].map((a) => {
+      const cards = indexCards.filter((c) => c.act === a);
+      return { name: a, count: cards.length + (cards.length === 1 ? " scene" : " scenes"), cards, hasCards: cards.length > 0, noCards: cards.length === 0,
+        eighths: cards.reduce((x, c) => x + parseInt(c.eighths, 10), 0) + "/8" };
+    });
+
+    const sel = scenes.find((x) => Number(x.n) === s.scene) || scenes[0];
+    const described = scenes.filter((x) => x.hasDesc).length;
+    const eighths = raw.reduce((a, b) => a + parseInt(b.eighths, 10), 0);
+    const whole = Math.floor(eighths / 8), rem = eighths % 8;
+    const frac = { 1: "⅛", 2: "¼", 3: "⅜", 4: "½", 5: "⅝", 6: "¾", 7: "⅞" }[rem] || "";
+    const pages = ((whole ? whole : "") + frac) || "0";
+
+    const toolBtn = (id, icon, title, action) => ({
+      icon, title,
+      bg: s.tool === id ? on : off,
+      ink: s.tool === id ? "var(--ink)" : "var(--ink2)",
+      go: action || (() => this.setState({ tool: id }))
+    });
+
+    return {
+      theme: s.theme, themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      navOpen, navLabel: navOpen ? "Hide nav" : "Show nav",
+      toggleNav: () => this.setState({ navOverride: !navOpen }),
+
+      viewTabs: this.seg([
+        { id: "cards", name: "Cards", icon: "▦" },
+        { id: "index", name: "Index cards", icon: "▣" },
+        { id: "list", name: "Scene list", icon: "▤" }
+      ], s.view, "view"),
+      isCards: s.view === "cards", isIndex: s.view === "index", isList: s.view === "list",
+      viewLabel: { cards: "Scene cards", index: "Index cards", list: "Scene list" }[s.view],
+      colorTabs: this.seg([{ id: "act", name: "Act" }, { id: "char", name: "Character" }, { id: "story", name: "Storyline" }], s.colorBy, "colorBy"),
+      colorLegend: legend,
+      indexCards, actCols,
+      selectedLabel: "Scene " + sel.no + " · " + sel.heading,
+
+      scenes,
+      cardW: Math.round(340 * s.scale) + "px",
+      cardGap: Math.round(22 * s.scale) + "px",
+      previewH: Math.round(150 * s.scale) + "px",
+      gridSize: Math.round(22 * s.scale) + "px",
+      zoomLabel: Math.round(s.scale * 100) + "%",
+
+      totalEighths: pages,
+      describedLabel: described + " / " + scenes.length,
+      describedPct: Math.round((described / scenes.length) * 100) + "%",
+      describedNote: (scenes.length - described) + " scene without a description",
+
+      canvasTools: [
+        toolBtn("select", "⌖", "Select"),
+        toolBtn("hand", "✋", "Pan"),
+        toolBtn("fit", "⛶", "Fit to content", () => this.setState({ tool: "fit", scale: 1 })),
+        toolBtn("out", "－", "Zoom out", () => this.setState({ scale: Math.max(0.6, Math.round((s.scale - 0.1) * 100) / 100) })),
+        toolBtn("in", "＋", "Zoom in", () => this.setState({ scale: Math.min(1.4, Math.round((s.scale + 0.1) * 100) / 100) })),
+        toolBtn("help", "?", "Shortcuts")
+      ],
+
+      rail: [
+        { name: "Writing", icon: "✎", bg: on, ink: "var(--ink)", bar: "var(--accent)" },
+        { name: "Characters", icon: "◍", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Locations", icon: "⌖", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Timeline", icon: "◷", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Bible", icon: "◈", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Research", icon: "▧", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Insights", icon: "◎", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Production", icon: "▶", bg: off, ink: "var(--ink2)", bar: "transparent" }
+      ],
+
+      epNav: [
+        { name: "Script", icon: "▤", meta: "14pp", bg: off, w: "400" },
+        { name: "Outline", icon: "▥", meta: "prose", bg: off, w: "400" },
+        { name: "Beats", icon: "⧗", meta: "6", bg: off, w: "400" },
+        { name: "Storyboard", icon: "▦", meta: "3 shots", bg: off, w: "400" },
+        { name: "Scenes", icon: "▢", meta: "3", bg: on, w: "500" },
+        { name: "Revisions", icon: "⇄", meta: "Draft 5", bg: off, w: "400" },
+        { name: "Notes", icon: "❝", meta: "4 open", bg: off, w: "400" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

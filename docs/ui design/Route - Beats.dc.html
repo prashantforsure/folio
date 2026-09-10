@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --sheet-ink:#171310; --sheet-line:rgba(0,0,0,.12); --sheet-edge:rgba(0,0,0,.16);
+  --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --frame-a:oklch(0.32 0.02 50); --frame-b:oklch(0.16 0.01 50);
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --focus:oklch(0.50 0.17 27); --shadow:none;
+  --grid:rgba(40,30,18,.16); --slate:#1d1915; --slate-ink:#efe9df;
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --sheet-ink:#e2dbcf; --sheet-line:rgba(255,255,255,.11); --sheet-edge:rgba(255,255,255,.08);
+  --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --frame-a:oklch(0.30 0.02 50); --frame-b:oklch(0.14 0.01 50);
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --focus:oklch(0.72 0.14 30); --shadow:none;
+  --grid:rgba(240,232,220,.18); --slate:#ebe4d8; --slate-ink:#151311;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit}
+::selection{background:var(--accent-bg)}
+button{transition:background .12s,border-color .12s,color .12s,box-shadow .12s,transform .12s}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ICON RAIL ── -->
+  <div style="width:66px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 5px 10px;gap:3px">
+    <div style="width:28px;height:28px;border-radius:3px;background:var(--ink);color:var(--desk);font-size:10.5px;font-weight:600;letter-spacing:.02em;display:grid;place-items:center;margin-bottom:12px">NM</div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8">
+      <button title="{{ r.name }}" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="position:relative;width:56px;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ r.bg }};border:none;border-radius:3px;cursor:pointer;color:{{ r.ink }}">
+        <span style="position:absolute;left:-5px;top:13px;bottom:13px;width:2px;border-radius:1px;background:{{ r.bar }}"></span>
+        <span style="font-size:14px;line-height:1">{{ r.icon }}</span>
+        <span style="font-size:8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;line-height:1;white-space:nowrap">{{ r.name }}</span>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:56px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:13px;color:var(--ink3)">{{ themeIcon }}</button>
+    <div title="Project settings" style="width:56px;height:34px;display:grid;place-items:center;border-radius:3px;cursor:pointer;font-size:14px;color:var(--ink3)">⚙</div>
+    <div style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;margin-top:6px">PP</div>
+  </div>
+
+  <!-- ── EPISODE NAV ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:238px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="padding:11px 10px 8px;display:flex;align-items:center;gap:6px">
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Not Magic, Just This</span>
+      <button title="New episode" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:13px">＋</button>
+      <button title="Project actions" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:13px">⋯</button>
+    </div>
+    <div style="padding:0 10px 10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border:1px solid var(--line2);border-radius:3px;color:var(--ink3);font-size:11.5px;cursor:pointer">
+        <span>Search or jump to…</span><span style="font-size:10px">⌘K</span>
+      </div>
+    </div>
+
+    <nav style="flex:1;overflow-y:auto;padding:0 6px 14px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <div style="padding:0 8px 5px;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Ep 1</div>
+        <sc-for list="{{ epNav }}" as="n" hint-placeholder-count="7">
+          <div style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:{{ n.bg }};border-radius:3px;cursor:pointer;font-size:12.5px;font-weight:{{ n.w }}">
+            <span style="width:13px;color:var(--ink2);font-size:11px;text-align:center">{{ n.icon }}</span>{{ n.name }}
+            <span style="margin-left:auto;font-size:10px;color:var(--ink3)">{{ n.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:center;padding:0 8px 3px">
+          <span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Beats</span>
+          <span style="font-size:9.5px;color:var(--ink3)">drag to reorder</span>
+        </div>
+        <sc-for list="{{ beats }}" as="b" hint-placeholder-count="6">
+          <div onClick="{{ b.select }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:9px;padding:8px 9px;background:{{ b.navBg }};border:1px solid {{ b.navBorder }};border-radius:3px;cursor:pointer">
+            <span title="Drag" style="flex:none;font-size:10px;color:var(--ink3);cursor:grab">⠿</span>
+            <span style="width:7px;height:7px;flex:none;border-radius:50%;background:{{ b.color }}"></span>
+            <span style="width:10px;flex:none;font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ b.no }}</span>
+            <span style="flex:1;min-width:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.name }}</span>
+            <span style="flex:none;font-size:9.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ b.dur }}</span>
+          </div>
+        </sc-for>
+        <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="margin-top:2px;display:flex;align-items:center;gap:7px;padding:7px 9px;background:transparent;border:1px dashed var(--line);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink3)">
+          <span style="font-size:12px">＋</span>New beat
+        </button>
+      </div>
+    </nav>
+
+    <div style="padding:8px 10px 10px;border-top:1px solid var(--line2)">
+      <div style="display:flex;flex-direction:column;gap:5px;padding:7px 8px;border:1px solid var(--line2);border-radius:3px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span style="font-size:10.5px;color:var(--ink2)">Runtime placed</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">{{ placedLabel }}</span>
+        </div>
+        <div style="height:3px;border-radius:2px;background:var(--line);overflow:hidden"><div style="width:{{ placedPct }};height:100%;background:var(--accent)"></div></div>
+        <span style="font-size:9.5px;color:var(--ink3)">{{ placedNote }}</span>
+      </div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:7px;overflow:hidden">
+        <span style="flex:none;font-family:var(--serif);font-size:21px;font-weight:500;letter-spacing:-.01em;line-height:1">Beats</span>
+        <span style="flex:none;padding:1px 6px;border-radius:3px;background:var(--sel);font-size:10px;font-weight:600;color:var(--ink2);font-variant-numeric:tabular-nums">6</span>
+      </div>
+      <div style="flex:none;display:flex;padding:2px;border:1px solid var(--line2);border-radius:3px;gap:2px">
+        <sc-for list="{{ viewTabs }}" as="t" hint-placeholder-count="2">
+          <button onClick="{{ t.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 11px;border:none;border-radius:3px;cursor:pointer;font-size:11.5px;background:{{ t.bg }};color:{{ t.ink }}">
+            <span style="font-size:10px;opacity:.7">{{ t.icon }}</span>{{ t.name }}
+          </button>
+        </sc-for>
+      </div>
+      <div style="flex:1;min-width:0"></div>
+      <button title="Export beat sheet" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:26px;height:26px;display:grid;place-items:center;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink2)">⤒</button>
+      <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap">
+        <span style="font-size:11px;opacity:.75">＋</span>Add beat
+      </button>
+    </header>
+
+    <!-- ════ BEATS (document) ════ -->
+    <sc-if value="{{ isDoc }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:20px 0 48px">
+        <div style="zoom:{{ pageZoom }};width:816px;flex:none;display:flex;flex-direction:column;align-items:center">
+          <div style="width:816px;height:14px;display:flex;align-items:flex-end;background:var(--panel);border:1px solid var(--sheet-edge);border-bottom:none;padding:0 96px;overflow:hidden">
+            <div style="flex:1;height:5px;background-image:repeating-linear-gradient(to right,var(--line) 0 1px,transparent 1px 24px)"></div>
+          </div>
+          <div style="width:816px;flex:none;background:var(--sheet);border:1px solid var(--sheet-edge);border-radius:0 0 2px 2px;box-shadow:var(--shadow);padding:52px 0 88px;min-height:1000px;font-family:'Courier Prime',Courier,monospace;color:var(--sheet-ink)">
+            <div style="position:relative;padding:0 96px;display:flex;flex-direction:column;gap:6px">
+              <span style="position:absolute;left:74px;top:9px;width:7px;height:7px;border-radius:50%;border:1px solid var(--sheet-line)"></span>
+              <span style="font-family:var(--serif);font-size:34px;line-height:1.1;letter-spacing:-.015em">Beat Editing</span>
+              <span style="font-size:14px;color:var(--ink3)">09/05/26</span>
+            </div>
+            <div style="height:34px"></div>
+
+            <sc-for list="{{ beats }}" as="b" hint-placeholder-count="6">
+              <div style="position:relative;padding:0 96px 26px 96px">
+                <span style="position:absolute;left:74px;top:8px;width:7px;height:7px;border-radius:50%;border:1px solid {{ b.dotBorder }};background:{{ b.dotFill }}"></span>
+                <div style="display:flex;align-items:flex-start;gap:14px">
+                  <span style="flex:none;width:26px;height:26px;display:grid;place-items:center;border:1px solid var(--sheet-line);border-radius:50%;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums">{{ b.no }}</span>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                      <span style="font-family:var(--serif);font-size:21px;font-weight:500;line-height:1.25">{{ b.name }}</span>
+                      <span style="font-family:'Instrument Sans',sans-serif;font-size:10px;color:var(--ink3)">{{ b.placement }}</span>
+                    </div>
+                    <div style="font-size:16px;line-height:1.9;color:var(--sheet-ink)">{{ b.line }}</div>
+                    <sc-if value="{{ b.hasScenes }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;gap:7px;flex-wrap:wrap;font-family:'Instrument Sans',sans-serif">
+                        <sc-for list="{{ b.scenes }}" as="sc" hint-placeholder-count="2">
+                          <span style="padding:2px 7px;border-radius:3px;background:var(--hover);font-size:10px;color:var(--ink2)">{{ sc }}</span>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ b.unplaced }}" hint-placeholder-val="{{ false }}">
+                      <span style="align-self:flex-start;padding:2px 7px;border-radius:3px;background:var(--note-bg);color:var(--note);font-family:'Instrument Sans',sans-serif;font-size:10px;font-weight:600">Not on the timeline yet</span>
+                    </sc-if>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+
+            <div style="position:relative;padding:0 96px">
+              <span style="position:absolute;left:74px;top:8px;width:7px;height:7px;border-radius:50%;border:1px solid var(--accent-line);background:var(--accent-bg)"></span>
+              <span style="font-size:16px;line-height:1.9;color:var(--ink3)">Type to add a beat, or press <b style="color:var(--ink2)">/</b> for a template<span style="color:var(--accent)">|</span></span>
+            </div>
+          </div>
+          <div style="width:816px;display:flex;gap:16px;padding:12px 2px 0;font-size:10.5px;color:var(--ink3);flex-wrap:wrap">
+            <span><b style="font-family:'Courier Prime',monospace;color:var(--ink2)">⌥↑↓</b> reorder a beat</span>
+            <span>Reordering here renumbers the beat sheet; it never moves a scene in the script</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ════ ARRANGEMENT (timeline) ════ -->
+    <sc-if value="{{ isArrangement }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;min-width:0">
+
+        <!-- placed track -->
+        <div style="flex:none;display:flex;flex-direction:column;border-bottom:1px solid var(--line)">
+          <div style="height:28px;flex:none;position:relative;border-bottom:1px solid var(--line2);background:var(--panel)">
+            <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="6">
+              <div style="position:absolute;left:{{ t.x }};top:0;bottom:0;display:flex;align-items:flex-start;padding-top:4px;border-left:1px solid {{ t.color }}">
+                <span style="padding-left:5px;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3)">{{ t.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:none;overflow-x:auto;padding:14px 16px 16px">
+            <div style="display:flex;gap:12px;min-width:min-content">
+              <sc-for list="{{ placed }}" as="b" hint-placeholder-count="3">
+                <div style-hover="border-color:var(--accent-line)" style="width:{{ b.width }};flex:none;display:flex;flex-direction:column;gap:10px;padding:12px 13px 11px;background:var(--panel);border:1px solid var(--line);border-radius:3px;box-shadow:var(--shadow)">
+                  <span style="width:26px;height:3px;border-radius:2px;background:{{ b.color }}"></span>
+                  <div style="display:flex;flex-direction:column;gap:4px">
+                    <span style="font-family:var(--serif);font-size:16px;font-weight:500;line-height:1.2">{{ b.name }}</span>
+                    <span style="font-size:11.5px;line-height:1.45;color:var(--ink2)">{{ b.line }}</span>
+                  </div>
+                  <div style="flex:1;min-height:14px"></div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="padding:2px 7px;border:1px solid var(--line2);border-radius:3px;font-family:ui-monospace,monospace;font-size:10px;color:var(--ink2)">{{ b.dur }}</span>
+                    <span style="font-size:10px;color:var(--ink3)">{{ b.at }}</span>
+                    <div style="flex:1"></div>
+                    <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 9px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">
+                      <span style="font-size:10px;opacity:.7">✎</span>Edit beat
+                    </button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <!-- unplaced canvas -->
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+          <div style="height:28px;flex:none;position:relative;border-bottom:1px solid var(--line2);background:var(--panel)">
+            <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="6">
+              <div style="position:absolute;left:{{ t.x }};top:0;bottom:0;display:flex;align-items:flex-start;padding-top:4px;border-left:1px solid {{ t.color }}">
+                <span style="padding-left:5px;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3)">{{ t.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="flex:none;display:flex;align-items:center;gap:8px;padding:6px 16px;border-bottom:1px solid var(--line2);background:var(--panel);font-size:10.5px;color:var(--ink2);overflow:hidden">
+            <span style="flex:none;width:5px;height:5px;border-radius:50%;background:var(--note)"></span>
+            <span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ unplacedNote }}</span>
+          </div>
+
+          <div style="flex:1;min-height:0;position:relative;overflow:auto;background-color:var(--desk);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:{{ gridSize }} {{ gridSize }};background-position:8px 8px">
+            <sc-for list="{{ unplaced }}" as="b" hint-placeholder-count="3">
+              <div style="position:absolute;left:{{ b.x }};top:{{ b.y }};width:236px;display:flex;flex-direction:column;gap:8px;padding:11px 12px;background:var(--panel);border:1px solid var(--line);border-radius:3px;box-shadow:var(--shadow);cursor:grab">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="width:20px;height:3px;border-radius:2px;background:{{ b.color }}"></span>
+                  <span style="flex:1;font-family:var(--serif);font-size:15px;font-weight:500">{{ b.name }}</span>
+                  <span style="font-size:9.5px;color:var(--ink3)">unplaced</span>
+                </div>
+                <span style="font-size:11.5px;line-height:1.45;color:var(--ink2)">{{ b.line }}</span>
+                <div style="display:flex;align-items:center;gap:7px">
+                  <span style="padding:2px 7px;border:1px solid var(--line2);border-radius:3px;font-family:ui-monospace,monospace;font-size:10px;color:var(--ink2)">{{ b.dur }}</span>
+                  <span style="font-size:10px;color:var(--ink3)">drag onto the track to place</span>
+                </div>
+              </div>
+            </sc-for>
+
+            <!-- canvas toolbar -->
+            <div style="position:absolute;top:12px;right:14px;display:flex;align-items:center;gap:1px;padding:3px;background:var(--panel);border:1px solid var(--line);border-radius:3px;box-shadow:var(--shadow)">
+              <sc-for list="{{ canvasTools }}" as="t" hint-placeholder-count="5">
+                <button onClick="{{ t.go }}" title="{{ t.title }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:28px;height:26px;display:grid;place-items:center;background:{{ t.bg }};border:none;border-radius:3px;cursor:pointer;font-size:12px;color:{{ t.ink }}">{{ t.icon }}</button>
+              </sc-for>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <footer style="height:28px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--ink2);overflow:hidden">
+      <span style="flex:none;white-space:nowrap">6 beats · <b style="font-weight:600;color:var(--ink)">{{ placedCount }}</b> placed</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="flex:none;white-space:nowrap">{{ viewLabel }}</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Selected: {{ selectedName }}</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="flex:none;white-space:nowrap">{{ placedLabel }}</span>
+      <div style="flex:1;min-width:0"></div>
+      <button onClick="{{ toggleNav }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);white-space:nowrap">{{ navLabel }}</button>
+      <button onClick="{{ cycleZoom }}" title="Zoom" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap">{{ zoomLabel }}</button>
+      <span style="flex:none;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap">ep_001/beats</span>
+    </footer>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;beats&quot;,&quot;arrangement&quot;],&quot;default&quot;:&quot;beats&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "light",
+    view: this.props.view || "beats",
+    selected: 2,
+    scale: 1,
+    tool: "select",
+    navOverride: null, zoom: "fit",
+    w: typeof window === "undefined" ? 1440 : window.innerWidth
+  };
+
+  componentDidMount() {
+    this._resize = () => this.setState({ w: window.innerWidth });
+    window.addEventListener("resize", this._resize);
+    this._resize();
+  }
+  componentWillUnmount() { window.removeEventListener("resize", this._resize); }
+
+  seg(list, cur, key) {
+    const view = key === "view" || key === "doc";
+    const on = view ? "var(--accent-bg)" : "var(--sel)", off = "transparent";
+    return list.map((it) => ({
+      ...it, bg: cur === it.id ? on : off,
+      ink: cur === it.id ? (view ? "var(--accent)" : "var(--ink)") : "var(--ink2)",
+      go: () => this.setState({ [key]: it.id })
+    }));
+  }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+
+    const navOpen = s.navOverride === null ? s.w >= 1000 : s.navOverride;
+    const avail = s.w - 66 - (navOpen ? 238 : 0) - 48;
+    const fit = Math.max(0.5, Math.min(1, avail / 816));
+    const pageZoom = s.zoom === "fit" ? Math.round(fit * 1000) / 1000 : Number(s.zoom);
+
+    const hues = [
+      "oklch(0.58 0.12 250)", "oklch(0.55 0.15 25)", "oklch(0.62 0.12 75)",
+      "oklch(0.52 0.12 150)", "oklch(0.55 0.13 300)", "oklch(0.48 0.02 60)"
+    ];
+
+    const raw = [
+      { no: "1", name: "Opening Image", line: "Empty pitch, Ade training alone — each shot more rushed than the last. Stillness doing the pressure.", scenes: ["Scene 1", "pg 1"], dur: "6m", at: "0'–6'", placed: false },
+      { no: "2", name: "Catalyst", line: "The old man's one line — don't think — turns the walk-off into a decision point.", scenes: ["Scene 2", "pg 4"], dur: "10m", at: "6'–16'", placed: true },
+      { no: "3", name: "Argument", line: "Ade blames talent. The old man doesn't argue; he rolls the ball back.", scenes: ["Scene 2", "pg 6"], dur: "10m", at: "16'–26'", placed: true },
+      { no: "4", name: "Climax Action", line: "One strike, dead corner. The doubt compresses into a single moment.", scenes: ["Scene 3", "pg 11"], dur: "10m", at: "26'–36'", placed: true },
+      { no: "5", name: "Final Image", line: "Ade picks the old ball back up and returns to his mark. Quitting gets written over.", scenes: ["Scene 3", "pg 13"], dur: "5m", at: "", placed: false },
+      { no: "6", name: "Decision Point", line: "Held back for the second pass — where it sits depends on whether beat 5 and 6 merge.", scenes: [], dur: "4m", at: "", placed: false }
+    ];
+
+    const beats = raw.map((b, i) => {
+      const isSel = Number(b.no) === s.selected;
+      return {
+        ...b, color: hues[i],
+        hasScenes: b.scenes.length > 0, unplaced: !b.placed,
+        placement: b.placed ? b.at + " · " + b.dur : "unplaced · " + b.dur,
+        navBg: isSel ? "var(--accent-bg)" : "transparent",
+        navBorder: isSel ? "var(--accent-line)" : "var(--line2)",
+        dotBorder: isSel ? "var(--accent-line)" : "var(--sheet-line)",
+        dotFill: isSel ? "var(--accent-bg)" : "transparent",
+        select: () => this.setState({ selected: Number(b.no) })
+      };
+    });
+
+    const placedBeats = beats.filter((b) => b.placed);
+    const minute = 62 * s.scale;
+    const placed = placedBeats.map((b) => ({ ...b, width: Math.round(parseInt(b.dur, 10) * minute) + "px" }));
+
+    const unplacedBeats = beats.filter((b) => !b.placed);
+    const spots = [[40, 34], [320, 132], [600, 60]];
+    const unplaced = unplacedBeats.map((b, i) => ({
+      ...b, x: (spots[i] ? spots[i][0] : 40 + i * 280) + "px", y: (spots[i] ? spots[i][1] : 34) + "px"
+    }));
+
+    const ticks = [0, 5, 10, 15, 20, 25, 30].map((m) => ({
+      label: m + "'", x: Math.round(m * minute + 16) + "px",
+      color: m === 0 ? "var(--line2)" : "var(--line)"
+    }));
+
+    const totalPlaced = placedBeats.reduce((a, b) => a + parseInt(b.dur, 10), 0);
+    const totalAll = beats.reduce((a, b) => a + parseInt(b.dur, 10), 0);
+
+    const toolBtn = (id, icon, title, action) => ({
+      icon, title,
+      bg: s.tool === id ? on : off,
+      ink: s.tool === id ? "var(--ink)" : "var(--ink2)",
+      go: action || (() => this.setState({ tool: id }))
+    });
+
+    return {
+      theme: s.theme, themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+
+      navOpen, pageZoom,
+      navLabel: navOpen ? "Hide nav" : "Show nav",
+      toggleNav: () => this.setState({ navOverride: !navOpen }),
+      zoomLabel: s.view === "beats"
+        ? (s.zoom === "fit" ? "Fit " + Math.round(fit * 100) + "%" : Math.round(pageZoom * 100) + "%")
+        : Math.round(s.scale * 100) + "%",
+      cycleZoom: () => s.view === "beats"
+        ? this.setState({ zoom: s.zoom === "fit" ? "1" : s.zoom === "1" ? "0.75" : "fit" })
+        : this.setState({ scale: s.scale >= 1.5 ? 0.75 : Math.round((s.scale + 0.25) * 100) / 100 }),
+
+      viewTabs: this.seg([
+        { id: "arrangement", name: "Arrangement", icon: "◷" },
+        { id: "beats", name: "Beats", icon: "⧗" }
+      ], s.view, "view"),
+      isDoc: s.view === "beats", isArrangement: s.view === "arrangement",
+      viewLabel: s.view === "beats" ? "Beat sheet" : "Arrangement",
+
+      beats, placed, unplaced, ticks,
+      gridSize: Math.round(22 * s.scale) + "px",
+      placedCount: placedBeats.length,
+      placedLabel: totalPlaced + "m of " + totalAll + "m",
+      placedPct: Math.round((totalPlaced / totalAll) * 100) + "%",
+      placedNote: unplacedBeats.length + " beats still off the timeline",
+      unplacedNote: unplacedBeats.length + " unplaced beats live here until you drag them onto the track",
+      selectedName: (beats.find((b) => Number(b.no) === s.selected) || beats[0]).name,
+
+      canvasTools: [
+        toolBtn("select", "⌖", "Select"),
+        toolBtn("hand", "✋", "Pan"),
+        toolBtn("fit", "⛶", "Fit to content", () => this.setState({ tool: "fit", scale: 1 })),
+        toolBtn("out", "－", "Zoom out", () => this.setState({ scale: Math.max(0.5, Math.round((s.scale - 0.25) * 100) / 100) })),
+        toolBtn("in", "＋", "Zoom in", () => this.setState({ scale: Math.min(2, Math.round((s.scale + 0.25) * 100) / 100) })),
+        toolBtn("help", "?", "Shortcuts")
+      ],
+
+      rail: [
+        { name: "Writing", icon: "✎", bg: on, ink: "var(--ink)", bar: "var(--accent)" },
+        { name: "Characters", icon: "◍", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Locations", icon: "⌖", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Timeline", icon: "◷", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Bible", icon: "◈", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Research", icon: "▧", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Insights", icon: "◎", bg: off, ink: "var(--ink2)", bar: "transparent" },
+        { name: "Production", icon: "▶", bg: off, ink: "var(--ink2)", bar: "transparent" }
+      ],
+
+      epNav: [
+        { name: "Script", icon: "▤", meta: "14pp", bg: off, w: "400" },
+        { name: "Outline", icon: "▥", meta: "prose", bg: off, w: "400" },
+        { name: "Beats", icon: "⧗", meta: "6", bg: on, w: "500" },
+        { name: "Storyboard", icon: "▦", meta: "3 shots", bg: off, w: "400" },
+        { name: "Scenes", icon: "▢", meta: "3", bg: off, w: "400" },
+        { name: "Revisions", icon: "⇄", meta: "Draft 5", bg: off, w: "400" },
+        { name: "Notes", icon: "❝", meta: "4 open", bg: off, w: "400" }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

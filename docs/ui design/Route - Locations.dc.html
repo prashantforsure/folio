@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --frame-a:oklch(0.32 0.02 50); --frame-b:oklch(0.16 0.01 50);
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --day:oklch(0.80 0.09 80); --night:oklch(0.42 0.06 265);
+  --focus:oklch(0.50 0.17 27);
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --frame-a:oklch(0.30 0.02 50); --frame-b:oklch(0.14 0.01 50);
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --day:oklch(0.78 0.09 80); --night:oklch(0.60 0.07 265);
+  --focus:oklch(0.72 0.14 30);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s,opacity .12s}
+input,textarea{font-family:inherit;color:inherit}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ICON RAIL ── -->
+  <div style="width:66px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 5px 10px;gap:3px">
+    <div style="width:28px;height:28px;border-radius:3px;background:var(--ink);color:var(--desk);font-size:10.5px;font-weight:600;letter-spacing:.02em;display:grid;place-items:center;margin-bottom:12px">ML</div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8">
+      <button title="{{ r.name }}" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="position:relative;width:56px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ r.bg }};border:none;border-radius:3px;cursor:pointer;color:{{ r.ink }}">
+        <span style="position:absolute;left:-5px;top:12px;bottom:12px;width:2px;border-radius:1px;background:{{ r.bar }}"></span>
+        <span style="font-size:14px;line-height:1">{{ r.icon }}</span>
+        <span style="font-size:8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;line-height:1;white-space:nowrap">{{ r.name }}</span>
+        <sc-if value="{{ r.badge }}" hint-placeholder-val="{{ false }}">
+          <span style="position:absolute;top:4px;right:6px;min-width:13px;height:13px;padding:0 3px;border-radius:3px;background:var(--note);color:var(--rail);font-size:8.5px;font-weight:700;display:grid;place-items:center">{{ r.badge }}</span>
+        </sc-if>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:56px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:13px;color:var(--ink3)">{{ themeIcon }}</button>
+    <div title="Project settings" style="width:56px;height:34px;display:grid;place-items:center;border-radius:3px;cursor:pointer;font-size:14px;color:var(--ink3)">⚙</div>
+    <div style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;margin-top:6px">PP</div>
+  </div>
+
+  <!-- ── LOCATION NAV ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:256px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="padding:11px 10px 8px;display:flex;align-items:center;gap:6px">
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Monsoon Line</span>
+      <button title="New location" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:14px">＋</button>
+    </div>
+    <div style="padding:0 10px 10px">
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 9px;background:var(--sheet);border:1px solid var(--line2);border-radius:3px">
+        <span style="font-size:11px;color:var(--ink3)">⌕</span>
+        <input placeholder="Find a location or slugline" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font-size:11.5px;color:var(--ink)">
+      </div>
+    </div>
+
+    <nav style="flex:1;overflow-y:auto;padding:0 6px 14px;display:flex;flex-direction:column;gap:2px">
+      <div style="display:flex;align-items:center;padding:0 8px 4px">
+        <span style="flex:1;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Locations</span>
+        <span style="flex:none;font-size:9.5px;color:var(--ink3)">{{ locCount }} · {{ sceneTotal }} scenes</span>
+      </div>
+      <sc-for list="{{ navLocs }}" as="l" hint-placeholder-count="6">
+        <div onClick="{{ l.select }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:6px 8px 6px {{ l.indent }};background:{{ l.bg }};border:1px solid {{ l.border }};border-radius:3px;cursor:pointer">
+          <span style="flex:none;width:26px;font-size:8.5px;font-weight:600;letter-spacing:.06em;color:var(--ink3)">{{ l.ie }}</span>
+          <span style="flex:1;min-width:0;font-size:{{ l.size }};font-weight:{{ l.weight }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ l.ink }}">{{ l.name }}</span>
+          <span style="flex:none;display:flex;height:6px;width:26px;border-radius:2px;overflow:hidden;background:var(--line2)"><span style="width:{{ l.dayPct }};background:var(--day)"></span><span style="flex:1;background:var(--night)"></span></span>
+          <span style="flex:none;width:18px;text-align:right;font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ l.count }}</span>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ hasUnmatched }}" hint-placeholder-val="{{ true }}">
+        <div onClick="{{ goResolve }}" style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;margin-top:10px;padding:7px 9px;background:{{ resolveBg }};border:1px solid {{ resolveBorder }};border-radius:3px;cursor:pointer">
+          <span style="flex:none;width:6px;height:6px;border-radius:50%;background:var(--note)"></span>
+          <span style="flex:1;font-size:11.5px;color:var(--ink)">Unmatched sluglines</span>
+          <span style="flex:none;font-size:10.5px;font-weight:600;color:var(--note);font-variant-numeric:tabular-nums">{{ unmatchedN }}</span>
+        </div>
+      </sc-if>
+    </nav>
+
+    <div style="padding:8px 10px 10px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:10px;color:var(--ink3)">
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--day)"></span>Day</span>
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--night)"></span>Night</span>
+        <span style="flex:1"></span>
+        <span>from sluglines</span>
+      </div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line)">
+      <span style="flex:none;font-family:var(--serif);font-size:21px;font-weight:500;letter-spacing:-.01em;line-height:1">Locations</span>
+      <span style="flex:none;padding:1px 6px;border-radius:3px;background:var(--sel);font-size:10px;font-weight:600;color:var(--ink2);font-variant-numeric:tabular-nums">{{ locCount }}</span>
+      <span style="flex:1;min-width:0;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">project-wide · derived from {{ slugTotal }} sluglines</span>
+      <div style="flex:none;display:flex;padding:2px;border:1px solid var(--line2);border-radius:3px;gap:2px">
+        <sc-for list="{{ viewTabs }}" as="t" hint-placeholder-count="3">
+          <button onClick="{{ t.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:none;border-radius:3px;cursor:pointer;font-size:11.5px;background:{{ t.bg }};color:{{ t.ink }};white-space:nowrap">
+            <span style="font-size:10px;opacity:.7">{{ t.icon }}</span>{{ t.name }}
+            <sc-if value="{{ t.badge }}" hint-placeholder-val="{{ false }}"><span style="min-width:14px;height:14px;padding:0 4px;border-radius:3px;background:var(--note);color:var(--rail);font-size:9px;font-weight:700;display:grid;place-items:center">{{ t.badge }}</span></sc-if>
+          </button>
+        </sc-for>
+      </div>
+      <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:4px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2);white-space:nowrap">Location report <span style="font-size:9px;color:var(--ink3)">PDF</span></button>
+      <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap"><span style="font-size:11px;opacity:.75">＋</span>New location</button>
+    </header>
+
+    <div style="flex:1;min-height:0;display:flex">
+
+      <!-- ════ EMPTY ════ -->
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px">
+          <div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px;padding:22px 24px 24px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Locations · 0</span>
+              <span style="font-family:var(--serif);font-size:22px;font-weight:500;line-height:1.15">No locations yet</span>
+              <span style="font-size:12px;line-height:1.55;color:var(--ink2)">Your script has 41 scene headings in 9 distinct places. Derive them and each becomes a record you can describe once and reuse in Production.</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line2);border-radius:3px;background:var(--sheet);font-family:'Courier Prime',monospace;font-size:11px;line-height:1.6;color:var(--ink2)">
+              <span>INT. CHAWL CORRIDOR - DAY <span style="color:var(--ink3)">× 6</span></span>
+              <span>EXT. WATER TANKER - DAY <span style="color:var(--ink3)">× 5</span></span>
+              <span>INT. LANDLORD'S OFFICE - AFTERNOON <span style="color:var(--ink3)">× 4</span></span>
+              <span style="color:var(--ink3)">… 6 more</span>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:3px;cursor:pointer;font-size:12px;font-weight:600"><span style="font-size:10px">✦</span>Derive 9 locations</button>
+              <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink2)"><span style="font-size:11px;opacity:.7">＋</span>Add by hand</button>
+            </div>
+            <span style="font-size:10.5px;color:var(--ink3)">Nothing is renamed in the script. Sluglines stay as written and point at the record.</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ RECORD ════ -->
+      <sc-if value="{{ isRecord }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:22px 26px 60px">
+          <div style="max-width:820px;display:flex;flex-direction:column;gap:22px">
+
+            <!-- title block -->
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink3)">
+                <sc-if value="{{ loc.hasParent }}" hint-placeholder-val="{{ false }}"><span style="color:var(--accent)">{{ loc.parent }}</span><span>›</span></sc-if>
+                <span style="padding:1px 6px;border-radius:3px;border:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.06em">{{ loc.ie }}</span>
+                <span>{{ loc.kind }}</span>
+              </div>
+              <h1 style="margin:0;font-family:var(--serif);font-size:34px;font-weight:500;letter-spacing:-.015em;line-height:1.05">{{ loc.name }}</h1>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+                <span style="font-size:10px;color:var(--ink3);margin-right:2px">Sluglines that resolve here</span>
+                <sc-for list="{{ loc.aliases }}" as="a" hint-placeholder-count="3">
+                  <span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:3px;background:var(--sheet);border:1px solid var(--line2);font-family:'Courier Prime',monospace;font-size:10.5px;color:var(--ink2)">{{ a.slug }}<span style="color:var(--ink3)">× {{ a.n }}</span></span>
+                </sc-for>
+                <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:2px 8px;background:transparent;border:1px dashed var(--line);border-radius:3px;cursor:pointer;font-size:10.5px;color:var(--ink3)">＋ alias</button>
+              </div>
+            </div>
+
+            <!-- description + reference -->
+            <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(200px,1fr);gap:18px">
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Description</span>
+                <p style="margin:0;font-family:var(--serif);font-size:15.5px;line-height:1.55;color:var(--ink);text-wrap:pretty">{{ loc.desc }}</p>
+                <p style="margin:0;font-size:12px;line-height:1.55;color:var(--ink2);text-wrap:pretty">{{ loc.desc2 }}</p>
+                <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:2px">
+                  <sc-for list="{{ loc.tags }}" as="t" hint-placeholder-count="4">
+                    <span style="padding:2px 8px;border-radius:3px;background:var(--sel);font-size:10.5px;color:var(--ink2)">{{ t.t }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Reference</span>
+                <div style-hover="border-color:var(--accent-line)" style="aspect-ratio:4/3;border-radius:3px;border:1px dashed var(--line);background:var(--hover);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;text-align:center;padding:12px">
+                  <span style="font-size:11.5px;color:var(--ink2)">Drop a scouting photo</span>
+                  <span style="font-size:10px;color:var(--ink3)">or generate a plate in Production</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+                  <span style="aspect-ratio:4/3;border-radius:2px;background:linear-gradient(160deg,var(--frame-a),var(--frame-b))"></span>
+                  <span style="aspect-ratio:4/3;border-radius:2px;background:linear-gradient(200deg,var(--frame-a),var(--frame-b))"></span>
+                  <span style="aspect-ratio:4/3;border-radius:2px;border:1px dashed var(--line2)"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- sub-locations -->
+            <sc-if value="{{ loc.hasSubs }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Inside this location</span>
+                  <span style="font-size:10.5px;color:var(--ink3)">{{ loc.subs.length }} · counted in the parent total</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">
+                  <sc-for list="{{ loc.subs }}" as="sb" hint-placeholder-count="4">
+                    <div onClick="{{ sb.select }}" style-hover="border-color:var(--accent-line)" style="display:flex;flex-direction:column;gap:5px;padding:9px 11px;background:var(--panel);border:1px solid var(--line2);border-radius:3px;cursor:pointer">
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <span style="font-size:8.5px;font-weight:600;letter-spacing:.06em;color:var(--ink3)">{{ sb.ie }}</span>
+                        <span style="flex:1;min-width:0;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sb.name }}</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <span style="display:flex;flex:1;height:4px;border-radius:2px;overflow:hidden;background:var(--line2)"><span style="width:{{ sb.dayPct }};background:var(--day)"></span><span style="flex:1;background:var(--night)"></span></span>
+                        <span style="font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ sb.count }} sc</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;background:transparent;border:1px dashed var(--line);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink3)">＋ Sub-location</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- appearances -->
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Scenes here</span>
+                <span style="font-size:10.5px;color:var(--ink3)">{{ loc.count }} across {{ loc.epSpan }}</span>
+                <span style="flex:1"></span>
+                <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line2);border-radius:3px">
+                  <sc-for list="{{ appFilters }}" as="f" hint-placeholder-count="4">
+                    <button onClick="{{ f.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:2px 8px;border:none;border-radius:3px;cursor:pointer;font-size:10.5px;background:{{ f.bg }};color:{{ f.ink }}">{{ f.name }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:3px;overflow:hidden">
+                <sc-for list="{{ appearances }}" as="a" hint-placeholder-count="6">
+                  <div style-hover="background:var(--hover)" style="display:grid;grid-template-columns:44px 40px minmax(0,1fr) 60px 110px 24px;gap:12px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line2);cursor:pointer">
+                    <span style="font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ a.ep }}</span>
+                    <span style="font-size:11px;color:var(--ink2);font-variant-numeric:tabular-nums">Sc {{ a.sc }}</span>
+                    <span style="min-width:0;display:flex;flex-direction:column;gap:2px">
+                      <span style="font-family:'Courier Prime',monospace;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.slug }}</span>
+                      <span style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.gist }}</span>
+                    </span>
+                    <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--ink3)"><span style="width:7px;height:7px;border-radius:2px;background:{{ a.tod }}"></span>{{ a.todLabel }}</span>
+                    <span style="display:flex;gap:3px;flex-wrap:wrap">
+                      <sc-for list="{{ a.cast }}" as="c" hint-placeholder-count="2"><span style="padding:0 5px;border-radius:2px;background:var(--sel);font-size:9.5px;color:var(--ink2)">{{ c.n }}</span></sc-for>
+                    </span>
+                    <span style="text-align:right;font-family:ui-monospace,monospace;font-size:10px;color:var(--ink3)">{{ a.pp }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <!-- notes -->
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">How this place changes</span>
+              <div style="display:flex;flex-direction:column;gap:0;border-left:1px solid var(--line)">
+                <sc-for list="{{ loc.arc }}" as="n" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;padding:6px 0 6px 14px">
+                    <span style="font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums;padding-top:2px">{{ n.when }}</span>
+                    <span style="font-family:var(--serif);font-size:14px;line-height:1.5;color:var(--ink);text-wrap:pretty">{{ n.t }}</span>
+                  </div>
+                </sc-for>
+                <div style-hover="color:var(--ink)" style="padding:6px 0 6px 14px;font-size:11.5px;color:var(--ink3);cursor:text">Add a note about how this place reads by the end…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- right panel -->
+        <aside style="width:264px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:auto">
+          <div style="padding:12px 14px 10px;border-bottom:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">At a glance</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <sc-for list="{{ facts }}" as="f" hint-placeholder-count="4">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:9.5px;color:var(--ink3)">{{ f.k }}</span>
+                  <span style="font-size:13px;font-weight:500;font-variant-numeric:tabular-nums">{{ f.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink3)"><span>Day / night</span><span style="font-variant-numeric:tabular-nums">{{ loc.dayN }} / {{ loc.nightN }}</span></div>
+              <div style="display:flex;height:6px;border-radius:2px;overflow:hidden;background:var(--line2)"><span style="width:{{ loc.dayPct }};background:var(--day)"></span><span style="flex:1;background:var(--night)"></span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink3)"><span>Screen time by episode</span><span>pages</span></div>
+              <div style="display:flex;align-items:flex-end;gap:4px;height:44px">
+                <sc-for list="{{ loc.perEp }}" as="e" hint-placeholder-count="4">
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end">
+                    <span style="width:100%;height:{{ e.h }};background:{{ e.bg }};border-radius:2px 2px 0 0"></span>
+                    <span style="font-size:9px;color:var(--ink3)">{{ e.ep }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:10px;color:var(--ink3)">Who is here most</span>
+              <sc-for list="{{ loc.people }}" as="p" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="width:18px;height:18px;border-radius:50%;background:{{ p.bg }};color:#fff;font-size:8px;font-weight:600;display:grid;place-items:center">{{ p.ini }}</span>
+                  <span style="flex:1;font-size:11.5px">{{ p.name }}</span>
+                  <span style="font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ p.n }} sc</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="padding:12px 14px 10px;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Downstream</div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:11.5px"><span style="width:6px;height:6px;border-radius:50%;background:var(--add)"></span><span style="flex:1">Establishing plate</span><span style="font-size:10.5px;color:var(--ink3)">E1 done</span></div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11.5px"><span style="width:6px;height:6px;border-radius:50%;background:var(--line)"></span><span style="flex:1">Night plate</span><span style="font-size:10.5px;color:var(--ink3)">not yet</span></div>
+            <a href="#" style="font-size:11px;margin-top:2px">Open in Production →</a>
+          </div>
+          <div style="flex:1"></div>
+          <div style="padding:10px 14px;border-top:1px solid var(--line2);display:flex;gap:6px">
+            <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:1;padding:5px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Merge into…</button>
+            <button style-hover="background:var(--del-bg);color:var(--del)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:5px 9px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink3)">Delete</button>
+          </div>
+        </aside>
+      </sc-if>
+
+      <!-- ════ BREAKDOWN ════ -->
+      <sc-if value="{{ isBreakdown }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:20px 22px 60px">
+          <div style="max-width:1040px;display:flex;flex-direction:column;gap:12px">
+            <p style="margin:0;font-size:11.5px;line-height:1.5;color:var(--ink3);max-width:70ch">Every location against every episode. Cell counts are scenes; the bar under each is day against night. Sort by weight to see where the series actually lives.</p>
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:3px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:minmax(200px,1.6fr) 44px repeat(4,minmax(70px,1fr)) 80px 90px;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">
+                <span>Location</span><span>I/E</span><span>E1</span><span>E2</span><span>E3</span><span>E4</span><span>Total</span><span>Pages</span>
+              </div>
+              <sc-for list="{{ breakdown }}" as="b" hint-placeholder-count="9">
+                <div onClick="{{ b.open }}" style-hover="background:var(--hover)" style="display:grid;grid-template-columns:minmax(200px,1.6fr) 44px repeat(4,minmax(70px,1fr)) 80px 90px;gap:10px;align-items:center;padding:9px 14px 9px {{ b.pad }};border-bottom:1px solid var(--line2);cursor:pointer">
+                  <span style="min-width:0;display:flex;align-items:center;gap:8px">
+                    <span style="flex:1;min-width:0;font-size:{{ b.size }};font-weight:{{ b.weight }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ b.ink }}">{{ b.name }}</span>
+                  </span>
+                  <span style="font-size:9px;font-weight:600;letter-spacing:.06em;color:var(--ink3)">{{ b.ie }}</span>
+                  <sc-for list="{{ b.eps }}" as="e" hint-placeholder-count="4">
+                    <span style="display:flex;flex-direction:column;gap:3px">
+                      <span style="font-size:12px;font-variant-numeric:tabular-nums;color:{{ e.ink }}">{{ e.n }}</span>
+                      <span style="display:flex;height:3px;width:100%;max-width:56px;border-radius:2px;overflow:hidden;background:{{ e.track }}"><span style="width:{{ e.dayPct }};background:var(--day)"></span><span style="flex:1;background:{{ e.nightBg }}"></span></span>
+                    </span>
+                  </sc-for>
+                  <span style="font-size:12px;font-weight:500;font-variant-numeric:tabular-nums">{{ b.total }}</span>
+                  <span style="font-family:ui-monospace,monospace;font-size:10.5px;color:var(--ink2)">{{ b.pp }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ════ RESOLVE ════ -->
+      <sc-if value="{{ isResolve }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow:auto;padding:20px 22px 60px">
+          <div style="max-width:820px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-family:var(--serif);font-size:20px;font-weight:500;letter-spacing:-.01em">{{ unmatchedN }} sluglines don't point at a record</span>
+              <p style="margin:0;font-size:11.5px;line-height:1.5;color:var(--ink2);max-width:70ch">Usually a typo or a shorter form of a place that exists. Match them and the counts above become accurate. The script text is never changed.</p>
+            </div>
+            <sc-for list="{{ unmatched }}" as="u" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:3px">
+                <div style="min-width:0;display:flex;flex-direction:column;gap:4px">
+                  <span style="font-family:'Courier Prime',monospace;font-size:12.5px">{{ u.slug }}</span>
+                  <span style="font-size:10.5px;color:var(--ink3)">{{ u.where }}</span>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                    <span style="font-size:10.5px;color:var(--ink3)">Likely</span>
+                    <span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:3px;background:var(--accent-bg);border:1px solid var(--accent-line);font-size:11px;color:var(--ink)">{{ u.guess }}<span style="font-size:9.5px;color:var(--ink3)">{{ u.conf }}</span></span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <button style-hover="opacity:.9" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:var(--ink);color:var(--desk);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap">Match</button>
+                  <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:transparent;border:1px solid var(--line);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink2);white-space:nowrap">Other…</button>
+                  <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 11px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink3);white-space:nowrap">New record</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <footer style="height:28px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--line);background:var(--panel);font-size:10.5px;color:var(--ink2);overflow:hidden">
+      <span style="flex:none;white-space:nowrap"><b style="font-weight:600;color:var(--ink)">{{ locCount }}</b> locations · {{ sceneTotal }} scenes · {{ slugTotal }} sluglines</span>
+      <span style="flex:none;color:var(--ink3)">·</span><span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ footerNote }}</span>
+      <div style="flex:1;min-width:0"></div>
+      <button onClick="{{ toggleNav }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="flex:none;padding:2px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:10px;color:var(--ink2);white-space:nowrap">{{ navLabel }}</button>
+      <span style="flex:none;display:flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--add)"></span>saved 6s ago</span>
+      <span style="flex:none;font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap">/locations/{{ loc.id }}</span>
+    </footer>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;record&quot;,&quot;breakdown&quot;,&quot;resolve&quot;],&quot;default&quot;:&quot;record&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;empty&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "light",
+    view: this.props.view || "record",
+    sel: "chawl",
+    filter: "all",
+    navOverride: null,
+    w: typeof window === "undefined" ? 1440 : window.innerWidth
+  };
+  componentDidMount() {
+    this._r = () => this.setState({ w: window.innerWidth });
+    window.addEventListener("resize", this._r); this._r();
+  }
+  componentWillUnmount() { window.removeEventListener("resize", this._r); }
+  componentDidUpdate(p) { if (p.view !== this.props.view && this.props.view) this.setState({ view: this.props.view }); }
+
+  data() {
+    const M = { ini: "M", name: "Meera", bg: "oklch(0.50 0.17 27)" }, A = { ini: "A", name: "Anil", bg: "oklch(0.55 0.10 300)" },
+      F = { ini: "F", name: "Farida", bg: "oklch(0.48 0.10 150)" }, K = { ini: "K", name: "Kadam", bg: "oklch(0.45 0.05 250)" }, D = { ini: "D", name: "Driver", bg: "oklch(0.55 0.08 75)" };
+    const sc = (ep, sc, slug, tod, gist, cast, pp) => ({ ep, sc, slug, tod, gist, cast, pp });
+    return [
+      { id: "chawl", name: "Kamathi Chawl", ie: "INT/EXT", kind: "Primary set · 5 sub-locations", parent: null,
+        desc: "A three-storey chawl off Falkland Road. One shared tap per floor, a courtyard that floods to the ankle every monsoon, and a rooftop tank nobody has seen the inside of since 1997.",
+        desc2: "Everything in the series happens within earshot of this building. Sound carries: a bucket set down on the second floor is heard on the first. Corridors are narrow enough that two people can't pass without one turning sideways.",
+        tags: ["shared tap", "monsoon flooding", "no lift", "1997 tank"],
+        aliases: [["INT. CHAWL CORRIDOR", 6], ["EXT. CHAWL COURTYARD", 5], ["INT. STAIRWELL", 3], ["INT. MEERA'S ROOM", 3], ["EXT. CHAWL ROOFTOP", 1]],
+        subs: ["corridor", "courtyard", "stairwell", "room", "roof"],
+        perEp: [8, 5, 5, 0], pp: "41 2/8",
+        arc: [
+          { when: "E1", t: "Introduced dry. The tap coughs; nobody panics yet. The corridor is a place people pass through." },
+          { when: "E2", t: "The courtyard becomes the queue. Buckets left overnight to hold a place. The building starts to feel occupied rather than lived in." },
+          { when: "E3", t: "The rooftop is opened for the first time. What Meera finds in the tank changes how every earlier corridor scene reads." }
+        ],
+        people: [[M, 16], [A, 7], [K, 4]],
+        scenes: [
+          sc("E1", "1", "INT. CHAWL CORRIDOR - DAY", "day", "Meera hangs washing; the tap coughs", [M], "2/8"),
+          sc("E1", "2", "INT. STAIRWELL - CONTINUOUS", "day", "Down three flights with two empty buckets", [M], "2 1/8"),
+          sc("E1", "5", "EXT. CHAWL COURTYARD - DUSK", "night", "Neighbours compare notes on the pressure", [M, A], "5/8"),
+          sc("E1", "9", "INT. MEERA'S ROOM - NIGHT", "night", "The blue bucket is filled to a pencil line", [M], "1 2/8"),
+          sc("E2", "3", "EXT. CHAWL COURTYARD - DAWN", "day", "First morning of the queue", [M, A, F], "1 6/8"),
+          sc("E2", "11", "INT. CHAWL CORRIDOR - NIGHT", "night", "Kadam's man counts doors", [K], "4/8"),
+          sc("E3", "17", "EXT. CHAWL ROOFTOP - DAY", "day", "The tank is opened", [M, A], "2 3/8")
+        ] },
+      { id: "corridor", name: "Corridor", ie: "INT", kind: "Sub-location", parent: "Kamathi Chawl", count: 6, day: 4 },
+      { id: "courtyard", name: "Courtyard", ie: "EXT", kind: "Sub-location", parent: "Kamathi Chawl", count: 5, day: 2 },
+      { id: "stairwell", name: "Stairwell", ie: "INT", kind: "Sub-location", parent: "Kamathi Chawl", count: 3, day: 3 },
+      { id: "room", name: "Meera's room", ie: "INT", kind: "Sub-location", parent: "Kamathi Chawl", count: 3, day: 1 },
+      { id: "roof", name: "Rooftop", ie: "EXT", kind: "Sub-location", parent: "Kamathi Chawl", count: 1, day: 1 },
+      { id: "tanker", name: "Water tanker stand", ie: "EXT", kind: "Recurring exterior", parent: null, count: 6, day: 5, perEp: [2, 3, 1, 0], pp: "9 4/8", people: [[M, 5], [D, 6]] },
+      { id: "landlord", name: "Kadam's office", ie: "INT", kind: "Recurring interior", parent: null, count: 4, day: 4, perEp: [1, 1, 2, 0], pp: "6 2/8", people: [[K, 4], [M, 3]] },
+      { id: "ward", name: "Ward office", ie: "INT", kind: "Recurring interior", parent: null, count: 3, day: 3, perEp: [0, 1, 2, 0], pp: "5 1/8", people: [[M, 3], [A, 2]] },
+      { id: "tiffin", name: "Farida's tiffin kitchen", ie: "INT", kind: "Recurring interior", parent: null, count: 3, day: 2, perEp: [0, 3, 0, 0], pp: "4 6/8", people: [[F, 3], [A, 2]] }
+    ];
+  }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    const navOpen = s.navOverride === null ? s.w >= 1000 : s.navOverride;
+    const all = this.data();
+    const byId = Object.fromEntries(all.map((l) => [l.id, l]));
+    const pct = (a, b) => (b ? Math.round(a / b * 100) : 0) + "%";
+
+    const parentIds = all.filter((l) => !l.parent).map((l) => l.id);
+    const chawlCount = 18, chawlDay = 11;
+    const countOf = (l) => l.id === "chawl" ? chawlCount : l.count;
+    const dayOf = (l) => l.id === "chawl" ? chawlDay : l.day;
+
+    const navLocs = [];
+    for (const l of all) {
+      const isSel = l.id === s.sel;
+      navLocs.push({
+        name: l.name, ie: l.ie, count: countOf(l), dayPct: pct(dayOf(l), countOf(l)),
+        indent: l.parent ? "22px" : "8px", size: l.parent ? "11.5px" : "12px", weight: l.parent ? "400" : "500",
+        ink: isSel ? "var(--ink)" : l.parent ? "var(--ink2)" : "var(--ink)",
+        bg: isSel ? "var(--accent-bg)" : off, border: isSel ? "var(--accent-line)" : "transparent",
+        select: () => this.setState({ sel: l.id, view: "record" })
+      });
+    }
+
+    const base = byId[s.sel] || byId.chawl;
+    const root = base.parent ? byId.chawl : base;
+    const isSub = !!base.parent;
+    const scenes = root.scenes.filter((x) => isSub ? x.slug.toLowerCase().includes(base.name.split("'")[0].toLowerCase().replace("meera", "meera's room").slice(0, 6)) : true);
+    const shown = isSub ? scenes : root.scenes;
+    const filtered = shown.filter((x) => s.filter === "all" || (s.filter === "day" ? x.tod === "day" : s.filter === "night" ? x.tod === "night" : x.ep === s.filter));
+    const cnt = countOf(base), dayN = dayOf(base), nightN = cnt - dayN;
+
+    const loc = {
+      id: base.id, name: base.name, ie: base.ie, kind: base.kind, parent: base.parent, hasParent: isSub,
+      desc: root.desc, desc2: root.desc2, tags: root.tags.map((t) => ({ t })),
+      aliases: (isSub ? root.aliases.filter((a) => a[0].toLowerCase().includes(base.name.split("'")[0].toLowerCase().slice(0, 5))) : root.aliases).map(([slug, n]) => ({ slug, n })),
+      hasSubs: !isSub && !!root.subs, subs: (root.subs || []).map((id) => {
+        const sb = byId[id]; return { name: sb.name, ie: sb.ie, count: sb.count, dayPct: pct(sb.day, sb.count), select: () => this.setState({ sel: id }) };
+      }),
+      count: cnt, epSpan: root.perEp.filter(Boolean).length + " episodes",
+      dayN, nightN, dayPct: pct(dayN, cnt),
+      perEp: root.perEp.map((n, i) => ({ ep: "E" + (i + 1), h: (n ? Math.max(8, Math.round(n / 8 * 100)) : 2) + "%", bg: n ? "var(--ink2)" : "var(--line)" })),
+      people: root.people.map(([p, n]) => ({ ...p, n })),
+      arc: root.arc || [{ when: "E1", t: "First seen. No note yet." }]
+    };
+
+    const appearances = filtered.map((x) => ({
+      ...x, todLabel: x.tod === "day" ? "Day" : "Night", tod: x.tod === "day" ? "var(--day)" : "var(--night)",
+      cast: x.cast.map((c) => ({ n: c.name }))
+    }));
+
+    const filters = [["all", "All"], ["E1", "E1"], ["E2", "E2"], ["E3", "E3"], ["day", "Day"], ["night", "Night"]];
+    const appFilters = filters.map(([id, name]) => ({ name, bg: s.filter === id ? "var(--sel)" : off, ink: s.filter === id ? "var(--ink)" : "var(--ink3)", go: () => this.setState({ filter: id }) }));
+
+    const breakdown = [];
+    for (const l of all) {
+      const isSubL = !!l.parent;
+      const perEp = l.perEp || [Math.round(l.count * .5), Math.round(l.count * .3), l.count - Math.round(l.count * .5) - Math.round(l.count * .3), 0];
+      breakdown.push({
+        name: l.name, ie: l.ie, pad: isSubL ? "32px" : "14px", size: isSubL ? "11.5px" : "12.5px", weight: isSubL ? "400" : "500", ink: isSubL ? "var(--ink2)" : "var(--ink)",
+        eps: perEp.map((n) => ({ n: n || "·", ink: n ? "var(--ink)" : "var(--ink3)", dayPct: n ? pct(Math.round(n * dayOf(l) / countOf(l)), n) : "0%", track: n ? "var(--line2)" : "transparent", nightBg: n ? "var(--night)" : "transparent" })),
+        total: countOf(l), pp: l.pp || "—", open: () => this.setState({ sel: l.id, view: "record" })
+      });
+    }
+
+    const unmatched = [
+      { slug: "INT. CORRIDOR - NIGHT", where: "E2 Sc 11 · E3 Sc 4", guess: "Kamathi Chawl › Corridor", conf: "likely" },
+      { slug: "EXT. TANKER - DAY", where: "E3 Sc 8", guess: "Water tanker stand", conf: "likely" },
+      { slug: "INT. FARIDA'S KITCHEN - MORNING", where: "E2 Sc 6", guess: "Farida's tiffin kitchen", conf: "possible" }
+    ];
+    const empty = this.props.empty === true;
+    const view = empty ? "empty" : s.view;
+
+    return {
+      theme: s.theme, themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      navOpen, navLabel: navOpen ? "Hide nav" : "Show nav", toggleNav: () => this.setState({ navOverride: !navOpen }),
+      locCount: empty ? 0 : parentIds.length, sceneTotal: empty ? 0 : 34, slugTotal: 41,
+      navLocs: empty ? [] : navLocs,
+      hasUnmatched: !empty, unmatchedN: unmatched.length, unmatched,
+      goResolve: () => this.setState({ view: "resolve" }),
+      resolveBg: view === "resolve" ? "var(--note-bg)" : off, resolveBorder: view === "resolve" ? "var(--note)" : "var(--line2)",
+      viewTabs: [
+        { id: "record", name: "Record", icon: "▤" }, { id: "breakdown", name: "Breakdown", icon: "▦" }, { id: "resolve", name: "Resolve", icon: "⇄", badge: String(unmatched.length) }
+      ].map((t) => ({ ...t, badge: t.badge || "", bg: view === t.id ? "var(--accent-bg)" : off, ink: view === t.id ? "var(--accent)" : "var(--ink2)", go: () => this.setState({ view: t.id }) })),
+      isEmpty: view === "empty", isRecord: view === "record", isBreakdown: view === "breakdown", isResolve: view === "resolve",
+      loc, appearances, appFilters, breakdown,
+      facts: [
+        { k: "Scenes", v: String(cnt) }, { k: "Pages", v: root.pp },
+        { k: "First seen", v: "E1 Sc " + (root.scenes[0] ? root.scenes[0].sc : "—") }, { k: "Last seen", v: "E3 Sc 30" }
+      ],
+      footerNote: view === "record" ? loc.name + " · " + cnt + " scenes · " + loc.dayN + " day / " + loc.nightN + " night" : view === "breakdown" ? "Breakdown · all episodes" : view === "resolve" ? unmatched.length + " sluglines to match" : "No locations",
+      rail: [
+        { name: "Writing", icon: "✎", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Characters", icon: "◍", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Locations", icon: "⌖", bg: on, ink: "var(--ink)", bar: "var(--accent)", badge: empty ? "" : String(unmatched.length) },
+        { name: "Timeline", icon: "◷", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Bible", icon: "◈", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Research", icon: "▧", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Insights", icon: "◎", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" },
+        { name: "Production", icon: "▶", bg: off, ink: "var(--ink2)", bar: "transparent", badge: "" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
