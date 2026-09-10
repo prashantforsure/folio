@@ -81,6 +81,12 @@ const NO_DEFAULT_EXPORT = {
     'No default exports except where Next.js requires them (pages, layouts, route handlers, config files). See AGENTS.md, Conventions > Imports.',
 }
 
+const NO_PROCESS_ENV = {
+  selector: 'MemberExpression[object.name="process"][property.name="env"]',
+  message:
+    'No bare process.env. The environment is parsed once, through Zod, in packages/db/src/env.ts, and exported as a typed object - a missing or malformed variable fails loudly there rather than becoming undefined here. That file is the only exemption. packages/script may not read it at all: `process` is a restricted global there. See AGENTS.md, Development philosophy 2.',
+}
+
 const NO_DOUBLE_ASSERTION = {
   selector: 'TSAsExpression > TSAsExpression.expression',
   message:
@@ -121,6 +127,7 @@ export default tseslint.config(
         'error',
         NO_DEFAULT_EXPORT,
         NO_DOUBLE_ASSERTION,
+        NO_PROCESS_ENV,
         ...bannedText(HEX_COLOUR, HEX_MESSAGE),
         ...bannedText(DARK_VARIANT, DARK_MESSAGE),
         ...bannedText(COOL_GREY, COOL_GREY_MESSAGE),
@@ -160,6 +167,7 @@ export default tseslint.config(
         'error',
         NO_DEFAULT_EXPORT,
         NO_DOUBLE_ASSERTION,
+        NO_PROCESS_ENV,
         ...bannedText(DARK_VARIANT, DARK_MESSAGE),
         ...bannedText(COOL_GREY, COOL_GREY_MESSAGE),
       ],
@@ -246,6 +254,7 @@ export default tseslint.config(
         'error',
         NO_DEFAULT_EXPORT,
         NO_DOUBLE_ASSERTION,
+        NO_PROCESS_ENV,
         ...bannedText(HEX_COLOUR, HEX_MESSAGE),
         {
           selector: 'NewExpression[callee.name="Date"][arguments.length=0]',
@@ -268,6 +277,45 @@ export default tseslint.config(
       'apps/web/middleware.ts',
       'apps/web/instrumentation.ts',
     ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        NO_DOUBLE_ASSERTION,
+        NO_PROCESS_ENV,
+        ...bannedText(HEX_COLOUR, HEX_MESSAGE),
+        ...bannedText(DARK_VARIANT, DARK_MESSAGE),
+        ...bannedText(COOL_GREY, COOL_GREY_MESSAGE),
+      ],
+    },
+  },
+
+  // The one file that may read process.env. AGENTS.md gives packages/script no
+  // access to the environment at all, and every other package reads it through
+  // the typed object this file exports - so a missing variable is one loud
+  // failure at startup rather than an `undefined` that surfaces three layers
+  // later. Sits after the ban above because flat config is last-match-wins.
+  {
+    files: ['packages/db/src/env.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        NO_DEFAULT_EXPORT,
+        NO_DOUBLE_ASSERTION,
+        ...bannedText(HEX_COLOUR, HEX_MESSAGE),
+        ...bannedText(DARK_VARIANT, DARK_MESSAGE),
+        ...bannedText(COOL_GREY, COOL_GREY_MESSAGE),
+      ],
+    },
+  },
+
+  // Test-runner configuration is not application code. Playwright and Vitest
+  // run in Node, outside anything Folio serves, and reading `CI` to decide a
+  // retry count is not the failure the process.env ban is about - there is no
+  // typed object for a CI flag and inventing one would be worse. Narrow on
+  // purpose: `next.config.ts` is NOT exempt, because build-time configuration
+  // that silently reads an absent variable is exactly the failure in question.
+  {
+    files: ['**/playwright.config.{ts,mts}', '**/vitest.config.{ts,mts}'],
     rules: {
       'no-restricted-syntax': [
         'error',

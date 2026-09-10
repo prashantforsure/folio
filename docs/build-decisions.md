@@ -138,3 +138,117 @@ The industry sequence continues into goldenrod, buff, salmon and cherry, but
 AGENTS.md names five and puts the sequence behind an explicit decision, so a
 sixth is not invented here. A production reaching a sixth revision is a real
 thing that will happen and it needs a ruling.
+
+## Schema phase: judgement calls that are not ADRs
+
+Written down here because each is a decision somebody could reasonably have made
+differently, and none is big enough for its own ADR. Episode identity *was*,
+and is [ADR 0002](./adr/0002-episode-identity.md).
+
+### The node order key is text, not a number
+
+Appendix A of the design handoff sketches node ordering as
+`order: number  // fractional index, so insert never renumbers`. The idea is
+right and the carrier is wrong. Repeatedly inserting between the same two
+neighbours halves the gap each time, and a double runs out of mantissa after
+roughly fifty splits at one point — a writer breaking the same paragraph over
+and over will get there. When they do, the two keys compare equal and document
+order becomes whatever the index feels like. **Document order is the one thing
+AGENTS.md says the script actually is**, and the failure is silent.
+
+So the key is base-62 text compared lexicographically
+([`order.ts`](../packages/db/src/order.ts)): between any two distinct strings
+there is always another, because a string can always get one character longer.
+
+The alphabet is in ASCII order and the column is plain `text`, so Postgres and
+JavaScript sort it identically. **If an index on `order_key` ever gets a
+collation, it must be `"C"`** — a locale-aware collation sorts `a` before `B`
+and breaks the invariant.
+
+Flagged rather than settled: the appendix says `number`, and nobody has ruled
+this specific point.
+
+### Comment threads are `comment_threads`, not `threads`
+
+The brief for the schema phase says "Threads with FOUR ANCHOR KINDS". Appendix A
+already uses `Thread` for a different entity — the Timeline's story threads,
+`Thread { id, projectId, name, color, episodeIds[] }` — and `SceneAuthored.threads`
+in `packages/script` refers to *those*. Two different things called `threads`
+in one schema is a bug waiting for whoever writes the Timeline route.
+
+So comment threads are `comment_threads` and `thread_comments`, leaving
+`threads` free for the Timeline entity. This renames what the brief asked for,
+which is why it is recorded here.
+
+### `users` is the one table without `project_id`
+
+AGENTS.md says every table carries `project_id`. `users` cannot: a person exists
+before they belong to a project and belongs to many, so the column would be null
+or a lie. AGENTS.md's own stack table is what forces this — "`auth.users` is
+identity; `users`/`memberships` are ours" — a users table is *for* the thing that
+spans projects.
+
+The exception is enforced rather than documented. `users` has no such column, so
+it is not assignable to `ProjectScopedTable` and cannot be passed to a scoped
+query at all; [`scope-guarantees.ts`](../packages/db/src/scope-guarantees.ts)
+asserts that it does not compile. Reads of it live in
+[`repositories/users.ts`](../packages/db/src/repositories/users.ts), where every
+function takes the `UserId` it filters on.
+
+### A thread has many comments
+
+Appendix A models a note as one immutable `body`. The brief says "threads", and
+the Notes route is described as an inbox of open/mine/resolved comments. A thread
+with one body is not a thread, so the body is a second table. **Nobody has
+specified reply behaviour** — whether a reply can be edited, whether the first
+message is special, what a resolved thread does with a new reply — and none of
+that is decided.
+
+### Two columns need an argument for existing at all
+
+AGENTS.md's "nothing is stored that can be computed" exception table says its
+list is complete. Two columns are not on it and are not obviously derived:
+
+- **`versions.node_count`.** A snapshot is immutable, so this is a property of a
+  frozen artefact and cannot drift from it. It exists so the version list renders
+  without deserialising a feature-length node list per row.
+- **`revisions.lines_added` / `lines_deleted`.** These describe the diff between
+  two frozen snapshots, so recomputing can only ever return the same answer at
+  the cost of materialising two node lists.
+
+Both are measurements of immutable things rather than caches of live data. If
+that reasoning is rejected, the replacement for the second is a view over the two
+versions.
+
+### Storyboard shot anchors have no foreign key
+
+`comment_threads.anchor_shot_id` is a bare `uuid` with nothing behind it, because
+shots are not a table. The fourth variant of the anchor union is modelled anyway
+— widening a union after rows exist is the expensive direction. Closing the gap
+is one forward migration and one brand.
+
+## Open, and blocking — added by the schema phase
+
+**The `SCENE_xxx` contradiction.** [ADR 0001](./adr/0001-node-identity.md) Ruling
+3 says `SCENE_xxx` is the derived scene record's id, "in a different id space"
+from node ids, and its Consequences say a node id "appears in no URL".
+`packages/script`'s `entities.ts` then made `SceneRecord.id` **be the heading
+node's id**, deliberately, so that moving a scene does not detach its synopsis.
+
+Both cannot hold. Either a scene record's id is a node id and node ids do appear
+in URLs, or a scene needs a second minted id and the ADR's separate id space is
+real. `packages/contracts` codifies neither — there is no `SceneRecordIdSchema`,
+and `scenes.scene_node_id` is the node id, matching the implemented core. It
+becomes a real problem when the Scenes route needs a URL.
+
+**Open decision 7 — `transfer`, `keys`, `episodes`.** No table for any of them.
+`episodes` ships regardless because it is core rather than a settings sub-route;
+`project_transfers` and `project_api_keys` are not invented. Every question they
+raise — key scope, rotation, who may transfer, what happens to the ledger on a
+transfer — is unanswered.
+
+**Membership roles are stored and enforced nowhere.** `memberships.role` holds
+`owner | writer | reader`. Nothing reads it: not the repositories, not the RLS
+policies, which check membership only. AGENTS.md, Development philosophy 5 puts
+enforcement in the server action, and there are no server actions yet — so the
+column is a placeholder for a capability model nobody has specified.

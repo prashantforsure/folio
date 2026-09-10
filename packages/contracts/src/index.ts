@@ -1,7 +1,256 @@
 /**
- * @folio/contracts — Zod schemas shared by web and worker.
+ * @folio/contracts - Zod schemas shared by web and worker.
  *
- * Deliberately empty. Types flow out of here; nothing downstream redeclares a
- * shape. Schemas are named `XSchema` with `type X = z.infer<typeof XSchema>`.
+ * AGENTS.md, Architecture: "Types flow from here; do not redeclare them
+ * downstream." That is the whole job, and this package does it in two ways
+ * which are worth telling apart.
+ *
+ * **What it declares.** The shapes storage and the wire invent: a project row,
+ * a membership, a document header, a node row, a comment thread, a revision, a
+ * measurement, a ledger entry. None of these exist in `packages/script`,
+ * because none of them are a function of the node list.
+ *
+ * **What it borrows.** Everything the pure core already declares -
+ * `ScreenplayNode`, `OutlineNode`, the two document kinds, the derived entity
+ * records, the revision colours, the eight element types. Those are imported
+ * and re-expressed as schemas that **delegate to the pure core's own reader**,
+ * never re-implemented. `packages/script`'s `read.ts` is strict, rejects
+ * unrecognised fields, and rejects the five `PAGINATION_FIELDS` by name; a
+ * hand-written Zod object here would be a third enforcement point that knew
+ * about neither.
+ *
+ * The seam between the two is held by `assertExact` from `equality.ts`. Every
+ * borrowed shape is followed by a compile-time proof that the schema's inferred
+ * type is *exactly* the pure core's type, in both directions. Adding a ninth
+ * element type, or a field to `CharacterRecord`, breaks the compile here rather
+ * than passing silently over the wire. `pnpm typecheck` is a test suite in this
+ * package for the same reason it is in `packages/script`.
+ *
+ * **These are boundary contracts, not a mirror of the database.** They are not
+ * generated from Drizzle and they do not follow it: timestamps are ISO strings
+ * because a `Date` does not survive a queue payload, fields are `camelCase`
+ * because columns are `snake_case`, and the derived entities are split into
+ * authored and derived halves because that split is the mechanism which stops a
+ * re-derive clobbering a synopsis. `packages/db` maps between the two, and it
+ * is the only place that mapping exists.
+ *
+ * What is deliberately **not** here, and why:
+ *
+ *   - **Bible entries, research sources, props, lenses, story threads.** Real
+ *     entities, sketched in the design handoff's Appendix A, and out of scope
+ *     for this phase - the brief names its tables and these are not among them.
+ *   - **Jobs and generations.** Same. The ledger carries `jobId` as a forward
+ *     reference with no foreign key so that early rows are not unattributable.
+ *   - **A scene *record* id.** `docs/adr/0001-node-identity.md` Ruling 3 says
+ *     `SCENE_xxx` is a derived id in its own space; `packages/script` then made
+ *     a scene record's id be the heading node's id. Both cannot hold. See the
+ *     header of `ids.ts` - flagged, not resolved.
+ *   - **Project settings `transfer`, `keys` and `episodes`.** AGENTS.md open
+ *     decision 7. Nothing here guesses where they went.
  */
 export const PACKAGE_NAME = '@folio/contracts'
+
+export type { Equals, Extends } from './equality'
+export { assertExact } from './equality'
+
+export type {
+  EpisodeId,
+  EpisodeSlug,
+  JobId,
+  LedgerEntryId,
+  MeasurementId,
+  MembershipId,
+  ProjectId,
+  ReservedProjectSegment,
+  RevisionId,
+  ThreadCommentId,
+  ThreadId,
+  UserId,
+  VersionId,
+} from './ids'
+export {
+  CharacterIdSchema,
+  DocumentIdSchema,
+  EPISODE_SLUG_PATTERN,
+  EpisodeIdSchema,
+  EpisodeSlugSchema,
+  JobIdSchema,
+  LedgerEntryIdSchema,
+  LocationIdSchema,
+  MeasurementIdSchema,
+  MembershipIdSchema,
+  NodeIdSchema,
+  ProjectIdSchema,
+  RESERVED_PROJECT_SEGMENTS,
+  RevisionIdSchema,
+  RunIdSchema,
+  ThreadCommentIdSchema,
+  ThreadIdSchema,
+  UserIdSchema,
+  VersionIdSchema,
+  episodeId,
+  episodeSlug,
+  formatEpisodeSlug,
+  isReservedProjectSegment,
+  jobId,
+  ledgerEntryId,
+  measurementId,
+  membershipId,
+  projectId,
+  revisionId,
+  threadCommentId,
+  threadId,
+  userId,
+  versionId,
+} from './ids'
+
+export type {
+  LedgerEntryKind,
+  MembershipRole,
+  PoolerMode,
+  ProjectKind,
+  ThreadAnchorKind,
+  ThreadState,
+  TombstoneReason,
+} from './enums'
+export {
+  ConfidenceSchema,
+  DeliveryModifierSchema,
+  DocumentKindSchema,
+  InteriorExteriorSchema,
+  LEDGER_ENTRY_KINDS,
+  LedgerEntryKindSchema,
+  LightSchema,
+  MEMBERSHIP_ROLES,
+  MembershipRoleSchema,
+  MentionEntitySchema,
+  OutlineNodeTypeSchema,
+  POOLER_MODES,
+  PROJECT_KINDS,
+  PageModeSchema,
+  PoolerModeSchema,
+  PresenceSchema,
+  ProjectKindSchema,
+  ProvenanceSourceSchema,
+  ResolveRowStateSchema,
+  RevisionColourSchema,
+  ScreenplayNodeTypeSchema,
+  ScriptFormatSchema,
+  THREAD_ANCHOR_KINDS,
+  THREAD_STATES,
+  TOMBSTONE_REASONS,
+  ThreadAnchorKindSchema,
+  ThreadStateSchema,
+  TombstoneReasonSchema,
+} from './enums'
+
+export type { OrderKey, PageRequest, Timestamp } from './primitives'
+export {
+  AuthoredNotesSchema,
+  AuthoredValueSchema,
+  CreditDeltaSchema,
+  CursorSchema,
+  OrderKeySchema,
+  PageRequestSchema,
+  TimestampSchema,
+  TitleSchema,
+  toTimestamp,
+} from './primitives'
+
+export {
+  FolioDocumentSchema,
+  OutlineDocumentSchema,
+  OutlineNodeSchema,
+  ScreenplayDocumentSchema,
+  ScreenplayNodeSchema,
+} from './model'
+
+export type { Episode, Membership, Project, ProjectCard, User } from './tenancy'
+export {
+  EpisodeSchema,
+  MembershipSchema,
+  ProjectCardSchema,
+  ProjectSchema,
+  UserSchema,
+} from './tenancy'
+
+export type {
+  DocumentRecord,
+  NodeProvenanceRow,
+  NodeRow,
+  NodeTombstone,
+  NodeType,
+} from './documents'
+export {
+  DocumentRecordSchema,
+  NodeProvenanceRowSchema,
+  NodeRowSchema,
+  NodeTombstoneSchema,
+  NodeTypeSchema,
+} from './documents'
+
+export type { Thread, ThreadAnchor, ThreadComment } from './threads'
+export { ThreadAnchorSchema, ThreadCommentSchema, ThreadSchema } from './threads'
+
+export type { LockedPage, Revision, Version, VersionSnapshot } from './history'
+export {
+  LockedPageSchema,
+  RevisionSchema,
+  VersionSchema,
+  VersionSnapshotSchema,
+} from './history'
+
+export type {
+  Measurement,
+  MeasurementNode,
+  MeasurementPage,
+  MeasurementScene,
+} from './measurement'
+export {
+  MeasurementNodeSchema,
+  MeasurementPageSchema,
+  MeasurementSceneSchema,
+  MeasurementSchema,
+} from './measurement'
+
+export type {
+  CharacterAuthoredRow,
+  CharacterBoundCue,
+  CharacterCueTally,
+  CharacterDerivation,
+  CharacterRelationshipRow,
+  LocationAuthoredRow,
+  LocationBoundSlugline,
+  LocationDerivation,
+  LocationSluglineTally,
+  ProposalRow,
+  ProposalTargetRow,
+  ResolveDecision,
+  ResolveQueueRow,
+  ResolveSubjectRow,
+  SceneAuthoredRow,
+  SceneDerivation,
+  SluglineReadingRow,
+} from './derived'
+export {
+  CharacterAuthoredSchema,
+  CharacterBoundCueSchema,
+  CharacterCueTallySchema,
+  CharacterDerivationSchema,
+  CharacterRelationshipSchema,
+  LocationAuthoredSchema,
+  LocationBoundSluglineSchema,
+  LocationDerivationSchema,
+  LocationSluglineTallySchema,
+  ProposalSchema,
+  ProposalTargetSchema,
+  ResolveDecisionSchema,
+  ResolveRowSchema,
+  ResolveSubjectSchema,
+  SceneAuthoredSchema,
+  SceneDerivationSchema,
+  SluglineReadingSchema,
+} from './derived'
+
+export type { CreditBalance, LedgerEntry } from './credits'
+export { CreditBalanceSchema, LedgerEntrySchema } from './credits'
