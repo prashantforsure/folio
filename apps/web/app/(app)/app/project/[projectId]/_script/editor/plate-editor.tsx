@@ -7,7 +7,7 @@ import { PathApi } from 'platejs'
 import type { PlateEditor } from 'platejs/react'
 import { Plate, PlateContent, createPlatePlugin, useRedecorate, usePlateEditor } from 'platejs/react'
 import type { KeyboardEvent } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import type { IdentityLog } from '../../../../../../../lib/script/identity'
 import { mintNodeId, withScriptIdentity } from '../../../../../../../lib/script/identity'
@@ -19,12 +19,12 @@ import {
 } from '../../../../../../../lib/script/keyboard'
 import type { SheetLayout } from '../../../../../../../lib/script/layout'
 import { charsPerLineFor } from '../../../../../../../lib/script/layout'
-import { lineEndsOf } from '../../../../../../../lib/script/lines'
+import { lineEndsOfBlock } from '../../../../../../../lib/script/lines'
 import type { ScriptElement, ScriptValue } from '../../../../../../../lib/script/slate-model'
 import { MENTION_TYPE, isScriptElement, toSlateValue } from '../../../../../../../lib/script/slate-model'
 import type { LineDecoration } from './elements'
 import { Leaf, MentionInline, ScriptBlock } from './elements'
-import { SheetContext } from './layout-context'
+import { SheetContext, createBlockLayoutStore } from './layout-context'
 import type { SheetContextValue } from './layout-context'
 import { MentionCombobox } from './mention-combobox'
 import type { MentionQuery } from './mention-combobox'
@@ -99,16 +99,42 @@ const emptyBlock = (type: ScreenplayNodeType): ScriptElement => ({
 })
 
 /**
- * Re-run `decorate` when the layout or the labels change. A child of
+ * Re-run `decorate` when what the decorations read has changed: a page gap
+ * moved, the sheet changed measure, or a label changed. A child of
  * `<Plate>`, because the hook needs the editor's store, and the decorations
  * read `layoutRef` / `labelForRef` which are updated before this renders.
+ *
+ * Keyed on the gaps rather than on the layout: the layout is new on every
+ * keystroke, but the decorations only change when a block's page gap does,
+ * and forcing three thousand blocks to re-decorate for one character was
+ * measurable.
  */
-const Redecorate = ({ layout, labels }: { readonly layout: SheetLayout; readonly labels: readonly MentionLabel[] }) => {
+const Redecorate = ({
+  gaps,
+  sheet,
+  labels,
+}: {
+  readonly gaps: string
+  readonly sheet: SheetSpec
+  readonly labels: readonly MentionLabel[]
+}) => {
   const redecorate = useRedecorate()
   useEffect(() => {
     redecorate()
-  }, [layout, labels, redecorate])
+  }, [gaps, sheet, labels, redecorate])
   return null
+}
+
+/** Every page gap in the layout, as one string: unchanged means no decoration moved. */
+const gapSignatureOf = (layout: SheetLayout): string => {
+  const parts: string[] = []
+  for (const [id, block] of layout.blocks) {
+    if (block.gap === null) continue
+    parts.push(
+      [id, String(block.gap.afterLine), String(block.gap.heightPx), block.gap.more ?? '', block.gap.continued ?? ''].join(':'),
+    )
+  }
+  return parts.join('|')
 }
 
 export type CaretInfo = {
@@ -153,6 +179,15 @@ export const ScriptEditor = ({
   // each and read the latest layout and labels without re-creating the editor.
   const layoutRef = useRef(layout)
   layoutRef.current = layout
+  const gaps = useMemo(() => gapSignatureOf(layout), [layout])
+  // The blocks read their rows from here, not from the context value - see
+  // `layout-context.tsx`. Built once per editor; fed every layout, before
+  // paint, so a block whose margin moved is drawn where the record put it
+  // in the same frame as the keystroke.
+  const [blocks] = useState(() => createBlockLayoutStore(layout))
+  useLayoutEffect(() => {
+    blocks.update(layout)
+  }, [blocks, layout])
   const labelForRef = useRef(labelFor)
   labelForRef.current = labelFor
   const sheetRef = useRef(sheet)
@@ -247,6 +282,12 @@ export const ScriptEditor = ({
       value: initialValue.map((block) => ({ ...block })),
       nodeId: false,
       autoSelect: autoFocus ? 'start' : false,
+      // slate-react re-creates every React element in the chunk a change
+      // touches. Plate's default chunk is a thousand blocks - a third of a
+      // feature - which was ~50ms of element creation per keystroke in the
+      // profile. A hundred blocks is about four pages: one chunk of a
+      // hundred plus the thirty chunk nodes above it, per keystroke.
+      chunking: { chunkSize: 100 },
     },
     [documentId, FolioPlugin],
   )
@@ -263,7 +304,7 @@ export const ScriptEditor = ({
       const [node, path] = entry
       if (path.length !== 1 || !isScriptElement(node)) return []
       const measure = charsPerLineFor(sheetRef.current, node.type)
-      const ends = lineEndsOf(node.children, labelForRef.current, measure)
+      const ends = lineEndsOfBlock(node, labelForRef.current, measure)
       const placed = layoutRef.current.blocks.get(node.id)
       const gapAfterLine = placed?.gap === null || placed?.gap === undefined ? -1 : placed.gap.afterLine
       const ranges: TRange[] = []
@@ -450,8 +491,8 @@ export const ScriptEditor = ({
   )
 
   const context = useMemo<SheetContextValue>(
-    () => ({ layout, sheet, labelFor, caretBlockId: null }),
-    [layout, sheet, labelFor],
+    () => ({ sheet, labelFor, blocks, caretBlockId: null }),
+    [blocks, sheet, labelFor],
   )
 
   const liveMention = readMentionQuery()
@@ -470,7 +511,7 @@ export const ScriptEditor = ({
           reportCaret()
         }}
       >
-        <Redecorate layout={layout} labels={labels} />
+        <Redecorate gaps={gaps} sheet={sheet} labels={labels} />
         <PlateContent
           className="folio-editable"
           spellCheck={false}

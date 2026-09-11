@@ -1,8 +1,11 @@
-import { EpisodeRoutePage } from '../../../_chrome/episode-route-page'
+import { OutlineRoute } from '../../../_outline/outline-route'
+import { enterEpisodeRoute } from '../../../../../../../../lib/workspace/context'
 
-/** Empty shell this phase, collapsed (film) shape. See `_chrome/episode-route-page.tsx`. */
-const Page = (props: PageProps<'/app/project/[projectId]/outline'>) => (
-  <EpisodeRoutePage route="outline" {...props} />
-)
+/** The Outline route, film shape. See the episodic page. */
+const Page = async ({ params, searchParams }: PageProps<'/app/project/[projectId]/outline'>) => {
+  const { projectId } = await params
+  const context = await enterEpisodeRoute(projectId, null, 'outline')
+  return <OutlineRoute context={context} searchParams={searchParams} />
+}
 
 export default Page

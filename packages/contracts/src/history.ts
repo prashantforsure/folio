@@ -56,15 +56,31 @@ import { TimestampSchema } from './primitives'
  *
  * `reason` says what took the snapshot. An agent run takes one before it
  * writes, which is what makes "revert this run" a single operation rather than
- * a reverse-diff.
+ * a reverse-diff. A restore takes two: `before_restore` is the document as it
+ * stood, `restore` is the document as restored - "Restore creates a new
+ * version. It never destroys history."
  */
+export const VERSION_REASONS = [
+  'autosave',
+  'manual',
+  'before_agent_run',
+  'before_import',
+  'before_rename',
+  'before_restore',
+  'restore',
+] as const
+
+export const VersionReasonSchema = z.enum(VERSION_REASONS)
+
+export type VersionReason = z.infer<typeof VersionReasonSchema>
+
 export const VersionSchema = z.object({
   id: VersionIdSchema,
   projectId: ProjectIdSchema,
   documentId: DocumentIdSchema,
   /** Monotonic within a document. Not a global sequence. */
   ordinal: z.int().min(1),
-  reason: z.enum(['autosave', 'manual', 'before_agent_run', 'before_import', 'before_rename']),
+  reason: VersionReasonSchema,
   nodeCount: z.int().min(0),
   createdBy: UserIdSchema.nullable(),
   createdAt: TimestampSchema,
@@ -104,6 +120,11 @@ export type VersionSnapshot = z.infer<typeof VersionSnapshotSchema>
  * that reasoning is rejected, the fix is a view over the two snapshots and this
  * comment is where to start.
  *
+ * `scenesTouched` and `pageCount` are two more of the same class. The first
+ * comes out of the same diff as the line counts; the second is the page count
+ * of the paper as it was issued, stored so that a later change to the sheet
+ * changes what a new revision counts and not what an old one already said.
+ *
  * `locked` is the flag that stops renumbering. Which pages are locked is
  * `LockedPageSchema` below, because a lock is per page and per anchor.
  */
@@ -121,6 +142,10 @@ export const RevisionSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(40)).max(24),
   linesAdded: z.int().min(0),
   linesDeleted: z.int().min(0),
+  /** Scenes with at least one changed line since the revision before. */
+  scenesTouched: z.int().min(0),
+  /** Pages as issued. */
+  pageCount: z.int().min(0),
   /** Once true, the pages of this revision keep their numbers forever. */
   locked: z.boolean(),
   /** The version this revision was cut from, so the paper is reproducible. */

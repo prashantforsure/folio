@@ -1,0 +1,17 @@
+import { chromium } from '@playwright/test'
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const log = []
+page.on('console', (m) => { if (m.type() === 'error') log.push(`[${m.type()}] ${m.text().slice(0, 160)}`) })
+await page.goto('http://localhost:3000/sign-in')
+await page.getByLabel('Email').fill('e2e.scenes@folio.invalid')
+await page.getByLabel('Password').fill('scenes-proof-2026-09-11-Xk9')
+await page.getByRole('button', { name: 'Sign in' }).click()
+await page.waitForURL(/\/app\/new$/)
+await page.goto('http://localhost:3000/app/project/04edf071-583d-47fc-8b57-766e0d387a72/ep_001/script')
+await page.waitForSelector('main[data-route="script"]', { timeout: 60000 })
+await page.locator('[data-empty-state] button').filter({ hasText: 'Start a blank script' }).click()
+await page.waitForSelector('[data-sheet] [data-node-id]', { timeout: 60000 })
+await page.waitForTimeout(3000)
+console.log(log.join('\n') || 'no console errors')
+await browser.close()

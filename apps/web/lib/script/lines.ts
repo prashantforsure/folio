@@ -132,3 +132,33 @@ export const lineEndsOf = (
 
 /** How many lines the block occupies: one more than the breaks, never fewer than one. */
 export const lineCountOf = (ends: readonly LineEnd[]): number => ends.length + 1
+
+type Wrapped = {
+  readonly labelFor: unknown
+  readonly charsPerLine: number
+  readonly ends: readonly LineEnd[]
+}
+
+const wrapped = new WeakMap<object, Wrapped>()
+
+/**
+ * `lineEndsOf` for a block, remembered on the block object.
+ *
+ * Slate keeps every block it did not touch as the same object across a
+ * change, and both the layout (`script-workspace.tsx`) and the decorations
+ * (`plate-editor.tsx`) wrap every block on every change. With this, a
+ * keystroke wraps the one block it touched and looks the rest up. The label
+ * book and the measure are part of the key, so a renamed character or a
+ * format switch wraps everything again, as it must.
+ */
+export const lineEndsOfBlock = (
+  block: { readonly children: readonly ScriptInline[] },
+  labelFor: (entity: MentionEntity, id: string) => string | undefined,
+  charsPerLine: number,
+): readonly LineEnd[] => {
+  const hit = wrapped.get(block)
+  if (hit !== undefined && hit.labelFor === labelFor && hit.charsPerLine === charsPerLine) return hit.ends
+  const ends = lineEndsOf(block.children, labelFor, charsPerLine)
+  wrapped.set(block, { labelFor, charsPerLine, ends })
+  return ends
+}

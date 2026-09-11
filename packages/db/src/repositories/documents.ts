@@ -10,12 +10,15 @@ import type {
   Result,
   ScreenplayNode,
 } from '@folio/script'
-import { asc, eq, inArray } from 'drizzle-orm'
+import { asc, eq, inArray, sql } from 'drizzle-orm'
 
+import type { NodeWritePlan, StoredNodeRow } from '../node-plan'
+import { planNodeWrite } from '../node-plan'
 import { between, byOrderKey, firstOrderKey, spread } from '../order'
 import { documents, episodes, nodeTombstones, nodes } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
+import { jsonb } from '../sql-json'
 import type { NodeWrite } from './mapping'
 import {
   nodeToWrite,
@@ -93,6 +96,24 @@ export const readDocumentByKind = async (
   return row === undefined ? null : toDocument(row)
 }
 
+/**
+ * One document by id, or null. The Script route's save names the document
+ * it is writing, so the row is read by that id - in parallel with the gate -
+ * and checked against the episode afterwards, rather than found through it.
+ */
+export const readDocumentById = async (
+  scope: ProjectScope,
+  documentId: DocumentId,
+): Promise<DocumentRecord | null> => {
+  const rows = await dbOf(scope)
+    .select()
+    .from(documents)
+    .where(scoped(scope, documents, eq(documents.id, documentId)))
+    .limit(1)
+  const row = rows[0]
+  return row === undefined ? null : toDocument(row)
+}
+
 export const createDocument = async (
   scope: ProjectScope,
   episodeId: EpisodeId,
@@ -143,12 +164,32 @@ const NODE_COLUMNS = {
 export const readScreenplayNodes = async (
   scope: ProjectScope,
   documentId: DocumentId,
-): Promise<Result<readonly OrderedNode<ScreenplayNode>[], ModelDefect>> => {
-  const rows = await dbOf(scope)
+): Promise<Result<readonly OrderedNode<ScreenplayNode>[], ModelDefect>> =>
+  parseScreenplayRows(await readNodeRows(scope, documentId))
+
+/** A stored node row, exactly as the save path compares and rewrites it. */
+export type NodeRow = StoredNodeRow & { readonly documentKind: DocumentKind }
+
+/**
+ * The rows of one document, in order, unparsed.
+ *
+ * The save path needs both the parsed list (to paginate) and the raw rows
+ * (to plan the write against), and a round trip is the unit of cost on the
+ * request path - so the rows are read once and parsed in memory.
+ */
+export const readNodeRows = async (
+  scope: ProjectScope,
+  documentId: DocumentId,
+): Promise<readonly NodeRow[]> =>
+  dbOf(scope)
     .select(NODE_COLUMNS)
     .from(nodes)
     .where(scoped(scope, nodes, eq(nodes.documentId, documentId)))
     .orderBy(byOrderKey(nodes.orderKey))
+
+export const parseScreenplayRows = (
+  rows: readonly NodeRow[],
+): Result<readonly OrderedNode<ScreenplayNode>[], ModelDefect> => {
   const out: OrderedNode<ScreenplayNode>[] = []
   for (const row of rows) {
     const node = screenplayNodeFromRow(row)
@@ -161,12 +202,13 @@ export const readScreenplayNodes = async (
 export const readOutlineNodes = async (
   scope: ProjectScope,
   documentId: DocumentId,
-): Promise<Result<readonly OrderedNode<OutlineNode>[], ModelDefect>> => {
-  const rows = await dbOf(scope)
-    .select(NODE_COLUMNS)
-    .from(nodes)
-    .where(scoped(scope, nodes, eq(nodes.documentId, documentId)))
-    .orderBy(byOrderKey(nodes.orderKey))
+): Promise<Result<readonly OrderedNode<OutlineNode>[], ModelDefect>> =>
+  parseOutlineRows(await readNodeRows(scope, documentId))
+
+/** The outline's rows, read strictly - `parseScreenplayRows` for the other kind. */
+export const parseOutlineRows = (
+  rows: readonly NodeRow[],
+): Result<readonly OrderedNode<OutlineNode>[], ModelDefect> => {
   const out: OrderedNode<OutlineNode>[] = []
   for (const row of rows) {
     const node = outlineNodeFromRow(row)
@@ -197,30 +239,24 @@ export const replaceNodes = async (
   list: readonly (ScreenplayNode | OutlineNode)[],
 ): Promise<void> => {
   const keys = spread(null, null, list.length)
+  const writes = list.map((node, index) => nodeToWrite(node, keys[index] ?? firstOrderKey()))
   await dbOf(scope).transaction(async (tx) => {
+    // Two statements, not one: the fresh keys are the same deterministic
+    // spread the old rows got, and a delete and an insert in one statement
+    // share a snapshot - see `node-plan.ts` - so the old rows would still
+    // be in the unique index when the new ones landed.
     await tx.delete(nodes).where(scoped(scope, nodes, eq(nodes.documentId, documentId)))
-    if (list.length === 0) return
-    const values = list.map((node, index) => {
-      const orderKey = keys[index] ?? firstOrderKey()
-      const write = nodeToWrite(node, orderKey)
-      return {
-        ...tenant(scope),
-        documentId,
-        documentKind: kind,
-        id: write.id,
-        type: write.type,
-        orderKey: write.orderKey,
-        content: write.content,
-        modifiers: [...write.modifiers],
-        provenanceSource: write.provenanceSource,
-        provenanceRunId: write.provenanceRunId,
-      }
-    })
-    await tx.insert(nodes).values(values)
-    await tx
-      .update(documents)
-      .set({ updatedAt: new Date() })
-      .where(scoped(scope, documents, eq(documents.id, documentId)))
+    await tx.execute(sql`
+      with ins as (
+        insert into ${nodes} (id, project_id, document_id, document_kind, type, order_key, content, modifiers, provenance_source, provenance_run_id)
+        select r.id, ${scope.projectId}, ${documentId}, ${kind}::document_kind, r.type, r.order_key, r.content, r.modifiers, r.provenance_source, r.provenance_run_id
+        from jsonb_to_recordset(${jsonb(writes.map(nodeWriteRecord))}) as ${NODE_RECORD}
+        returning id
+      )
+      update ${documents} set updated_at = now()
+      where ${scoped(scope, documents, eq(documents.id, documentId))}
+        and (select count(*) from ins) = ${writes.length}
+    `)
   })
 }
 
@@ -377,60 +413,28 @@ export const mintNodeIds = async (
 }
 
 // ---------------------------------------------------------------------------
-// Reconciling a node list - the Script route's save path
+// Writing a node list back - the Script route's save path
 // ---------------------------------------------------------------------------
 
 /**
- * The longest increasing subsequence of `keys`, as a set of indexes.
- *
- * Used to decide which existing order keys can be kept when a node list is
- * written back: every node whose key already sorts correctly against the ones
- * around it keeps its row untouched, and only the rest are re-keyed. Standard
- * patience sorting, O(n log n), over the keys in *new document order*.
+ * The record shape `jsonb_to_recordset` reads a node write as. The enum
+ * names are the Postgres types `schema/documents.ts` declares; a wrong one
+ * fails the statement, never a row.
  */
-const longestIncreasing = (keys: readonly (string | null)[]): ReadonlySet<number> => {
-  const tails: number[] = []
-  const previous: number[] = new Array<number>(keys.length).fill(-1)
-  const tailKey = (index: number): string => keys[index] ?? ''
-  keys.forEach((key, index) => {
-    if (key === null) return
-    let low = 0
-    let high = tails.length
-    while (low < high) {
-      const mid = (low + high) >> 1
-      const at = tails[mid]
-      if (at !== undefined && tailKey(at) < key) low = mid + 1
-      else high = mid
-    }
-    const before = tails[low - 1]
-    previous[index] = low > 0 && before !== undefined ? before : -1
-    tails[low] = index
-  })
-  const kept = new Set<number>()
-  let cursor = tails[tails.length - 1] ?? -1
-  while (cursor !== -1) {
-    kept.add(cursor)
-    cursor = previous[cursor] ?? -1
-  }
-  return kept
-}
+const NODE_RECORD = sql.raw(
+  'r(id uuid, type node_type, order_key text, content jsonb, modifiers delivery_modifier[], provenance_source provenance_source, provenance_run_id uuid)',
+)
 
-/** The columns a save compares. Order is compared separately. */
-const sameContent = (
-  row: {
-    readonly type: string
-    readonly content: unknown
-    readonly modifiers: readonly string[]
-    readonly provenanceSource: string
-    readonly provenanceRunId: string | null
-  },
-  write: NodeWrite,
-): boolean =>
-  row.type === write.type &&
-  row.provenanceSource === write.provenanceSource &&
-  row.provenanceRunId === write.provenanceRunId &&
-  JSON.stringify(row.content) === JSON.stringify(write.content) &&
-  JSON.stringify(row.modifiers) === JSON.stringify(write.modifiers)
+/** A `NodeWrite` in the column names the record above declares. */
+const nodeWriteRecord = (write: NodeWrite) => ({
+  id: write.id,
+  type: write.type,
+  order_key: write.orderKey,
+  content: write.content,
+  modifiers: write.modifiers,
+  provenance_source: write.provenanceSource,
+  provenance_run_id: write.provenanceRunId,
+})
 
 export type ReconcileSummary = {
   readonly inserted: number
@@ -441,28 +445,141 @@ export type ReconcileSummary = {
   readonly updatedAt: Timestamp
 }
 
+export type NodeRetirement = {
+  readonly nodeId: NodeId
+  readonly mergedInto: NodeId | null
+}
+
+/**
+ * Apply a plan from `planNodeWrite` - in **one statement**.
+ *
+ * The request path pays two round trips per parameterised statement and
+ * cannot pipeline them (`client.ts`), so the shape of this write is the
+ * cost of a keystroke. Everything a save does to the authored tables is one
+ * `WITH`: the id check, the deletes, the tombstones, the inserts, the
+ * updates and the document stamp. One statement is also one snapshot and
+ * one atomic commit, which is why the plan's keys are chosen never to
+ * collide with a stored one (`node-plan.ts`).
+ *
+ * Ids new to the document are checked against the tombstones and against
+ * every node in the project (ADR 0001: never reused, globally unique) in the
+ * same statement, and every writing clause is gated on that check passing:
+ * a reused id refuses the whole write and names the ids, the caller
+ * re-mints, and nothing was touched.
+ *
+ * `retirements` are the tombstones for ids that left the list - what
+ * `retireNodes` writes, landed in the same statement as the delete so an
+ * id can never be gone without its tombstone. The *decision* to retire, and
+ * what an id was merged into, is still the caller's (the header of
+ * `replaceNodes` says why); this only refuses to let the two halves of it
+ * commit separately.
+ */
+export const commitNodePlan = async (
+  scope: ProjectScope,
+  documentId: DocumentId,
+  kind: DocumentKind,
+  plan: NodeWritePlan,
+  retirements: readonly NodeRetirement[] = [],
+): Promise<ReconcileSummary | { readonly unusable: readonly NodeId[] }> => {
+  const introduced = sql.param([...plan.introduced])
+  const tombstones = retirements.map((retirement) => ({
+    node_id: retirement.nodeId,
+    reason: retirement.mergedInto === null ? 'deleted' : 'merged',
+    merged_into: retirement.mergedInto,
+  }))
+  const rows = await dbOf(scope).execute(sql`
+    with bad as (
+      select ${nodeTombstones.nodeId} as id from ${nodeTombstones}
+        where ${scoped(scope, nodeTombstones, sql`${nodeTombstones.nodeId} = any(${introduced}::uuid[])`)}
+      union
+      select ${nodes.id} as id from ${nodes}
+        where ${scoped(scope, nodes, sql`${nodes.id} = any(${introduced}::uuid[])`)}
+    ),
+    ok as (select not exists (select 1 from bad) as ok),
+    del as (
+      delete from ${nodes}
+      where ${scoped(scope, nodes, eq(nodes.documentId, documentId), sql`${nodes.id} = any(${sql.param([...plan.deletes])}::uuid[])`)}
+        and (select ok from ok)
+      returning id
+    ),
+    tomb as (
+      insert into ${nodeTombstones} (project_id, document_id, node_id, reason, merged_into, retired_by)
+      select ${scope.projectId}, ${documentId}, r.node_id, r.reason, r.merged_into, ${scope.actor}::uuid
+      from jsonb_to_recordset(${jsonb(tombstones)}) as r(node_id uuid, reason tombstone_reason, merged_into uuid)
+      where (select ok from ok)
+      on conflict (node_id) do nothing
+      returning node_id
+    ),
+    ins as (
+      insert into ${nodes} (id, project_id, document_id, document_kind, type, order_key, content, modifiers, provenance_source, provenance_run_id)
+      select r.id, ${scope.projectId}, ${documentId}, ${kind}::document_kind, r.type, r.order_key, r.content, r.modifiers, r.provenance_source, r.provenance_run_id
+      from jsonb_to_recordset(${jsonb(plan.inserts.map(nodeWriteRecord))}) as ${NODE_RECORD}
+      where (select ok from ok)
+      returning id
+    ),
+    upd as (
+      update ${nodes} set
+        type = r.type, order_key = r.order_key, content = r.content, modifiers = r.modifiers,
+        provenance_source = r.provenance_source, provenance_run_id = r.provenance_run_id, updated_at = now()
+      from jsonb_to_recordset(${jsonb(plan.updates.map(nodeWriteRecord))}) as ${NODE_RECORD}
+      where ${scoped(scope, nodes, eq(nodes.documentId, documentId))}
+        and ${nodes.id} = r.id
+        and (select ok from ok)
+      returning ${nodes.id}
+    ),
+    stamp as (
+      update ${documents} set updated_at = now()
+      where ${scoped(scope, documents, eq(documents.id, documentId))}
+        and (select ok from ok)
+      returning updated_at
+    )
+    select
+      (select array_agg(id) from bad) as unusable,
+      (select updated_at from stamp) as updated_at,
+      (select count(*)::int from ins) as inserted,
+      (select count(*)::int from upd) as updated,
+      (select count(*)::int from del) as deleted
+  `)
+  const row = rows[0] as
+    | {
+        readonly unusable: readonly string[] | null
+        readonly updated_at: Date | string | null
+        readonly inserted: number
+        readonly updated: number
+        readonly deleted: number
+      }
+    | undefined
+  if (row === undefined) {
+    throw new Error('Folio: the node write returned no row. This is a bug in the repository.')
+  }
+  if (row.unusable !== null && row.unusable.length > 0) {
+    return { unusable: row.unusable.map((id) => id as NodeId) }
+  }
+  if (row.updated_at === null) {
+    throw new Error(
+      'Folio: the node write touched no document row. This is a bug in the repository.',
+    )
+  }
+  return {
+    inserted: row.inserted,
+    updated: row.updated,
+    deleted: row.deleted,
+    rekeyed: plan.rekeyed,
+    // Raw `execute` bypasses the column parsers: a timestamp arrives as text.
+    updatedAt: stamp(row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at)),
+  }
+}
+
 /**
  * Write a node list back with the fewest rows touched.
  *
- * `replaceNodes` rewrites every row, which is right for an import and wrong
- * for a keystroke: an autosave on a feature-length script would delete and
- * reinsert six thousand rows every second and a half. This walks the new
- * list against the stored one and writes only what changed - a node whose
- * content, type or provenance differs is updated; one that is gone is
- * deleted; one that is new is inserted between its neighbours; and an order
- * key is reassigned only when the node moved relative to the keys around it
- * (the longest run of keys already in order is kept, everything else is
- * re-keyed between them).
- *
- * The result is the same rows `replaceNodes` would have produced, in the same
- * order, without the churn. Tombstones are still `retireNodes`' business, for
- * the reason its header gives.
- *
- * Ids new to the document are checked inside the transaction, against the
- * tombstones and against every node in the project (ADR 0001: never reused,
- * globally unique). A reused id refuses the whole write and names the ids; the
- * caller re-mints. Done here rather than by a separate read because the rows
- * are in hand already and a save is a round-trip budget.
+ * Read the stored rows, plan against them (`planNodeWrite`), commit the
+ * plan. Two round trips. The read is not inside the write's transaction: a
+ * concurrent save between the two is caught by the unique index on
+ * `(document_id, order_key)` - a fresh key cannot collide with anything the
+ * plan saw, so if it collides the statement fails whole and the caller
+ * retries against the new rows - and by `documents.updated_at`, which the
+ * Script route compares to report the conflict.
  */
 export const reconcileNodes = async (
   scope: ProjectScope,
@@ -470,116 +587,8 @@ export const reconcileNodes = async (
   kind: DocumentKind,
   list: readonly ScreenplayNode[],
 ): Promise<ReconcileSummary | { readonly unusable: readonly NodeId[] }> => {
-  return dbOf(scope).transaction(async (tx) => {
-    const existing = await tx
-      .select(NODE_COLUMNS)
-      .from(nodes)
-      .where(scoped(scope, nodes, eq(nodes.documentId, documentId)))
-    const held = new Map(existing.map((row) => [row.id, row]))
-    const wanted = new Set(list.map((node) => node.id as string))
-
-    const introduced = list.map((node) => node.id).filter((id) => !held.has(id))
-    if (introduced.length > 0) {
-      const [tombstoned, present] = await Promise.all([
-        tx
-          .select({ id: nodeTombstones.nodeId })
-          .from(nodeTombstones)
-          .where(scoped(scope, nodeTombstones, inArray(nodeTombstones.nodeId, [...introduced]))),
-        tx
-          .select({ id: nodes.id })
-          .from(nodes)
-          .where(scoped(scope, nodes, inArray(nodes.id, [...introduced]))),
-      ])
-      const used = new Set<string>([...tombstoned, ...present].map((row) => row.id))
-      const unusable = introduced.filter((id) => used.has(id))
-      if (unusable.length > 0) return { unusable }
-    }
-
-    const gone = existing.filter((row) => !wanted.has(row.id)).map((row) => row.id)
-    if (gone.length > 0) {
-      await tx
-        .delete(nodes)
-        .where(scoped(scope, nodes, eq(nodes.documentId, documentId), inArray(nodes.id, gone)))
-    }
-
-    const currentKeys = list.map((node) => held.get(node.id)?.orderKey ?? null)
-    const kept = longestIncreasing(currentKeys)
-
-    // The next kept key after each position, so a re-keyed node lands between
-    // the last key written and the next one that is staying put.
-    const nextKept: (OrderKey | null)[] = new Array<OrderKey | null>(list.length).fill(null)
-    let following: OrderKey | null = null
-    for (let index = list.length - 1; index >= 0; index -= 1) {
-      nextKept[index] = following
-      const key = currentKeys[index]
-      if (kept.has(index) && key !== null) following = key as OrderKey
-    }
-
-    let inserted = 0
-    let updated = 0
-    let rekeyed = 0
-    let previousKey: OrderKey | null = null
-    for (let index = 0; index < list.length; index += 1) {
-      const node = list[index]
-      if (node === undefined) continue
-      const row = held.get(node.id)
-      const heldKey = currentKeys[index]
-      const keepKey = row !== undefined && kept.has(index) && heldKey !== null
-      const orderKey: OrderKey = keepKey
-        ? (heldKey as OrderKey)
-        : between(previousKey, nextKept[index] ?? null)
-      const write = nodeToWrite(node, orderKey)
-
-      if (row === undefined) {
-        await tx.insert(nodes).values({
-          ...tenant(scope),
-          documentId,
-          documentKind: kind,
-          id: write.id,
-          type: write.type,
-          orderKey: write.orderKey,
-          content: write.content,
-          modifiers: [...write.modifiers],
-          provenanceSource: write.provenanceSource,
-          provenanceRunId: write.provenanceRunId,
-        })
-        inserted += 1
-      } else {
-        const changed = !sameContent(row, write)
-        const moved = !keepKey
-        if (changed || moved) {
-          await tx
-            .update(nodes)
-            .set({
-              type: write.type,
-              orderKey: write.orderKey,
-              content: write.content,
-              modifiers: [...write.modifiers],
-              provenanceSource: write.provenanceSource,
-              provenanceRunId: write.provenanceRunId,
-              updatedAt: new Date(),
-            })
-            .where(scoped(scope, nodes, eq(nodes.id, node.id)))
-          if (changed) updated += 1
-          if (moved) rekeyed += 1
-        }
-      }
-      previousKey = orderKey
-    }
-
-    const stamped = await tx
-      .update(documents)
-      .set({ updatedAt: new Date() })
-      .where(scoped(scope, documents, eq(documents.id, documentId)))
-      .returning({ updatedAt: documents.updatedAt })
-    const header = stamped[0]
-    if (header === undefined) {
-      throw new Error(
-        'Folio: reconciling nodes touched no document row. This is a bug in the repository.',
-      )
-    }
-    return { inserted, updated, deleted: gone.length, rekeyed, updatedAt: stamp(header.updatedAt) }
-  })
+  const existing = await readNodeRows(scope, documentId)
+  return commitNodePlan(scope, documentId, kind, planNodeWrite(existing, list))
 }
 
 /**

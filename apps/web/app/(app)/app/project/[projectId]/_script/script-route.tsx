@@ -104,6 +104,8 @@ export const ScriptRoute = async ({
       measurement: load.measurement,
       stats: load.stats,
       labels: load.labels,
+      lockedPages: load.lockedPages,
+      revision: episode.revisionColour,
       threads,
       revisions,
     }

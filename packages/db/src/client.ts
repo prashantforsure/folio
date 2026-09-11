@@ -68,14 +68,46 @@ const SESSION_OPTIONS = {
 /**
  * Web requests.
  *
- * `prepare: false` is required - see the header. `max` is small because the
- * pooler is the pool: every instance holding ten connections is how a Supabase
- * project runs out of them. A short `idle_timeout` returns them promptly.
+ * `prepare: false` is required - see the header, and Supabase's own
+ * connection guide: "Transaction mode does not support prepared statements.
+ * Turn them off in your connection library." What that costs is worth
+ * knowing, because it shapes every repository on the request path
+ * (measured 2026-09-12 from a machine ~400ms from the pooler):
+ *
+ *   - a query with **no** parameters is one round trip;
+ *   - a query **with** parameters is **two** - postgres.js has to `Describe`
+ *     the unnamed statement to learn its parameter types before it can
+ *     `Bind`, and with nothing prepared it does so every time - and such
+ *     queries are **not pipelined**, even inside one transaction, because
+ *     the describe has to come back first;
+ *   - so `BEGIN` + N parameterised statements + `COMMIT` is 2 + 2N round
+ *     trips, and an autosave that touched fourteen statements took seven
+ *     seconds before it returned.
+ *
+ * Every tenant-scoped query has at least one parameter. So on this path a
+ * repository's cost is its **statement count**, not its row count, and the
+ * write paths the Script route runs on every keystroke (`commitNodePlan`,
+ * `writeMeasurement`, `commitDerivation`) are each one statement built
+ * from `WITH` clauses for that reason. Independent statements still run in
+ * parallel across the pool, which is why `max` is not tiny.
+ *
+ * `prepare: true` over this pooler happened to work in a forty-query probe
+ * (Supavisor's blog says it broadcasts named statements); the product docs
+ * say the opposite, and "under load and not in development" is the worst
+ * place to find out which is right. Left off. If the docs change, flipping
+ * it halves the cost of every parameterised statement.
+ *
+ * `idle_timeout` was 20 seconds. A fresh connection to the pooler costs
+ * ~4 seconds (DNS, TCP, TLS, auth), so a writer who paused for twenty
+ * seconds paid that on their next autosave, every time. Five minutes keeps
+ * the pool warm across a writer's pauses; the pooler multiplexes client
+ * connections, so ten idle ones per instance are not ten backends -
+ * and a derivation pass reads nine tables at once.
  */
 const TRANSACTION_OPTIONS = {
   prepare: false,
-  max: 5,
-  idle_timeout: 20,
+  max: 10,
+  idle_timeout: 300,
   connect_timeout: 10,
 } as const
 

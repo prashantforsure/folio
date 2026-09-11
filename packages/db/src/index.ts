@@ -58,3 +58,6 @@ export type { OrderKey } from '@folio/contracts'
 export { between, firstOrderKey, spread } from './order'
 
 export * from './repositories'
+
+export type { NodeWritePlan, StoredNodeRow } from './node-plan'
+export { planNodeWrite } from './node-plan'

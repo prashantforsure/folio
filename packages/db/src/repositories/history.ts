@@ -10,9 +10,9 @@ import type {
 import { projectId as brandProjectId } from '@folio/contracts'
 import { isErr, nextRevisionColour } from '@folio/script'
 import type { DocumentId, NodeId, RevisionColour } from '@folio/script'
-import { asc, desc, eq } from 'drizzle-orm'
+import { asc, desc, eq, inArray } from 'drizzle-orm'
 
-import { lockedPages, revisions, versions } from '../schema'
+import { episodes, lockedPages, nodeTombstones, revisions, versions } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { stamp } from './mapping'
@@ -25,6 +25,18 @@ import { stamp } from './mapping'
  * `cutRevision` are different operations with different lifetimes, and a
  * "saveHistory" that dispatched on a flag would be the first step back to one
  * table.
+ *
+ * ## Restore lives in `apps/web`, and one piece of it is here
+ *
+ * "Restore creates a new version. It never destroys history." The route's
+ * server action is the sequence - snapshot the document as it stands, write
+ * the restored list, snapshot again - and it goes through `reconcileNodes`,
+ * which writes only the rows that changed and so keeps every surviving
+ * node's row, and with it every anchor pointing at it. The one thing that
+ * path cannot do on its own is bring back a node that was deleted since the
+ * draft was cut: its id is tombstoned, and `reconcileNodes` refuses a
+ * tombstoned id, correctly, as reuse. `reviveNodeIds` below is the explicit
+ * lift, and its header says why it is not reuse.
  */
 
 /**
@@ -58,6 +70,8 @@ const toRevision = (row: typeof revisions.$inferSelect): Revision => ({
   tags: row.tags,
   linesAdded: row.linesAdded,
   linesDeleted: row.linesDeleted,
+  scenesTouched: row.scenesTouched,
+  pageCount: row.pageCount,
   locked: row.locked,
   versionId: row.versionId === null ? null : (row.versionId as VersionId),
   authorId: row.authorId === null ? null : (row.authorId as UserId),
@@ -134,6 +148,29 @@ export const listVersions = async (
   return rows.map(toVersion)
 }
 
+/** One version's header, or null. The snapshot is not selected. */
+export const readVersion = async (
+  scope: ProjectScope,
+  versionId: VersionId,
+): Promise<Version | null> => {
+  const rows = await dbOf(scope)
+    .select({
+      id: versions.id,
+      projectId: versions.projectId,
+      documentId: versions.documentId,
+      ordinal: versions.ordinal,
+      reason: versions.reason,
+      nodeCount: versions.nodeCount,
+      createdBy: versions.createdBy,
+      createdAt: versions.createdAt,
+    })
+    .from(versions)
+    .where(scoped(scope, versions, eq(versions.id, versionId)))
+    .limit(1)
+  const row = rows[0]
+  return row === undefined ? null : toVersion(row)
+}
+
 /** One snapshot's payload. Validated by `@folio/script`'s reader at the caller. */
 export const readVersionSnapshot = async (
   scope: ProjectScope,
@@ -145,6 +182,38 @@ export const readVersionSnapshot = async (
     .where(scoped(scope, versions, eq(versions.id, versionId)))
     .limit(1)
   return rows[0]?.snapshot ?? null
+}
+
+/**
+ * Lift the tombstones on ids a restore is bringing back.
+ *
+ * ADR 0001, Q4, is the whole argument: "Is a deleted node's id retired
+ * permanently? Undo has to restore it, so yes in practice - which means
+ * delete is a tombstone, and an id is never reused." The tombstone exists
+ * *so that* the node can come back as itself. A restore is undo at the scale
+ * of a draft: the node that returns is the node that left - same text, same
+ * identity - so a later diff against any draft joins it to itself, and its
+ * provenance and every measurement that named it still name it. Minting a
+ * fresh id instead would make every restored line a stranger to its own
+ * history.
+ *
+ * Reuse - the thing the ADR forbids - is a *different* node taking an old id.
+ * This is the same node taking its own. The two are told apart by the
+ * caller: a restore only revives ids that appear in the snapshot it is
+ * restoring, and a snapshot is immutable.
+ *
+ * What this does not do: re-anchor a comment thread. `comment_threads.
+ * anchor_node_id` was set to null by the foreign key when the node row went,
+ * and a nulled anchor is the *detached* state ADR 0001 Q4 leaves as a product
+ * decision. Reviving the id does not reach back into that table.
+ *
+ * Scoped, like everything here, and a no-op for ids with no tombstone.
+ */
+export const reviveNodeIds = async (scope: ProjectScope, ids: readonly NodeId[]): Promise<void> => {
+  if (ids.length === 0) return
+  await dbOf(scope)
+    .delete(nodeTombstones)
+    .where(scoped(scope, nodeTombstones, inArray(nodeTombstones.nodeId, [...ids])))
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +232,47 @@ export const listRevisions = async (
   return rows.map(toRevision)
 }
 
+export const readRevision = async (
+  scope: ProjectScope,
+  revisionId: RevisionId,
+): Promise<Revision | null> => {
+  const rows = await dbOf(scope)
+    .select()
+    .from(revisions)
+    .where(scoped(scope, revisions, eq(revisions.id, revisionId)))
+    .limit(1)
+  const row = rows[0]
+  return row === undefined ? null : toRevision(row)
+}
+
+/**
+ * What the next revision of an episode would be, without cutting it.
+ *
+ * The Revisions route's "Issue revision" form shows the colour before the
+ * writer commits, and refuses in the same place the cut would: past green
+ * there is no next colour (open decision, `docs/build-decisions.md`), and a
+ * form that only found that out on submit would be a form that lies.
+ */
+export const previewNextRevision = async (
+  scope: ProjectScope,
+  episodeId: EpisodeId,
+): Promise<
+  | { readonly ok: true; readonly ordinal: number; readonly colour: RevisionColour }
+  | { readonly ok: false; readonly after: RevisionColour; readonly detail: string }
+> => {
+  const latest = await dbOf(scope)
+    .select({ ordinal: revisions.ordinal, colour: revisions.colour })
+    .from(revisions)
+    .where(scoped(scope, revisions, eq(revisions.episodeId, episodeId)))
+    .orderBy(desc(revisions.ordinal))
+    .limit(1)
+  const previous = latest[0]
+  if (previous === undefined) return { ok: true, ordinal: 1, colour: 'white' }
+  const next = nextRevisionColour(previous.colour)
+  if (isErr(next)) return { ok: false, after: next.error.after, detail: next.error.detail }
+  return { ok: true, ordinal: previous.ordinal + 1, colour: next.value }
+}
+
 /**
  * Cut the next coloured draft.
  *
@@ -171,11 +281,20 @@ export const listRevisions = async (
  * sequence behind an explicit decision, so a sixth invented here would be a
  * product decision taken in a commit. The refusal surfaces as a thrown error
  * with the pure core's own wording, because a production that has reached a
- * sixth revision needs a human, not a fallback.
+ * sixth revision needs a human, not a fallback - and `previewNextRevision`
+ * lets a caller see it coming without tripping it.
  *
  * AGENTS.md, The AI agent: "One run produces one revision entry." This is that
  * entry, and it is why `versionId` is carried - the paper has to be
  * reproducible from the snapshot it was cut from.
+ *
+ * The episode's `revision_colour` moves to the new colour in the same
+ * transaction. That column is "the colour of the current production draft"
+ * (`schema/tenancy.ts`), the status bar reads it as `Rev. Blue`, and the
+ * paginator gives unlocked pages that colour - so it and the newest revision
+ * row cannot be allowed to disagree, and one transaction is how they are
+ * kept from it. This is the design README's "snapshot a revision + colour
+ * bump", as one write.
  */
 export const cutRevision = async (
   scope: ProjectScope,
@@ -186,6 +305,8 @@ export const cutRevision = async (
     readonly tags: readonly string[]
     readonly linesAdded: number
     readonly linesDeleted: number
+    readonly scenesTouched: number
+    readonly pageCount: number
     readonly versionId: VersionId | null
   },
 ): Promise<Revision> => {
@@ -210,6 +331,8 @@ export const cutRevision = async (
         tags: [...input.tags],
         linesAdded: input.linesAdded,
         linesDeleted: input.linesDeleted,
+        scenesTouched: input.scenesTouched,
+        pageCount: input.pageCount,
         locked: false,
         versionId: input.versionId,
         authorId: scope.actor,
@@ -219,6 +342,10 @@ export const cutRevision = async (
     if (row === undefined) {
       throw new Error('Folio: inserting a revision returned no row. This is a bug in the repository.')
     }
+    await tx
+      .update(episodes)
+      .set({ revisionColour: colour, updatedAt: new Date() })
+      .where(scoped(scope, episodes, eq(episodes.id, episodeId)))
     return toRevision(row)
   })
 }

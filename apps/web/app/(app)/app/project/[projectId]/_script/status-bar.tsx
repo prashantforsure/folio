@@ -1,5 +1,7 @@
 'use client'
 
+import { memo } from 'react'
+
 import type { ScreenplayNodeType } from '@folio/script'
 
 import { digitForType } from '../../../../../../lib/script/keyboard'
@@ -32,7 +34,7 @@ export type StatusBarProps = {
   readonly routeId: string
 }
 
-export const StatusBar = ({
+const StatusBarBody = ({
   page,
   pages,
   paginationLabel,
@@ -81,3 +83,6 @@ export const StatusBar = ({
     <span className="flex-none whitespace-nowrap font-mono text-9-5 text-ink3">{routeId}</span>
   </footer>
 )
+
+/** Memoised: the workspace re-renders on every keystroke and this does not need to. */
+export const StatusBar = memo(StatusBarBody)

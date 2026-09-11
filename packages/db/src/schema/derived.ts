@@ -383,9 +383,13 @@ export const locationSluglineTallies = pgTable(
  * reference is therefore `ON DELETE SET NULL` on a *separate* nullable column
  * and the primary key stands alone - see `sceneNodeRef` below.
  *
- * `beats` and `threads` are opaque strings because neither Beats nor Timeline
- * is a table in this phase. They are carried so a re-derive cannot drop them;
- * they are not foreign keys and are not pretending to be.
+ * `beats` and `threads` are opaque strings: neither was a table when the
+ * column was declared, and they are carried so a re-derive cannot drop them.
+ * `beats` now holds **beat block node ids** - the Beats route writes them
+ * (`repositories/beats.ts`, "a beat names the scenes that deliver it") and
+ * reads them back inverted. Still not a foreign key: a beat block that leaves
+ * the outline leaves its id here, and the route lists only links whose block
+ * exists. `threads` is still opaque; Timeline is not a table.
  */
 export const scenes = pgTable(
   'scenes',

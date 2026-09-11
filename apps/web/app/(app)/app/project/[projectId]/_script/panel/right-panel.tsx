@@ -2,7 +2,7 @@
 
 import type { Project } from '@folio/contracts'
 import type { ScriptFormat } from '@folio/script'
-import { useState, useTransition } from 'react'
+import { memo, useState, useTransition } from 'react'
 
 import { replyThread, resolveThread } from '../../../../../../../lib/script/actions'
 import type { RevisionRow, ThreadCard } from '../../../../../../../lib/script/panel'
@@ -78,7 +78,7 @@ const PROJECT_TYPE_NOTE: Readonly<Record<Project['projectType'], string>> = {
   film: 'One document. The episode board is hidden and routes collapse to /project/{uuid}/script.',
 }
 
-export const RightPanel = ({
+const RightPanelBody = ({
   projectId,
   episode,
   project,
@@ -305,7 +305,7 @@ export const RightPanel = ({
   )
 }
 
-const ThreadCardView = ({
+export const ThreadCardView = ({
   thread,
   projectId,
   episode,
@@ -378,3 +378,6 @@ const ThreadCardView = ({
     </div>
   )
 }
+
+/** Memoised: the workspace re-renders on every keystroke and this does not need to. */
+export const RightPanel = memo(RightPanelBody)

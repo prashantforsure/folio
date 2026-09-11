@@ -1,5 +1,7 @@
 'use client'
 
+import { memo } from 'react'
+
 import type { ScreenplayNodeType } from '@folio/script'
 
 import { DIGIT_TYPES, digitForType } from '../../../../../../lib/script/keyboard'
@@ -11,7 +13,7 @@ import { TYPE_LABEL } from './editor/elements'
  * from `Route - Script.dc.html`. `DIGIT_TYPES` is the order the digits take,
  * which is the bundle's order, which is the union's.
  */
-export const TypeBar = ({
+const TypeBarBody = ({
   current,
   onPick,
   disabled,
@@ -51,3 +53,6 @@ export const TypeBar = ({
     })}
   </div>
 )
+
+/** Memoised: the workspace re-renders on every keystroke and this does not need to. */
+export const TypeBar = memo(TypeBarBody)

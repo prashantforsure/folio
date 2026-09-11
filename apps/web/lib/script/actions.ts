@@ -8,12 +8,18 @@ import {
   TitlePageInputSchema,
 } from '@folio/contracts'
 import {
+  commitNodePlan,
   createDocument,
   createMentionTarget,
   mintNodeIds,
+  parseScreenplayRows,
+  planNodeWrite,
+  readDocumentById,
   readDocumentByKind,
+  readLatestLockedPages,
+  readMentionLabels,
+  readNodeRows,
   readScreenplayNodes,
-  reconcileNodes,
   replaceNodes,
   replyToThread,
   retireNodes,
@@ -23,7 +29,7 @@ import {
   snapshotVersion,
   writeTitlePage,
 } from '@folio/db'
-import type { NodeId, ScreenplayNode } from '@folio/script'
+import type { DocumentId, NodeId, ScreenplayNode } from '@folio/script'
 import {
   countFdxNodes,
   countFountainNodes,
@@ -36,8 +42,10 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { isPaginationControl, paginationFromControl } from '../state/project-preferences'
+import { digestOf } from './digest'
 import { readFdx } from './fdx-adapter'
-import { isRefusal, openEpisode } from './gate'
+import { cachedRows, forgetRows, rememberRows, rowsAfterWrite } from './row-cache'
+import { isRefusal, openEpisode, openEpisodeWith } from './gate'
 import type {
   ImportScriptResult,
   MentionTargetResult,
@@ -45,7 +53,14 @@ import type {
   SimpleResult,
   TitlePageResult,
 } from './result'
-import { measureAndDerive } from './server'
+import {
+  deferAfterSave,
+  deriveSpeculatively,
+  measure,
+  measureAndDerive,
+  readDerivationReads,
+  statsFor,
+} from './server'
 
 /**
  * The Script route's writes. The only surface in the product that writes the
@@ -65,7 +80,7 @@ import { measureAndDerive } from './server'
  *
  * The editor mints ids so Enter does not wait on a round trip. Every id
  * that is new to the document is checked against the tombstones and against
- * every node in the project, inside `reconcileNodes`' transaction, before a
+ * every node in the project, inside `commitNodePlan`'s one statement, before a
  * row is written. A reused id refuses the write as `ids-unusable`. This is
  * ADR 0001's "never reused" at the only door that can enforce it.
  *
@@ -84,34 +99,116 @@ const RetirementSchema = z.object({
 const SaveScriptInputSchema = z.object({
   projectId: z.string(),
   episode: z.string(),
-  documentId: z.string(),
+  documentId: z.string().uuid(),
   baseUpdatedAt: z.string(),
-  nodes: z.array(ScreenplayNodeSchema),
+  /** Every node that is new or changed since the client's last save, whole. */
+  upserts: z.array(ScreenplayNodeSchema),
+  /**
+   * The full id list in document order - or null when no node was added,
+   * removed or moved since the last save, in which case the stored order
+   * stands and `upserts` may name only stored ids.
+   */
+  order: z.array(z.string().min(1)).nullable(),
   retirements: z.array(RetirementSchema),
   snapshot: z.boolean(),
   derive: z.boolean(),
+  /** `digestOf([record, paged])` of the record the client drew for this list, if it computed one. */
+  recordDigest: z.string().nullable(),
 })
 
 export type SaveScriptInput = z.input<typeof SaveScriptInputSchema>
 
+const invalid = (message: string): SaveScriptResult => ({
+  status: 'invalid',
+  message: `The script did not read as a node list (${message}).`,
+})
+
+/**
+ * Save the script.
+ *
+ * ## The request is a delta; the write is still a node list
+ *
+ * A feature is ~3,000 nodes and half a megabyte as JSON, and an autosave
+ * runs 1.5s after every pause. So the client sends what changed - the nodes
+ * that are new or different since its last save, and the id order only when
+ * a node was added, removed or moved - and the server reads the stored rows
+ * (it must anyway, to plan the write and to paginate), lays the delta over
+ * them, and has the whole list back in hand before anything is decided. The
+ * list is validated as a list: every id in the order resolves, none
+ * repeats, and an upsert with no place in the order is refused as the
+ * client bug it would be. Nothing about "the script is a node list" moved;
+ * only the transport did.
+ *
+ * ## What a save waits for
+ *
+ * Every read a save needs is issued **beside the gate**, in one round trip
+ * (`openEpisodeWith`); the write is one statement (`commitNodePlan`); the
+ * measurement is computed in memory and returned. Storing that measurement
+ * and re-deriving the project happen after the response (`deferAfterSave`).
+ * Three round trips between the keystroke's request and its answer, where
+ * there were nineteen. The snapshot, when asked for, runs beside the write.
+ */
 export const saveScript = async (raw: SaveScriptInput): Promise<SaveScriptResult> => {
   const parsed = SaveScriptInputSchema.safeParse(raw)
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
-    return {
-      status: 'invalid',
-      message: `The script did not read as a node list${issue === undefined ? '' : ` (${issue.path.join('.')}: ${issue.message})`}.`,
-    }
+    return invalid(issue === undefined ? 'shape' : `${issue.path.join('.')}: ${issue.message}`)
   }
   const input = parsed.data
+  const documentId = input.documentId as DocumentId
 
-  const gate = await openEpisode(input.projectId, input.episode)
+  // The stored rows, if this process wrote them last (`row-cache.ts`): the
+  // read is skipped beside the gate and the entry checked against the
+  // document's stamp once that has come back.
+  const cached = cachedRows(documentId)
+  const gate = await openEpisodeWith(input.projectId, input.episode, async (scope) => {
+    const [document, freshRows, labels, reads] = await Promise.all([
+      readDocumentById(scope, documentId),
+      cached === undefined ? readNodeRows(scope, documentId) : Promise.resolve(null),
+      readMentionLabels(scope),
+      input.derive ? readDerivationReads(scope) : Promise.resolve(null),
+    ])
+    return { document, freshRows, labels, reads }
+  })
   if (isRefusal(gate)) return gate
   const { scope, project, episode } = gate
+  const { document, freshRows, labels, reads } = gate.extra
 
-  const document = await readDocumentByKind(scope, episode.id, 'screenplay')
-  if (document === null || document.id !== input.documentId) {
+  if (document === null || document.episodeId !== episode.id || document.kind !== 'screenplay') {
     return { status: 'refused', message: 'That script no longer exists. Reload to continue.' }
+  }
+  const rows =
+    freshRows ??
+    (cached !== undefined && cached.updatedAt === document.updatedAt
+      ? cached.rows
+      : await readNodeRows(scope, documentId))
+  const stored = parseScreenplayRows(rows)
+  if (!stored.ok) {
+    return { status: 'refused', message: 'The stored script would not read. Reload to continue.' }
+  }
+
+  // The delta over the stored list, checked as a list.
+  const held = new Map(stored.value.map((entry) => [entry.node.id as string, entry.node]))
+  const upserts = new Map(input.upserts.map((node) => [node.id as string, node as ScreenplayNode]))
+  let next: ScreenplayNode[]
+  if (input.order === null) {
+    for (const id of upserts.keys()) {
+      if (!held.has(id)) return invalid(`node ${id} is new but no order was sent`)
+    }
+    next = stored.value.map((entry) => upserts.get(entry.node.id as string) ?? entry.node)
+  } else {
+    const seen = new Set<string>()
+    next = []
+    for (const id of input.order) {
+      if (seen.has(id)) return invalid(`node ${id} appears twice in the order`)
+      seen.add(id)
+      const node = upserts.get(id) ?? held.get(id)
+      if (node === undefined) return invalid(`node ${id} is in the order but was neither stored nor sent`)
+      next.push(node)
+    }
+    for (const id of upserts.keys()) {
+      if (!seen.has(id)) return invalid(`node ${id} was sent but is not in the order`)
+    }
   }
 
   const conflict =
@@ -119,34 +216,43 @@ export const saveScript = async (raw: SaveScriptInput): Promise<SaveScriptResult
       ? null
       : { expected: input.baseUpdatedAt, found: document.updatedAt }
 
-  const written = await reconcileNodes(scope, document.id, 'screenplay', input.nodes)
-  if ('unusable' in written) return { status: 'ids-unusable', ids: written.unusable }
-  await retireNodes(
-    scope,
-    document.id,
-    input.retirements.map((entry) => ({
-      nodeId: entry.nodeId as NodeId,
-      mergedInto: entry.mergedInto === null ? null : (entry.mergedInto as NodeId),
-    })),
-  )
-
-  let snapshotTaken = false
-  if (input.snapshot) {
-    await snapshotVersion(scope, document.id, 'autosave', input.nodes, input.nodes.length)
-    snapshotTaken = true
-  }
-
-  const after = await measureAndDerive(scope, project, episode, document, input.nodes, {
-    derive: input.derive,
+  // Every id that leaves the list gets its tombstone in the same statement
+  // as its delete. What it was merged into is the client's to say - it saw
+  // the merge - and an id the client did not mention is retired as deleted.
+  const plan = planNodeWrite(rows, next)
+  const mergedInto = new Map(input.retirements.map((entry) => [entry.nodeId, entry.mergedInto]))
+  const tombstones = plan.deletes.map((nodeId) => {
+    const survivor = mergedInto.get(nodeId as string) ?? null
+    return { nodeId, mergedInto: survivor === null ? null : (survivor as NodeId) }
   })
+
+  const [written, lockedPages, snapshot] = await Promise.all([
+    commitNodePlan(scope, document.id, 'screenplay', plan, tombstones),
+    readLatestLockedPages(scope, episode.id),
+    input.snapshot
+      ? snapshotVersion(scope, document.id, 'autosave', next, next.length).then(() => true)
+      : Promise.resolve(false),
+  ])
+  if ('unusable' in written) return { status: 'ids-unusable', ids: written.unusable }
+  rememberRows(documentId, written.updatedAt, rowsAfterWrite(rows, next, plan, 'screenplay'))
+
+  const measurement = measure(next, project, episode.revisionColour, { labels, lockedPages })
+  const digest = measurement.ok ? digestOf([measurement.record, measurement.paged]) : null
+  const stats =
+    reads === null
+      ? null
+      : statsFor(next, deriveSpeculatively(reads, { storedIds: new Set(held.keys()), nodes: next }))
+
+  deferAfterSave(scope, episode, document, measurement, next, { derive: input.derive })
+
   return {
     status: 'saved',
     updatedAt: written.updatedAt,
     conflict,
-    measurement: after.measurement,
-    stats: after.stats,
-    labels: after.labels,
-    snapshotTaken,
+    measurement: digest !== null && digest === input.recordDigest ? null : measurement,
+    stats,
+    labels,
+    snapshotTaken: snapshot,
   }
 }
 
@@ -271,6 +377,7 @@ export const importScript = async (
     }
   }
   await replaceNodes(scope, document.id, 'screenplay', nodes)
+  forgetRows(document.id)
   await measureAndDerive(scope, project, episode, document, nodes)
   revalidatePath(workspacePath(project.id), 'layout')
   return { status: 'imported', nodes: nodes.length, stripped, headingsNotRecognised, unsupported }

@@ -2,10 +2,12 @@
 
 import type { Project, TitlePage } from '@folio/contracts'
 import type {
+  LockedPage,
   MeasurementRecord,
   MentionEntity,
   MentionLabel,
   NodeId,
+  RevisionColour,
   ScreenplayNode,
   ScreenplayNodeType,
   ScriptFormat,
@@ -17,11 +19,12 @@ import type { PlateEditor } from 'platejs/react'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 
 import { createMention, saveScript, setFormat, setPagination } from '../../../../../../lib/script/actions'
+import { digestOf } from '../../../../../../lib/script/digest'
 import type { IdentityLog } from '../../../../../../lib/script/identity'
 import { newIdentityLog, retirementsSince } from '../../../../../../lib/script/identity'
 import type { SheetLayout } from '../../../../../../lib/script/layout'
 import { charsPerLineFor, layoutSheet } from '../../../../../../lib/script/layout'
-import { lineCountOf, lineEndsOf } from '../../../../../../lib/script/lines'
+import { lineCountOf, lineEndsOfBlock } from '../../../../../../lib/script/lines'
 import type { RevisionRow, ThreadCard } from '../../../../../../lib/script/panel'
 import type { MeasureOutcome, SaveConflict, SimpleResult } from '../../../../../../lib/script/result'
 import type { ScriptValue } from '../../../../../../lib/script/slate-model'
@@ -62,22 +65,43 @@ import { ViewTab } from './view-tab'
  *
  * ## Saving
  *
- * Autosave 1.5s after the last change. Last-write-wins: the server writes
- * regardless and reports a conflict when `documents.updated_at` moved, and
- * the banner says so. `⌘S` saves now and asks for a snapshot; otherwise a
- * snapshot is requested at most every five minutes (an assumption, flagged).
- * A value the strict reader refuses is not saved - the banner names the
- * defect - which is the editor being told it made a shape the script cannot
- * hold, rather than the script being widened to hold it.
+ * Autosave a second after the last change, and at once when the tab is hidden.
+ * Last-write-wins: the server writes regardless and reports a conflict when
+ * `documents.updated_at` moved, and the banner says so. `⌘S` saves now and
+ * asks for a snapshot; otherwise a snapshot is requested at most every five
+ * minutes (an assumption, flagged). A value the strict reader refuses is
+ * not saved - the banner names the defect - which is the editor being told
+ * it made a shape the script cannot hold, rather than the script being
+ * widened to hold it.
+ *
+ * What goes over the wire is a **delta** against the last save: the nodes
+ * that are new or changed, and the id order only when a node was added,
+ * removed or moved. A feature is half a megabyte as a whole list and a
+ * keystroke is one node; the server lays the delta over its rows and has
+ * the whole list back before it decides anything (`actions.ts`). The
+ * baseline the delta is against is the list the server last confirmed,
+ * kept here as one JSON string per node so "changed" is one comparison.
+ *
+ * One save is in flight at a time. A change that lands while one is out
+ * marks another wanted, and it runs when the first returns - against the
+ * value *then*, read through a ref, never the value the first closed over.
+ * A save that throws - the network, not the script - clears the in-flight
+ * flag in `finally` so the next change can try again.
  *
  * ## Pagination
  *
  * The record is the server's, returned by every save. With `liveRepaginate`
- * the same `paginate` runs here on every change (debounced 150ms) so the
- * breaks follow the keystroke, and the server's record replaces it on the
- * next save; without it the breaks move on save. Either way the record the
- * sheet draws was produced by the one engine, and the page number never
- * touches a node.
+ * the same `paginate` runs here on every change (debounced 150ms) - with
+ * the same locked pages and revision colour the server uses, handed down at
+ * load - so the breaks follow the keystroke; without it the breaks move on
+ * save. Either way the record the sheet draws was produced by the one
+ * engine with the same inputs, and the page number never touches a node.
+ * Because the inputs are the same, a save sends a digest of the record it
+ * holds and the server answers "same" instead of 400 KB of record when they
+ * agree (`lib/script/digest.ts`). Without `liveRepaginate` the record is
+ * computed here once per save, for the digest, and applied only when the
+ * server has confirmed it - which is still "the breaks move on save", with
+ * the server's answer and without the server's bytes.
  *
  * ## Switching the document and the panel tab
  *
@@ -104,7 +128,8 @@ import { ViewTab } from './view-tab'
  * one as every save's does.
  */
 
-const AUTOSAVE_MS = 1500
+/** A second after the last change. A save is a delta and one statement now, so the pause can be short. */
+const AUTOSAVE_MS = 1000
 const LIVE_REPAGINATE_MS = 150
 const SNAPSHOT_EVERY_MS = 5 * 60 * 1000
 /** Derivation - project-wide, the expensive half of a save - at most this often between explicit saves. */
@@ -124,6 +149,9 @@ export type ScriptDraft = {
   readonly measurement: MeasureOutcome
   readonly stats: ScriptStats
   readonly labels: readonly MentionLabel[]
+  /** The engine's other inputs, so a local pass equals the server's. */
+  readonly lockedPages: readonly LockedPage[]
+  readonly revision: RevisionColour
   readonly threads: readonly ThreadCard[]
   readonly revisions: readonly RevisionRow[]
 }
@@ -155,6 +183,7 @@ const sheetFor = (measurement: MeasureOutcome | null): SheetSpec => {
   return letter.value
 }
 
+/** Wrapped through the per-block cache in `lines.ts`: a keystroke wraps one block, not three thousand. */
 const blocksOf = (
   value: readonly TElement[],
   sheet: SheetSpec,
@@ -162,9 +191,45 @@ const blocksOf = (
 ) =>
   value.flatMap((element) => {
     if (!isScriptElement(element)) return []
-    const lines = lineCountOf(lineEndsOf(element.children, labelFor, charsPerLineFor(sheet, element.type)))
+    const lines = lineCountOf(lineEndsOfBlock(element, labelFor, charsPerLineFor(sheet, element.type)))
     return [{ id: element.id, type: element.type, lines }]
   })
+
+/**
+ * A node's JSON, remembered on the Slate element it was read from. The delta
+ * compares every node to the baseline by its JSON; Slate keeps untouched
+ * elements as the same objects, so a save serialises the blocks that changed
+ * and looks the rest up.
+ */
+const serialisedNode = new WeakMap<TElement, string>()
+
+const serialise = (element: TElement | undefined, node: ScreenplayNode): string => {
+  if (element === undefined) return JSON.stringify(node)
+  const hit = serialisedNode.get(element)
+  if (hit !== undefined) return hit
+  const json = JSON.stringify(node)
+  serialisedNode.set(element, json)
+  return json
+}
+
+/** A record computed here for one value, with the digest a save vouches for it by. */
+type LocalRecord = {
+  readonly value: readonly TElement[]
+  readonly measurement: MeasureOutcome
+  readonly digest: string
+}
+
+/** The baseline a delta is computed against: the list the server last confirmed. */
+type Baseline = {
+  readonly ids: readonly string[]
+  /** Node id -> the node as JSON, so "changed" is one string comparison. */
+  readonly byId: ReadonlyMap<string, string>
+}
+
+const baselineOf = (nodes: readonly ScreenplayNode[], serialised: readonly string[]): Baseline => ({
+  ids: nodes.map((node) => node.id as string),
+  byId: new Map(nodes.map((node, index) => [node.id as string, serialised[index] ?? JSON.stringify(node)])),
+})
 
 const agoLabel = (state: SaveState, now: number): string => {
   switch (state.kind) {
@@ -275,15 +340,40 @@ export const ScriptWorkspace = ({
   const log = useMemo<IdentityLog>(() => newIdentityLog(), [])
   const editorRef = useRef<PlateEditor | null>(null)
   const baseUpdatedAt = useRef(draft?.updatedAt ?? '')
-  const baselineIds = useRef<readonly NodeId[]>((draft?.nodes ?? []).map((node) => node.id))
+  // Lazily: a `useRef(initial)` evaluates its argument on every render, and
+  // this one serialises every node.
+  const [initialBaseline] = useState<Baseline>(() =>
+    baselineOf(draft?.nodes ?? [], (draft?.nodes ?? []).map((node) => JSON.stringify(node))),
+  )
+  const baseline = useRef<Baseline>(initialBaseline)
   const lastSnapshot = useRef(Date.now())
   const lastDerive = useRef(Date.now())
   const saveTimer = useRef<number | null>(null)
   const liveTimer = useRef<number | null>(null)
   const inFlight = useRef(false)
   const queued = useRef(false)
+  /** The record computed here for a value, so a save can vouch for it by digest. */
+  const localRecordFor = useRef<LocalRecord | null>(null)
+  const preferencesRef = useRef<ScriptPreferences>({
+    pageMode: project.pageMode,
+    liveRepaginate: project.liveRepaginate,
+    format: project.format,
+  })
 
-  const sheet = useMemo(() => sheetFor(measurement), [measurement])
+  // Every record carries its own `SheetSpec` object, equal to the last one
+  // unless the format changed. The editor's context hands the sheet to
+  // every block, so a new-but-equal object would re-render three thousand
+  // blocks per live repaginate. The previous object is kept while it is
+  // equal; the ref write is the usual "remember the last" during render.
+  const sheetRef = useRef<{ readonly key: string; readonly spec: SheetSpec } | null>(null)
+  const sheet = useMemo(() => {
+    const next = sheetFor(measurement)
+    const key = JSON.stringify(next)
+    const last = sheetRef.current
+    if (last !== null && last.key === key) return last.spec
+    sheetRef.current = { key, spec: next }
+    return next
+  }, [measurement])
   const labelFor = useCallback(
     (entity: MentionEntity, id: string): string | undefined =>
       labels.find((label) => label.entity === entity && label.id === id)?.label,
@@ -291,20 +381,57 @@ export const ScriptWorkspace = ({
   )
 
   const paged = preferences.pageMode === 'paged'
-  const layout = useMemo<SheetLayout>(
-    () =>
-      layoutSheet(
-        blocksOf(value, sheet, labelFor),
-        measurement?.ok === true ? measurement.record : null,
-        sheet,
-        paged,
-      ),
-    [value, sheet, labelFor, measurement, paged],
-  )
+  // `layoutSheet` builds a fresh frames array every time; the frames change
+  // only when a page is added, a label moves or a comment grows a page, so
+  // the previous array is kept while its rows are equal and `<PageFrames>`
+  // - a hundred-odd sheets - is not drawn again for a keystroke.
+  const framesRef = useRef<{ readonly key: string; readonly frames: SheetLayout['frames'] } | null>(null)
+  const layout = useMemo<SheetLayout>(() => {
+    const next = layoutSheet(
+      blocksOf(value, sheet, labelFor),
+      measurement?.ok === true ? measurement.record : null,
+      sheet,
+      paged,
+    )
+    const key = next.frames
+      .map((frame) => `${String(frame.ordinal)}:${frame.label}:${String(frame.topPx)}:${String(frame.heightPx)}:${frame.locked ? 'L' : ''}`)
+      .join('|')
+    const last = framesRef.current
+    if (last !== null && last.key === key) return { ...next, frames: last.frames }
+    framesRef.current = { key, frames: next.frames }
+    return next
+  }, [value, sheet, labelFor, measurement, paged])
 
   // ---------------------------------------------------------------------------
   // Saving
   // ---------------------------------------------------------------------------
+
+  /**
+   * The one engine, run here with the same inputs the server uses. `null`
+   * when the value will not read or the engine refuses; the server's answer
+   * then carries the refusal.
+   */
+  const measureLocally = useCallback(
+    (next: readonly TElement[], using: ScriptPreferences): LocalRecord | null => {
+      const read = fromSlateValue(next)
+      if (!read.ok) return null
+      const base = {
+        format: using.format,
+        liveRepaginate: using.liveRepaginate,
+        mentionLabels: labels,
+        lockedPages: draft?.lockedPages ?? [],
+        revision: draft?.revision ?? 'white',
+      }
+      const record = paginate(read.value, { ...base, pageMode: using.pageMode })
+      if (!record.ok) return null
+      const pagedRecord =
+        using.pageMode === 'paged' ? record : paginate(read.value, { ...base, pageMode: 'paged' })
+      if (!pagedRecord.ok) return null
+      const measurement: MeasureOutcome = { ok: true, record: record.value, paged: pagedRecord.value }
+      return { value: next, measurement, digest: digestOf([record.value, pagedRecord.value]) }
+    },
+    [draft, labels],
+  )
 
   const save = useCallback(
     async (snapshot: boolean): Promise<void> => {
@@ -328,46 +455,70 @@ export const ScriptWorkspace = ({
       inFlight.current = true
       setSaveState({ kind: 'saving' })
       const nodes = read.value
-      const retirements = retirementsSince(baselineIds.current, nodes.map((node) => node.id), log)
+      const ids = nodes.map((node) => node.id)
+      const before = baseline.current
+      // The strict reader yields one node per top-level element, in order.
+      const serialised = nodes.map((node, index) => serialise(value[index], node))
+      const upserts = nodes.filter((node, index) => before.byId.get(node.id as string) !== serialised[index])
+      const sameOrder =
+        ids.length === before.ids.length && ids.every((id, index) => id === before.ids[index])
+      const retirements = retirementsSince(before.ids as readonly NodeId[], ids, log)
       const wantSnapshot = snapshot || Date.now() - lastSnapshot.current > SNAPSHOT_EVERY_MS
       const wantDerive = snapshot || Date.now() - lastDerive.current > DERIVE_EVERY_MS
-      const result = await saveScript({
-        projectId,
-        episode,
-        documentId: draft.documentId,
-        baseUpdatedAt: baseUpdatedAt.current,
-        nodes: [...nodes],
-        retirements: [...retirements],
-        snapshot: wantSnapshot,
-        derive: wantDerive,
-      })
-      inFlight.current = false
-      if (result.status === 'saved') {
-        baseUpdatedAt.current = result.updatedAt
-        baselineIds.current = nodes.map((node) => node.id)
-        if (result.snapshotTaken) lastSnapshot.current = Date.now()
-        if (result.stats !== null) {
-          lastDerive.current = Date.now()
-          setStats(result.stats)
-        }
-        setMeasurement(result.measurement)
-        setLabels(result.labels)
-        setConflict(result.conflict)
-        setSaveState({ kind: 'saved', at: Date.now() })
-      } else if (result.status === 'ids-unusable') {
-        setSaveState({
-          kind: 'error',
-          message: `${String(result.ids.length)} id(s) were already used. Reload to continue.`,
+      // The record this save vouches for: live mode's, when it is for this
+      // value, else one computed now. Applied below only if the server
+      // confirms it is its own answer.
+      const held = localRecordFor.current
+      const local = held !== null && held.value === value ? held : measureLocally(value, preferencesRef.current)
+      try {
+        const result = await saveScript({
+          projectId,
+          episode,
+          documentId: draft.documentId,
+          baseUpdatedAt: baseUpdatedAt.current,
+          upserts: [...upserts],
+          order: sameOrder ? null : [...ids],
+          retirements: [...retirements],
+          snapshot: wantSnapshot,
+          derive: wantDerive,
+          recordDigest: local?.digest ?? null,
         })
-      } else {
-        setSaveState({ kind: 'error', message: result.message })
+        if (result.status === 'saved') {
+          baseUpdatedAt.current = result.updatedAt
+          baseline.current = baselineOf(nodes, serialised)
+          if (result.snapshotTaken) lastSnapshot.current = Date.now()
+          if (result.stats !== null) {
+            lastDerive.current = Date.now()
+            setStats(result.stats)
+          }
+          if (result.measurement !== null) setMeasurement(result.measurement)
+          else if (local !== null) setMeasurement(local.measurement)
+          // Same book, same array: `labelFor` keys the per-block wrap cache
+          // and the editor's context, and a save happens every few seconds.
+          setLabels((current) =>
+            JSON.stringify(current) === JSON.stringify(result.labels) ? current : result.labels,
+          )
+          setConflict(result.conflict)
+          setSaveState({ kind: 'saved', at: Date.now() })
+        } else if (result.status === 'ids-unusable') {
+          setSaveState({
+            kind: 'error',
+            message: `${String(result.ids.length)} id(s) were already used. Reload to continue.`,
+          })
+        } else {
+          setSaveState({ kind: 'error', message: result.message })
+        }
+      } catch (cause) {
+        setSaveState({ kind: 'error', message: cause instanceof Error ? cause.message : 'The save did not reach the server.' })
+      } finally {
+        inFlight.current = false
       }
       if (queued.current) {
         queued.current = false
-        void save(false)
+        void saveRef.current(false)
       }
     },
-    [draft, episode, log, projectId, value],
+    [draft, episode, log, measureLocally, projectId, value],
   )
 
   const saveRef = useRef(save)
@@ -381,31 +532,15 @@ export const ScriptWorkspace = ({
     }, AUTOSAVE_MS)
   }, [])
 
-  /** The one engine, run here, with the settings given - the row's as last known, or the ones just chosen. */
+  /** Live mode, and a preference change: measure here and draw it now. */
   const repaginateLocally = useCallback(
     (next: readonly TElement[], using: ScriptPreferences) => {
-      const read = fromSlateValue(next)
-      if (!read.ok) return
-      const record = paginate(read.value, {
-        format: using.format,
-        pageMode: using.pageMode,
-        liveRepaginate: using.liveRepaginate,
-        mentionLabels: labels,
-      })
-      if (!record.ok) return
-      const pagedRecord =
-        using.pageMode === 'paged'
-          ? record
-          : paginate(read.value, {
-              format: using.format,
-              pageMode: 'paged',
-              liveRepaginate: using.liveRepaginate,
-              mentionLabels: labels,
-            })
-      if (!pagedRecord.ok) return
-      setMeasurement({ ok: true, record: record.value, paged: pagedRecord.value })
+      const local = measureLocally(next, using)
+      if (local === null) return
+      localRecordFor.current = local
+      setMeasurement(local.measurement)
     },
-    [labels],
+    [measureLocally],
   )
 
   const onValueChange = useCallback(
@@ -430,6 +565,7 @@ export const ScriptWorkspace = ({
 
   const valueRef = useRef(value)
   valueRef.current = value
+  preferencesRef.current = preferences
 
   const choosePreferences = useCallback(
     (next: ScriptPreferences, write: () => Promise<SimpleResult>) => {
@@ -474,9 +610,26 @@ export const ScriptWorkspace = ({
         event.preventDefault()
       }
     }
+    // A tab going to the background is the moment a laptop lid closes: a
+    // change waiting on the 1.5s timer is saved now rather than maybe never.
+    const onHidden = (): void => {
+      if (document.visibilityState !== 'hidden' || saveTimer.current === null) return
+      window.clearTimeout(saveTimer.current)
+      saveTimer.current = null
+      void saveRef.current(false)
+    }
+    // And a tab closed with a save pending or in flight is asked about it.
+    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+      if (saveTimer.current === null && !inFlight.current && !queued.current) return
+      event.preventDefault()
+    }
     window.addEventListener('keydown', onKey)
+    document.addEventListener('visibilitychange', onHidden)
+    window.addEventListener('beforeunload', onBeforeUnload)
     return () => {
       window.removeEventListener('keydown', onKey)
+      document.removeEventListener('visibilitychange', onHidden)
+      window.removeEventListener('beforeunload', onBeforeUnload)
     }
   }, [])
 
@@ -539,12 +692,19 @@ export const ScriptWorkspace = ({
    * `packages/script/src/testing/golden/us-letter.json`. Nothing in the
    * product reads it.
    */
+  // The id sequence as one string: it changes on a split, merge or paste,
+  // not on a keystroke, so the map below - 100 KB of JSON in a hidden
+  // element - is not rebuilt and re-diffed by React for every character.
+  const idsKey = useMemo(
+    () => value.map((element) => (isScriptElement(element) ? element.id : '')).join('\n'),
+    [value],
+  )
   const pageMap = useMemo(() => {
     if (measurement?.ok !== true) return null
     const record = measurement.paged
     const position = new Map<string, number>()
-    value.forEach((element, index) => {
-      if (isScriptElement(element)) position.set(element.id, index)
+    idsKey.split('\n').forEach((id, index) => {
+      if (id !== '') position.set(id, index)
     })
     const at = (id: string): string => {
       const index = position.get(id)
@@ -581,11 +741,20 @@ export const ScriptWorkspace = ({
       pagesById: byId.pages,
       scenesById: byId.scenes,
     }
-  }, [measurement, value])
+  }, [measurement, idsKey])
 
   const paginationLabel = PAGINATION_CONTROL_COPY[controlFromPagination(preferences)].label
   const refusal = measurement?.ok === false ? measurement.refusal : null
 
+  const onImport = useCallback(() => {
+    document.getElementById(IMPORT_INPUT_ID)?.click()
+  }, [])
+  const onToggleNav = useCallback(() => {
+    session.setNavOpen(!navOpen)
+  }, [navOpen, session])
+  const onCycleZoom = useCallback(() => {
+    session.setZoom(session.zoom === 'fit' ? 1 : session.zoom === 1 ? 0.75 : 'fit')
+  }, [session])
   const setCaretType = useCallback((type: ScreenplayNodeType) => {
     const editor = editorRef.current
     if (editor === null) return
@@ -780,9 +949,7 @@ export const ScriptWorkspace = ({
             stats={stats}
             threads={draft?.threads ?? []}
             revisions={draft?.revisions ?? []}
-            onImport={() => {
-              document.getElementById(IMPORT_INPUT_ID)?.click()
-            }}
+            onImport={onImport}
           />
         ) : null}
       </div>
@@ -794,13 +961,9 @@ export const ScriptWorkspace = ({
         caretType={caret.type}
         sceneLabel={status.sceneLabel}
         navOpen={navOpen}
-        onToggleNav={() => {
-          session.setNavOpen(!navOpen)
-        }}
+        onToggleNav={onToggleNav}
         zoomLabel={zoomLabel}
-        onCycleZoom={() => {
-          session.setZoom(session.zoom === 'fit' ? 1 : session.zoom === 1 ? 0.75 : 'fit')
-        }}
+        onCycleZoom={onCycleZoom}
         revisionLabel={revisionLabel}
         savedLabel={agoLabel(saveState, now)}
         routeId={routeId}

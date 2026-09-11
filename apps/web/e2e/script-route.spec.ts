@@ -6,6 +6,13 @@ import { join } from 'node:path'
 import { featureLengthFdx } from '../../../packages/script/src/testing/fdx-corpus'
 import type { WalkOptions } from '../playwright.config'
 
+/** The latency test parks its Event Timing samples on the window between two evaluates. */
+declare global {
+  interface Window {
+    __folioEvents?: number[]
+  }
+}
+
 /**
  * The Script route, walked in a browser.
  *
@@ -27,6 +34,11 @@ import type { WalkOptions } from '../playwright.config'
  *      text contains `(CONT'D)` or `(MORE)` after import.
  *   5. **Both states, both themes.** Screenshots of empty and draft in dark
  *      and light, plus the cover and the collaboration tab.
+ *   6. **Typing is cheap and a save is small.** A sentence typed into a
+ *      feature-length script: keystroke-to-paint from the Event Timing API,
+ *      keystroke-to-"saved", and the bytes each autosave sent and received,
+ *      written to `test-results/script-latency.json`. A keystroke's save
+ *      must be a delta - kilobytes, not the half-megabyte list.
  *
  * Needs a real account; skips without one. Leaves one project behind per run.
  */
@@ -113,11 +125,15 @@ test('empty state, both themes; then import lands a real script', async ({ page,
     await page.screenshot({ path: `test-results/script-empty-${theme}.png`, fullPage: false })
   }
 
-  // The empty state does not come from a URL, and ?panel=composer is not a value.
+  // The empty state does not come from a URL. Script has no sub-view params
+  // (ruled 2026-09-11, `lib/workspace/params.ts`): `?content=` and `?panel=`
+  // are unknown keys, so a stale link opens on the script - not a 404 - with
+  // the Info tab, and the composer is not a panel.
   await page.goto(`${projectUrl}?content=empty`)
   await expect(page.locator('main[data-route="script"]')).toHaveAttribute('data-script-state', 'empty')
   const composer = await page.goto(`${projectUrl}?panel=composer`)
-  expect(composer?.status()).toBe(404)
+  expect(composer?.status()).toBe(200)
+  await expect(page.locator('main[data-route="script"]')).toHaveAttribute('data-doc-tab', 'script')
 
   // Import the golden corpus through the real action.
   await page.goto(projectUrl)
@@ -248,6 +264,87 @@ test('typing, splitting and merging preserve ids across save and reload', async 
   )
 })
 
+test('autosave is a delta, the sheet keeps up with typing, and "saved" comes back fast', async ({ page, account, scriptProjectUrl }) => {
+  await signIn(page, account)
+  projectUrl = projectUrl === '' && scriptProjectUrl !== null ? scriptProjectUrl : projectUrl
+  await page.goto(projectUrl)
+  await expect(page.locator('[data-sheet] [data-node-id]').first()).toBeVisible()
+  await expect(page.locator('[data-script-header]')).toHaveAttribute('data-mounted', 'true', { timeout: 60_000 })
+  await waitSaved(page)
+
+  // Every save is a POST to the route path (a server action). Record what went up and came down.
+  const routePath = new URL(projectUrl).pathname
+  const saves: { readonly up: number; readonly down: number; readonly ms: number }[] = []
+  const started = new Map<string, number>()
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === routePath) {
+      started.set(request.url() + String(request.timing().startTime), Date.now())
+    }
+  })
+  page.on('response', async (response) => {
+    const request = response.request()
+    if (request.method() !== 'POST' || new URL(request.url()).pathname !== routePath) return
+    const body = await response.body().catch(() => Buffer.alloc(0))
+    const from = started.get(request.url() + String(request.timing().startTime)) ?? Date.now()
+    saves.push({ up: request.postData()?.length ?? 0, down: body.length, ms: Date.now() - from })
+  })
+
+  // Event Timing: how long each keystroke held the main thread before the next paint.
+  await page.evaluate(() => {
+    const durations: number[] = []
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.name === 'keydown' || entry.name === 'input' || entry.name === 'keypress') durations.push(entry.duration)
+      }
+    })
+    // `durationThreshold` is Event Timing's, newer than the DOM lib's typing of the init dictionary.
+    observer.observe({ type: 'event', durationThreshold: 16, buffered: false } as PerformanceObserverInit)
+    window.__folioEvents = durations
+  })
+
+  // Type a sentence into a block in the middle of the script, at its end.
+  const blocks = page.locator('[data-sheet] [data-node-id]')
+  const middle = Math.floor((await blocks.count()) / 2)
+  await blocks.nth(middle).click()
+  await page.keyboard.press('End')
+  const sentence = ' The lamp hums and the tea goes cold before anyone speaks.'
+  const t0 = Date.now()
+  await page.keyboard.type(sentence, { delay: 0 })
+  const typedMs = Date.now() - t0
+  const lastKeystroke = Date.now()
+  await waitSaved(page)
+  const savedMs = Date.now() - lastKeystroke
+  const slow = await page.evaluate(() => window.__folioEvents ?? [])
+
+  // A keystroke-only save must not carry the whole list: one node up, and
+  // - because the client paginated the same list with the same inputs -
+  // no record down.
+  const last = saves[saves.length - 1]
+  expect(last).toBeDefined()
+  expect(last?.up ?? Infinity).toBeLessThan(20_000)
+  expect(last?.down ?? Infinity).toBeLessThan(20_000)
+
+  // The text is on the server: reload and find it.
+  await page.reload()
+  await expect(page.locator('[data-sheet] [data-node-id]').nth(middle)).toContainText(sentence.trim())
+
+  writeFileSync(
+    join(test.info().outputDir, '..', 'script-latency.json'),
+    JSON.stringify(
+      {
+        blocks: await blocks.count(),
+        typed: { characters: sentence.length, wallMs: typedMs, msPerCharacter: Math.round((typedMs / sentence.length) * 10) / 10 },
+        keystrokesOver16ms: slow.length,
+        slowestKeystrokeMs: slow.length === 0 ? 0 : Math.round(Math.max(...slow)),
+        lastKeystrokeToSavedMs: savedMs,
+        saves,
+      },
+      null,
+      2,
+    ),
+  )
+})
+
 test('inserting a Comment node changes no page number', async ({ page, account, scriptProjectUrl }) => {
   await signIn(page, account)
   projectUrl = projectUrl === '' && scriptProjectUrl !== null ? scriptProjectUrl : projectUrl
@@ -305,12 +402,14 @@ test('draft state, both themes; the cover and the collaboration tab', async ({ p
   await page.getByRole('tab', { name: /Cover$/ }).click()
   await expect(page.locator('[data-cover]')).toBeVisible()
   await page.locator('[data-cover-field="title"]').fill('STANDPIPE')
-  await page.locator('[data-cover-field="author"]').fill('Script walk')
+  // A value that differs from any earlier run's, so React sees a change on a reused project.
+  await page.locator('[data-cover-field="author"]').fill(`Script walk ${new Date().toISOString()}`)
   await expect(page.locator('[data-cover-status]')).toHaveAttribute('data-cover-status', 'saved', { timeout: 30_000 })
   // A reload opens on the script - the cover is not remembered - and the panel tab is (session).
   await page.reload()
   await expect(page.locator('main[data-route="script"]')).toHaveAttribute('data-doc-tab', 'script')
-  await expect(page.locator('[data-right-panel]')).toHaveAttribute('data-panel-tab', 'collab')
+  // The session tab is read after hydration, which takes seconds on a dev server with 2,900 nodes.
+  await expect(page.locator('[data-right-panel]')).toHaveAttribute('data-panel-tab', 'collab', { timeout: 60_000 })
   await page.getByRole('tab', { name: /Cover$/ }).click()
   await expect(page.locator('[data-cover-field="title"]')).toHaveValue('STANDPIPE')
   await page.screenshot({ path: 'test-results/script-cover-light.png', fullPage: false })

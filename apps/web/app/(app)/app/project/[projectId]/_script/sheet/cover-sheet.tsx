@@ -2,7 +2,7 @@
 
 import type { TitlePage, TitlePageField, TitlePageInput } from '@folio/contracts'
 import { TITLE_PAGE_FIELDS } from '@folio/contracts'
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { memo, useEffect, useRef, useState, useTransition } from 'react'
 
 import { saveTitlePage } from '../../../../../../../lib/script/actions'
 
@@ -40,7 +40,7 @@ const fromRecord = (titlePage: TitlePage | null): Record<TitlePageField, string>
     TITLE_PAGE_FIELDS.map((field) => [field, titlePage?.[field] ?? '']),
   ) as Record<TitlePageField, string>
 
-export const CoverSheet = ({
+const CoverSheetBody = ({
   projectId,
   episode,
   titlePage,
@@ -133,3 +133,6 @@ export const CoverSheet = ({
     </div>
   )
 }
+
+/** Memoised: the workspace re-renders on every keystroke and this does not need to. */
+export const CoverSheet = memo(CoverSheetBody)

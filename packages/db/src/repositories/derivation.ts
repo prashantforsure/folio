@@ -15,7 +15,7 @@ import type {
 } from '@folio/script'
 import { NO_COUNTS, characterId, locationId } from '@folio/script'
 import type { AuthoredNotes, NodeId } from '@folio/script'
-import { asc } from 'drizzle-orm'
+import { asc, sql } from 'drizzle-orm'
 
 import {
   characterBoundCues,
@@ -30,6 +30,7 @@ import {
 } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
+import { jsonb } from '../sql-json'
 
 /**
  * The input side of a derivation pass, and the one authored write it needs.
@@ -240,16 +241,43 @@ export const persistMintedRecords = async (
       : [],
   )
   if (characterRowsToAdd.length === 0 && locationRowsToAdd.length === 0) return
-  await dbOf(scope).transaction(async (tx) => {
-    if (characterRowsToAdd.length > 0) {
-      await tx.insert(characters).values(characterRowsToAdd).onConflictDoNothing()
-      await tx.insert(characterBoundCues).values(cueRowsToAdd).onConflictDoNothing()
-    }
-    if (locationRowsToAdd.length > 0) {
-      await tx.insert(locations).values(locationRowsToAdd).onConflictDoNothing()
-      await tx.insert(locationBoundSluglines).values(sluglineRowsToAdd).onConflictDoNothing()
-    }
-  })
+  // One statement rather than a transaction of four: the request path pays
+  // two round trips per parameterised statement (`client.ts`). The cue and
+  // slugline rows reference the records inserted beside them; a foreign key
+  // is checked at the end of the statement, so the pair lands together.
+  await dbOf(scope).execute(sql`
+    with
+    minted_characters as (
+      insert into ${characters} (project_id, id, name)
+      select ${scope.projectId}, r.id, r.name
+      from jsonb_to_recordset(${jsonb(characterRowsToAdd.map((row) => ({ id: row.id, name: row.name })))}) as r(id uuid, name text)
+      on conflict do nothing
+      returning id
+    ),
+    minted_cues as (
+      insert into ${characterBoundCues} (project_id, character_id, cue)
+      select ${scope.projectId}, r.character_id, r.cue
+      from jsonb_to_recordset(${jsonb(cueRowsToAdd.map((row) => ({ character_id: row.characterId, cue: row.cue })))}) as r(character_id uuid, cue text)
+      on conflict do nothing
+      returning character_id
+    ),
+    minted_locations as (
+      insert into ${locations} (project_id, id, name, parent_id)
+      select ${scope.projectId}, r.id, r.name, null
+      from jsonb_to_recordset(${jsonb(locationRowsToAdd.map((row) => ({ id: row.id, name: row.name })))}) as r(id uuid, name text)
+      on conflict do nothing
+      returning id
+    ),
+    minted_sluglines as (
+      insert into ${locationBoundSluglines} (project_id, location_id, slugline)
+      select ${scope.projectId}, r.location_id, r.slugline
+      from jsonb_to_recordset(${jsonb(sluglineRowsToAdd.map((row) => ({ location_id: row.locationId, slugline: row.slugline })))}) as r(location_id uuid, slugline text)
+      on conflict do nothing
+      returning location_id
+    )
+    select (select count(*) from minted_characters) + (select count(*) from minted_cues)
+         + (select count(*) from minted_locations) + (select count(*) from minted_sluglines) as minted
+  `)
 }
 
 /**

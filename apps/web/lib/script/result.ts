@@ -32,7 +32,12 @@ export type SaveScriptResult =
       readonly status: 'saved'
       readonly updatedAt: Timestamp
       readonly conflict: SaveConflict | null
-      readonly measurement: MeasureOutcome
+      /**
+       * The server's record - or null when the digest the client sent of
+       * its own record matched, in which case what the client drew *is* the
+       * server's answer and it keeps it (`digest.ts`).
+       */
+      readonly measurement: MeasureOutcome | null
       /** Null when this save did not derive; keep the last. */
       readonly stats: ScriptStats | null
       readonly labels: readonly MentionLabel[]

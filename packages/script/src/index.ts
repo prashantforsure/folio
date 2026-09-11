@@ -37,6 +37,10 @@
  * refuses: AGENTS.md open decision 8, the A4 sheet width, is unruled and the
  * engine will not guess it.
  *
+ * Comparing two drafts is `diffScreenplays` - the node id is the join key,
+ * lines are compared at the sheet's measure, and the result is what the
+ * Revisions route draws and what a revision row's line counts are cut from.
+ *
  * Not here, and not blocked on anything, just later: FDX *export*.
  *
  * Constraints this package is under (AGENTS.md):
@@ -326,3 +330,26 @@ export {
 } from './paginate'
 
 export { CONTINUED_TEXT, MORE_TEXT, writeContinuedCue } from './generated-text'
+
+export type {
+  DiffEntry,
+  DiffError,
+  DiffKind,
+  DiffLine,
+  DiffOptions,
+  DiffTotals,
+  ScreenplayDiff,
+} from './diff'
+export { DIFF_KINDS, diffScreenplays } from './diff'
+
+export type { BeatHeadline, HeadingLevel, OutlineBeat, OutlineHeading } from './beats'
+export {
+  BEAT_HEADLINE_SEPARATOR,
+  outlineBeats,
+  outlineContentText,
+  outlineHeadings,
+  outlineNodeText,
+  outlineWordCount,
+  readBeatHeadline,
+  writeBeatHeadline,
+} from './beats'

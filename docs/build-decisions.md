@@ -675,3 +675,197 @@ a look at the cover. The tabs are `<button role="tab">`, not links (`_script/vie
   created through the admin API for the Script walk (the shell phase's `folio-e2e@example.com`
   password was not recorded anywhere). Its password is not in the repo either. Each run of
   `script-route.spec.ts` leaves one project behind on that account.
+
+## Revisions route phase: the diff, the restore, and two more counts on a row
+
+**Nothing here needed a ruling; everything that was open stayed open.** The four decisions
+AGENTS.md puts behind a human — the colour sequence past green, locked-page numbering past the
+last lock, the A4 sheet width, `SCENE_xxx` — were left exactly where the schema phase left them.
+The route refuses at each: `Issue revision` past green shows `nextRevisionColour`'s own refusal
+before the write; a `format: asian` project's compare view reports the unresolved sheet rather
+than laying anything out; lock issues are printed under the diff as `numberPages` reports them,
+never resolved.
+
+### What the route is built on
+
+- **`diffScreenplays` in `packages/script`** ([diff.ts](../packages/script/src/diff.ts), 20 tests).
+  The node id is the join key (ADR 0001); lines are compared at the sheet's measure, so the format
+  is an input as it is to `paginate`; comments are not on the paper and are not compared; a moved
+  node is a deletion where it was and an addition where it is, flagged `moved`. Within a node
+  present in both drafts, a run of removed lines directly followed by an equal run of new ones
+  reads as `changed`, one for one; unequal runs read as struck-then-tinted. That rule is a
+  judgement call and is stated in the header.
+- **Migration `0004`**: `revisions.scenes_touched` and `revisions.page_count`, and `version_reason`
+  gains `before_restore` and `restore`. The two columns lean on the same argument as `lines_added`
+  — a measurement of an immutable pair — and `page_count` is additionally *the paper as issued*:
+  a later re-ruling of lines per inch changes what a new revision counts, not what a production
+  office was already handed. Both are defended at their definition in `schema/history.ts`.
+- **`cutRevision` now moves `episodes.revision_colour`** in the same transaction. The status bar's
+  `Rev. Blue` and the newest revision row cannot disagree. The design README's "snapshot a revision
+  + colour bump" is one write.
+- **`reviveNodeIds`** lifts the tombstones on ids a restore brings back. ADR 0001 Q4 is the
+  argument: the tombstone exists *so that* undo can bring the node back as itself. Reuse — a
+  different node taking an old id — is what the ADR forbids; this is the same node taking its
+  own, and the caller can only revive ids that appear in an immutable snapshot. It does not
+  re-anchor a comment thread whose anchor the foreign key nulled; that is the *detached* state Q4
+  leaves as a product decision.
+
+### Restore, as built
+
+`restoreRevision` is three writes in order: a `before_restore` version of the document as it
+stands; the restored list through `reconcileNodes`, so surviving rows and their anchors
+(locked pages, threads) are kept and only the difference is written; a `restore` version of the
+result. No revision row is touched and no version row is deleted. "Restore creates a new version.
+It never destroys history." is therefore two rows, and the first is what makes the second
+reversible.
+
+### Judgement calls in this phase, each reversible
+
+- **The pair being compared is component state**, not `?base=&head=`. The Scenes ruling (selection
+  is state, not a URL) was read across; adding two query params is AGENTS.md "ask first". The
+  route's default is *latest revision → current* — what changed since the last issue — where the
+  bundle's mock shows *Draft 4 → Draft 5*. A history card's click and `Compare to current` set the
+  pair and switch to `?view=diff`.
+- **A version is not a draft.** The pickers list revisions and `Current` only. Versions stay in
+  the Script route's Collaboration tab; the brief's first rule is why.
+- **The bundle's `Drafts` timeline in the episode nav is not drawn.** The nav is chrome and
+  `Route - Script.dc.html` wins on chrome; the pickers and the history list cover selection.
+  `Snapshot current draft` (the nav footer) is not drawn either: it is a `versions` write the
+  Script route's `⌘S` already makes, and issuing a revision takes one anyway. Both flagged.
+- **The asterisk is drawn in the right margin.** The bundle's copy says "Revised pages carry an
+  asterisk in the right margin"; its markup draws the mark at `left:52px`. The copy is what a
+  production office reads and matches convention, so the copy stands and the mark moved. A
+  revised page also carries `*` beside its page number. **A bundle contradiction, resolved in the
+  copy's favour — flag for the designer.**
+- **A deleted node is drawn on the page of the entry before it**, and a node split across a page
+  break is drawn whole on the page it starts on. The diff is a review surface; the sheet's
+  splits with `(MORE)` / `(CONT'D)` are the Script route's and export's business.
+- **"Changes only" keeps context**: every entry that is not `same`, plus the scene heading it is
+  under and the cue above a changed line of speech. The bundle's mock filters to changed lines
+  alone; a diff with no heading is a diff nobody can place.
+- **`N lines differ on this page`** is the page most in view (an `IntersectionObserver` over the
+  sheets), so the specified copy stays true with more than one page.
+- **The Issue form is not in the bundle** — it draws the button and nothing after it. The form
+  collects what the row holds (label defaulting to `Draft N`, note, tags, `Lock pages`) and shows
+  the next colour rather than asking for it. `⊕` and `≡` are outside AGENTS.md's glyph set and are
+  left off, as the Scenes header left off `▦ ▣ ▤`; `⇄` is drawn. `⤒ Export revision pages` is not
+  drawn: export is a queued job that does not exist.
+- **`Lock pages` is offered on any unlocked revision**, not only the latest; the pagination reads
+  the *latest locked* revision's pages, as `lib/script/server.ts` already did, so an earlier lock
+  taken later changes nothing until it is the latest. A revision's own pages are numbered under the
+  locks in force *before* it, so an earlier lock's A-pages are locked under the labels they print.
+- **Membership, not role.** Anyone who can open the project can issue, lock and restore.
+  Unchanged from every earlier phase and flagged again.
+
+### Verified end to end
+
+`apps/web/e2e/revisions-route.spec.ts` against the dev Supabase project, with the Scenes phase's
+E2E account: both empty states in both themes; `?view=grid` is a 404; issuing `Draft 1` writes a
+`manual` version and a White row with `+16 −0 · 3 scenes touched · 1 pp`; two real edits on the
+Script route (a typed line, a merged speech) come back on the sheet as a tinted line, a noted cue
+and a struck line, each with its asterisk and the page label `1.*`; `Draft 2` is Blue and locked in
+the same act and the Script status bar reads `Rev. Blue`; restoring `Draft 1` writes versions
+`before_restore` (14 nodes) and `restore` (15 nodes), puts the old text back on the Script route,
+keeps both revision rows and the Blue lock's anchor, and leaves `Draft 1 → Current` with zero
+differing lines; `Draft 1 → Draft 2` through the pickers prints counts that reconcile with the
+row's stored `+2 −2`. Six tests, nine minutes against the dev server. One run was hit
+mid-restore by another session's in-flight rewrite of `reconcileNodes` (a `jsonb_to_recordset`
+parameter passed unserialised); it passed once that landed.
+
+Two things the walk turned up that are not this route's: a cross-type merge on the Script route
+(Backspace at the start of a speech folds it into the cue) writes no tombstone for the loser's
+id — `node_tombstones` stayed at zero rows through the whole walk — and the last keystroke of a
+burst typed straight after a click can land before Slate has taken the click's selection, so
+the walk waits between the two. Both flagged in the phase report.
+
+## Script route, second pass: the save path measured, and what it now costs
+
+Brief: finish the Script route's backend and make writing on the sheet feel immediate, end to
+end against the dev database. The route's body was built; what was not finished was the cost of
+a keystroke reaching a row. Measured 2026-09-12 from a machine ~400ms from the dev pooler
+(`aws-0-ap-southeast-2`):
+
+- A parameterised statement over the transaction pooler is **two** round trips, not one, and
+  cannot be pipelined: `prepare: false` (mandatory - Supabase's connection guide: "Transaction
+  mode does not support prepared statements") makes postgres.js `Describe` every statement
+  before it can `Bind`. Every tenant-scoped query has a parameter. So `BEGIN` + N statements +
+  `COMMIT` is 2 + 2N round trips, and one keystroke's autosave ran **nineteen statements**
+  (sequential gate, per-row updates in `reconcileNodes`, seven for `writeMeasurement`, fourteen
+  for `commitDerivation`): seven to fourteen seconds of "saving…" per keystroke.
+- A fresh pooler connection costs ~4s (DNS, TCP, TLS, auth); `idle_timeout: 20` dropped the pool
+  every time a writer paused for twenty seconds and charged it to their next save.
+- A feature is ~2,950 nodes and half a megabyte as a list; every autosave sent all of it up and a
+  400 KB measurement record back down.
+
+### What changed, and the rule each change keeps
+
+- **Statement count is the unit of cost**, so every write the save runs is one statement built
+  from `WITH` clauses: `commitNodePlan` (id-reuse gate, deletes, tombstones, inserts, updates,
+  document stamp), `writeMeasurement` (header upsert, children upserted and pruned),
+  `commitDerivation` (six caches upserted and pruned), `persistMintedRecords`. Each is still one
+  atomic write of the same rows the transaction produced. `derived.ts` still names no authored
+  table; the tenant predicate in the raw SQL is still `scoped()`'s.
+- **A plan is computed in TypeScript, in one place** (`packages/db/src/node-plan.ts`, unit-tested),
+  and it chooses keys that collide with no stored key - including the rows the same statement
+  deletes - because a delete and an insert in one statement share a snapshot. The concurrent
+  `reconcileNodes` transaction is now read + plan + one statement; the revisions route's restore
+  calls it unchanged.
+- **The gate's reads run at once** (`openEpisodeWith`): identity first and alone, then membership,
+  project, episode *and the save's own reads* in one round trip; membership is still checked
+  before anything is acted on, and a non-member still gets the same `REFUSED`. The profile row is
+  no longer read on the action path - no action needs a display name.
+- **The request is a delta; the write is still a node list.** The client sends the nodes that
+  changed and the id order only when it changed; the server lays that over its rows and validates
+  the whole list before planning. With `liveRepaginate` the client also sends a digest of the
+  record it drew - same engine, same inputs, now including locked pages and the revision colour -
+  and the server answers "same" instead of the record. Pagination is still computed server-side on
+  every save; only transport changed.
+- **What the answer does not carry runs after it** (`after()`, `deferAfterSave`): storing the
+  measurement and re-deriving the project. Both are caches replaced whole on the next save, both
+  serialised per key in-process with newest-wins, so two `⌘S` cannot interleave a derive's read
+  with the previous derive's commit (the duplicate-mint bug `persistMintedRecords` records). One
+  Next instance is one lock; a second instance would not share it - flagged, not solved.
+- **Every deleted id gets its tombstone in the same statement as its delete**, derived server-side
+  from the plan; the client's retirements only say what an id was merged into. This closes the
+  Revisions phase's finding that a cross-type merge wrote no tombstone.
+- **The pool stays warm** (`idle_timeout` 300s, `max` 10 - a derivation reads nine tables at once).
+- **On the client**, a keystroke no longer renders every block: the layout sits in a per-block
+  subscription store (`layout-context.tsx`), line wrapping is cached per block object, the forced
+  redecorate is keyed on page gaps rather than the layout, a queued save reads the value through a
+  ref (the old closure re-saved the value the first save had started with - a real loss until the
+  next keystroke), a save that throws clears its in-flight flag, and a hidden tab flushes a pending
+  save.
+
+### Not done, and why
+
+- `prepare: true` over Supavisor ran a forty-statement probe with zero errors and would halve
+  every statement's cost; the product docs say the opposite of the Supavisor blog and "under load
+  and not in development" is the wrong place to learn which is right. Left off, documented in
+  `client.ts`.
+- `getUser()` is ~0.3-0.9s per action, the one fixed cost left. `getClaims()` would verify the JWT
+  locally against the project's JWKS; that touches the auth boundary and is a decision, not a
+  tuning.
+- The dev database is in Sydney. Nothing in code moves it; wherever the server is deployed should
+  be next to it.
+
+### Verified end to end
+
+`apps/web/e2e/script-route.spec.ts` against the dev Supabase project through the running dev
+server, with a dedicated confirmed E2E account created through the Admin API: the whole existing
+walk, plus a test that types a sentence into the middle of the 220-scene corpus and records
+keystroke-to-paint (Event Timing), keystroke-to-"saved", and the bytes each autosave sent and
+received, to `test-results/script-latency.json`. The spec's `?panel=composer` → 404 assertion
+predated the 2026-09-11 ruling that Script has no sub-view params; it now asserts what the
+ruling says (200, the script, the Info tab). On the final code: seven of seven on a fresh project in
+8.8 minutes, and the Revisions walk - which restores through `reconcileNodes` and
+`measureAndDerive` - six of six in 7.9 minutes, both against the dev server on port 3000.
+
+Two later adjustments in the same pass, both measured on the production build against the
+2,951-node walk project: the autosave pause is **one second** rather than 1.5 (a save is a delta
+and one statement now; last keystroke to "saved" is ~4s warm, ~7s when the pool is cold), and the
+server keeps the rows it last wrote per document, validated by `documents.updated_at`
+(`lib/script/row-cache.ts`), so a keystroke save transfers nothing but the delta in either direction.
+Typing on that script costs ~46ms of main-thread work per keystroke in production (Playwright's own
+floor is ~3ms), down from over 140ms in development before this pass; the slowest keystroke measured
+by the Event Timing API fell from 360ms to ~110ms. Plate's chunk size is 100 blocks (from its
+default 1,000) so a change re-renders four pages of blocks rather than a third of the feature.

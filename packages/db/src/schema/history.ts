@@ -1,3 +1,4 @@
+import { VERSION_REASONS } from '@folio/contracts'
 import { sql } from 'drizzle-orm'
 import {
   boolean,
@@ -42,13 +43,16 @@ import { episodes, projects, revisionColourEnum, users } from './tenancy'
  * pruned and the production record grows holes.
  */
 
-export const versionReasonEnum = pgEnum('version_reason', [
-  'autosave',
-  'manual',
-  'before_agent_run',
-  'before_import',
-  'before_rename',
-])
+/**
+ * `before_restore` and `restore` are the pair a restore writes (migration
+ * `0004`). The Revisions route's rule is "Restore creates a new version. It
+ * never destroys history": the first row is the document as it stood before
+ * the restore, so nothing the writer had is lost; the second is the restored
+ * document itself, so the restore is a version in the chain and not a rewind
+ * of it. Two rows rather than one, because the first is what makes the
+ * second reversible.
+ */
+export const versionReasonEnum = pgEnum('version_reason', VERSION_REASONS)
 
 // ---------------------------------------------------------------------------
 // versions
@@ -121,6 +125,17 @@ export const versions = pgTable(
  * the replacement is a view over the two versions and this comment is where to
  * start.
  *
+ * `scenes_touched` and `page_count` (migration `0004`) are two more numbers
+ * of the same class, and they lean on the same argument. The first is a
+ * property of the diff between two frozen snapshots, exactly as the line
+ * counts are - `diffScreenplays` in `@folio/script` returns all three from
+ * one pass. The second is the page count of the paper that was handed out:
+ * it is stored as issued, so that a later re-ruling of the sheet (open
+ * decision 8, or lines per inch again) changes what a *new* revision would
+ * count and not what a production office was already given. That is the
+ * difference between a cache of live data and a record of an artefact, and
+ * it is the same reason the revision's date is stored rather than recomputed.
+ *
  * `version_id` is what makes the paper reproducible: a revision points at the
  * exact snapshot it was cut from.
  *
@@ -147,6 +162,10 @@ export const revisions = pgTable(
     tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
     linesAdded: integer('lines_added').notNull().default(0),
     linesDeleted: integer('lines_deleted').notNull().default(0),
+    /** Scenes with at least one changed line since the revision before. */
+    scenesTouched: integer('scenes_touched').notNull().default(0),
+    /** Pages as issued. See the header: a record of the paper, not a cache. */
+    pageCount: integer('page_count').notNull().default(0),
     /** Once true, the pages of this revision keep their numbers forever. */
     locked: boolean('locked').notNull().default(false),
     versionId: uuid('version_id').references(() => versions.id, { onDelete: 'set null' }),
@@ -160,6 +179,10 @@ export const revisions = pgTable(
     check(
       'revisions_line_counts_not_negative',
       sql`${table.linesAdded} >= 0 AND ${table.linesDeleted} >= 0`,
+    ),
+    check(
+      'revisions_issue_counts_not_negative',
+      sql`${table.scenesTouched} >= 0 AND ${table.pageCount} >= 0`,
     ),
   ],
 )

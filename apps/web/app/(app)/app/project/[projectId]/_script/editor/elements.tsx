@@ -4,6 +4,7 @@ import type { ScreenplayNodeType } from '@folio/script'
 import type { RenderLeafProps } from 'platejs'
 import type { PlateElementProps } from 'platejs/react'
 import { PlateElement, useSelected } from 'platejs/react'
+import { useCallback, useSyncExternalStore } from 'react'
 
 import { isMentionElement, isScriptElement } from '../../../../../../../lib/script/slate-model'
 import { useSheet } from './layout-context'
@@ -16,8 +17,10 @@ import { useSheet } from './layout-context'
  * CSS in `globals.css` does the insets. `TYPE_LABEL` is a `Record` over the
  * union so a ninth type is a compile error here before it is a wrong inset.
  *
- * The block's vertical position comes from `SheetContext`: `marginTop` from
- * the measurement record, never from the DOM. A split block also draws its
+ * The block's vertical position comes from `SheetContext`'s layout store:
+ * `marginTop` from the measurement record, never from the DOM - and read
+ * through a subscription to this block's own row, so a keystroke elsewhere
+ * on the sheet does not render this block again (`layout-context.tsx`). A split block also draws its
  * page gap, but not here - the gap sits *between two of its lines*, so it is
  * a decoration on the leaf that ends the first page (see `Leaf` below and
  * `plate-editor.tsx`'s `decorate`).
@@ -36,7 +39,11 @@ export const TYPE_LABEL: Readonly<Record<ScreenplayNodeType, string>> = {
 
 export const ScriptBlock = (props: PlateElementProps) => {
   const { element } = props
-  const { layout, caretBlockId } = useSheet()
+  const { blocks, caretBlockId } = useSheet()
+  const id = isScriptElement(element) ? element.id : ''
+  const subscribe = useCallback((listener: () => void) => blocks.subscribe(id, listener), [blocks, id])
+  const read = useCallback(() => blocks.get(id), [blocks, id])
+  const placed = useSyncExternalStore(subscribe, read, read)
   if (!isScriptElement(element)) {
     // Cannot happen after normalisation; drawn plainly rather than hidden so
     // a stray shape is visible and the strict reader refuses it at save.
@@ -46,7 +53,6 @@ export const ScriptBlock = (props: PlateElementProps) => {
       </PlateElement>
     )
   }
-  const placed = layout.blocks.get(element.id)
   const isCaret = caretBlockId === element.id
   const style = { marginTop: placed?.marginTopPx ?? 0 }
 

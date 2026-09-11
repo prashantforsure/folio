@@ -211,10 +211,18 @@ export {
 export type { Thread, ThreadAnchor, ThreadComment } from './threads'
 export { ThreadAnchorSchema, ThreadCommentSchema, ThreadSchema } from './threads'
 
-export type { LockedPage, Revision, Version, VersionSnapshot } from './history'
+export type {
+  LockedPage,
+  Revision,
+  Version,
+  VersionReason,
+  VersionSnapshot,
+} from './history'
 export {
   LockedPageSchema,
   RevisionSchema,
+  VERSION_REASONS,
+  VersionReasonSchema,
   VersionSchema,
   VersionSnapshotSchema,
 } from './history'
@@ -273,6 +281,16 @@ export {
 
 export type { CreditBalance, LedgerEntry } from './credits'
 export { CreditBalanceSchema, LedgerEntrySchema } from './credits'
+
+export type { BeatAuthoredRow, BeatRow, BeatScene, BeatTiming, CanvasSpot } from './beats'
+export {
+  BeatAuthoredSchema,
+  BeatRowSchema,
+  BeatSceneSchema,
+  BeatTimingSchema,
+  CanvasSpotSchema,
+  UNSET_BEAT_TIMING,
+} from './beats'
 
 export type {
   EpisodeBoardRow,

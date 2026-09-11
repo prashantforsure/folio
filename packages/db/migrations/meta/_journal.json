@@ -29,6 +29,20 @@
       "when": 1789140039342,
       "tag": "0003_script_route",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789152566068,
+      "tag": "0004_revisions_route",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789162377852,
+      "tag": "0005_beats_route",
+      "breakpoints": true
     }
   ]
 }

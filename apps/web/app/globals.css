@@ -474,6 +474,446 @@
   }
 }
 
+/*
+ * The prose sheet - the Outline and the Beats sheet. `Route - Outline.dc.html`
+ * and `Route - Beats.dc.html`, transcribed: the same 816px sheet as the
+ * script, a 14px ruler above it, `56px 0 88px` inside, Courier Prime 16px at
+ * 1.95 for prose and Newsreader for the title and headings. Not paginated -
+ * the panel says so - so blocks wrap on their own (`pre-wrap`) and there is
+ * no line engine here.
+ *
+ * Each block carries a 7px ring in the left margin at `left:74px` on the
+ * sheet, which is 22px left of the 96px text inset. The inset is on the
+ * block and the ring is inside it, so the ring's `left` is `-22px`.
+ */
+@layer components {
+  .folio-prose-ruler {
+    width: 816px;
+    height: 14px;
+    display: flex;
+    align-items: flex-end;
+    background: var(--panel);
+    border: 1px solid var(--sheet-edge);
+    border-bottom: none;
+    padding: 0 96px;
+    overflow: hidden;
+  }
+
+  .folio-prose-ruler > div {
+    flex: 1;
+    height: 5px;
+    background-image: repeating-linear-gradient(to right, var(--line) 0 1px, transparent 1px 24px);
+  }
+
+  .folio-prose-sheet {
+    width: 816px;
+    flex: none;
+    background: var(--sheet);
+    border: 1px solid var(--sheet-edge);
+    border-radius: 0 0 var(--radius-sheet) var(--radius-sheet);
+    padding: 56px 0 88px;
+    min-height: 1000px;
+    font-family: var(--font-mono);
+    color: var(--sheet-ink);
+  }
+
+  .folio-prose-dot {
+    position: absolute;
+    left: -22px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    border: 1px solid var(--sheet-line);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .folio-prose-dot[data-caret='true'] {
+    border-color: var(--accent-line);
+    background: var(--accent-bg);
+  }
+
+  .folio-outline-editable {
+    outline: none;
+    caret-color: var(--accent);
+  }
+
+  .folio-outline-editable ::selection {
+    background: var(--accent-bg);
+  }
+
+  /* One block. The vertical rhythm is the bundle's `pad` per kind. */
+  .folio-outline-block {
+    position: relative;
+    margin: 0 96px;
+    padding-top: 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 16px;
+    line-height: 1.95;
+  }
+
+  .folio-outline-block:first-child {
+    padding-top: 0;
+  }
+
+  .folio-outline-block > .folio-prose-dot {
+    top: calc(12px + 12px);
+  }
+
+  .folio-outline-block:first-child > .folio-prose-dot {
+    top: 12px;
+  }
+
+  .folio-outline-block[data-type='h1'],
+  .folio-outline-block[data-type='h2'],
+  .folio-outline-block[data-type='h3'] {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    line-height: 1.25;
+    letter-spacing: var(--tracking-title);
+  }
+
+  .folio-outline-block[data-type='h1'] {
+    padding-top: 30px;
+    font-size: var(--text-20);
+  }
+
+  .folio-outline-block[data-type='h2'] {
+    padding-top: 24px;
+    font-size: var(--text-18);
+  }
+
+  .folio-outline-block[data-type='h3'] {
+    padding-top: 18px;
+    font-size: var(--text-16);
+  }
+
+  .folio-outline-block[data-type='h1'] > .folio-prose-dot {
+    top: calc(30px + 6px);
+  }
+
+  .folio-outline-block[data-type='h2'] > .folio-prose-dot {
+    top: calc(24px + 5px);
+  }
+
+  .folio-outline-block[data-type='h3'] > .folio-prose-dot {
+    top: calc(18px + 4px);
+  }
+
+  .folio-outline-block[data-type='h1']:first-child,
+  .folio-outline-block[data-type='h2']:first-child,
+  .folio-outline-block[data-type='h3']:first-child {
+    padding-top: 0;
+  }
+
+  .folio-outline-block[data-type='h1']:first-child > .folio-prose-dot {
+    top: 6px;
+  }
+
+  .folio-outline-block[data-type='h2']:first-child > .folio-prose-dot,
+  .folio-outline-block[data-type='h3']:first-child > .folio-prose-dot {
+    top: 5px;
+  }
+
+  /* Prose straight after a heading sits closer to it, as the bundle's `10px` pad. */
+  .folio-outline-block[data-type='h1'] + .folio-outline-block,
+  .folio-outline-block[data-type='h2'] + .folio-outline-block,
+  .folio-outline-block[data-type='h3'] + .folio-outline-block {
+    padding-top: 10px;
+  }
+
+  .folio-outline-block[data-type='h1'] + .folio-outline-block > .folio-prose-dot,
+  .folio-outline-block[data-type='h2'] + .folio-outline-block > .folio-prose-dot,
+  .folio-outline-block[data-type='h3'] + .folio-outline-block > .folio-prose-dot {
+    top: calc(10px + 12px);
+  }
+
+  .folio-outline-block[data-type='quote'] > .folio-outline-quote {
+    padding: 2px 0 2px 16px;
+    border-left: 2px solid var(--accent-line);
+    color: var(--ink2);
+    font-style: italic;
+  }
+
+  .folio-outline-block[data-type='rule'] {
+    padding-top: 26px;
+  }
+
+  .folio-outline-block[data-type='rule'] > .folio-prose-dot {
+    top: calc(26px - 4px);
+  }
+
+  .folio-outline-rule {
+    display: block;
+    height: 1px;
+    background: var(--sheet-line);
+  }
+
+  .folio-outline-block[data-type='rule'][data-selected='true'] > .folio-outline-rule {
+    box-shadow: 0 0 0 2px var(--focus);
+  }
+
+  /* A numbered beat: marker in the gutter, consecutive beats 4px apart. */
+  .folio-outline-block[data-type='beat'] {
+    padding-left: 30px;
+  }
+
+  .folio-outline-block[data-type='beat'] > .folio-prose-dot {
+    left: -52px;
+  }
+
+  .folio-outline-block[data-type='beat'] + .folio-outline-block[data-type='beat'] {
+    padding-top: 4px;
+  }
+
+  .folio-outline-block[data-type='beat'] + .folio-outline-block[data-type='beat'] > .folio-prose-dot {
+    top: calc(4px + 12px);
+  }
+
+  .folio-outline-marker {
+    position: absolute;
+    left: 0;
+    width: 18px;
+    color: var(--ink3);
+    user-select: none;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .folio-outline-lead {
+    font-weight: 700;
+  }
+
+  /* The caret line's promise, drawn inside an empty last block. */
+  .folio-outline-ghost {
+    position: absolute;
+    left: 0;
+    top: inherit;
+    color: var(--ink3);
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .folio-outline-ghost b {
+    color: var(--ink2);
+  }
+
+  .folio-outline-ghost i {
+    font-style: normal;
+    color: var(--accent);
+  }
+
+  /* The slash menu and the block toolbar's two-line buttons. */
+  .folio-slash-menu {
+    position: absolute;
+    z-index: 30;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-chrome);
+    font-family: var(--font-sans);
+    font-size: var(--text-11-5);
+    color: var(--ink);
+  }
+
+  .folio-slash-menu > button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 8px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-chrome);
+    cursor: pointer;
+    color: var(--ink2);
+    text-align: left;
+  }
+
+  .folio-slash-menu > button[aria-selected='true'] {
+    background: var(--sel);
+    color: var(--ink);
+  }
+
+  .folio-block-tool {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    min-width: 52px;
+    padding: 5px 9px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-chrome);
+    cursor: pointer;
+    color: var(--ink2);
+  }
+
+  .folio-block-tool:hover {
+    background: var(--hover);
+  }
+
+  .folio-block-tool[aria-pressed='true'] {
+    background: var(--sel);
+    color: var(--ink);
+  }
+
+  .folio-block-tool:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus);
+  }
+}
+
+/*
+ * The Beats route. The sheet view shares the prose sheet above; the
+ * arrangement is a placed track over a minute rule and a dot-grid canvas of
+ * unplaced cards, `Route - Beats.dc.html`.
+ */
+@layer components {
+  .folio-beat-field {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    outline: none;
+    resize: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .folio-beat-field::placeholder {
+    color: var(--ink3);
+    opacity: 1;
+  }
+
+  .folio-beat-field:focus-visible {
+    box-shadow: 0 0 0 2px var(--focus);
+    border-radius: 2px;
+  }
+
+  .folio-beat-number {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--sheet-line);
+    border-radius: 50%;
+    font-size: var(--text-12);
+    color: var(--ink2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .folio-beat-chip {
+    padding: 2px 7px;
+    border-radius: var(--radius-chrome);
+    background: var(--hover);
+    font-family: var(--font-sans);
+    font-size: var(--text-10);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-beat-unplaced {
+    align-self: flex-start;
+    padding: 2px 7px;
+    border-radius: var(--radius-chrome);
+    background: var(--note-bg);
+    color: var(--note);
+    font-family: var(--font-sans);
+    font-size: var(--text-10);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .folio-beat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 13px 11px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-chrome);
+    touch-action: none;
+  }
+
+  .folio-beat-card:hover {
+    border-color: var(--accent-line);
+  }
+
+  .folio-beat-card[data-dragging='true'] {
+    opacity: 0.85;
+    border-color: var(--accent);
+    z-index: 5;
+  }
+
+  .folio-beat-card[data-selected='true'] {
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 2px var(--accent-bg);
+  }
+
+  .folio-beat-colour {
+    width: 26px;
+    height: 3px;
+    border-radius: var(--radius-sheet);
+  }
+
+  .folio-beat-minutes {
+    padding: 2px 7px;
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-chrome);
+    font-family: ui-monospace, monospace;
+    font-size: var(--text-10);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-beat-ticks {
+    height: 28px;
+    flex: none;
+    position: relative;
+    border-bottom: 1px solid var(--line2);
+    background: var(--panel);
+    overflow: hidden;
+  }
+
+  .folio-beat-tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: flex-start;
+    padding-top: 4px;
+    border-left: 1px solid var(--line);
+  }
+
+  .folio-beat-tick > span {
+    padding-left: 5px;
+    font-family: ui-monospace, monospace;
+    font-size: var(--text-9-5);
+    color: var(--ink3);
+  }
+
+  .folio-beat-canvas {
+    background-color: var(--desk);
+    background-image: radial-gradient(var(--grid) 1px, transparent 1px);
+    background-position: 8px 8px;
+  }
+
+  .folio-beat-canvas[data-drop='true'],
+  .folio-beat-track[data-drop='true'] {
+    box-shadow: inset 0 0 0 2px var(--accent-line);
+  }
+}
+
 /* The status bar's "Hide nav": the episode nav is server-rendered in the layout, so the flag rides on <html>. */
 html[data-nav-open='false'] [data-episode-nav] {
   display: none;

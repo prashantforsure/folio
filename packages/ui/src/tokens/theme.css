@@ -123,6 +123,16 @@
   --text-20: 20px;
 
   /*
+   * Two more from `Route - Outline.dc.html` and `Route - Beats.dc.html`: 34px
+   * is the document title on the prose sheet (Newsreader), 18px the H2 step
+   * between the bundle's 20px H1 and its 16px body - the bundle draws only H1
+   * and gives H2 / H3 no size, so 18 is an inference and 16 (H3) reuses a
+   * step that exists. Named by value like the rest.
+   */
+  --text-18: 18px;
+  --text-34: 34px;
+
+  /*
    * "Radii are flat and small" - 3px almost everywhere, 2px for the sheet and
    * progress bars, 1px for the rail's active bar. The 5/6/7/8/9-10/12px scale
    * belongs to the superseded shell; the one 7px survivor is Research's toggle.

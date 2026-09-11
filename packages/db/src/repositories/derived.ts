@@ -1,7 +1,7 @@
 import type { DerivedEntities } from '@folio/script'
 import { resolveRowKey } from '@folio/script'
 import type { ProposalTarget } from '@folio/script'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 
 import {
   characterCueTallies,
@@ -14,6 +14,7 @@ import {
 } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
+import { jsonb } from '../sql-json'
 
 /**
  * Writing a derivation pass, and the type that stops it writing anything else.
@@ -96,125 +97,225 @@ export const proposalTargetKey = (target: ProposalTarget): string => {
 /**
  * Replace the derived caches for a project from one `derive` result.
  *
- * Delete-then-insert rather than upsert, and per the classification in
- * `../schema/index.ts` that is safe precisely because these rows are a cache:
- * AGENTS.md requires them to be "reproducible by re-derivation", so throwing
- * them away and rewriting them is not a loss, it is the definition.
+ * Per the classification in `../schema/index.ts` this is safe precisely
+ * because these rows are a cache: AGENTS.md requires them to be
+ * "reproducible by re-derivation", so throwing them away and rewriting them
+ * is not a loss, it is the definition. The same statement against
+ * `characters` would destroy a bio. It cannot be written here, because
+ * `characters` is not in scope in this file.
  *
- * The same statement against `characters` would destroy a bio. It cannot be
- * written here, because `characters` is not in scope in this file.
+ * **One statement**, for the reason `client.ts` gives: on the request path a
+ * parameterised statement is two round trips and cannot be pipelined, and
+ * the fourteen this used to be were the slowest thing a save did. The six
+ * tables are upserted by primary key and pruned of every row the pass did
+ * not produce, in twelve `WITH` clauses that touch disjoint rows - upsert
+ * and prune on the same table are fine together as long as no row is in
+ * both, and by construction none is. The result is the six tables holding
+ * exactly the pass, atomically, as before.
+ *
+ * Every row carries `project_id` from the scope and every prune is scoped:
+ * the raw SQL here is the exception `scope.ts` warns about, and the tenant
+ * predicate is still `scoped()`'s, never typed by hand.
  */
 export const commitDerivation = async (
   scope: ProjectScope,
   entities: DerivedEntities,
   derivedAt: Date = new Date(),
 ): Promise<void> => {
-  await dbOf(scope).transaction(async (tx) => {
-    await tx.delete(characterDerivations).where(scoped(scope, characterDerivations))
-    await tx.delete(characterCueTallies).where(scoped(scope, characterCueTallies))
-    await tx.delete(locationDerivations).where(scoped(scope, locationDerivations))
-    await tx.delete(locationSluglineTallies).where(scoped(scope, locationSluglineTallies))
-    await tx.delete(sceneDerivations).where(scoped(scope, sceneDerivations))
-    await tx.delete(resolveRows).where(scoped(scope, resolveRows))
+  const at = derivedAt.toISOString()
+  const characterRows = entities.characters.map((character) => ({
+    character_id: character.id,
+    appearances: character.appearances,
+    lines: character.lines,
+    mentions: character.mentions,
+    presence: character.presence,
+    scenes: [...character.scenes],
+  }))
+  const cueRows = entities.characters.flatMap((character) =>
+    character.cues.map((cue) => ({
+      character_id: character.id,
+      cue: cue.cue,
+      key: cue.key,
+      occurrences: cue.occurrences,
+      lines: cue.lines,
+    })),
+  )
+  const locationRows = entities.locations.map((location) => ({
+    location_id: location.id,
+    depth: location.depth,
+    presence: location.presence,
+    own_scenes: location.own.scenes,
+    own_sluglines: location.own.sluglines,
+    own_day_scenes: location.own.dayScenes,
+    own_night_scenes: location.own.nightScenes,
+    own_shooting_days: location.own.shootingDays,
+    rollup_scenes: location.rollup.scenes,
+    rollup_sluglines: location.rollup.sluglines,
+    rollup_day_scenes: location.rollup.dayScenes,
+    rollup_night_scenes: location.rollup.nightScenes,
+    rollup_shooting_days: location.rollup.shootingDays,
+    scenes: [...location.scenes],
+  }))
+  const sluglineRows = entities.locations.flatMap((location) =>
+    location.sluglines.map((slugline) => ({
+      location_id: location.id,
+      slugline: slugline.slugline,
+      key: slugline.key,
+      occurrences: slugline.occurrences,
+    })),
+  )
+  const sceneRows = entities.scenes.map((scene) => ({
+    scene_node_id: scene.id,
+    number: scene.number,
+    heading: scene.heading,
+    reading: scene.reading,
+    location_id: scene.locationId,
+    cast: [...scene.cast],
+    speaking: [...scene.speaking],
+    mentioned: [...scene.mentioned],
+    unresolved_cues: [...scene.unresolvedCues],
+    cast_size: scene.castSize,
+    lines: scene.lines,
+    presence: scene.presence,
+  }))
+  const queueRows = entities.queue.map((row) => ({
+    key: resolveRowKey(row.subject),
+    subject_kind: row.subject.kind,
+    subject: row.subject,
+    occurrences: row.occurrences,
+    scenes: [...row.scenes],
+    proposal_target: row.proposal === null ? null : row.proposal.target,
+    proposal_confidence: row.proposal === null ? null : row.proposal.confidence,
+    suppressed: row.suppressed,
+    state: row.state,
+  }))
 
-    if (entities.characters.length > 0) {
-      await tx.insert(characterDerivations).values(
-        entities.characters.map((character) => ({
-          ...tenant(scope),
-          characterId: character.id,
-          appearances: character.appearances,
-          lines: character.lines,
-          mentions: character.mentions,
-          presence: character.presence,
-          scenes: [...character.scenes],
-          derivedAt,
-        })),
-      )
-      const tallies = entities.characters.flatMap((character) =>
-        character.cues.map((cue) => ({
-          ...tenant(scope),
-          characterId: character.id,
-          cue: cue.cue,
-          key: cue.key,
-          occurrences: cue.occurrences,
-          lines: cue.lines,
-        })),
-      )
-      if (tallies.length > 0) await tx.insert(characterCueTallies).values(tallies)
-    }
-
-    if (entities.locations.length > 0) {
-      await tx.insert(locationDerivations).values(
-        entities.locations.map((location) => ({
-          ...tenant(scope),
-          locationId: location.id,
-          depth: location.depth,
-          presence: location.presence,
-          ownScenes: location.own.scenes,
-          ownSluglines: location.own.sluglines,
-          ownDayScenes: location.own.dayScenes,
-          ownNightScenes: location.own.nightScenes,
-          ownShootingDays: location.own.shootingDays,
-          rollupScenes: location.rollup.scenes,
-          rollupSluglines: location.rollup.sluglines,
-          rollupDayScenes: location.rollup.dayScenes,
-          rollupNightScenes: location.rollup.nightScenes,
-          rollupShootingDays: location.rollup.shootingDays,
-          scenes: [...location.scenes],
-          derivedAt,
-        })),
-      )
-      const tallies = entities.locations.flatMap((location) =>
-        location.sluglines.map((slugline) => ({
-          ...tenant(scope),
-          locationId: location.id,
-          slugline: slugline.slugline,
-          key: slugline.key,
-          occurrences: slugline.occurrences,
-        })),
-      )
-      if (tallies.length > 0) await tx.insert(locationSluglineTallies).values(tallies)
-    }
-
-    if (entities.scenes.length > 0) {
-      await tx.insert(sceneDerivations).values(
-        entities.scenes.map((scene) => ({
-          ...tenant(scope),
-          sceneNodeId: scene.id,
-          number: scene.number,
-          heading: scene.heading,
-          reading: scene.reading,
-          locationId: scene.locationId,
-          cast: [...scene.cast],
-          speaking: [...scene.speaking],
-          mentioned: [...scene.mentioned],
-          unresolvedCues: [...scene.unresolvedCues],
-          castSize: scene.castSize,
-          lines: scene.lines,
-          presence: scene.presence,
-          derivedAt,
-        })),
-      )
-    }
-
-    if (entities.queue.length > 0) {
-      await tx.insert(resolveRows).values(
-        entities.queue.map((row) => ({
-          ...tenant(scope),
-          key: resolveRowKey(row.subject),
-          subjectKind: row.subject.kind,
-          subject: row.subject,
-          occurrences: row.occurrences,
-          scenes: [...row.scenes],
-          proposalTarget: row.proposal === null ? null : row.proposal.target,
-          proposalConfidence: row.proposal === null ? null : row.proposal.confidence,
-          suppressed: row.suppressed,
-          state: row.state,
-          derivedAt,
-        })),
-      )
-    }
-  })
+  await dbOf(scope).execute(sql`
+    with
+    character_rows as (
+      insert into ${characterDerivations} (project_id, character_id, appearances, lines, mentions, presence, scenes, derived_at)
+      select ${scope.projectId}, r.character_id, r.appearances, r.lines, r.mentions, r.presence, r.scenes, ${at}::timestamptz
+      from jsonb_to_recordset(${jsonb(characterRows)})
+        as r(character_id uuid, appearances int, lines int, mentions int, presence presence, scenes uuid[])
+      on conflict (character_id) do update set
+        appearances = excluded.appearances, lines = excluded.lines, mentions = excluded.mentions,
+        presence = excluded.presence, scenes = excluded.scenes, derived_at = excluded.derived_at
+      returning character_id
+    ),
+    character_prune as (
+      delete from ${characterDerivations}
+      where ${scoped(scope, characterDerivations)}
+        and ${characterDerivations.characterId} <> all(${sql.param(characterRows.map((row) => row.character_id))}::uuid[])
+      returning character_id
+    ),
+    cue_rows as (
+      insert into ${characterCueTallies} (project_id, character_id, cue, key, occurrences, lines)
+      select ${scope.projectId}, r.character_id, r.cue, r.key, r.occurrences, r.lines
+      from jsonb_to_recordset(${jsonb(cueRows)})
+        as r(character_id uuid, cue text, key text, occurrences int, lines int)
+      on conflict (character_id, cue) do update set
+        key = excluded.key, occurrences = excluded.occurrences, lines = excluded.lines
+      returning character_id
+    ),
+    cue_prune as (
+      delete from ${characterCueTallies}
+      where ${scoped(scope, characterCueTallies)}
+        and not exists (
+          select 1 from jsonb_to_recordset(${jsonb(cueRows.map((row) => ({ character_id: row.character_id, cue: row.cue })))})
+            as r(character_id uuid, cue text)
+          where r.character_id = ${characterCueTallies.characterId} and r.cue = ${characterCueTallies.cue}
+        )
+      returning character_id
+    ),
+    location_rows as (
+      insert into ${locationDerivations}
+        (project_id, location_id, depth, presence, own_scenes, own_sluglines, own_day_scenes, own_night_scenes, own_shooting_days,
+         rollup_scenes, rollup_sluglines, rollup_day_scenes, rollup_night_scenes, rollup_shooting_days, scenes, derived_at)
+      select ${scope.projectId}, r.location_id, r.depth, r.presence, r.own_scenes, r.own_sluglines, r.own_day_scenes, r.own_night_scenes, r.own_shooting_days,
+        r.rollup_scenes, r.rollup_sluglines, r.rollup_day_scenes, r.rollup_night_scenes, r.rollup_shooting_days, r.scenes, ${at}::timestamptz
+      from jsonb_to_recordset(${jsonb(locationRows)})
+        as r(location_id uuid, depth int, presence presence, own_scenes int, own_sluglines int, own_day_scenes int, own_night_scenes int, own_shooting_days int,
+             rollup_scenes int, rollup_sluglines int, rollup_day_scenes int, rollup_night_scenes int, rollup_shooting_days int, scenes uuid[])
+      on conflict (location_id) do update set
+        depth = excluded.depth, presence = excluded.presence,
+        own_scenes = excluded.own_scenes, own_sluglines = excluded.own_sluglines, own_day_scenes = excluded.own_day_scenes,
+        own_night_scenes = excluded.own_night_scenes, own_shooting_days = excluded.own_shooting_days,
+        rollup_scenes = excluded.rollup_scenes, rollup_sluglines = excluded.rollup_sluglines, rollup_day_scenes = excluded.rollup_day_scenes,
+        rollup_night_scenes = excluded.rollup_night_scenes, rollup_shooting_days = excluded.rollup_shooting_days,
+        scenes = excluded.scenes, derived_at = excluded.derived_at
+      returning location_id
+    ),
+    location_prune as (
+      delete from ${locationDerivations}
+      where ${scoped(scope, locationDerivations)}
+        and ${locationDerivations.locationId} <> all(${sql.param(locationRows.map((row) => row.location_id))}::uuid[])
+      returning location_id
+    ),
+    slugline_rows as (
+      insert into ${locationSluglineTallies} (project_id, location_id, slugline, key, occurrences)
+      select ${scope.projectId}, r.location_id, r.slugline, r.key, r.occurrences
+      from jsonb_to_recordset(${jsonb(sluglineRows)})
+        as r(location_id uuid, slugline text, key text, occurrences int)
+      on conflict (location_id, slugline) do update set
+        key = excluded.key, occurrences = excluded.occurrences
+      returning location_id
+    ),
+    slugline_prune as (
+      delete from ${locationSluglineTallies}
+      where ${scoped(scope, locationSluglineTallies)}
+        and not exists (
+          select 1 from jsonb_to_recordset(${jsonb(sluglineRows.map((row) => ({ location_id: row.location_id, slugline: row.slugline })))})
+            as r(location_id uuid, slugline text)
+          where r.location_id = ${locationSluglineTallies.locationId} and r.slugline = ${locationSluglineTallies.slugline}
+        )
+      returning location_id
+    ),
+    scene_rows as (
+      insert into ${sceneDerivations}
+        (project_id, scene_node_id, number, heading, reading, location_id, "cast", speaking, mentioned, unresolved_cues, cast_size, lines, presence, derived_at)
+      select ${scope.projectId}, r.scene_node_id, r.number, r.heading, r.reading, r.location_id, r."cast", r.speaking, r.mentioned, r.unresolved_cues, r.cast_size, r.lines, r.presence, ${at}::timestamptz
+      from jsonb_to_recordset(${jsonb(sceneRows)})
+        as r(scene_node_id uuid, number int, heading text, reading jsonb, location_id uuid, "cast" uuid[], speaking uuid[], mentioned uuid[],
+             unresolved_cues text[], cast_size int, lines int, presence presence)
+      on conflict (scene_node_id) do update set
+        number = excluded.number, heading = excluded.heading, reading = excluded.reading, location_id = excluded.location_id,
+        "cast" = excluded."cast", speaking = excluded.speaking, mentioned = excluded.mentioned, unresolved_cues = excluded.unresolved_cues,
+        cast_size = excluded.cast_size, lines = excluded.lines, presence = excluded.presence, derived_at = excluded.derived_at
+      returning scene_node_id
+    ),
+    scene_prune as (
+      delete from ${sceneDerivations}
+      where ${scoped(scope, sceneDerivations)}
+        and ${sceneDerivations.sceneNodeId} <> all(${sql.param(sceneRows.map((row) => row.scene_node_id))}::uuid[])
+      returning scene_node_id
+    ),
+    queue_rows as (
+      insert into ${resolveRows}
+        (project_id, key, subject_kind, subject, occurrences, scenes, proposal_target, proposal_confidence, suppressed, state, derived_at)
+      select ${scope.projectId}, r.key, r.subject_kind, r.subject, r.occurrences, r.scenes, r.proposal_target, r.proposal_confidence, r.suppressed, r.state, ${at}::timestamptz
+      from jsonb_to_recordset(${jsonb(queueRows)})
+        as r(key text, subject_kind resolve_subject_kind, subject jsonb, occurrences int, scenes uuid[], proposal_target jsonb,
+             proposal_confidence confidence, suppressed jsonb, state resolve_row_state)
+      on conflict (project_id, key) do update set
+        subject_kind = excluded.subject_kind, subject = excluded.subject, occurrences = excluded.occurrences, scenes = excluded.scenes,
+        proposal_target = excluded.proposal_target, proposal_confidence = excluded.proposal_confidence, suppressed = excluded.suppressed,
+        state = excluded.state, derived_at = excluded.derived_at
+      returning key
+    ),
+    queue_prune as (
+      delete from ${resolveRows}
+      where ${scoped(scope, resolveRows)}
+        and ${resolveRows.key} <> all(${sql.param(queueRows.map((row) => row.key))}::text[])
+      returning key
+    )
+    select
+      (select count(*) from character_rows) + (select count(*) from character_prune)
+      + (select count(*) from cue_rows) + (select count(*) from cue_prune)
+      + (select count(*) from location_rows) + (select count(*) from location_prune)
+      + (select count(*) from slugline_rows) + (select count(*) from slugline_prune)
+      + (select count(*) from scene_rows) + (select count(*) from scene_prune)
+      + (select count(*) from queue_rows) + (select count(*) from queue_prune) as touched
+  `)
 }
 
 /**

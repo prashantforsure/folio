@@ -1,5 +1,7 @@
 'use client'
 
+import { memo } from 'react'
+
 import type { PageFrame } from '../../../../../../../lib/script/layout'
 
 /**
@@ -9,7 +11,7 @@ import type { PageFrame } from '../../../../../../../lib/script/layout'
  * `top: 48px; right: 96px` in `--ink3`. The label is the record's, so a
  * locked page prints `12A` here exactly as it will in the PDF.
  */
-export const PageFrames = ({ frames }: { readonly frames: readonly PageFrame[] }) => (
+const PageFramesBody = ({ frames }: { readonly frames: readonly PageFrame[] }) => (
   <>
     {frames.map((frame) => (
       <div
@@ -26,3 +28,6 @@ export const PageFrames = ({ frames }: { readonly frames: readonly PageFrame[] }
     ))}
   </>
 )
+
+/** Memoised: the workspace re-renders on every keystroke and this does not need to. */
+export const PageFrames = memo(PageFramesBody)

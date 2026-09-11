@@ -11,13 +11,13 @@ import type { ProjectScope } from '@folio/db'
 import {
   commitDerivation,
   ensureSceneRecords,
-  listLockedPages,
   listOpenThreads,
   listRevisions,
   listVersions,
   persistMintedRecords,
   readDerivationInput,
   readDocumentByKind,
+  readLatestLockedPages,
   readMentionLabels,
   readProjectScreenplayNodes,
   readScreenplayNodes,
@@ -29,9 +29,11 @@ import type {
   DeriveError,
   LockedPage,
   MentionLabel,
+  RevisionColour,
   ScreenplayNode,
 } from '@folio/script'
 import { countDerivationIds, derive, paginate, renderableNodes } from '@folio/script'
+import { after } from 'next/server'
 import { createHash } from 'node:crypto'
 
 import type { MeasureOutcome } from './result'
@@ -51,19 +53,44 @@ import type { ScriptStats } from './stats'
  * same engine and *also* stores the record for the routes that read page
  * counts from the table. Two consumers, one function, one answer.
  *
- * ## The pipeline after a write
+ * ## What a save waits for, and what it does not
  *
- *   1. paginate at the project's format and mode; when the mode is
- *      `continuous`, paginate `paged` as well, because the status bar's page
- *      count is still live in minimal mode (bundle copy) and export needs it;
- *   2. store every record computed (`writeMeasurement` replaces per mode);
- *   3. derive, project-wide, against the authored rows; persist the records
- *      the pass minted and the scene rows it needs; commit the derived caches.
+ * The request path is ~400ms from the database and pays two round trips per
+ * statement (`@folio/db`'s `client.ts`), so what a save *awaits* before it
+ * answers is the whole of what a writer feels between a keystroke and
+ * "saved". A save awaits exactly what the answer depends on: the node write,
+ * and the measurement *computed* - the sheet is drawn from it. Everything
+ * whose result the answer does not carry runs **after the response**
+ * (`after()` from `next/server`, which Server Functions support):
  *
- * A `format: asian` project refuses at step 1 - open decision 8 - and the
- * refusal is returned to the client to show, not swallowed.
+ *   1. storing the measurement - `writeMeasurement`, one statement per mode,
+ *      for the routes that count pages from the table;
+ *   2. derivation, when the client asked for it - project-wide, nine tables
+ *      read and six rewritten, on a cadence (`script-workspace.tsx`), on
+ *      `⌘S`, and always on import and creation.
+ *
+ * Both are caches of a computation the response already carried, both are
+ * replaced whole on the next save, and both are digest-tagged or
+ * reproducible - so a process dying between the response and the store
+ * costs a stale cache for one save, never a lost keystroke. The stats the
+ * Info panel shows come from a *speculative* pass over the same reads,
+ * ids discarded, exactly as `loadScript` computes them.
+ *
+ * ## Deferred work is serialised, per key
+ *
+ * Two saves a second apart both defer a measurement store for the same
+ * document; two `⌘S` presses defer two derivations for the same project. A
+ * derivation that read the previous entities before the last one committed
+ * would re-mint the records it was about to persist - the exact bug
+ * `persistMintedRecords`' header records. So `later()` runs deferred jobs
+ * one at a time per key, and a job queued while another waits **replaces**
+ * it: the store that runs is always for the newest save. This is a lock in
+ * one process, which is what one Next server is. A second instance would
+ * not share it, and that is recorded here rather than solved.
+ *
+ * A `format: asian` project refuses at measurement - open decision 8 - and
+ * the refusal is returned to the client to show, not swallowed.
  */
-
 
 const wordCount = (nodes: readonly ScreenplayNode[]): number =>
   renderableNodes(nodes).reduce((total, node) => {
@@ -78,30 +105,35 @@ const wordCount = (nodes: readonly ScreenplayNode[]): number =>
 export const nodeDigest = (nodes: readonly ScreenplayNode[]): string =>
   createHash('sha256').update(JSON.stringify(nodes)).digest('hex')
 
-const lockedPagesFor = async (
-  scope: ProjectScope,
-  revisions: readonly Revision[],
-): Promise<readonly LockedPage[]> => {
-  const locked = revisions.filter((revision) => revision.locked)
-  const latest = locked[locked.length - 1]
-  if (latest === undefined) return []
-  const pages = await listLockedPages(scope, latest.id)
-  return pages.map((page) => ({ label: page.label, anchor: page.anchor, revision: page.colour }))
+/** What the engine needs beside the nodes, read once per request. */
+export type MeasureInputs = {
+  readonly labels: readonly MentionLabel[]
+  readonly lockedPages: readonly LockedPage[]
 }
 
-const measure = (
+export const readMeasureInputs = async (
+  scope: ProjectScope,
+  episode: Episode,
+): Promise<MeasureInputs> => {
+  const [labels, lockedPages] = await Promise.all([
+    readMentionLabels(scope),
+    readLatestLockedPages(scope, episode.id),
+  ])
+  return { labels, lockedPages }
+}
+
+export const measure = (
   nodes: readonly ScreenplayNode[],
   project: Project,
-  episode: Episode,
-  labels: readonly MentionLabel[],
-  lockedPages: readonly LockedPage[],
+  revision: RevisionColour,
+  inputs: MeasureInputs,
 ): MeasureOutcome => {
   const base = {
     format: project.format,
     liveRepaginate: project.liveRepaginate,
-    lockedPages,
-    mentionLabels: labels,
-    revision: episode.revisionColour,
+    lockedPages: inputs.lockedPages,
+    mentionLabels: inputs.labels,
+    revision,
   }
   const paged = paginate(nodes, { ...base, pageMode: 'paged' })
   if (!paged.ok) return { ok: false, refusal: paged.error }
@@ -128,6 +160,67 @@ const statsOf = (nodes: readonly ScreenplayNode[], derivation: Derivation | null
   }
 }
 
+// ---------------------------------------------------------------------------
+// Deferred work, one job at a time per key
+// ---------------------------------------------------------------------------
+
+type Pending = { job: () => Promise<void> }
+
+const running = new Map<string, Promise<void>>()
+const waiting = new Map<string, Pending>()
+
+/**
+ * Run `job` after the current one for `key` finishes. A job queued while
+ * one is already waiting replaces it - only the newest matters.
+ */
+const later = (key: string, job: () => Promise<void>): Promise<void> => {
+  const pending = waiting.get(key)
+  if (pending !== undefined) {
+    pending.job = job
+    return running.get(key) ?? Promise.resolve()
+  }
+  const slot: Pending = { job }
+  waiting.set(key, slot)
+  const previous = running.get(key) ?? Promise.resolve()
+  const next = previous.then(async () => {
+    waiting.delete(key)
+    try {
+      await slot.job()
+    } catch (cause) {
+      console.error({
+        event: 'folio.script.deferred_failed',
+        key,
+        message: cause instanceof Error ? cause.message : String(cause),
+        note: 'A cache write after the response failed. The next save rewrites it.',
+      })
+    }
+  })
+  running.set(key, next)
+  void next.then(() => {
+    if (running.get(key) === next) running.delete(key)
+  })
+  return next
+}
+
+/** Store both records the measurement produced. One statement each, in parallel. */
+const storeMeasurement = async (
+  scope: ProjectScope,
+  episode: Episode,
+  document: DocumentRecord,
+  measurement: MeasureOutcome,
+  nodes: readonly ScreenplayNode[],
+): Promise<void> => {
+  if (!measurement.ok) return
+  const digest = nodeDigest(nodes)
+  const target = { episodeId: episode.id, documentId: document.id }
+  await Promise.all([
+    writeMeasurement(scope, target, measurement.paged, digest),
+    measurement.record === measurement.paged
+      ? Promise.resolve()
+      : writeMeasurement(scope, target, measurement.record, digest),
+  ])
+}
+
 /**
  * Derive the whole project and persist. Returns the pass, or the engine's
  * refusal, which the caller reports rather than hides.
@@ -135,19 +228,60 @@ const statsOf = (nodes: readonly ScreenplayNode[], derivation: Derivation | null
 export const rederiveProject = async (
   scope: ProjectScope,
 ): Promise<{ readonly ok: true; readonly derivation: Derivation } | { readonly ok: false; readonly error: DeriveError | { readonly kind: 'unreadable' } }> => {
-  const all = await readProjectScreenplayNodes(scope)
+  const [all, previous] = await Promise.all([readProjectScreenplayNodes(scope), readDerivationInput(scope)])
   if (!all.ok) return { ok: false, error: { kind: 'unreadable' } }
-  const previous = await readDerivationInput(scope)
   const needed = countDerivationIds(all.value, previous)
   const freshIds = Array.from({ length: needed }, () => crypto.randomUUID())
   const pass = derive(all.value, previous, { freshIds })
   if (!pass.ok) return { ok: false, error: pass.error }
-  await persistMintedRecords(scope, pass.value.minted)
   // The scene's authored row: `scene_derivations` has a foreign key to it and
-  // nothing else creates it. See `@folio/db`'s `scenes.ts`.
-  await ensureSceneRecords(scope, pass.value.entities.scenes)
+  // nothing else creates it. See `@folio/db`'s `scenes.ts`. Minted records
+  // and scene rows are independent tables, so they land together.
+  await Promise.all([
+    persistMintedRecords(scope, pass.value.minted),
+    ensureSceneRecords(scope, pass.value.entities.scenes),
+  ])
   await commitDerivation(scope, pass.value.entities)
   return { ok: true, derivation: pass.value }
+}
+
+/** The two reads a derivation pass takes. Issued beside a save's other reads. */
+export type DerivationReads = Awaited<ReturnType<typeof readDerivationReads>>
+
+export const readDerivationReads = async (scope: ProjectScope) => {
+  const [all, previous] = await Promise.all([readProjectScreenplayNodes(scope), readDerivationInput(scope)])
+  return { all, previous }
+}
+
+/**
+ * A derivation pass over the rows as read, nothing written. What
+ * `loadScript` and a save both count the Info panel's figures from.
+ *
+ * A save counts over the list it is writing, which the project-wide read -
+ * issued beside the write - has not seen. The read is ordered by episode
+ * then document order and a document's nodes are contiguous in it, so the
+ * document's stored run is cut out by id and the new list put in its
+ * place. A document with no stored rows yet is appended; that shifts
+ * nothing but the speculative scene numbers of a later episode.
+ */
+export const deriveSpeculatively = (
+  reads: DerivationReads,
+  replacing?: { readonly storedIds: ReadonlySet<string>; readonly nodes: readonly ScreenplayNode[] },
+): Derivation | null => {
+  if (!reads.all.ok) return null
+  let nodes = reads.all.value
+  if (replacing !== undefined) {
+    const { storedIds } = replacing
+    const first = nodes.findIndex((node) => storedIds.has(node.id as string))
+    const kept = nodes.filter((node) => !storedIds.has(node.id as string))
+    const at = first < 0 ? kept.length : first
+    nodes = [...kept.slice(0, at), ...replacing.nodes, ...kept.slice(at)]
+  }
+  const needed = countDerivationIds(nodes, reads.previous)
+  const pass = derive(nodes, reads.previous, {
+    freshIds: Array.from({ length: needed }, () => crypto.randomUUID()),
+  })
+  return pass.ok ? pass.value : null
 }
 
 export type AfterWrite = {
@@ -158,15 +292,12 @@ export type AfterWrite = {
 }
 
 /**
- * Steps 1-3 of the pipeline, after the node rows are written.
+ * The pipeline after the node rows are written, **awaited whole**: the
+ * measurement stored and, when asked, the project re-derived, before this
+ * returns. For the paths that revalidate afterwards - creation, import,
+ * restore - where the next render reads the tables this writes.
  *
- * Measurement runs every time - the sheet is drawn from it and other routes
- * count from it. Derivation runs when `derive` is true: it is project-wide,
- * reads nine tables and rewrites six, and a keystroke autosave every 1.5s
- * does not need the Characters route's caches rebuilt each time. The client
- * asks for it on a cadence (`script-workspace.tsx`), on `⌘S`, and import
- * and creation always ask. Independent reads run in parallel: a save is a
- * round-trip budget, and on a remote database each round trip is the cost.
+ * The Script route's autosave does not call this; see `deferAfterSave`.
  */
 export const measureAndDerive = async (
   scope: ProjectScope,
@@ -176,27 +307,52 @@ export const measureAndDerive = async (
   nodes: readonly ScreenplayNode[],
   options: { readonly derive: boolean } = { derive: true },
 ): Promise<AfterWrite> => {
-  const derived = options.derive ? await rederiveProject(scope) : null
-  const [labels, revisions] = await Promise.all([
-    readMentionLabels(scope),
-    listRevisions(scope, episode.id),
+  const [inputs, derived] = await Promise.all([
+    readMeasureInputs(scope, episode),
+    options.derive ? rederiveProject(scope) : Promise.resolve(null),
   ])
-  const lockedPages = await lockedPagesFor(scope, revisions)
-  const measurement = measure(nodes, project, episode, labels, lockedPages)
-  if (measurement.ok) {
-    const digest = nodeDigest(nodes)
-    const target = { episodeId: episode.id, documentId: document.id }
-    await writeMeasurement(scope, target, measurement.paged, digest)
-    if (measurement.record !== measurement.paged) {
-      await writeMeasurement(scope, target, measurement.record, digest)
-    }
-  }
+  const measurement = measure(nodes, project, episode.revisionColour, inputs)
+  await storeMeasurement(scope, episode, document, measurement, nodes)
   return {
     measurement,
     stats: derived === null ? null : statsOf(nodes, derived.ok ? derived.derivation : null),
-    labels,
+    labels: inputs.labels,
   }
 }
+
+/**
+ * The same pipeline, after the response. Queued per document (the store)
+ * and per project (the derivation), newest wins - see the header.
+ */
+export const deferAfterSave = (
+  scope: ProjectScope,
+  episode: Episode,
+  document: DocumentRecord,
+  measurement: MeasureOutcome,
+  nodes: readonly ScreenplayNode[],
+  options: { readonly derive: boolean },
+): void => {
+  after(async () => {
+    await Promise.all([
+      later(`measurement:${document.id}`, () => storeMeasurement(scope, episode, document, measurement, nodes)),
+      options.derive
+        ? later(`derive:${scope.projectId}`, async () => {
+            const result = await rederiveProject(scope)
+            if (!result.ok) {
+              console.error({
+                event: 'folio.script.derive_refused',
+                projectId: scope.projectId,
+                error: result.error,
+              })
+            }
+          })
+        : Promise.resolve(),
+    ])
+  })
+}
+
+export const statsFor = (nodes: readonly ScreenplayNode[], derivation: Derivation | null): ScriptStats =>
+  statsOf(nodes, derivation)
 
 // ---------------------------------------------------------------------------
 // What the route reads
@@ -211,6 +367,8 @@ export type ScriptLoad =
       readonly measurement: MeasureOutcome
       readonly stats: ScriptStats
       readonly labels: readonly MentionLabel[]
+      /** What the client needs to run the engine itself and get the server's answer. */
+      readonly lockedPages: readonly LockedPage[]
       readonly titlePage: TitlePage | null
       readonly threads: readonly Thread[]
       readonly revisions: readonly Revision[]
@@ -237,7 +395,14 @@ export const loadScript = async (
   ])
   if (document === null) return { state: 'empty', titlePage }
 
-  const read = await readScreenplayNodes(scope, document.id)
+  const [read, inputs, revisions, versions, threads, reads] = await Promise.all([
+    readScreenplayNodes(scope, document.id),
+    readMeasureInputs(scope, episode),
+    listRevisions(scope, episode.id),
+    listVersions(scope, document.id, 20),
+    listOpenThreads(scope),
+    readDerivationReads(scope),
+  ])
   if (!read.ok) {
     return {
       state: 'unreadable',
@@ -246,27 +411,7 @@ export const loadScript = async (
     }
   }
   const nodes = read.value.map((entry) => entry.node)
-
-  const [labels, revisions, versions, threads, all, previous] = await Promise.all([
-    readMentionLabels(scope),
-    listRevisions(scope, episode.id),
-    listVersions(scope, document.id, 20),
-    listOpenThreads(scope),
-    readProjectScreenplayNodes(scope),
-    readDerivationInput(scope),
-  ])
-  const lockedPages = await lockedPagesFor(scope, revisions)
-  const measurement = measure(nodes, project, episode, labels, lockedPages)
-
-  // Speculative: same function, ids discarded, nothing written.
-  let derivation: Derivation | null = null
-  if (all.ok) {
-    const needed = countDerivationIds(all.value, previous)
-    const pass = derive(all.value, previous, {
-      freshIds: Array.from({ length: needed }, () => crypto.randomUUID()),
-    })
-    if (pass.ok) derivation = pass.value
-  }
+  const measurement = measure(nodes, project, episode.revisionColour, inputs)
 
   const ids = new Set(nodes.map((node) => node.id as string))
   return {
@@ -274,8 +419,9 @@ export const loadScript = async (
     document,
     nodes,
     measurement,
-    stats: statsOf(nodes, derivation),
-    labels,
+    stats: statsOf(nodes, deriveSpeculatively(reads)),
+    labels: inputs.labels,
+    lockedPages: inputs.lockedPages,
     titlePage,
     threads: threads.filter(
       (thread) => thread.anchor.kind === 'script_node' && ids.has(thread.anchor.nodeId),

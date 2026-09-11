@@ -27,6 +27,7 @@
  *   locations                    name, parent, scheduled days
  *   location_bound_sluglines
  *   scenes                       synopsis, story time, beat and thread links
+ *   beats                        duration, timeline position, canvas spot - hung off a beat block
  *   resolve_decisions            authored input, never derived output
  *   credit_ledger                append-only
  *
@@ -60,9 +61,10 @@
  * names.** Page numbers and eighths are on measurement rows; the credit balance
  * is a view over the ledger, not a column; the derived entity rows are marked as
  * caches. There is no fourth case in this schema. `versions.node_count` and
- * `revisions.lines_added` are the two that need an argument rather than an
- * exemption, and each carries it at its definition: both describe frozen,
- * immutable artefacts, so they cannot drift from what they summarise.
+ * the four issue counts on `revisions` (`lines_added`, `lines_deleted`,
+ * `scenes_touched`, `page_count`) are the ones that need an argument rather
+ * than an exemption, and each carries it at its definition: all describe
+ * frozen, immutable artefacts, so they cannot drift from what they summarise.
  *
  * **Every table carries `project_id` except `users`.** That exception is
  * enforced rather than documented: `users` has no such column, so it is not
@@ -84,4 +86,5 @@ export * from './threads'
 export * from './history'
 export * from './measurement'
 export * from './derived'
+export * from './beats'
 export * from './credits'
