@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import {
   MembershipRoleSchema,
+  PageModeSchema,
   ProjectKindSchema,
   ProjectTypeSchema,
   RevisionColourSchema,
@@ -104,6 +105,14 @@ export const ProjectSchema = z.object({
   kind: ProjectKindSchema,
   projectType: ProjectTypeSchema,
   format: ScriptFormatSchema,
+  /**
+   * The pagination preference. AGENTS.md's exception table: `pageMode` +
+   * `liveRepaginate`, per project, not in the URL. Two rendering modes plus a
+   * cadence flag, never three peer modes - the Script route's three-way
+   * control maps onto this pair at the boundary and nowhere else.
+   */
+  pageMode: PageModeSchema,
+  liveRepaginate: z.boolean(),
   /** Free tags, as the project cards show them. Lower case, deduplicated by the repository. */
   tags: z.array(z.string().trim().min(1).max(40)).max(24),
   createdBy: UserIdSchema,
@@ -230,3 +239,69 @@ export const ProjectCardSchema = z.object({
 })
 
 export type ProjectCard = z.infer<typeof ProjectCardSchema>
+
+// ---------------------------------------------------------------------------
+// Title pages
+// ---------------------------------------------------------------------------
+
+/**
+ * The title page - the cover the Script route shows under `?doc=cover`.
+ *
+ * AGENTS.md, Export: "The title page is a separate document on the same sheet
+ * geometry, exported with the script." Separate in that it is its own sheet
+ * and its own row; not a `documents` row, because it carries no node list.
+ * The fields are Fountain's title-page keys, the same closed list
+ * `@folio/script`'s `fountain-syntax.ts` recognises on import, so an exported
+ * cover and an imported one share a vocabulary. Every field is nullable - an
+ * empty cover is a valid cover - and `draftDate` is text, as Fountain has it.
+ */
+export const TitlePageSchema = z.object({
+  id: z.uuid(),
+  projectId: ProjectIdSchema,
+  episodeId: EpisodeIdSchema,
+  title: z.string().nullable(),
+  credit: z.string().nullable(),
+  author: z.string().nullable(),
+  source: z.string().nullable(),
+  draftDate: z.string().nullable(),
+  contact: z.string().nullable(),
+  copyright: z.string().nullable(),
+  notes: z.string().nullable(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+})
+
+export type TitlePage = z.infer<typeof TitlePageSchema>
+
+/** The eight fields a writer edits on the cover, in the order the sheet draws them. */
+export const TITLE_PAGE_FIELDS = [
+  'title',
+  'credit',
+  'author',
+  'source',
+  'draftDate',
+  'contact',
+  'copyright',
+  'notes',
+] as const
+
+export type TitlePageField = (typeof TITLE_PAGE_FIELDS)[number]
+
+const TitlePageFieldInput = z
+  .string()
+  .max(2000)
+  .transform((value) => (value.trim() === '' ? null : value.trim()))
+
+/** What a cover edit submits: every field, each trimmed, empty meaning null. */
+export const TitlePageInputSchema = z.object({
+  title: TitlePageFieldInput,
+  credit: TitlePageFieldInput,
+  author: TitlePageFieldInput,
+  source: TitlePageFieldInput,
+  draftDate: TitlePageFieldInput,
+  contact: TitlePageFieldInput,
+  copyright: TitlePageFieldInput,
+  notes: TitlePageFieldInput,
+})
+
+export type TitlePageInput = z.infer<typeof TitlePageInputSchema>

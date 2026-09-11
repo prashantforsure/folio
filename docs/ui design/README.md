@@ -243,11 +243,12 @@ Non-negotiable geometry — this is what makes the app credible to screenwriters
 
 - **US Letter**, 816px wide × 1056px min-height at 96dpi (8.5in × 11in), 1in top padding, text
   block 6.0in. `border-radius: 2px`, 1px `--sheet-edge` border.
-- **Courier Prime 12pt**, 12 lines per inch (AGENTS.md, *Pagination and the sheet*). Line height
-  is a fixed multiple; do not use a relative line-height. **The bundles set `font-size: 16px;
-  line-height: 16px` on the 96dpi sheet, which is 6 lines per inch — the standard single-spaced
-  12pt Courier metric. The contract's number and the bundle's geometry do not agree; get one
-  ruling before the pagination engine is written.**
+- **Courier Prime 12pt**, **six lines per inch** — the bundles' own `font-size: 16px;
+  line-height: 16px` on the 96dpi sheet, the standard single-spaced 12pt Courier metric. Line
+  height is a fixed multiple; do not use a relative line-height. AGENTS.md, *Pagination and the
+  sheet* wrote twelve; the client ruled six on 2026-09-11 when the Script route made the two
+  irreconcilable on screen (`docs/build-decisions.md`, Script route phase). AGENTS.md's text has
+  not been amended.
 - Element indents at full 816px scale, straight from the bundle (96px = 1in):
 
   | Element | Left | Right |
@@ -513,7 +514,7 @@ Build the right-hand column. Do not resolve these by reading the bundle.
 | An AI composer in the Script right panel | A floating, draggable agent window, everywhere, `⌘J` | The agent is not a route and not a panel |
 | `kind: 'series' \| 'feature' \| 'short'` (old Appendix A) | `film \| series` only | No `short` project type |
 | A settings page with sub-routes (shell only) | A stub | No design exists; where `transfer`, `keys` and `episodes` went is open decision #7 |
-| 12 lines per inch (AGENTS.md) vs 16px/16px on a 96dpi sheet (bundles) | **Unresolved — ask** | 6 lpi is the standard single-spaced 12pt Courier metric |
+| 12 lines per inch (AGENTS.md) vs 16px/16px on a 96dpi sheet (bundles) | **Ruled 2026-09-11: six** — the bundle's geometry (`docs/build-decisions.md`, Script route phase) | 6 lpi is the standard single-spaced 12pt Courier metric; the engine and the golden maps are on six |
 
 ## Changes from the original spec doc
 

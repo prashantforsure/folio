@@ -316,6 +316,13 @@ test('/app/project/:id lands on the last opened episode, else the first', async 
   await signIn(page, account)
   await page.goto(`/app/project/${seriesId}/ep_002/notes`)
   await expect(page.locator('main[data-route="notes"]')).toBeVisible()
+  // The cookie is written by a client effect after hydration, which on a cold
+  // dev server lands well after `load`. Wait for the write, not for time.
+  await expect
+    .poll(async () => (await page.context().cookies()).some((c) => c.name === `folio.episode.${seriesId}`), {
+      timeout: 60_000,
+    })
+    .toBe(true)
   await page.goto(`/app/project/${seriesId}`)
   await expect(page).toHaveURL(new RegExp(`/app/project/${seriesId}/ep_002/script$`))
 
@@ -328,8 +335,8 @@ test('the project rail does not appear on the home shell, and vice versa', async
   await signIn(page, account)
   await page.goto('/app/recents')
   await expect(page.locator('nav[data-rail]')).toHaveCount(0)
-  await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Sections', exact: true })).toBeVisible()
   await page.goto(`/app/project/${seriesId}/ep_001/script`)
-  await expect(page.getByRole('navigation', { name: 'Sections' })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Sections', exact: true })).toHaveCount(0)
   await expect(page.locator('nav[data-rail]')).toBeVisible()
 })

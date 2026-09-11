@@ -112,6 +112,17 @@
   --text-21: 21px;
 
   /*
+   * Four steps from `Route - Scenes.dc.html` that the README's list does not
+   * name: 6.5px and 7px are the miniature sheet on a scene card (a preview of
+   * the page, not chrome type), 16px is the index card's and list row's scene
+   * number, 20px the card's. Named by value like the rest.
+   */
+  --text-6-5: 6.5px;
+  --text-7: 7px;
+  --text-16: 16px;
+  --text-20: 20px;
+
+  /*
    * "Radii are flat and small" - 3px almost everywhere, 2px for the sheet and
    * progress bars, 1px for the rail's active bar. The 5/6/7/8/9-10/12px scale
    * belongs to the superseded shell; the one 7px survivor is Research's toggle.

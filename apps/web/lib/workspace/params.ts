@@ -40,6 +40,21 @@ import type { WorkspaceRoute } from './routes'
  * already works and the other can be redirected. The built-in ids are the
  * bundle's; authored lenses have no table yet, so nothing else parses.
  *
+ * ## `script.panel` is a query param, on the client's instruction
+ *
+ * The design README and AGENTS.md's exception table put the right panel's tab
+ * in session state (`sideTab` in `lib/state/session.ts`). The brief for the
+ * Script route phase specifies `?panel=info|collab` as a sub-view, and the
+ * brief is the client's, so the URL wins here and `useSession().sideTab` is
+ * not read by the Script route. `composer` is deliberately not a value: ruled
+ * 2026-09-11 - the composer is a floating window, not a panel - so
+ * `?panel=composer` is a 404 like any other unknown sub-view value.
+ *
+ * `script.content` stays unwired. `empty` is a data state - whether a
+ * screenplay document exists - and a param that forced it would let a URL
+ * hide a script that exists. Unknown keys are ignored, so a stale
+ * `?content=empty` link is neither honoured nor a 404.
+ *
  * ## `selected` is not wired
  *
  * The README puts a selected record in `?selected=`, and the storyboard
@@ -69,7 +84,7 @@ const first = <const T extends readonly [string, ...string[]]>(values: T) =>
  * it.
  */
 export const SUB_VIEW_SCHEMAS = {
-  script: z.object({ doc: first(['script', 'cover']) }),
+  script: z.object({ doc: first(['script', 'cover']), panel: first(['info', 'collab']) }),
   outline: z.object({}),
   beats: z.object({ view: first(['beats', 'arrangement']) }),
   storyboard: z.object({ view: first(['board', 'canvas', 'list']) }),

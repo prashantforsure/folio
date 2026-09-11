@@ -1,8 +1,8 @@
-import type { Episode, EpisodeId, EpisodeSlug, Membership, Project, UserId } from '@folio/contracts'
+import type { Episode, EpisodeId, EpisodeSlug, Membership, Project, TitlePage, TitlePageInput, UserId } from '@folio/contracts'
 import { episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
 import { asc, eq, isNull } from 'drizzle-orm'
 
-import { episodes, memberships, projects, users } from '../schema'
+import { episodes, memberships, projects, titlePages, users } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { mintEpisodeSlug } from './episode-slug'
@@ -34,6 +34,8 @@ export const toProject = (row: ProjectRow): Project => ({
   kind: row.kind,
   projectType: row.projectType,
   format: row.format,
+  pageMode: row.pageMode,
+  liveRepaginate: row.liveRepaginate,
   tags: row.tags,
   createdBy: row.createdBy as UserId,
   createdAt: stamp(row.createdAt),
@@ -101,6 +103,29 @@ export const restoreProject = async (scope: ProjectScope): Promise<void> => {
   await dbOf(scope)
     .update(projects)
     .set({ trashedAt: null, updatedAt: new Date() })
+    .where(scoped(scope, projects))
+}
+
+/**
+ * Set the pagination preference the whole project shares.
+ *
+ * AGENTS.md's exception table puts `pageMode` + `liveRepaginate` per project,
+ * not in the URL, and `apps/web/lib/state/project-preferences.ts` says why a
+ * per-person store would be the wrong fix: two writers on one script must not
+ * disagree about how many pages it is. Any member may write it - roles are
+ * enforced nowhere yet, which is the server action's problem to flag.
+ */
+export const setProjectPagination = async (
+  scope: ProjectScope,
+  pagination: { readonly pageMode: Project['pageMode']; readonly liveRepaginate: boolean },
+): Promise<void> => {
+  await dbOf(scope)
+    .update(projects)
+    .set({
+      pageMode: pagination.pageMode,
+      liveRepaginate: pagination.liveRepaginate,
+      updatedAt: new Date(),
+    })
     .where(scoped(scope, projects))
 }
 
@@ -255,4 +280,81 @@ export const listMemberProfiles = async (
     displayName: row.displayName,
     email: row.email,
   }))
+}
+
+// ---------------------------------------------------------------------------
+// Title pages
+// ---------------------------------------------------------------------------
+
+const toTitlePage = (row: typeof titlePages.$inferSelect): TitlePage => ({
+  id: row.id,
+  projectId: brandProjectId(row.projectId),
+  episodeId: brandEpisodeId(row.episodeId),
+  title: row.title,
+  credit: row.credit,
+  author: row.author,
+  source: row.source,
+  draftDate: row.draftDate,
+  contact: row.contact,
+  copyright: row.copyright,
+  notes: row.notes,
+  createdAt: stamp(row.createdAt),
+  updatedAt: stamp(row.updatedAt),
+})
+
+/** The episode's cover, or null when nobody has written one. Null is a valid, empty cover. */
+export const readTitlePage = async (
+  scope: ProjectScope,
+  episodeId: EpisodeId,
+): Promise<TitlePage | null> => {
+  const rows = await dbOf(scope)
+    .select()
+    .from(titlePages)
+    .where(scoped(scope, titlePages, eq(titlePages.episodeId, episodeId)))
+    .limit(1)
+  const row = rows[0]
+  return row === undefined ? null : toTitlePage(row)
+}
+
+/**
+ * Write the cover whole. One row per episode (`title_pages_episode_key`), so
+ * this is an upsert on the episode: the first save creates it, every later one
+ * replaces every field. There is no partial update - a cover is small enough
+ * that a whole write is simpler to reason about than eight setters.
+ */
+export const writeTitlePage = async (
+  scope: ProjectScope,
+  episodeId: EpisodeId,
+  input: TitlePageInput,
+): Promise<TitlePage> => {
+  const now = new Date()
+  const rows = await dbOf(scope)
+    .insert(titlePages)
+    .values({ ...tenant(scope), episodeId, ...input })
+    .onConflictDoUpdate({
+      target: titlePages.episodeId,
+      set: { ...input, updatedAt: now },
+      setWhere: eq(titlePages.projectId, scope.projectId),
+    })
+    .returning()
+  const row = rows[0]
+  if (row === undefined) {
+    throw new Error('Folio: writing a title page returned no row. This is a bug in the repository.')
+  }
+  return toTitlePage(row)
+}
+
+/**
+ * Change the project's format. An engine input, so every measurement in the
+ * project is stale the moment this returns; the Script route re-measures on
+ * its next save and the nav's page counts follow.
+ */
+export const setProjectFormat = async (
+  scope: ProjectScope,
+  format: Project['format'],
+): Promise<void> => {
+  await dbOf(scope)
+    .update(projects)
+    .set({ format, updatedAt: new Date() })
+    .where(scoped(scope, projects))
 }

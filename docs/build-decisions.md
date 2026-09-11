@@ -468,3 +468,172 @@ smoke test uses to prove the validator, not precedence, is doing the work.
 - **The episode board's open/closed state is component state**, not persisted.
 - **The `＋` New episode button is wired** to a server action that refuses for a film. It is the
   one mutation in the chrome and the only way to make the board show more than one row.
+
+## Scenes route phase: one ruling, three upstream bugs, and what the route reads
+
+### Ruled by the client: there is no `/scenes/:sceneId`
+
+Asked, before anything was built, what `:sceneId` in `/:episodeId/scenes/:sceneId` is — the
+`SCENE_xxx` contradiction above. The answer was a product decision rather than an id shape: **the
+route is `/app/project/:projectId/:episodeId/scenes` only; clicking a scene opens a detail card in
+place; nothing navigates.** So scene selection is React component state, `?view=` is the route's
+only URL state, and the contradiction is **still open** — side-stepped, not resolved. `?selected=`
+on Storyboard still needs it.
+
+### Three bugs found by the first real import, none of them in the route
+
+The brief called this route "the end-to-end proof that derivation and measurement actually work
+against a real document". Nothing had been imported through the app before this phase, and the
+first feature-length import (`featureLengthScript(220)` from `@folio/script`'s corpus, pushed
+through `replaceNodes` → `measureAndDerive` into project `test 1`) found three things in
+`packages/db`. Each is fixed where it lives, with a header comment saying how it was found.
+
+1. **`commitDerivation` could not write a scene.** `scene_derivations.scene_node_id` is a foreign
+   key to `scenes.scene_node_id`, and nothing created the authored `scenes` row —
+   `persistMintedRecords` covers characters and locations, and a scene mints nothing. The first
+   derivation over any script with a heading failed the constraint. `ensureSceneRecords`
+   (`repositories/scenes.ts`) now runs between minting and commit; `onConflictDoNothing`, so the
+   row is created empty once and is the writer's from then on.
+2. **`ORDER BY order_key` returned the script in the wrong order.** `order.ts` documents that the
+   base-62 alphabet only sorts correctly under `C` collation and says the column must have it; the
+   column is plain `text` (migration `0000`), so it takes the database default, which on the dev
+   project is `en_US.UTF-8` — locale-aware, `k` before `U`. Every node read came back starting at
+   the 3,000th key. Derivation, which reads through the repository, numbered the 220 scenes in
+   that order while the measurement record, computed over the list as imported, numbered them in
+   the real one, and 172 of 220 cards disagreed with themselves. **Read-side fix:** `byOrderKey`
+   in `order.ts`, `COLLATE "C"`, used at every node read. **The durable fix is a forward
+   migration putting the collation on the column** so an index or an ad-hoc query cannot fall
+   back to the locale. That is a schema change and is left for a ruling; the read-side fix makes
+   it safe to wait.
+3. **Every derivation pass minted a second `MEERA`.** `derive.ts` binds a cue only by "an exact
+   key match against an authored bound cue", and the record it builds for a mint carries
+   `boundCues: [mint.cue]`. `persistMintedRecords` wrote the name and not the cue, so the next
+   pass found `MEERA` *resembling* an unbound record — the proposal case — and minted a fresh
+   one beside it. Three passes, three `ARJUN`s, every scene's cast pointing at whichever one that
+   pass had minted. It now writes `character_bound_cues` / `location_bound_sluglines` for the
+   minting text, which is what the pure core's own output says exists. Verified: passes two and
+   three over the same script mint nothing.
+
+Also seen and not fixed: `measurements.node_digest` is computed over the in-memory list before
+the write, and read back after; with bug 2 in place it never matched, and the route's "measured
+against an earlier draft" notice would have shown permanently. With the collation fix the round
+trip is byte-identical and the digest matches. Worth a test in the Script phase.
+
+### What the route reads, table by table
+
+`lib/scenes/server.ts` is a join and never a computation. Number, heading, I/E, time, dialogue
+node count, cast size and cast ids: `scene_derivations`. Cast names: `characters.name` through
+`readMentionLabels`. Synopsis: `scenes.synopsis`. Page, page range, eighths, lines on the page:
+`measurement_scenes`, on the `measurements` row at the project's format in `paged` mode — the
+same row the nav and the project card count from — and `—` on every card when there is none.
+The excerpt: the node list, cut at the headings derivation accepted (`lib/scenes/excerpt.ts`,
+tested), so a demoted heading stays inside the scene it was in as the text the writer typed.
+Scene-typed nodes with no derived row are listed as *not read as a scene*, with the parser's own
+reason, and are never a card.
+
+### Judgement calls in this phase, each reversible
+
+- **The bundle's `＋ New scene`, `＋ New card`, drag-to-reorder, "Colour by" and act columns are
+  not built.** A scene is never created here; reordering renumbers the script and is a document
+  write; acts are not a table; the colour palettes are hexes outside the tokens.
+- **`⤒ Export scene report` is not drawn.** Export is a queued job that does not exist.
+- **The empty-synopsis button reads "No synopsis yet · write one"**, not the bundle's
+  "summarise from the page" with a `✦`. Scene-level AI belongs to a later phase.
+- **The view tabs carry no glyphs.** The bundle's `▦ ▣ ▤` are outside AGENTS.md's eighteen and
+  `▤` already means Script in the nav. Text only, until someone rules on widening the set.
+- **The canvas toolbar is Fit / − / ＋ only**, as text; the bundle's `⌖` select and `✋` pan
+  tools have no canvas to act on, and `⛶` has an emoji form. Card zoom is React state, not the
+  session store's `zoom`, which is the sheet's.
+- **"Show nav" / "Hide nav" is not on the footer.** The episode nav is a layout with no toggle
+  wiring in this phase.
+- **`N chars` on a card is `scene_derivations.cast_size`** (speaking plus mentioned), titled
+  "Cast size"; the bundle titles it "Speaking characters". The chips beside it are the same list,
+  so the number and the chips agree.
+- **The list view's Status column is `Ready` / `Draft` from whether a synopsis exists**, as the
+  bundle computes it. It is a display of authored data, not a stored state.
+- **Four type steps were added to the tokens** — 6.5, 7, 16 and 20px — because the Scenes bundle
+  uses them and the README's list did not name them. The route's own header is 21px like every
+  other, not the bundle's 19px act header.
+- **The header title is `Scenes`**, not the bundle's "Scene Board": `ROUTE_TITLE`, the nav and the
+  smoke test all say `Scenes`, and the Script bundle wins on chrome.
+
+
+## Script route phase: eight rulings, and where Slate meets the union
+
+**Ruled by the client, not inferred.** Everything the brief said to stop on was put back as a
+question before anything was built, and answered on 2026-09-11.
+
+| Item | Ruling | Consequence |
+| --- | --- | --- |
+| AGENTS.md open decision 1 — node identity | Treated as **ruled by ADR 0001** (Accepted, delegated, implemented). The table row is still marked open because amending the contract is a separate call | The editor implements head-wins split, first-wins merge, tombstoned delete, preserve-if-absent paste — see below |
+| `?panel=collab` | **Threads + revision list, no presence** | The bundle's Collaborators section (`Scene 12 · Dialogue`, `idle 4m`, live dots) is not drawn. AGENTS.md's "no realtime" stands |
+| `?panel=composer` | **Not a value.** `panel=info\|collab` only | The composer is a floating window (AGENTS.md; the design file's own `sideTab` prop agrees). The footer button is drawn as the bundle draws it and disabled. `?panel=composer` is a 404 |
+| Comment node authoring | **`⌘7` / the type bar only.** Enter at the end of a comment creates an Action; Tab never cycles into Comment; no `[[` shortcut | `lib/script/keyboard.ts`, as `Record<ScreenplayNodeType, …>` tables |
+| Lines per inch | **Six.** AGENTS.md's "12 lines per inch" is superseded | `LINES_PER_INCH = 6` in `sheet.ts`; the golden page map regenerated (58 → 115 pages for the feature corpus). See below |
+| Dependencies | **`platejs@53.3.11`** (one package; bundles Slate) and **`fast-xml-parser@5.11.1`**, both in `apps/web` only | No other `@platejs/*` package. `packages/script` still has zero dependencies |
+| Migration `0003` | **`projects.page_mode` + `projects.live_repaginate`**, per project, any member may write | The pair AGENTS.md's exception table specifies finally has a home. `lib/state/project-preferences.ts` is the control ↔ model boundary |
+| `?doc=cover` | **A `title_pages` table**, one row per episode, Fountain's title-page keys as columns, editable | Part of migration `0003`. Not a `documents` row: it has no node list |
+
+### Lines per inch: why the sheet forced the ruling
+
+The engine was at 12 (AGENTS.md's figure) and the bundle at 6 (`font-size:16px;line-height:16px`
+on a 96dpi sheet). Until a sheet was drawn the disagreement was a page-count question. Drawing one
+made it a rendering impossibility: 12pt Courier is 16px tall, and on a 12-lpi grid the glyphs
+overlap, or the page is 1920px tall, or the visual line count disagrees with the record. Six is
+the industry single-spaced metric (54 lines to a Letter page) and what the bundle draws. The
+constant moved, `sheet.test.ts` asserts six, `paginate.test.ts` had its page-relative literals
+rewritten against `LINES_PER_PAGE`, and the golden regenerated with a 346-/289-line diff that was
+read before it was pasted in. **AGENTS.md still says twelve; amending it is a separate call.**
+
+### Where Slate's shape meets the union, and what stops them drifting
+
+`apps/web/lib/script/slate-model.ts` is the whole of the contact. `toSlateValue` runs on load,
+`fromSlateValue` on save, and the second goes through `readScreenplayNode` — the strict wire
+reader in `@folio/script` that refuses an unknown type, an unknown field, a pagination field, an
+empty or duplicate id. A shape Plate introduced cannot be saved; the save refuses and the banner
+names the defect. `ScriptElement.type` is `ScreenplayNodeType`, not `string`; the eight block
+plugins are built from `SCREENPLAY_NODE_TYPES` so the list cannot be longer or shorter than the
+union; every keyboard table is a `Record` over the union. **Plate's core `NodeIdPlugin` is off**
+(`nodeId: false`) — it would mint `nanoid(10)` ids on split and paste — and
+`lib/script/identity.ts` on `editor.apply` is the only minter, replaying ADR 0001 at the one door
+every Slate transform, undo, redo and paste goes through. Tested headless in
+`apps/web/tests/script-identity.test.ts`.
+
+### Pagination on the sheet
+
+The record is the server's. `loadScript` runs `paginate` over the rows it is about to render and
+`saveScript` runs it again and stores it; the client never invents a page. The sheet is one
+contiguous editable, so a page is not a box blocks live in: `lib/script/layout.ts` turns the
+record into each block's top margin (including the jump across a page boundary), a gap inside a
+split block carrying `(MORE)` and the continued cue, and absolutely positioned page frames behind
+the flow. Blocks are `white-space: pre` and never wrap on their own — the line ends are the
+engine's, computed by `lib/script/lines.ts` (the same algorithm as `wrapText`, walked with editor
+offsets) and drawn as decorations. `script-lines.test.ts` asserts exact agreement with `wrapText`.
+`liveRepaginate` runs the same `paginate` in the browser on every change; the server's record
+replaces it on the next save.
+
+### Judgement calls in this phase, each reversible
+
+- **Autosave is 1.5s after the last change; a `versions` snapshot is requested at most every five
+  minutes and on `⌘S`.** Nothing specifies either cadence.
+- **Saves write only the rows that changed** (`reconcileNodes`: longest-increasing-subsequence over
+  existing order keys, re-keying the rest). `replaceNodes` is kept for import.
+- **`⌘1`–`⌘8`, not bare digits**, as the bundle writes them; a bare `3` in dialogue is a `3`.
+- **The Format control is live** (writes `projects.format`); **the Project type control is
+  shown disabled** — film ↔ series reshapes every URL and is not a panel toggle.
+- **`?panel=` is a query param** on the client's instruction, although the README and AGENTS.md's
+  exception table put the tab in session state. `useSession().sideTab` is not read by Script.
+- **`?content=` is not a param.** `empty` is `loadScript` finding no document. Unknown keys are
+  ignored, so a stale `?content=empty` link is neither honoured nor a 404.
+- **In `continuous` mode the server also computes the `paged` record**, because the bundle's copy
+  says the page count stays live in minimal mode and export needs it.
+- **The cover's fields are Fountain's keys** laid out the conventional way; nothing in the bundle
+  draws a title page.
+- **Derivation runs on every save, project-wide**, and persists — with the three fixes the Scenes
+  phase found in the same day. The Info panel's numbers are that pass's; Beats and Shots are typed
+  as the literal `0`.
+- **The Info panel's Dialogue / Subtitle rows print `—`.** The bundle shows `Hinglish` /
+  `देवनागरी`; no language setting exists anywhere.
+- **The episode nav is not revalidated on autosave.** Its page count follows the next navigation.
+- **Two writers still cannot be told apart by role.** `memberships.role` is read by nothing; the
+  gate is membership. Unchanged from every earlier phase and flagged again.

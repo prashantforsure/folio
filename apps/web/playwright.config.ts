@@ -35,7 +35,7 @@ import { defineConfig, devices } from '@playwright/test'
  * flagged in the phase report as not done.
  */
 
-const PORT = 3210
+const PORT = Number(process.env['E2E_PORT'] ?? 3210)
 
 /**
  * The account the signed-in walk uses, or `null` to skip it.
@@ -47,12 +47,21 @@ const PORT = 3210
  */
 export type WalkOptions = {
   readonly account: { readonly email: string; readonly password: string } | null
+  /**
+   * An existing Script-route URL for `script-route.spec.ts` to reuse instead of
+   * creating a project and importing the corpus again (`E2E_SCRIPT_URL`).
+   * Iteration only; the full walk runs with it unset.
+   */
+  readonly scriptProjectUrl: string | null
 }
 
 const EMAIL = process.env['E2E_EMAIL']
 const PASSWORD = process.env['E2E_PASSWORD']
 const ACCOUNT: WalkOptions['account'] =
   typeof EMAIL === 'string' && typeof PASSWORD === 'string' ? { email: EMAIL, password: PASSWORD } : null
+
+/** Both set: the signed-in walk runs and the dev server keeps its real `.env`. */
+const SCRIPT_URL = process.env['E2E_SCRIPT_URL'] ?? null
 
 /** Both set: the signed-in walk runs and the dev server keeps its real `.env`. */
 const SIGNED_IN_WALK = ACCOUNT !== null
@@ -81,6 +90,7 @@ export default defineConfig<WalkOptions>({
   use: {
     baseURL: `http://localhost:${String(PORT)}`,
     account: ACCOUNT,
+    scriptProjectUrl: SCRIPT_URL,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {

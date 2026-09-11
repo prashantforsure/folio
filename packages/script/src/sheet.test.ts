@@ -100,19 +100,19 @@ describe('US Letter', () => {
   })
 
   /**
-   * AGENTS.md says twelve. The design bundle draws six (`line-height:16px` at
-   * 96dpi), and `docs/ui design/README.md` leaves the row open. This asserts
-   * what is implemented - twelve, as written - so that re-ruling it to six is a
+   * AGENTS.md wrote twelve. The design bundle draws six (`line-height:16px` at
+   * 96dpi), and the client ruled six on 2026-09-11 (`docs/build-decisions.md`,
+   * Script route phase). This asserts the ruling so that a change back is a
    * visible test change and a golden regeneration, not a silent drift.
    */
-  it('is on twelve lines to the inch, which is AGENTS.md and is disputed', () => {
+  it('is on six lines to the inch, as ruled for the Script route', () => {
     const sheet = hollywood()
-    expect(LINES_PER_INCH).toBe(12)
-    expect(sheet.linesPerInch).toBe(12)
-    expect(sheet.lineHeightPx).toBe(8)
+    expect(LINES_PER_INCH).toBe(6)
+    expect(sheet.linesPerInch).toBe(6)
+    expect(sheet.lineHeightPx).toBe(16)
     expect(sheet.marginTopPx).toBe(96)
     expect(sheet.marginBottomPx).toBe(96)
-    expect(sheet.linesPerPage).toBe(108)
+    expect(sheet.linesPerPage).toBe(54)
   })
 })
 
@@ -174,10 +174,10 @@ describe('measuring text', () => {
 describe('eighths', () => {
   it('is eight to the page, rounded, never below one for a scene that exists', () => {
     expect(EIGHTHS_PER_PAGE).toBe(8)
-    expect(eighthsOf(108, 108)).toBe(8)
-    expect(eighthsOf(54, 108)).toBe(4)
-    expect(eighthsOf(1, 108)).toBe(1)
-    expect(eighthsOf(0, 108)).toBe(0)
+    expect(eighthsOf(54, 54)).toBe(8)
+    expect(eighthsOf(27, 54)).toBe(4)
+    expect(eighthsOf(1, 54)).toBe(1)
+    expect(eighthsOf(0, 54)).toBe(0)
   })
 
   it('prints the way the breakdown column in the Script bundle prints', () => {

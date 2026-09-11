@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { SceneDerivationSchema } from './derived'
 import { NodeIdSchema } from './ids'
 import { EpisodeSchema } from './tenancy'
 
@@ -136,3 +137,28 @@ export const EpisodeSceneRowSchema = z.object({
 })
 
 export type EpisodeSceneRow = z.infer<typeof EpisodeSceneRowSchema>
+
+// ---------------------------------------------------------------------------
+// The Scenes route
+// ---------------------------------------------------------------------------
+
+/**
+ * One scene as the Scenes route reads it: the derived row, joined to the one
+ * authored field the route may write.
+ *
+ *   everything in `SceneDerivationSchema`   `scene_derivations` - DERIVED CACHE
+ *   `synopsis`                              `scenes.synopsis` - AUTHORED. May be
+ *                                           `null`; survives a re-derive intact
+ *                                           because `commitDerivation` never
+ *                                           touches `scenes`.
+ *
+ * What is *not* here, on purpose: page, eighths, rendered lines. Those are
+ * `measurement_scenes` and the route reads them from `MeasurementScene`, keyed
+ * by the same `sceneNodeId`. Joining them onto this shape would let a component
+ * forget which table a number came from.
+ */
+export const SceneBoardRowSchema = SceneDerivationSchema.extend({
+  synopsis: z.string().nullable(),
+})
+
+export type SceneBoardRow = z.infer<typeof SceneBoardRowSchema>

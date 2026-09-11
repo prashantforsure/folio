@@ -38,21 +38,26 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 ## Repository state
 
 - `packages/script` — the pure core, done: node model, seven operations, Fountain both ways, FDX
-  import (not callable yet — needs an unapproved XML parser), derivation, pagination.
+  import (callable from `apps/web` through `fast-xml-parser`, approved in the Script phase),
+  derivation, pagination at **six lines per inch** (ruled 2026-09-11; AGENTS.md still says twelve).
   19 test files, 388 tests.
-- `packages/contracts`, `packages/db` — built: Zod boundary schemas, 30-table Drizzle schema, three
-  forward-only migrations (applied to the dev Supabase project in the shell-routes phase),
-  project-scoped repositories.
+- `packages/contracts`, `packages/db` — built: Zod boundary schemas, 31-table Drizzle schema, four
+  forward-only migrations (all applied to the dev Supabase project; `0003` adds the pagination
+  preference to `projects` and `title_pages`), project-scoped repositories.
 - `packages/ui` — tokens as CSS custom properties, plus `Glyph`, `RevisionSwatch`, `Avatar`.
   Nothing else; no component reads a colour into JavaScript.
 - `apps/web` — auth (Google OAuth + email/password), the signed-in home shell and its six routes,
-  and the project workspace **chrome**: rail, episode nav, fourteen empty route shells, param
-  validation. Route bodies are unbuilt on purpose. `lib/workspace/routes.ts` is the route tree.
+  the project workspace **chrome** (rail, episode nav, param validation), and the **Script route**
+  — Plate on Slate mapped one-to-one onto the eight-type union (`lib/script/slate-model.ts` is
+  the boundary), server-side pagination drawn as page frames, autosave with last-write-wins, FDX
+  and Fountain import, the cover. Other route bodies are unbuilt on purpose.
+  `lib/workspace/routes.ts` is the route tree.
 - `apps/worker` — empty on purpose. Do not create `apps/sync/`.
 - Unwritten and unblocked: **FDX export**.
 - **Nothing needs a live database** to typecheck, lint, build or unit-test. The signed-in E2E
-  walks (`shell-routes.spec.ts`, `workspace.spec.ts`) need `E2E_EMAIL`/`E2E_PASSWORD` and skip
-  without them.
+  walks (`shell-routes.spec.ts`, `workspace.spec.ts`, `script-route.spec.ts`) need
+  `E2E_EMAIL`/`E2E_PASSWORD` and skip without them; `E2E_PORT` points them at a running dev
+  server. The Script walk imports the golden corpus and diffs the rendered page map against it.
 
 ## Commands
 

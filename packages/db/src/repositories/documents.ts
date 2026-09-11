@@ -1,4 +1,4 @@
-import type { DocumentRecord, EpisodeId, NodeTombstone, OrderKey } from '@folio/contracts'
+import type { DocumentRecord, EpisodeId, NodeTombstone, OrderKey, Timestamp } from '@folio/contracts'
 import { episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
 import { documentId as brandDocumentId, isErr, ok } from '@folio/script'
 import type {
@@ -12,10 +12,11 @@ import type {
 } from '@folio/script'
 import { asc, eq, inArray } from 'drizzle-orm'
 
-import { between, firstOrderKey, spread } from '../order'
-import { documents, nodeTombstones, nodes } from '../schema'
+import { between, byOrderKey, firstOrderKey, spread } from '../order'
+import { documents, episodes, nodeTombstones, nodes } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
+import type { NodeWrite } from './mapping'
 import {
   nodeToWrite,
   outlineNodeFromRow,
@@ -134,7 +135,8 @@ const NODE_COLUMNS = {
  * Every screenplay node in a document, in order.
  *
  * Ordered by `order_key`, which is a lexicographic fractional index - see
- * `../order.ts` for why it is text and not a float. A `Result`, because a row
+ * `../order.ts` for why it is text and not a float, and `byOrderKey` there
+ * for why the sort names its collation. A `Result`, because a row
  * that will not read is data about a broken document and the caller has to be
  * able to say so.
  */
@@ -146,7 +148,7 @@ export const readScreenplayNodes = async (
     .select(NODE_COLUMNS)
     .from(nodes)
     .where(scoped(scope, nodes, eq(nodes.documentId, documentId)))
-    .orderBy(asc(nodes.orderKey))
+    .orderBy(byOrderKey(nodes.orderKey))
   const out: OrderedNode<ScreenplayNode>[] = []
   for (const row of rows) {
     const node = screenplayNodeFromRow(row)
@@ -164,7 +166,7 @@ export const readOutlineNodes = async (
     .select(NODE_COLUMNS)
     .from(nodes)
     .where(scoped(scope, nodes, eq(nodes.documentId, documentId)))
-    .orderBy(asc(nodes.orderKey))
+    .orderBy(byOrderKey(nodes.orderKey))
   const out: OrderedNode<OutlineNode>[] = []
   for (const row of rows) {
     const node = outlineNodeFromRow(row)
@@ -372,4 +374,265 @@ export const mintNodeIds = async (
     }
   }
   return minted
+}
+
+// ---------------------------------------------------------------------------
+// Reconciling a node list - the Script route's save path
+// ---------------------------------------------------------------------------
+
+/**
+ * The longest increasing subsequence of `keys`, as a set of indexes.
+ *
+ * Used to decide which existing order keys can be kept when a node list is
+ * written back: every node whose key already sorts correctly against the ones
+ * around it keeps its row untouched, and only the rest are re-keyed. Standard
+ * patience sorting, O(n log n), over the keys in *new document order*.
+ */
+const longestIncreasing = (keys: readonly (string | null)[]): ReadonlySet<number> => {
+  const tails: number[] = []
+  const previous: number[] = new Array<number>(keys.length).fill(-1)
+  const tailKey = (index: number): string => keys[index] ?? ''
+  keys.forEach((key, index) => {
+    if (key === null) return
+    let low = 0
+    let high = tails.length
+    while (low < high) {
+      const mid = (low + high) >> 1
+      const at = tails[mid]
+      if (at !== undefined && tailKey(at) < key) low = mid + 1
+      else high = mid
+    }
+    const before = tails[low - 1]
+    previous[index] = low > 0 && before !== undefined ? before : -1
+    tails[low] = index
+  })
+  const kept = new Set<number>()
+  let cursor = tails[tails.length - 1] ?? -1
+  while (cursor !== -1) {
+    kept.add(cursor)
+    cursor = previous[cursor] ?? -1
+  }
+  return kept
+}
+
+/** The columns a save compares. Order is compared separately. */
+const sameContent = (
+  row: {
+    readonly type: string
+    readonly content: unknown
+    readonly modifiers: readonly string[]
+    readonly provenanceSource: string
+    readonly provenanceRunId: string | null
+  },
+  write: NodeWrite,
+): boolean =>
+  row.type === write.type &&
+  row.provenanceSource === write.provenanceSource &&
+  row.provenanceRunId === write.provenanceRunId &&
+  JSON.stringify(row.content) === JSON.stringify(write.content) &&
+  JSON.stringify(row.modifiers) === JSON.stringify(write.modifiers)
+
+export type ReconcileSummary = {
+  readonly inserted: number
+  readonly updated: number
+  readonly deleted: number
+  readonly rekeyed: number
+  /** `documents.updated_at` after the write. The save's new base version. */
+  readonly updatedAt: Timestamp
+}
+
+/**
+ * Write a node list back with the fewest rows touched.
+ *
+ * `replaceNodes` rewrites every row, which is right for an import and wrong
+ * for a keystroke: an autosave on a feature-length script would delete and
+ * reinsert six thousand rows every second and a half. This walks the new
+ * list against the stored one and writes only what changed - a node whose
+ * content, type or provenance differs is updated; one that is gone is
+ * deleted; one that is new is inserted between its neighbours; and an order
+ * key is reassigned only when the node moved relative to the keys around it
+ * (the longest run of keys already in order is kept, everything else is
+ * re-keyed between them).
+ *
+ * The result is the same rows `replaceNodes` would have produced, in the same
+ * order, without the churn. Tombstones are still `retireNodes`' business, for
+ * the reason its header gives.
+ *
+ * Ids new to the document are checked inside the transaction, against the
+ * tombstones and against every node in the project (ADR 0001: never reused,
+ * globally unique). A reused id refuses the whole write and names the ids; the
+ * caller re-mints. Done here rather than by a separate read because the rows
+ * are in hand already and a save is a round-trip budget.
+ */
+export const reconcileNodes = async (
+  scope: ProjectScope,
+  documentId: DocumentId,
+  kind: DocumentKind,
+  list: readonly ScreenplayNode[],
+): Promise<ReconcileSummary | { readonly unusable: readonly NodeId[] }> => {
+  return dbOf(scope).transaction(async (tx) => {
+    const existing = await tx
+      .select(NODE_COLUMNS)
+      .from(nodes)
+      .where(scoped(scope, nodes, eq(nodes.documentId, documentId)))
+    const held = new Map(existing.map((row) => [row.id, row]))
+    const wanted = new Set(list.map((node) => node.id as string))
+
+    const introduced = list.map((node) => node.id).filter((id) => !held.has(id))
+    if (introduced.length > 0) {
+      const [tombstoned, present] = await Promise.all([
+        tx
+          .select({ id: nodeTombstones.nodeId })
+          .from(nodeTombstones)
+          .where(scoped(scope, nodeTombstones, inArray(nodeTombstones.nodeId, [...introduced]))),
+        tx
+          .select({ id: nodes.id })
+          .from(nodes)
+          .where(scoped(scope, nodes, inArray(nodes.id, [...introduced]))),
+      ])
+      const used = new Set<string>([...tombstoned, ...present].map((row) => row.id))
+      const unusable = introduced.filter((id) => used.has(id))
+      if (unusable.length > 0) return { unusable }
+    }
+
+    const gone = existing.filter((row) => !wanted.has(row.id)).map((row) => row.id)
+    if (gone.length > 0) {
+      await tx
+        .delete(nodes)
+        .where(scoped(scope, nodes, eq(nodes.documentId, documentId), inArray(nodes.id, gone)))
+    }
+
+    const currentKeys = list.map((node) => held.get(node.id)?.orderKey ?? null)
+    const kept = longestIncreasing(currentKeys)
+
+    // The next kept key after each position, so a re-keyed node lands between
+    // the last key written and the next one that is staying put.
+    const nextKept: (OrderKey | null)[] = new Array<OrderKey | null>(list.length).fill(null)
+    let following: OrderKey | null = null
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+      nextKept[index] = following
+      const key = currentKeys[index]
+      if (kept.has(index) && key !== null) following = key as OrderKey
+    }
+
+    let inserted = 0
+    let updated = 0
+    let rekeyed = 0
+    let previousKey: OrderKey | null = null
+    for (let index = 0; index < list.length; index += 1) {
+      const node = list[index]
+      if (node === undefined) continue
+      const row = held.get(node.id)
+      const heldKey = currentKeys[index]
+      const keepKey = row !== undefined && kept.has(index) && heldKey !== null
+      const orderKey: OrderKey = keepKey
+        ? (heldKey as OrderKey)
+        : between(previousKey, nextKept[index] ?? null)
+      const write = nodeToWrite(node, orderKey)
+
+      if (row === undefined) {
+        await tx.insert(nodes).values({
+          ...tenant(scope),
+          documentId,
+          documentKind: kind,
+          id: write.id,
+          type: write.type,
+          orderKey: write.orderKey,
+          content: write.content,
+          modifiers: [...write.modifiers],
+          provenanceSource: write.provenanceSource,
+          provenanceRunId: write.provenanceRunId,
+        })
+        inserted += 1
+      } else {
+        const changed = !sameContent(row, write)
+        const moved = !keepKey
+        if (changed || moved) {
+          await tx
+            .update(nodes)
+            .set({
+              type: write.type,
+              orderKey: write.orderKey,
+              content: write.content,
+              modifiers: [...write.modifiers],
+              provenanceSource: write.provenanceSource,
+              provenanceRunId: write.provenanceRunId,
+              updatedAt: new Date(),
+            })
+            .where(scoped(scope, nodes, eq(nodes.id, node.id)))
+          if (changed) updated += 1
+          if (moved) rekeyed += 1
+        }
+      }
+      previousKey = orderKey
+    }
+
+    const stamped = await tx
+      .update(documents)
+      .set({ updatedAt: new Date() })
+      .where(scoped(scope, documents, eq(documents.id, documentId)))
+      .returning({ updatedAt: documents.updatedAt })
+    const header = stamped[0]
+    if (header === undefined) {
+      throw new Error(
+        'Folio: reconciling nodes touched no document row. This is a bug in the repository.',
+      )
+    }
+    return { inserted, updated, deleted: gone.length, rekeyed, updatedAt: stamp(header.updatedAt) }
+  })
+}
+
+/**
+ * Which of these ids may not be introduced as new nodes.
+ *
+ * ADR 0001: an id is never reused. A client mints ids optimistically (the
+ * editor cannot wait for a round trip on every Enter), so the server checks
+ * them on the way in: an id that is tombstoned, or that already exists on any
+ * node in the project, is refused. Global uniqueness is what keeps the comment
+ * join a single column, so the second check is across every document.
+ */
+export const findUnusableIds = async (
+  scope: ProjectScope,
+  ids: readonly NodeId[],
+): Promise<readonly NodeId[]> => {
+  if (ids.length === 0) return []
+  const db = dbOf(scope)
+  const [tombstoned, present] = await Promise.all([
+    db
+      .select({ id: nodeTombstones.nodeId })
+      .from(nodeTombstones)
+      .where(scoped(scope, nodeTombstones, inArray(nodeTombstones.nodeId, [...ids]))),
+    db
+      .select({ id: nodes.id })
+      .from(nodes)
+      .where(scoped(scope, nodes, inArray(nodes.id, [...ids]))),
+  ])
+  const unusable = new Set<string>([...tombstoned, ...present].map((row) => row.id))
+  return ids.filter((id) => unusable.has(id))
+}
+
+/**
+ * Every screenplay node in the project, in episode order then document order.
+ *
+ * Derivation is project-wide - "Entities stay project-wide" (the Script
+ * bundle's own copy) - so it reads one list across every episode's script.
+ * A row that will not read is a `ModelDefect`, as with the per-document read.
+ */
+export const readProjectScreenplayNodes = async (
+  scope: ProjectScope,
+): Promise<Result<readonly ScreenplayNode[], ModelDefect>> => {
+  const rows = await dbOf(scope)
+    .select({ ...NODE_COLUMNS, ordinal: episodes.ordinal })
+    .from(nodes)
+    .innerJoin(documents, eq(documents.id, nodes.documentId))
+    .innerJoin(episodes, eq(episodes.id, documents.episodeId))
+    .where(scoped(scope, nodes, eq(nodes.documentKind, 'screenplay')))
+    .orderBy(asc(episodes.ordinal), byOrderKey(nodes.orderKey))
+  const out: ScreenplayNode[] = []
+  for (const row of rows) {
+    const node = screenplayNodeFromRow(row)
+    if (isErr(node)) return node
+    out.push(node.value)
+  }
+  return ok(out)
 }

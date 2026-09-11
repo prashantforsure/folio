@@ -1,4 +1,7 @@
 import type { OrderKey } from '@folio/contracts'
+import { sql } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
+import type { PgColumn } from 'drizzle-orm/pg-core'
 
 /**
  * Fractional index keys.
@@ -57,6 +60,30 @@ const asOrderKey = (raw: string): OrderKey => {
   // else.
   return raw as OrderKey
 }
+
+/**
+ * The `ORDER BY` expression for an order-key column. **Always use this, never
+ * `asc(nodes.orderKey)`.**
+ *
+ * The invariant above - the database sorts the alphabet the way JavaScript
+ * does - held on paper and not in the database. The column is declared plain
+ * `text` (`schema/columns.ts`, migration `0000`), so it takes the database's
+ * default collation, and the dev Supabase project's is `en_US.UTF-8`: locale-
+ * aware, case-folding, `k` before `U`. Found in the Scenes route phase, by the
+ * first feature-length import: `ORDER BY order_key` returned the 2,937 nodes
+ * of a script starting at the 3,000th key, and derivation - which reads
+ * through this repository - numbered the scenes in that order while the
+ * measurement record, computed over the list as imported, numbered them in
+ * the real one. 172 of 220 cards disagreed with themselves.
+ *
+ * `COLLATE "C"` on the read is byte order, which is what `between` and
+ * `spread` produce, and it is applied here so every read site says the same
+ * thing. It is the read-side half of the fix. The durable half is a forward
+ * migration putting the collation on the column itself, so an index or an
+ * ad-hoc query cannot fall back to the locale - that is a schema change and
+ * is escalated rather than made in this phase (`docs/build-decisions.md`).
+ */
+export const byOrderKey = (column: PgColumn): SQL => sql`${column} COLLATE "C" ASC`
 
 /** The key for the first node in an empty document. */
 export const firstOrderKey = (): OrderKey => asOrderKey(MID)

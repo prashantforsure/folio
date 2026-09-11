@@ -8,12 +8,13 @@ import type { WorkspaceRoute } from '../../../../../../lib/workspace/routes'
 import { PageHeader } from '../../../../_shell/page-header'
 
 /**
- * A route's shell: the 46px page header and an empty body.
+ * A route's shell: the 46px page header and a body.
  *
- * **Empty on purpose.** The brief for this phase: "Chrome only - the fourteen
- * routes stay empty this phase." Each route's body, in both states, is the
- * work of a later phase; what a route gets now is its title, its position in
- * the frame, and its sub-views parsed and exposed.
+ * **Empty by default.** The shell-routes brief: "Chrome only - the fourteen
+ * routes stay empty this phase." A route that has been built since supplies
+ * `render` for its body and, when its header carries more than the title (a
+ * count, view tabs), `header` in place of the plain `PageHeader`. Scenes was
+ * the first to do both.
  *
  * ## Sub-views are parsed here and refused here
  *
@@ -31,11 +32,14 @@ export const RouteShell = async <R extends WorkspaceRoute>({
   route,
   searchParams,
   render,
+  header,
 }: {
   readonly route: R
   readonly searchParams: Promise<RawSearchParams>
-  /** The body, when there is one. Receives the parsed sub-views. Absent this phase. */
+  /** The body, when there is one. Receives the parsed sub-views. */
   readonly render?: (subViews: SubViews<R>) => ReactNode
+  /** The 46px header, when the route's has more than a title. Same geometry; use `PageHeader`. */
+  readonly header?: (subViews: SubViews<R>) => ReactNode
 }) => {
   const parsed = parseSubViews(route, await searchParams)
   if (!parsed.ok) notFound()
@@ -50,7 +54,7 @@ export const RouteShell = async <R extends WorkspaceRoute>({
       {...attributes}
       className="flex min-w-0 flex-1 flex-col overflow-hidden"
     >
-      <PageHeader title={ROUTE_TITLE[route]} />
+      {header === undefined ? <PageHeader title={ROUTE_TITLE[route]} /> : header(parsed.params)}
       <div className="min-h-0 flex-1 overflow-auto">{render?.(parsed.params)}</div>
     </main>
   )

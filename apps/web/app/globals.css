@@ -164,3 +164,315 @@
     white-space: nowrap;
   }
 }
+
+/*
+ * The script sheet. `Route - Script.dc.html`, the sheet element and its
+ * children, transcribed: every inset is the bundle's own pixel figure at the
+ * 816px width (96px = 1in), and `@folio/script`'s `sheet.ts` reads the same
+ * numbers into the pagination engine - the two must agree or the page count
+ * on screen stops being the page count in print.
+ *
+ * The line is 16px (Courier Prime 12pt at 96dpi on six lines to the inch -
+ * the ruling recorded in `docs/build-decisions.md`, Script route phase) and
+ * every vertical measure on the sheet is a whole number of lines. Blocks are
+ * `white-space: pre` and never wrap on their own: the line ends are the
+ * engine's, drawn by `.folio-line-end::after` (see `lib/script/lines.ts`).
+ *
+ * Colours are the sheet tokens - `--sheet`, `--sheet-ink`, `--sheet-line`,
+ * `--sheet-edge` - which the theme switches: in dark mode the sheet is
+ * tinted, never white, never black. No `dark:` anywhere; the cascade under
+ * `data-theme` is what makes a light sheet inside a dark desk possible.
+ */
+@layer components {
+  .folio-desk {
+    position: relative;
+    width: 816px;
+    flex: none;
+  }
+
+  .folio-page {
+    position: absolute;
+    left: 0;
+    width: 816px;
+    height: 1056px;
+    background: var(--sheet);
+    border: 1px solid var(--sheet-edge);
+    border-radius: var(--radius-sheet);
+    pointer-events: none;
+  }
+
+  .folio-page-number {
+    position: absolute;
+    top: 48px;
+    right: 96px;
+    color: var(--ink3);
+    font-family: var(--font-mono);
+    font-size: 16px;
+    line-height: 16px;
+    user-select: none;
+  }
+
+  .folio-editable {
+    position: relative;
+    outline: none;
+    font-family: var(--font-mono);
+    font-size: 16px;
+    line-height: 16px;
+    color: var(--sheet-ink);
+    caret-color: var(--accent);
+  }
+
+  .folio-editable ::selection {
+    background: var(--accent-bg);
+  }
+
+  .folio-block {
+    position: relative;
+    white-space: pre;
+    padding: 0 96px 0 144px;
+    min-height: 16px;
+  }
+
+  .folio-block[data-type='scene'] {
+    text-transform: uppercase;
+  }
+
+  .folio-block[data-type='character'] {
+    padding-left: 355px;
+    text-transform: uppercase;
+  }
+
+  .folio-block[data-type='paren'] {
+    padding-left: 298px;
+    padding-right: 278px;
+  }
+
+  .folio-block[data-type='dialogue'] {
+    padding-left: 240px;
+    padding-right: 240px;
+  }
+
+  .folio-block[data-type='subtitle'] {
+    padding-left: 240px;
+    padding-right: 240px;
+    font-style: italic;
+    color: var(--ink2);
+  }
+
+  .folio-block[data-type='transition'] {
+    padding-left: 576px;
+    text-transform: uppercase;
+    color: var(--ink2);
+  }
+
+  /*
+   * The comment block: an amber note inset to the action measure, labelled
+   * COMMENT with "not exported - not paginated". Zero page space: its drawn
+   * height is subtracted from the next block's margin by `lib/script/layout.ts`,
+   * which is why the vertical chrome here is fixed - 8px above, 4px and 4px
+   * inside, a 16px label line - and must not change without changing it there.
+   */
+  .folio-block[data-type='comment'] {
+    margin: 8px 96px 0 144px;
+    padding: 4px 10px;
+    border-left: 2px solid var(--note);
+    background: var(--note-bg);
+    border-radius: 0 4px 4px 0;
+  }
+
+  .folio-comment-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 16px;
+    font-family: var(--font-sans);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--note);
+    user-select: none;
+  }
+
+  .folio-comment-label > span {
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    opacity: 0.85;
+  }
+
+  /* An engine line end. The break is a rendered newline, not a DOM node. */
+  .folio-line-end::after {
+    content: '\A';
+    white-space: pre;
+  }
+
+  /* The caret line's element chip: 9px, accent, at the sheet's inner margin. */
+  .folio-chip {
+    position: absolute;
+    left: 96px;
+    top: -1px;
+    font-family: var(--font-sans);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    user-select: none;
+    pointer-events: none;
+  }
+
+  /* An @mention: accent ground, accent underline, as the bundle draws MEERA. */
+  .folio-mention {
+    background: var(--accent-bg);
+    border-bottom: 1px solid var(--accent-line);
+    border-radius: 2px;
+  }
+
+  .folio-mention[data-selected='true'] {
+    box-shadow: 0 0 0 2px var(--focus);
+  }
+
+  /*
+   * A page gap inside a split block: the rest of the page, the desk between
+   * sheets, and the next page's top margin, with (MORE) at its head and the
+   * continued cue at its foot. A block box inside the inline flow, so the
+   * lines after it continue on the next sheet.
+   */
+  .folio-page-gap {
+    display: block;
+    position: relative;
+    user-select: none;
+  }
+
+  .folio-page-gap-more {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .folio-page-gap-continued {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    text-transform: uppercase;
+  }
+
+  .folio-ghost {
+    text-transform: uppercase;
+    color: var(--ink3);
+    letter-spacing: 0.02em;
+  }
+
+  /* The right panel's segmented control and its rows. Bundle geometry. */
+  .folio-segment {
+    display: flex;
+    padding: 2px;
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-chrome);
+    gap: 2px;
+  }
+
+  .folio-segment > button,
+  .folio-segment > a {
+    flex: 1;
+    padding: 5px 8px;
+    border: none;
+    border-radius: var(--radius-chrome);
+    cursor: pointer;
+    font-size: var(--text-11-5);
+    background: transparent;
+    color: var(--ink2);
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .folio-segment > button[aria-pressed='true'],
+  .folio-segment > a[aria-current='true'] {
+    background: var(--sel);
+    color: var(--ink);
+  }
+
+  .folio-segment[data-view='true'] > button[aria-pressed='true'],
+  .folio-segment[data-view='true'] > a[aria-current='true'] {
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+
+  .folio-segment > button:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .folio-icon-button {
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-chrome);
+    cursor: pointer;
+    font-size: var(--text-12);
+    color: var(--ink2);
+  }
+
+  .folio-icon-button:hover {
+    background: var(--hover);
+  }
+
+  .folio-icon-button[aria-pressed='true'] {
+    background: var(--sel);
+  }
+
+  .folio-small-button {
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-chrome);
+    cursor: pointer;
+    font-size: var(--text-10-5);
+    color: var(--ink2);
+  }
+
+  .folio-small-button:hover {
+    background: var(--hover);
+  }
+
+  .folio-status-button {
+    padding: 2px 7px;
+    background: transparent;
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-chrome);
+    cursor: pointer;
+    font-size: var(--text-10);
+    color: var(--ink2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .folio-status-button:hover {
+    background: var(--hover);
+  }
+
+  .folio-panel-label {
+    font-size: var(--text-9-5);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink3);
+  }
+
+  .folio-focus:focus-visible,
+  .folio-segment > button:focus-visible,
+  .folio-icon-button:focus-visible,
+  .folio-small-button:focus-visible,
+  .folio-status-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus);
+  }
+}
+
+/* The status bar's "Hide nav": the episode nav is server-rendered in the layout, so the flag rides on <html>. */
+html[data-nav-open='false'] [data-episode-nav] {
+  display: none;
+}

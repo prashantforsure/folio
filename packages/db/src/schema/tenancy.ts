@@ -1,7 +1,8 @@
 import { LEDGER_ENTRY_KINDS, MEMBERSHIP_ROLES, PROJECT_KINDS, PROJECT_TYPES } from '@folio/contracts'
-import { REVISION_COLOURS, SCRIPT_FORMATS } from '@folio/script'
+import { PAGE_MODES, REVISION_COLOURS, SCRIPT_FORMATS } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import {
+  boolean,
   check,
   index,
   integer,
@@ -57,6 +58,12 @@ import {
 export const projectKindEnum = pgEnum('project_kind', PROJECT_KINDS)
 export const projectTypeEnum = pgEnum('project_type', PROJECT_TYPES)
 export const scriptFormatEnum = pgEnum('script_format', SCRIPT_FORMATS)
+/**
+ * `paged | continuous`. Born in `measurement.ts` (migration `0000`), moved here
+ * in the Script route phase for the same reason `script_format` was: `projects`
+ * now carries one and `measurement.ts` imports this file. Same Postgres type.
+ */
+export const pageModeEnum = pgEnum('page_mode', PAGE_MODES)
 export const membershipRoleEnum = pgEnum('membership_role', MEMBERSHIP_ROLES)
 export const invitedViaEnum = pgEnum('invited_via', ['created', 'share_link'])
 export const revisionColourEnum = pgEnum('revision_colour', REVISION_COLOURS)
@@ -122,6 +129,18 @@ export const users = pgTable('users', {
  *
  * `trashed_at` is soft delete. AGENTS.md, When to ask first: deleting user data
  * needs a question, so nothing here hard-deletes.
+ *
+ * ## `page_mode` and `live_repaginate` - the pagination preference, per project
+ *
+ * AGENTS.md's "Sub-views are query params - except" table: "`pageMode` +
+ * `liveRepaginate`, per project, not in the URL." Two rendering modes plus a
+ * cadence flag, not three peer modes (`docs/build-decisions.md`, Pagination).
+ * They had no home until migration `0003`; `apps/web/lib/state/project-preferences.ts`
+ * records why `measurements.page_mode` could never be it - that column is an
+ * input echoed onto a result, and a project with two measurements has two
+ * values. **Ruled by the client, 2026-09-11: two columns here**, per project
+ * rather than per episode, writable by any member - `memberships.role` is
+ * still enforced nowhere, which is flagged, not fixed, by this phase.
  */
 export const projects = pgTable(
   'projects',
@@ -134,6 +153,10 @@ export const projects = pgTable(
     projectType: projectTypeEnum('project_type').notNull(),
     /** `hollywood | asian`. An engine input; see the header. */
     format: scriptFormatEnum('format').notNull(),
+    /** `paged | continuous`. A rendering mode the whole project shares. */
+    pageMode: pageModeEnum('page_mode').notNull().default('paged'),
+    /** A cadence flag: repaginate on every keystroke. Changes no output. */
+    liveRepaginate: boolean('live_repaginate').notNull().default(false),
     tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
     createdBy: uuid('created_by')
       .notNull()
@@ -229,5 +252,54 @@ export const episodes = pgTable(
     uniqueIndex('episodes_project_ordinal_key').on(table.projectId, table.ordinal),
     check('episodes_slug_shape', sql`${table.slug} ~ '^ep_[0-9]{3,}$'`),
     check('episodes_ordinal_positive', sql`${table.ordinal} >= 1`),
+  ],
+)
+
+// ---------------------------------------------------------------------------
+// title_pages
+// ---------------------------------------------------------------------------
+
+/**
+ * The title page. AUTHORED. One per episode.
+ *
+ * AGENTS.md, Export: "The title page is a separate document on the same sheet
+ * geometry, exported with the script." It is a document in the sense that it
+ * is drawn on a sheet and exported; it is **not** a `documents` row, because it
+ * holds no node list - a title page is a handful of named fields, and widening
+ * `document_kind` to hold one would give the node table a kind with no legal
+ * node type. The Script route renders it under `?doc=cover`.
+ *
+ * The columns are the Fountain title-page keys `@folio/script`'s
+ * `fountain-syntax.ts` already recognises (`TITLE_PAGE_KEYS`), so an import
+ * that carries a title page and an export that writes one agree on the
+ * vocabulary without a mapping table. `draft_date` is text, as Fountain has it
+ * - "Blue revision, 2 Sep 2026" is a date to a production office and not to
+ * Postgres. Every field is nullable: an empty cover is a valid cover.
+ *
+ * **Ruled by the client, 2026-09-11** (`docs/build-decisions.md`, Script route
+ * phase), as an editable table rather than read-only text from `episodes.title`.
+ */
+export const titlePages = pgTable(
+  'title_pages',
+  {
+    id: idColumn(),
+    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
+    episodeId: uuid('episode_id')
+      .notNull()
+      .references(() => episodes.id, { onDelete: 'cascade' }),
+    title: text('title'),
+    credit: text('credit'),
+    author: text('author'),
+    source: text('source'),
+    draftDate: text('draft_date'),
+    contact: text('contact'),
+    copyright: text('copyright'),
+    notes: text('notes'),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [
+    uniqueIndex('title_pages_episode_key').on(table.episodeId),
+    index('title_pages_project_idx').on(table.projectId),
   ],
 )

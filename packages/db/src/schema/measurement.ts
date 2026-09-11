@@ -1,4 +1,3 @@
-import { PAGE_MODES } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import {
   boolean,
@@ -6,7 +5,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   primaryKey,
   text,
@@ -16,7 +14,7 @@ import {
 
 import { idColumn, projectIdColumn, timestampColumn } from './columns'
 import { documents, nodes } from './documents'
-import { episodes, projects, revisionColourEnum, scriptFormatEnum } from './tenancy'
+import { episodes, pageModeEnum, projects, revisionColourEnum, scriptFormatEnum } from './tenancy'
 
 /**
  * Measurement records. The only place in this schema a page number may live.
@@ -51,9 +49,8 @@ import { episodes, projects, revisionColourEnum, scriptFormatEnum } from './tena
  * reviewer sees.
  */
 
-// `scriptFormatEnum` (`script_format`) now lives in `tenancy.ts`, because `projects`
-// carries a format too and this file imports that one. Same Postgres type.
-export const pageModeEnum = pgEnum('page_mode', PAGE_MODES)
+// `scriptFormatEnum` (`script_format`) and `pageModeEnum` (`page_mode`) live in `tenancy.ts`,
+// because `projects` carries both and this file imports that one. Same Postgres types.
 
 /**
  * One pagination pass. MEASUREMENT.

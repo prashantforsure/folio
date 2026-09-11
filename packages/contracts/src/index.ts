@@ -176,6 +176,9 @@ export type {
   Membership,
   Project,
   ProjectCard,
+  TitlePage,
+  TitlePageField,
+  TitlePageInput,
   User,
 } from './tenancy'
 export {
@@ -184,6 +187,9 @@ export {
   MembershipSchema,
   ProjectCardSchema,
   ProjectSchema,
+  TITLE_PAGE_FIELDS,
+  TitlePageInputSchema,
+  TitlePageSchema,
   UserSchema,
 } from './tenancy'
 
@@ -268,10 +274,17 @@ export {
 export type { CreditBalance, LedgerEntry } from './credits'
 export { CreditBalanceSchema, LedgerEntrySchema } from './credits'
 
-export type { EpisodeBoardRow, EpisodeNavMeta, EpisodeSceneRow, RailBadges } from './workspace'
+export type {
+  EpisodeBoardRow,
+  EpisodeNavMeta,
+  EpisodeSceneRow,
+  RailBadges,
+  SceneBoardRow,
+} from './workspace'
 export {
   EpisodeBoardRowSchema,
   EpisodeNavMetaSchema,
   EpisodeSceneRowSchema,
   RailBadgesSchema,
+  SceneBoardRowSchema,
 } from './workspace'

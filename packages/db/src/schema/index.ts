@@ -12,6 +12,7 @@
  *   projects
  *   memberships
  *   episodes
+ *   title_pages                  the cover, one per episode, Fountain's keys as columns
  *   documents
  *   nodes                        the one hand-authored artefact
  *   node_tombstones

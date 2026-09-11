@@ -41,21 +41,22 @@ import type { RenderableNode } from './stream'
  *     is what sets `linesPerPage`, so it is the assumption that moves the page
  *     count most, and it is flagged in the report.
  *
- * ## LINES_PER_INCH is disputed and is not resolved here
+ * ## LINES_PER_INCH was disputed and is now ruled: six
  *
- * AGENTS.md says 12 lines per inch and this file implements 12. The design
- * bundle sets `font-size:16px;line-height:16px` on the sheet, which is 6 lines
- * per inch at 96dpi, and lays its blank gaps out in 16px and 32px steps. Both
- * cannot be true: 12pt type is 16px tall and cannot sit on an 8px grid.
- * `docs/ui design/README.md` lists "12 vs 6 lines per inch" as one of the two
- * rows it leaves open, and CLAUDE.md says to ask rather than infer.
+ * AGENTS.md wrote 12 lines per inch and this file implemented 12 until the
+ * Script route phase. The design bundle sets `font-size:16px;line-height:16px`
+ * on the sheet, which is 6 lines per inch at 96dpi, and lays its blank gaps
+ * out in 16px and 32px steps. Both could not be true: 12pt type is 16px tall
+ * and cannot sit on an 8px grid, so the sheet the writer sees could not be
+ * drawn from a 12-lpi page map with readable type.
  *
- * So: the figure is implemented exactly as AGENTS.md writes it, it is one
- * constant, and the golden page maps are regenerable in one deliberate step
- * (see `golden-page-map.test.ts`). Nothing else in the engine hard-codes a
- * line count. Re-ruling this to 6 is a one-line change plus a golden
- * regeneration with a visible diff - which is the whole reason the maps are
- * held the way they are.
+ * **Ruled by the client, 2026-09-11: six** (`docs/build-decisions.md`, Script
+ * route phase). Six is the standard single-spaced 12pt Courier metric - 54
+ * lines to a US Letter page - and it is what the bundle draws. The constant
+ * below changed from 12 to 6, the golden page maps were regenerated as their
+ * own change with a visible diff, and nothing else in the engine hard-codes a
+ * line count. AGENTS.md's "12 lines per inch" is superseded by that ruling;
+ * amending the contract text is a separate call.
  *
  * Vertical *gaps* are held in lines, not pixels, for the same reason: the
  * bundle's 16px and 32px gaps read as one and two blank lines on its own grid,
@@ -78,12 +79,13 @@ export const TYPE_SIZE_PT = 12
 export const COURIER_ADVANCE_EM = 0.6
 
 /**
- * AGENTS.md, Pagination and the sheet: "12 lines per inch."
+ * Six lines to the inch - the design bundle's 16px line on a 96dpi sheet.
  *
- * Disputed by the design bundle, which is on 6. See the header. One constant,
- * one place, so the ruling is one edit.
+ * AGENTS.md, Pagination and the sheet, wrote "12 lines per inch"; the client
+ * re-ruled it to six on 2026-09-11 (see the header). One constant, one place,
+ * so the ruling was one edit plus a golden regeneration.
  */
-export const LINES_PER_INCH = 12
+export const LINES_PER_INCH = 6
 
 /** 12pt at 96dpi is 16px; 16 x 0.6 = 9.6. Ten characters to the inch. */
 export const CHAR_WIDTH_PX = (TYPE_SIZE_PT / POINTS_PER_INCH) * DPI * COURIER_ADVANCE_EM

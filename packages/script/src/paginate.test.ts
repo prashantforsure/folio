@@ -23,13 +23,13 @@ import { linesOfText, node, resetIds } from './testing/pagination-corpus'
  * room under it is still an orphan because those two lines could only be a cue
  * and a single line of speech.
  *
- * The arithmetic these tests are built on: a US Letter page holds 108 lines,
+ * The arithmetic these tests are built on: a US Letter page holds 54 lines,
  * action measures 60 characters, dialogue 35, a cue 38. `linesOfText(n, m)`
  * produces text that measures exactly `n` lines at measure `m`, so a test can
  * say "leave four lines at the foot of the page" and mean it.
  */
 
-const LINES_PER_PAGE = 108
+const LINES_PER_PAGE = 54
 const ACTION = 60
 const DIALOGUE = 35
 
@@ -76,7 +76,7 @@ describe('the measurement record', () => {
     const record = run(nodes)
     expect(record.nodes.map((entry) => entry.id)).toEqual(nodes.map((entry) => entry.id))
     expect(record.scenes).toEqual([
-      { id: nodes[0]?.id, number: 1, startPage: 1, endPage: 1, lines: 11, eighths: 1 },
+      { id: nodes[0]?.id, number: 1, startPage: 1, endPage: 1, lines: 11, eighths: 2 },
     ])
     expect(record.totals.pages).toBe(1)
   })
@@ -151,9 +151,9 @@ describe('format is an input', () => {
 describe('a speech split across a page', () => {
   it('draws (MORE) at the split and (CONT’D) on the continuation', () => {
     resetIds()
-    // 100 lines of action, then a cue (one blank, one line) and ten lines of
+    // A page less eight lines of action, then a cue (one blank, one line) and ten lines of
     // speech. Eight lines are left: blank, cue, five of speech, (MORE).
-    const nodes = [filler(100), ...speech(10, 'MEERA')]
+    const nodes = [filler(LINES_PER_PAGE - 8), ...speech(10, 'MEERA')]
     const record = run(nodes)
 
     expect(record.totals.pages).toBe(2)
@@ -170,7 +170,7 @@ describe('a speech split across a page', () => {
   it('keeps authored modifiers on the continuation cue and adds the continued', () => {
     resetIds()
     const nodes = [
-      filler(100),
+      filler(LINES_PER_PAGE - 8),
       node('character', 'MEERA', ['V.O.']),
       node('dialogue', linesOfText(10, DIALOGUE)),
     ]
@@ -189,7 +189,7 @@ describe('a speech split across a page', () => {
 
   it('puts the split inside the speech, never between the cue and the speech', () => {
     resetIds()
-    const nodes = [filler(100), ...speech(10)]
+    const nodes = [filler(LINES_PER_PAGE - 8), ...speech(10)]
     const record = run(nodes)
     const cue = record.nodes.find((entry) => entry.type === 'character')
     const dialogue = record.nodes.find((entry) => entry.type === 'dialogue')
@@ -201,7 +201,7 @@ describe('a speech split across a page', () => {
 
   it('puts neither artefact in the node stream', () => {
     resetIds()
-    const nodes = [filler(100), ...speech(10)]
+    const nodes = [filler(LINES_PER_PAGE - 8), ...speech(10)]
     run(nodes)
     const text = JSON.stringify(nodes)
     expect(text).not.toContain('MORE')
@@ -218,10 +218,10 @@ describe('the two-lines-of-dialogue minimum', () => {
     resetIds()
     // Four lines left: a blank, a cue, one line of speech and a (MORE) would
     // fit exactly - and are exactly what the rule forbids.
-    const nodes = [filler(104), ...speech(10)]
+    const nodes = [filler(LINES_PER_PAGE - 4), ...speech(10)]
     const record = run(nodes)
 
-    expect(linesOn(record, 1)).toBe(104)
+    expect(linesOn(record, 1)).toBe(LINES_PER_PAGE - 4)
     expect(rules(record)).toEqual(['dialogue-minimum'])
     expect(nodesOn(record, 1)).toEqual([nodes[0]?.id])
     expect(nodesOn(record, 2)).toEqual([nodes[1]?.id, nodes[2]?.id])
@@ -230,7 +230,7 @@ describe('the two-lines-of-dialogue minimum', () => {
 
   it('splits as soon as two lines and a (MORE) do fit', () => {
     resetIds()
-    const nodes = [filler(103), ...speech(10)]
+    const nodes = [filler(LINES_PER_PAGE - 5), ...speech(10)]
     const record = run(nodes)
     expect(rules(record)).toEqual(['dialogue-split'])
     expect(record.nodes[2]?.runs[0]?.lines).toBe(2)
@@ -245,7 +245,7 @@ describe('the stranded-line rule', () => {
   it('will not leave one line of a speech overleaf', () => {
     resetIds()
     // A three-line speech could only ever split two-and-one.
-    const nodes = [filler(105), ...speech(3)]
+    const nodes = [filler(LINES_PER_PAGE - 3), ...speech(3)]
     const record = run(nodes)
     expect(rules(record)).toEqual(['stranded-dialogue'])
     expect(record.nodes[2]?.runs).toHaveLength(1)
@@ -254,7 +254,7 @@ describe('the stranded-line rule', () => {
 
   it('splits a four-line speech two and two', () => {
     resetIds()
-    const nodes = [filler(103), ...speech(4)]
+    const nodes = [filler(LINES_PER_PAGE - 5), ...speech(4)]
     const record = run(nodes)
     expect(rules(record)).toEqual(['dialogue-split'])
     expect(record.nodes[2]?.runs.map((placed) => placed.lines)).toEqual([2, 2])
@@ -262,7 +262,7 @@ describe('the stranded-line rule', () => {
 
   it('never breaks a speech so that either side holds a single line', () => {
     resetIds()
-    for (let fill = 96; fill <= 106; fill += 1) {
+    for (let fill = LINES_PER_PAGE - 12; fill <= LINES_PER_PAGE - 2; fill += 1) {
       resetIds()
       const nodes = [filler(fill), ...speech(6)]
       const record = run(nodes)
@@ -281,16 +281,16 @@ describe('the orphan rule', () => {
     resetIds()
     // Five lines left. The heading takes three (two blanks and its line); the
     // action under it needs six and cannot legally divide into two.
-    const nodes = [filler(103), node('scene', 'INT. THE CHAWL - NIGHT'), filler(5)]
+    const nodes = [filler(LINES_PER_PAGE - 5), node('scene', 'INT. THE CHAWL - NIGHT'), filler(5)]
     const record = run(nodes)
     expect(rules(record)).toEqual(['orphaned-heading'])
-    expect(linesOn(record, 1)).toBe(103)
+    expect(linesOn(record, 1)).toBe(LINES_PER_PAGE - 5)
     expect(record.scenes[0]?.startPage).toBe(2)
   })
 
   it('leaves the heading alone when what follows can legally start', () => {
     resetIds()
-    const nodes = [filler(100), node('scene', 'INT. THE CHAWL - NIGHT'), filler(5)]
+    const nodes = [filler(LINES_PER_PAGE - 8), node('scene', 'INT. THE CHAWL - NIGHT'), filler(5)]
     const record = run(nodes)
     expect(rules(record)).not.toContain('orphaned-heading')
     expect(record.scenes[0]?.startPage).toBe(1)
@@ -304,10 +304,10 @@ describe('the orphan rule', () => {
    */
   it('asks whether the next block can legally start, not whether two lines fit', () => {
     resetIds()
-    const nodes = [filler(102), node('scene', 'INT. THE MILL - DAY'), ...speech(10)]
+    const nodes = [filler(LINES_PER_PAGE - 6), node('scene', 'INT. THE MILL - DAY'), ...speech(10)]
     const record = run(nodes)
     expect(rules(record)).toEqual(['orphaned-heading'])
-    expect(linesOn(record, 1)).toBe(102)
+    expect(linesOn(record, 1)).toBe(LINES_PER_PAGE - 6)
     expect(nodesOn(record, 2)).toEqual([nodes[1]?.id, nodes[2]?.id, nodes[3]?.id])
     expect(artefactsOf(record)).toEqual([])
   })
@@ -318,7 +318,7 @@ describe('the orphan rule', () => {
     // it cannot legally start anywhere. A fresh page saves nothing and the
     // break would only waste paper.
     const nodes = [
-      filler(103),
+      filler(LINES_PER_PAGE - 5),
       node('scene', 'INT. NOWHERE - DAY'),
       node('paren', linesOfText(200, 25)),
     ]
@@ -406,9 +406,9 @@ describe('two modes and a cadence flag', () => {
 // ---------------------------------------------------------------------------
 
 describe('locked pages', () => {
-  /** Five action nodes of 107 lines: one page each, each opening a page. */
+  /** Five action nodes one line short of a page: one page each, each opening a page. */
   const fivePages = (): readonly ScreenplayNode[] =>
-    Array.from({ length: 5 }, () => filler(107))
+    Array.from({ length: 5 }, () => filler(LINES_PER_PAGE - 1))
 
   const locksFor = (record: MeasurementRecord): readonly LockedPage[] =>
     record.pages.flatMap((page) =>
@@ -429,7 +429,7 @@ describe('locked pages', () => {
     const original = fivePages()
     const locks = locksFor(run(original))
 
-    const edited = [original[0], filler(107), ...original.slice(1)].filter(
+    const edited = [original[0], filler(LINES_PER_PAGE - 1), ...original.slice(1)].filter(
       (entry): entry is ScreenplayNode => entry !== undefined,
     )
     const record = run(edited, { ...paged, lockedPages: locks })
@@ -443,7 +443,7 @@ describe('locked pages', () => {
     resetIds()
     const original = fivePages()
     const locks = locksFor(run(original))
-    const edited = [original[0], filler(107), filler(107), ...original.slice(1)].filter(
+    const edited = [original[0], filler(LINES_PER_PAGE - 1), filler(LINES_PER_PAGE - 1), ...original.slice(1)].filter(
       (entry): entry is ScreenplayNode => entry !== undefined,
     )
     const record = run(edited, { ...paged, lockedPages: locks })
@@ -462,7 +462,7 @@ describe('locked pages', () => {
     resetIds()
     const original = fivePages()
     const locks = locksFor(run(original))
-    const record = run([...original, filler(107), filler(107)], {
+    const record = run([...original, filler(LINES_PER_PAGE - 1), filler(LINES_PER_PAGE - 1)], {
       ...paged,
       lockedPages: locks,
     })
@@ -473,7 +473,7 @@ describe('locked pages', () => {
     resetIds()
     const original = fivePages()
     const locks = locksFor(run(original)).map((lock) => ({ ...lock, revision: 'blue' as const }))
-    const edited = [original[0], filler(107), ...original.slice(1)].filter(
+    const edited = [original[0], filler(LINES_PER_PAGE - 1), ...original.slice(1)].filter(
       (entry): entry is ScreenplayNode => entry !== undefined,
     )
     const record = run(edited, { ...paged, lockedPages: locks, revision: 'pink' })
@@ -500,7 +500,7 @@ describe('locked pages', () => {
 
   it('reports two pages printing the same number instead of renumbering one', () => {
     resetIds()
-    const nodes = [filler(107), filler(107)]
+    const nodes = [filler(LINES_PER_PAGE - 1), filler(LINES_PER_PAGE - 1)]
     // Page two is locked as "1". Page one is before the first lock, so it
     // numbers from one - and now two pages print "1". Resolving that would mean
     // renumbering a locked page, which is the one thing that must not happen.
@@ -534,7 +534,7 @@ describe('locked pages', () => {
 describe('a lock whose label is not a plain number', () => {
   it('letters past it and says why, rather than inventing the next number', () => {
     resetIds()
-    const nodes = [filler(107), filler(107)]
+    const nodes = [filler(LINES_PER_PAGE - 1), filler(LINES_PER_PAGE - 1)]
     const record = run(nodes, {
       ...paged,
       lockedPages: [{ label: '12A', anchor: nodes[0]?.id ?? nodeId('a'), revision: 'blue' }],
@@ -657,8 +657,8 @@ describe('scenes and eighths', () => {
     const record = run(nodes)
     // One heading line, one blank above the action, twenty-six lines of it.
     expect(record.scenes[0]?.lines).toBe(28)
-    expect(record.scenes[0]?.eighths).toBe(2)
-    expect(record.totals.eighths).toBe(2)
+    expect(record.scenes[0]?.eighths).toBe(4)
+    expect(record.totals.eighths).toBe(4)
   })
 
   it('gives a scene that exists at least one eighth', () => {
@@ -670,7 +670,7 @@ describe('scenes and eighths', () => {
 
   it('records the pages a scene spans', () => {
     resetIds()
-    const nodes = [node('scene', 'INT. A ROOM - DAY'), filler(200)]
+    const nodes = [node('scene', 'INT. A ROOM - DAY'), filler(LINES_PER_PAGE + 20)]
     const record = run(nodes)
     expect(record.scenes[0]?.startPage).toBe(1)
     expect(record.scenes[0]?.endPage).toBe(2)
@@ -684,7 +684,7 @@ describe('scenes and eighths', () => {
 describe('tallyBreaks', () => {
   it('counts every rule, including the ones that fired zero times', () => {
     resetIds()
-    const record = run([filler(105), ...speech(3)])
+    const record = run([filler(LINES_PER_PAGE - 3), ...speech(3)])
     expect(tallyBreaks(record)).toEqual({
       'page-full': 0,
       'dialogue-split': 0,

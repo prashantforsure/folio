@@ -22,6 +22,13 @@
       "when": 1789126606499,
       "tag": "0002_project_axes",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789140039342,
+      "tag": "0003_script_route",
+      "breakpoints": true
     }
   ]
 }

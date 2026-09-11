@@ -17,7 +17,7 @@ something.
 | `zoom` | sessionStorage, per tab | [session.ts](session.ts) | a route change; not a closed tab |
 | `navOpen` | sessionStorage, per tab | [session.ts](session.ts) | a route change |
 | `sideOpen` | sessionStorage, per tab | [session.ts](session.ts) | a route change |
-| `sideTab` | sessionStorage, per tab | [session.ts](session.ts) | a route change |
+| `sideTab` | sessionStorage, per tab — **except on Script, where `?panel=` is the URL param the client's brief specified** | [session.ts](session.ts) | a route change |
 | `paletteOpen` | React state | [ephemeral.tsx](ephemeral.tsx) | nothing |
 | `aiScope` | React state | [ephemeral.tsx](ephemeral.tsx) | nothing |
 
