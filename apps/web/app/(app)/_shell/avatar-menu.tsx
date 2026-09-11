@@ -97,7 +97,7 @@ export const AvatarMenu = ({ user }: { readonly user: ShellUser }) => {
           <Link
             href={ACCOUNT_SETTINGS}
             role="menuitem"
-            title="Account settings — this route arrives in the next phase"
+            title="Account settings"
             className="flex items-center gap-[8px] px-[10px] py-[6px] text-11-5 text-ink2 no-underline hover:bg-hover hover:text-ink hover:no-underline"
           >
             <Glyph name="settings" style={{ width: 13, textAlign: 'center' }} />

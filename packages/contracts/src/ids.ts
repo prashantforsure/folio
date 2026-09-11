@@ -198,3 +198,37 @@ export type ReservedProjectSegment = (typeof RESERVED_PROJECT_SEGMENTS)[number]
 
 export const isReservedProjectSegment = (value: string): value is ReservedProjectSegment =>
   (RESERVED_PROJECT_SEGMENTS as readonly string[]).includes(value)
+
+/**
+ * What a URL segment in the episode position turns out to be.
+ *
+ * `reserved` is reported *before* `shape` on purpose. `characters` fails the
+ * `ep_NNN` regex too, so a shape-only check would refuse it - but for the
+ * wrong reason, and nothing would ever learn that a project-scoped name had
+ * reached the episode validator at all. Naming the reserved case is what makes
+ * "do not rely on static-first precedence" a check rather than a hope.
+ */
+export type EpisodeSegmentResult =
+  | { readonly ok: true; readonly slug: EpisodeSlug }
+  | { readonly ok: false; readonly reason: 'reserved'; readonly segment: ReservedProjectSegment }
+  | { readonly ok: false; readonly reason: 'shape'; readonly segment: string }
+
+/**
+ * The one validator for a segment that claims to be an episode.
+ *
+ * AGENTS.md, Routing: "Validate every episode id against `characters`,
+ * `locations`, `timeline`, `bible`, `research`, `insights`, `production`,
+ * `settings`, `assets`, and keep ids to the `ep_NNN` shape. Static-first
+ * precedence saves this tree by accident; do not rely on it."
+ *
+ * Both halves, in that order, in one function, so the router and the
+ * repository that mints a slug run the same check. It returns a result rather
+ * than throwing: a bad segment in a URL is data - the router turns it into a
+ * 404 - and a bad slug at creation is a bug, which is the repository's call.
+ */
+export const parseEpisodeSegment = (raw: string): EpisodeSegmentResult => {
+  if (isReservedProjectSegment(raw)) return { ok: false, reason: 'reserved', segment: raw }
+  const parsed = EpisodeSlugSchema.safeParse(raw)
+  if (!parsed.success) return { ok: false, reason: 'shape', segment: raw }
+  return { ok: true, slug: parsed.data }
+}

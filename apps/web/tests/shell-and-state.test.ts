@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { ACCOUNT_SETTINGS, SIDEBAR } from '../app/(app)/_shell/nav'
+import { ACCOUNT_SETTINGS, SIDEBAR, TRASH } from '../app/(app)/_shell/nav'
 import { AI_SCOPES } from '../lib/state/ephemeral'
 import { DEFAULT_PROJECT_PAGINATION, PAGE_MODES } from '../lib/state/project-preferences'
 import { useSession } from '../lib/state/session'
@@ -53,9 +53,11 @@ describe('the sidebar', () => {
     }
   })
 
-  it('marks all four as unbuilt, which is what the `as Route` assertion is for', () => {
-    // When this stops being true, the assertions in nav.ts can be deleted.
-    expect(SIDEBAR.every((item) => item.unbuilt)).toBe(true)
+  it('keeps Trash off the sidebar even now that it exists', () => {
+    // The route landed with the shell routes; the sidebar stayed four items.
+    // Trash is reached from the project list header.
+    expect(SIDEBAR.map((item) => item.href)).not.toContain(TRASH)
+    expect(TRASH).toBe('/app/trash')
   })
 })
 

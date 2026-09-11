@@ -1,5 +1,5 @@
-import { LEDGER_ENTRY_KINDS, MEMBERSHIP_ROLES, PROJECT_KINDS } from '@folio/contracts'
-import { REVISION_COLOURS } from '@folio/script'
+import { LEDGER_ENTRY_KINDS, MEMBERSHIP_ROLES, PROJECT_KINDS, PROJECT_TYPES } from '@folio/contracts'
+import { REVISION_COLOURS, SCRIPT_FORMATS } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import {
   check,
@@ -39,7 +39,24 @@ import {
 // Enums
 // ---------------------------------------------------------------------------
 
+/**
+ * The three creation axes. `project_kind` and `project_type` are
+ * `@folio/contracts` vocabulary; `script_format` is `@folio/script`'s, because
+ * the format is an engine input and the engine owns its closed set.
+ *
+ * `script_format` is declared here rather than in `measurement.ts`, where it
+ * was born, because `projects` now carries one and `measurement.ts` imports
+ * this file. The Postgres type is unchanged - migration `0000` created it - so
+ * moving the declaration changes nothing in the database.
+ *
+ * **`project_kind` changed meaning in migration `0002`.** Until then it held
+ * `film | series`; that axis is now `project_type`, matching AGENTS.md's own
+ * word for it, and `project_kind` holds `screenwriting | filmmaking`. See the
+ * header on `PROJECT_KINDS` in `@folio/contracts` for the whole story.
+ */
 export const projectKindEnum = pgEnum('project_kind', PROJECT_KINDS)
+export const projectTypeEnum = pgEnum('project_type', PROJECT_TYPES)
+export const scriptFormatEnum = pgEnum('script_format', SCRIPT_FORMATS)
 export const membershipRoleEnum = pgEnum('membership_role', MEMBERSHIP_ROLES)
 export const invitedViaEnum = pgEnum('invited_via', ['created', 'share_link'])
 export const revisionColourEnum = pgEnum('revision_colour', REVISION_COLOURS)
@@ -92,6 +109,17 @@ export const users = pgTable('users', {
  * format, so AGENTS.md's exception table puts them on a measurement record. The
  * card reads a measurement; this row does not carry one.
  *
+ * ## The three axes, and why `format` is here and not on the episode
+ *
+ * `kind`, `project_type` and `format` are collected together at `/app/new`
+ * because they decide the whole workspace - which rail, whether the URL carries
+ * an episode, and what a page is. `format` in particular is **an input to the
+ * pagination engine, not a print preference** (AGENTS.md, Pagination and the
+ * sheet), and it is per project rather than per episode so that every episode
+ * of a series is measured at the same sheet width and a page count summed
+ * across episodes is a sum of like things. `measurements.format` still records
+ * what each pass actually ran at; this column is what the project asks for.
+ *
  * `trashed_at` is soft delete. AGENTS.md, When to ask first: deleting user data
  * needs a question, so nothing here hard-deletes.
  */
@@ -100,7 +128,12 @@ export const projects = pgTable(
   {
     id: idColumn(),
     title: text('title').notNull(),
+    /** `screenwriting | filmmaking`. Was `film | series` before migration `0002`. */
     kind: projectKindEnum('kind').notNull(),
+    /** `film | series`. Was the `kind` column before migration `0002`. */
+    projectType: projectTypeEnum('project_type').notNull(),
+    /** `hollywood | asian`. An engine input; see the header. */
+    format: scriptFormatEnum('format').notNull(),
     tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
     createdBy: uuid('created_by')
       .notNull()

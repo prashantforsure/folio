@@ -81,7 +81,7 @@ export const Sidebar = ({ user }: { readonly user: ShellUser }) => {
             href={item.href}
             className="folio-nav-item"
             aria-current={active ? 'page' : undefined}
-            title={item.unbuilt ? `${item.label} — arrives in the next phase` : item.label}
+            title={item.label}
           >
             <Glyph name={item.glyph} style={{ fontSize: 14 }} />
             <span className="folio-nav-label">{item.label}</span>

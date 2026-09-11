@@ -78,6 +78,7 @@
   --color-slate-ink: var(--slate-ink);
   --color-transparent: transparent;
   --color-current: currentColor;
+  --color-scrim: var(--scrim);
 
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 
 import { requireUser } from '../../lib/auth/session'
 import { EphemeralProvider } from '../../lib/state/ephemeral'
-import { Sidebar } from './_shell/sidebar'
 
 /**
  * Never prerendered.
@@ -22,7 +21,7 @@ import { Sidebar } from './_shell/sidebar'
 export const dynamic = 'force-dynamic'
 
 /**
- * The signed-in shell. Sidebar, theme toggle, avatar.
+ * The signed-in boundary and frame. The chrome is one level down.
  *
  * AGENTS.md, Architecture: "`app/(app)/` Signed-in shell: sidebar, theme,
  * avatar. Everything user-facing lives under /app."
@@ -43,14 +42,18 @@ export const dynamic = 'force-dynamic'
  * when the proxy has been bypassed - the normal deep-link case is handled
  * there, with the full path and query preserved.
  *
- * ## Why the sidebar is a sibling of `{children}` and not inside a page
+ * ## Two shells under one boundary
  *
- * "Panel show/hide and theme live HERE and persist across route changes." A
- * layout is not re-mounted when a route below it changes, so the sidebar's
- * component state, the theme provider and the session store all survive
- * navigation. Rendering the chrome inside each page would remount it every
- * time, and the visible symptom is an avatar menu that closes itself when you
- * click a link in it.
+ * Everything under `/app` shares this layout and nothing else visual. The
+ * chrome is drawn one level down, by a layout that knows which shell it is:
+ * `app/(home)/layout.tsx` draws the four-item sidebar for the project lists,
+ * and `app/project/[projectId]/layout.tsx` draws the 66px rail for the
+ * workspace. Both are layouts, not pages, for the same reason the sidebar was
+ * here before there were two of them: "Panel show/hide and theme live HERE and
+ * persist across route changes." A layout is not re-mounted when a route
+ * below it changes, so chrome state survives navigation. Rendering it inside
+ * each page would remount it every time, and the visible symptom is an avatar
+ * menu that closes itself when you click a link in it.
  *
  * `EphemeralProvider` sits here for the same reason - and only here, not in the
  * root layout, because a command palette and an agent scope belong to the
@@ -64,14 +67,11 @@ export const dynamic = 'force-dynamic'
  * anything being `position: fixed`.
  */
 const AppLayout = async ({ children }: { readonly children: ReactNode }) => {
-  const user = await requireUser('/app')
+  await requireUser('/app')
 
   return (
     <EphemeralProvider>
-      <div className="flex h-screen overflow-hidden bg-desk text-ink">
-        <Sidebar user={user} />
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
-      </div>
+      <div className="flex h-screen overflow-hidden bg-desk text-ink">{children}</div>
     </EphemeralProvider>
   )
 }

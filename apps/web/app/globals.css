@@ -47,7 +47,8 @@
    * which has its own bundle. Widening keeps every specified value and moves
    * the one that was borrowed. Flagged in the phase report.
    */
-  .folio-nav-item {
+  .folio-nav-item,
+  .folio-rail-item {
     position: relative;
     width: 78px;
     height: 46px;
@@ -64,7 +65,17 @@
     text-decoration: none;
   }
 
-  .folio-nav-item:hover {
+  /*
+   * The project rail's button is the same control at the bundle's own width:
+   * 56x46 inside a 66px column (`Route - Script.dc.html`). Its labels are one
+   * short word each, so the widening the home sidebar needed does not apply.
+   */
+  .folio-rail-item {
+    width: 56px;
+  }
+
+  .folio-nav-item:hover,
+  .folio-rail-item:hover {
     background: var(--hover);
     color: var(--ink);
     text-decoration: none;
@@ -77,12 +88,14 @@
    * it is driven by `aria-current`, so the accessible state and the visible
    * state cannot disagree.
    */
-  .folio-nav-item[aria-current='page'] {
+  .folio-nav-item[aria-current='page'],
+  .folio-rail-item[aria-current='page'] {
     background: var(--sel);
     color: var(--ink);
   }
 
-  .folio-nav-item[aria-current='page']::before {
+  .folio-nav-item[aria-current='page']::before,
+  .folio-rail-item[aria-current='page']::before {
     content: '';
     position: absolute;
     left: -5px;
@@ -91,6 +104,55 @@
     width: 2px;
     border-radius: var(--radius-bar);
     background: var(--accent);
+  }
+
+  /*
+   * A badge on a rail button: `top:4px; right:6px`, 13px tall, `--note` on
+   * `--rail`, 8.5px/700. Rendered only when the count is non-zero - the empty
+   * state shows no badge (design README, Icon rail).
+   */
+  .folio-rail-badge {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    min-width: 13px;
+    height: 13px;
+    padding: 0 3px;
+    border-radius: var(--radius-chrome);
+    background: var(--note);
+    color: var(--rail);
+    font-size: 8.5px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * A row in the episode nav: the seven routes, the episode board's entries
+   * and the scenes group all share the selected treatment - `--sel` behind
+   * the row, driven by `aria-current` for the same reason as the rail.
+   */
+  .folio-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: var(--radius-chrome);
+    color: var(--ink);
+    text-decoration: none;
+    background: transparent;
+  }
+
+  .folio-nav-row:hover {
+    background: var(--hover);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .folio-nav-row[aria-current='page'] {
+    background: var(--sel);
+    font-weight: 500;
   }
 
   .folio-nav-label {

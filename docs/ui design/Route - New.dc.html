@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --sheet-ink:#171310; --sheet-line:rgba(0,0,0,.12); --sheet-edge:rgba(0,0,0,.16);
+  --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --frame-a:oklch(0.32 0.02 50); --frame-b:oklch(0.16 0.01 50);
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --focus:oklch(0.50 0.17 27); --shadow:none;
+  --grid:rgba(40,30,18,.16); --slate:#1d1915; --slate-ink:#efe9df;
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --sheet-ink:#e2dbcf; --sheet-line:rgba(255,255,255,.11); --sheet-edge:rgba(255,255,255,.08);
+  --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --frame-a:oklch(0.30 0.02 50); --frame-b:oklch(0.14 0.01 50);
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --focus:oklch(0.72 0.14 30); --shadow:none;
+  --grid:rgba(240,232,220,.18); --slate:#ebe4d8; --slate-ink:#151311;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s,transform .12s}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ACCOUNT SIDEBAR ── -->
+  <aside style="width:228px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 11px 9px">
+      <span style="width:22px;height:22px;flex:none;border-radius:3px;background:var(--ink);color:var(--desk);font-family:var(--serif);font-size:13px;font-weight:500;display:grid;place-items:center">L</span>
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em">Laper</span>
+      <button title="Collapse sidebar" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:12px">◨</button>
+    </div>
+
+    <div style="padding:0 10px 10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border:1px solid var(--line2);border-radius:3px;color:var(--ink3);font-size:11.5px;cursor:pointer">
+        <span>Search or jump to…</span><span style="font-size:10px">⌘K</span>
+      </div>
+    </div>
+
+    <nav style="display:flex;flex-direction:column;gap:1px;padding:0 8px">
+      <sc-for list="{{ sidebar }}" as="n" hint-placeholder-count="4">
+        <div style-hover="background:var(--hover)" style="position:relative;display:flex;align-items:center;gap:9px;padding:6px 8px;background:{{ n.bg }};border-radius:3px;cursor:pointer;font-size:12.5px;font-weight:{{ n.w }};color:{{ n.ink }}">
+          <span style="position:absolute;left:-3px;top:7px;bottom:7px;width:2px;border-radius:1px;background:{{ n.bar }}"></span>
+          <span style="width:13px;text-align:center;font-size:12px;color:var(--ink2)">{{ n.icon }}</span>{{ n.name }}
+          <span style="margin-left:auto;font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ n.meta }}</span>
+        </div>
+      </sc-for>
+    </nav>
+
+    <div style="flex:1"></div>
+
+    <div style="padding:10px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid var(--line2);border-radius:3px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span style="font-size:10.5px;color:var(--ink2)">Credits</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">95</span>
+        </div>
+        <div style="height:3px;border-radius:2px;background:var(--line);overflow:hidden"><div style="width:19%;height:100%;background:var(--accent)"></div></div>
+        <span style="font-size:9.5px;line-height:1.5;color:var(--ink3)">Free plan. Invite a writer to earn 50 more.</span>
+      </div>
+
+      <div style="position:relative">
+        <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:0;right:0;bottom:calc(100% + 6px);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:4px;display:flex;flex-direction:column;gap:1px;z-index:5">
+            <sc-for list="{{ menu }}" as="m" hint-placeholder-count="4">
+              <div style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:3px;cursor:pointer;font-size:12px;color:{{ m.ink }}">
+                <span style="width:12px;text-align:center;font-size:11px;color:var(--ink3)">{{ m.icon }}</span>{{ m.name }}
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <button onClick="{{ toggleMenu }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:100%;display:flex;align-items:center;gap:8px;padding:6px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;text-align:left">
+          <span style="width:22px;height:22px;flex:none;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center">PP</span>
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+            <span style="font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Prashant Patel</span>
+            <span style="font-size:9.5px;color:var(--ink3)">Free plan</span>
+          </span>
+          <span style="font-size:10px;color:var(--ink3)">⌄</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── PAGE ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line2)">
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em">{{ pageTitle }}</span>
+      <div style="display:flex;align-items:center;gap:3px;padding:2px;border:1px solid var(--line2);border-radius:3px">
+        <sc-for list="{{ stateTabs }}" as="t" hint-placeholder-count="2">
+          <button onClick="{{ t.go }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:{{ t.bg }};border:none;border-radius:3px;cursor:pointer;font-size:11px;color:{{ t.ink }}">{{ t.name }}</button>
+        </sc-for>
+      </div>
+      <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:26px;height:24px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink3)">{{ themeIcon }}</button>
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line2);border-radius:3px;font-size:11px;color:var(--ink2);cursor:pointer">Free plan<span style="color:var(--accent)">Upgrade</span></div>
+    </header>
+
+    <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column">
+
+      <!-- COMPOSE -->
+      <sc-if value="{{ isCompose }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:22px">
+        <div style="width:100%;max-width:720px;display:flex;flex-direction:column;gap:6px">
+          <h1 style="margin:0;font-family:var(--serif);font-size:30px;font-weight:400;letter-spacing:-.01em">Good evening, Prashant</h1>
+          <p style="margin:0;font-size:12.5px;color:var(--ink2)">Describe what you're making. Laper opens a project in the right format and parses the rest as you write.</p>
+        </div>
+
+        <div style="width:100%;max-width:720px;border:1px solid var(--line);border-radius:3px;background:var(--panel);padding:12px 12px 10px;display:flex;flex-direction:column;gap:14px">
+          <div style="min-height:52px;font-size:13.5px;line-height:1.55;color:var(--ink3)">Fix up your screenplay format, or start from a fresh idea?</div>
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink2)"><span style="font-size:12px">＋</span>Add files</button>
+            <button onClick="{{ cycleKind }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink)"><span style="font-size:11px;color:var(--ink2)">{{ kindIcon }}</span>{{ kindLabel }}<span style="font-size:10px;color:var(--ink3)">⌄</span></button>
+            <span style="font-size:10.5px;color:var(--ink3)">{{ kindHint }}</span>
+            <div style="flex:1"></div>
+            <button title="Create project" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:28px;height:28px;display:grid;place-items:center;background:var(--accent);border:none;border-radius:3px;cursor:pointer;font-size:13px;color:var(--accent-ink)">→</button>
+          </div>
+        </div>
+
+        <div style="width:100%;max-width:720px;display:flex;gap:7px;flex-wrap:wrap">
+          <sc-for list="{{ chips }}" as="c" hint-placeholder-count="5">
+            <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:5px 11px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink2)"><span style="font-size:11px;color:var(--ink3)">{{ c.icon }}</span>{{ c.name }}</button>
+          </sc-for>
+        </div>
+
+        <div style="width:100%;max-width:720px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:4px">
+          <sc-for list="{{ kinds }}" as="k" hint-placeholder-count="2">
+            <div style-hover="border-color:var(--accent-line)" style="display:flex;flex-direction:column;gap:6px;padding:13px;border:1px dashed var(--line);border-radius:3px;cursor:pointer">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:13px;color:var(--ink2)">{{ k.icon }}</span>
+                <span style="font-size:13px;font-weight:500">{{ k.name }}</span>
+                <sc-if value="{{ k.beta }}" hint-placeholder-val="{{ false }}">
+                  <span style="padding:1px 5px;border-radius:3px;background:var(--note-bg);color:var(--note);font-size:8.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Beta</span>
+                </sc-if>
+              </div>
+              <p style="margin:0;font-size:11.5px;line-height:1.55;color:var(--ink2)">{{ k.desc }}</p>
+              <span style="font-family:'Courier Prime',monospace;font-size:10px;color:var(--ink3)">{{ k.meta }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ONBOARDING -->
+      <sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px">
+        <div style="width:100%;max-width:560px;border:1px solid var(--line);border-radius:3px;background:var(--panel);display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line2)">
+            <span style="flex:1;font-family:var(--serif);font-size:16px;font-weight:500">Set up your workspace</span>
+            <span style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)">Step {{ stepNo }} of 3</span>
+          </div>
+          <div style="display:flex;gap:4px;padding:10px 16px 0">
+            <sc-for list="{{ steps }}" as="s" hint-placeholder-count="3">
+              <div style="flex:1;height:2px;border-radius:1px;background:{{ s.bg }}"></div>
+            </sc-for>
+          </div>
+
+          <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">What are you making</span>
+              <sc-for list="{{ onbKinds }}" as="k" hint-placeholder-count="2">
+                <div onClick="{{ k.go }}" style="display:flex;align-items:flex-start;gap:10px;padding:11px;border:1px solid {{ k.line }};background:{{ k.bg }};border-radius:3px;cursor:pointer">
+                  <span style="width:14px;text-align:center;font-size:13px;color:{{ k.ink }}">{{ k.icon }}</span>
+                  <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                    <span style="font-size:12.5px;font-weight:500">{{ k.name }}</span>
+                    <span style="font-size:11px;line-height:1.5;color:var(--ink2)">{{ k.desc }}</span>
+                  </span>
+                  <span style="font-size:11px;color:{{ k.ink }}">{{ k.tick }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Page format</span>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
+                <sc-for list="{{ formats }}" as="f" hint-placeholder-count="2">
+                  <div onClick="{{ f.go }}" style="display:flex;flex-direction:column;gap:3px;padding:10px 11px;border:1px solid {{ f.line }};background:{{ f.bg }};border-radius:3px;cursor:pointer">
+                    <span style="font-size:12px;font-weight:500">{{ f.name }}</span>
+                    <span style="font-family:'Courier Prime',monospace;font-size:10px;color:var(--ink3)">{{ f.meta }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <span style="font-size:10.5px;line-height:1.5;color:var(--ink3)">Changeable later in project settings. It only sets page geometry, not how you write.</span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--line2)">
+            <span style="flex:1;font-size:10.5px;color:var(--ink3)">You can skip this and start from a blank sheet.</span>
+            <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 12px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink2)">Skip</button>
+            <button style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 14px;background:var(--accent);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:500;color:var(--accent-ink)">Continue</button>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <footer style="flex:none;display:flex;justify-content:center;gap:18px;flex-wrap:wrap;padding:16px 24px 22px;font-size:10.5px;color:var(--ink3)">
+        <span>Laper,Corp</span><span>Screenplay Museum</span><span>ChunXiangZhao (CEO)</span><span>support@laper.ai</span><span>Terms of Service</span><span>Privacy Policy</span>
+      </footer>
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;compose&quot;,&quot;onboarding&quot;],&quot;default&quot;:&quot;compose&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;screenwriting&quot;,&quot;filmmaking&quot;],&quot;default&quot;:&quot;screenwriting&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "dark",
+    view: this.props.view || "compose",
+    kind: this.props.kind || "screenwriting",
+    format: "hollywood",
+    menuOpen: false
+  };
+
+  pick(list, cur, key) {
+    return list.map((it) => ({
+      ...it,
+      bg: cur === it.id ? "var(--accent-bg)" : "transparent",
+      line: cur === it.id ? "var(--accent-line)" : "var(--line2)",
+      ink: cur === it.id ? "var(--accent)" : "var(--ink2)",
+      tick: cur === it.id ? "●" : "○",
+      go: () => this.setState({ [key]: it.id })
+    }));
+  }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    const sw = s.kind === "screenwriting";
+
+    return {
+      theme: s.theme, themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      menuOpen: s.menuOpen,
+      toggleMenu: () => this.setState({ menuOpen: !s.menuOpen }),
+      menu: [
+        { name: "Account settings", icon: "⚙", ink: "var(--ink)" },
+        { name: "Trash", icon: "▧", ink: "var(--ink)" },
+        { name: "Keyboard shortcuts", icon: "⌘", ink: "var(--ink)" },
+        { name: "Sign out", icon: "⎋", ink: "var(--ink2)" }
+      ],
+
+      pageTitle: "New",
+      isCompose: s.view === "compose",
+      isOnboarding: s.view === "onboarding",
+      stateTabs: [
+        { id: "compose", name: "Compose" },
+        { id: "onboarding", name: "First run" }
+      ].map((t) => ({
+        ...t,
+        bg: s.view === t.id ? on : off,
+        ink: s.view === t.id ? "var(--ink)" : "var(--ink2)",
+        go: () => this.setState({ view: t.id })
+      })),
+
+      sidebar: [
+        { name: "New", icon: "＋", bg: on, ink: "var(--ink)", bar: "var(--accent)", w: "500", meta: "" },
+        { name: "Recents", icon: "◷", bg: off, ink: "var(--ink2)", bar: "transparent", w: "400", meta: "4" },
+        { name: "Screenwriting", icon: "▤", bg: off, ink: "var(--ink2)", bar: "transparent", w: "400", meta: "3" },
+        { name: "Filmmaking", icon: "▶", bg: off, ink: "var(--ink2)", bar: "transparent", w: "400", meta: "1" }
+      ],
+
+      kindLabel: sw ? "Screenwriting" : "Filmmaking",
+      kindIcon: sw ? "▤" : "▶",
+      kindHint: sw ? "Opens a script sheet · US Letter" : "Opens a shot board · 16:9",
+      cycleKind: () => this.setState({ kind: sw ? "filmmaking" : "screenwriting" }),
+
+      chips: [
+        { name: "Format", icon: "⇥" },
+        { name: "Idea", icon: "◌" },
+        { name: "Writing", icon: "✎" },
+        { name: "Plot", icon: "◈" },
+        { name: "Character", icon: "◍" }
+      ],
+
+      kinds: [
+        { name: "New script", icon: "▤", beta: false, desc: "Write professional, structured screenplays. Scenes, characters and locations are parsed out as you type.", meta: "US Letter · Courier 12pt" },
+        { name: "New quick video", icon: "▶", beta: true, desc: "Made for creating AI video. Shots, prompts and renders in one board, no page geometry.", meta: "16:9 · shot board" }
+      ],
+
+      stepNo: "2",
+      steps: [
+        { bg: "var(--accent)" }, { bg: "var(--accent)" }, { bg: "var(--line)" }
+      ],
+      onbKinds: this.pick([
+        { id: "screenwriting", name: "A screenplay", icon: "▤", desc: "Feature, series or short. Episodes, revisions and production drafts." },
+        { id: "filmmaking", name: "An AI video", icon: "▶", desc: "Prompt-driven shots with generation jobs and credits." }
+      ], s.kind, "kind"),
+      formats: this.pick([
+        { id: "hollywood", name: "Hollywood", meta: "US Letter · Courier 12pt" },
+        { id: "asian", name: "Asian", meta: "A4 · Courier 12pt" }
+      ], s.format, "format")
+    };
+  }
+}
+
+</script>
+</body>
+</html>

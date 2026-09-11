@@ -3,6 +3,7 @@ import { userId as brandUserId } from '@folio/contracts'
 import type { UserId } from '@folio/contracts'
 import type { User as AuthUser } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
+import { cache } from 'react'
 
 import { asRoute } from '../routes'
 import { avatarUrlFrom, displayNameFrom, initialsFrom } from './identity'
@@ -41,12 +42,22 @@ export type ShellUser = {
 
 const claimsOf = (user: AuthUser): Record<string, unknown> => user.user_metadata
 
-export const currentIdentity = async (): Promise<AuthUser | null> => {
+/**
+ * Wrapped in React's `cache()` so one request asks the Auth server once.
+ *
+ * The `(app)` layout calls `requireUser()` as the security boundary, and the
+ * pages inside it call it again because they need the user's id and a layout
+ * cannot pass props to a page. Without the cache that is two verifying round
+ * trips per render; with it the second call is a memo hit for the life of the
+ * request and nothing else. `cache()` is per request in Server Components, so
+ * nothing leaks between users.
+ */
+export const currentIdentity = cache(async (): Promise<AuthUser | null> => {
   const supabase = await supabaseServer()
   const { data, error } = await supabase.auth.getUser()
   if (error !== null) return null
   return data.user
-}
+})
 
 /**
  * The identity, enriched by our own `users` row when there is one.

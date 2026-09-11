@@ -1,6 +1,12 @@
 import { z } from 'zod'
 
-import { MembershipRoleSchema, ProjectKindSchema, RevisionColourSchema } from './enums'
+import {
+  MembershipRoleSchema,
+  ProjectKindSchema,
+  ProjectTypeSchema,
+  RevisionColourSchema,
+  ScriptFormatSchema,
+} from './enums'
 import {
   EpisodeIdSchema,
   EpisodeSlugSchema,
@@ -90,7 +96,14 @@ export type Membership = z.infer<typeof MembershipSchema>
 export const ProjectSchema = z.object({
   id: ProjectIdSchema,
   title: TitleSchema,
+  /**
+   * The three creation axes. See `enums.ts` for what each decides. All three
+   * are required at creation and none has a default in the contract: a project
+   * whose format was assumed is a project whose page count is a guess.
+   */
   kind: ProjectKindSchema,
+  projectType: ProjectTypeSchema,
+  format: ScriptFormatSchema,
   /** Free tags, as the project cards show them. Lower case, deduplicated by the repository. */
   tags: z.array(z.string().trim().min(1).max(40)).max(24),
   createdBy: UserIdSchema,
@@ -100,6 +113,28 @@ export const ProjectSchema = z.object({
 })
 
 export type Project = z.infer<typeof ProjectSchema>
+
+/**
+ * What `/app/new` submits.
+ *
+ * The three axes plus a title, and nothing else - no episode count, no page
+ * mode, no tags. Creation writes the project, the creator's `owner` membership
+ * and **exactly one episode row** whatever the project type (AGENTS.md,
+ * Routing), and then the workspace takes over.
+ *
+ * This is the boundary schema a server action parses a `FormData` against. It
+ * is here rather than in `apps/web` because the worker will one day create
+ * projects too (an import job), and AGENTS.md, Architecture says types flow
+ * from this package and are not redeclared downstream.
+ */
+export const CreateProjectInputSchema = z.object({
+  title: TitleSchema,
+  kind: ProjectKindSchema,
+  projectType: ProjectTypeSchema,
+  format: ScriptFormatSchema,
+})
+
+export type CreateProjectInput = z.infer<typeof CreateProjectInputSchema>
 
 // ---------------------------------------------------------------------------
 // Episodes
@@ -149,22 +184,49 @@ export type Episode = z.infer<typeof EpisodeSchema>
  *
  * The design README: project cards show "real derived metadata - episode, scene
  * and page counts, last edited - never a placeholder string. If a project has
- * no script, the card says so." That last sentence is why `pages` is nullable
- * rather than zero: `null` means nothing has been measured, `0` would mean a
- * measured script of no length, and the card's two states are exactly that
- * distinction. AGENTS.md, UI fidelity: "things that legitimately count to zero
- * show `0`; things that either exist or don't show `—`".
+ * no script, the card says so." Every field below names where it is read from,
+ * because a value quietly computed in the component is the failure this shape
+ * exists to prevent:
  *
- * This is a **read model**, assembled by a repository from a project row and a
- * measurement. It is not a table.
+ *   `episodes`      `episodes` - an authored table, counted. A film has one by
+ *                   construction, so the card shows it for a series only.
+ *   `script`        `documents` - whether a screenplay document exists for any
+ *                   of the project's episodes. "No script yet" is this being
+ *                   `absent`; it is a designed state, not a zero.
+ *   `scenes`        `scene_derivations` - the derived cache, counted where
+ *                   `presence = 'present'`. Legitimately zero for a script with
+ *                   no headings yet, and the convention shows `0`.
+ *   `pages`         `measurements` - the measurement record, `total_pages`
+ *                   summed over the project's documents at the project's
+ *                   `format` in `paged` mode. `null` when nothing has been
+ *                   measured: a measurement either exists or does not, so the
+ *                   card shows `—`, never 0.
+ *   `lastEditedAt`  the later of `projects.updated_at` and the newest
+ *                   `documents.updated_at` - the project row and the document
+ *                   headers, because `replaceNodes` stamps the header on every
+ *                   write to the node list.
+ *
+ * AGENTS.md, UI fidelity: "things that legitimately count to zero show `0`;
+ * things that either exist or don't show `—`; the script says `empty`."
+ *
+ * This is a **read model**, assembled by one repository query. It is not a
+ * table, and there is no column anywhere it could be cached in.
  */
 export const ProjectCardSchema = z.object({
   project: ProjectSchema,
-  episodes: z.int().min(0),
+  episodes: z.int().min(1),
+  /** Whether any screenplay document exists yet. Not a count. */
+  script: z.enum(['absent', 'present']),
   scenes: z.int().min(0),
-  /** `null` when no measurement exists yet - the card says so rather than showing 0. */
+  /** `null` when no measurement exists yet - the card shows `—` rather than 0. */
   pages: z.int().min(0).nullable(),
-  lastEditedAt: TimestampSchema.nullable(),
+  lastEditedAt: TimestampSchema,
+  /**
+   * The episode the card opens on: the first in running order. A series URL
+   * always carries an episode segment, so the card needs one to link anywhere;
+   * for a film the router drops it (AGENTS.md, Routing) and it is unused.
+   */
+  openingEpisode: EpisodeSlugSchema,
 })
 
 export type ProjectCard = z.infer<typeof ProjectCardSchema>

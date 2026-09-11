@@ -76,12 +76,20 @@ test.describe('the sign-in page', () => {
    * form, `useActionState`, the action, the discriminated result, the error
    * rendered beside the field it belongs to - and it needs no Supabase project,
    * because Zod refuses the address before any Supabase call is made.
+   *
+   * **The address is `a@b`, not `not-an-address`, and that is the point.** The
+   * input is `type="email" required`, so the browser's own constraint
+   * validation refuses an obviously malformed address and the form never
+   * submits - which is correct, and which makes it useless for testing the
+   * server. `a@b` is an address the browser accepts and Zod does not (it wants a
+   * dot and a two-letter TLD), so it reaches the action. Two validators
+   * disagreeing is normal; the server is the one that decides.
    */
   test('a bad address is refused by the server action and shown beside the field', async ({
     page,
   }) => {
     await page.goto('/sign-in')
-    await page.getByLabel('Email').fill('not-an-address')
+    await page.getByLabel('Email').fill('a@b')
     await page.getByLabel('Password').fill('whatever-goes-here')
     await page.getByRole('button', { name: 'Sign in' }).click()
 

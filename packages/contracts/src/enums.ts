@@ -94,6 +94,35 @@ assertExact<Equals<z.infer<typeof LightSchema>, Light>>()
 // ---------------------------------------------------------------------------
 
 /**
+ * The three axes a project is created with. Together they decide the whole
+ * workspace the writer lands in, which is why `/app/new` collects all three
+ * before it can create anything.
+ *
+ * ## `kind` - which product this is
+ *
+ * `screenwriting` or `filmmaking`. It decides the rail, the routes and the
+ * default landing. AGENTS.md, Constraints: "`/app/filmmaking` is a project list
+ * and a creation entry point. Stop there. It needs an ADR first" - open
+ * decision 9. So a `filmmaking` project can be created and listed, and nothing
+ * in this repository yet knows what its workspace is.
+ *
+ * **This used to be the film-or-series axis.** The schema phase named the
+ * column `kind` after the design handoff's Appendix A (`Project { kind: 'film'
+ * | 'series' }`). AGENTS.md's own vocabulary for that axis is "project type" -
+ * Routing: "`projectType: 'film'` hides the episode segment"; Constraints: "No
+ * `short` project type" - and the `/app/new` brief uses `kind` for
+ * screenwriting-or-filmmaking. The contract follows AGENTS.md and the brief;
+ * migration `0002` renames the column to match.
+ */
+export const PROJECT_KINDS = ['screenwriting', 'filmmaking'] as const
+
+export type ProjectKind = (typeof PROJECT_KINDS)[number]
+
+export const ProjectKindSchema = z.enum(PROJECT_KINDS)
+
+/**
+ * ## `projectType` - one document, or episodes
+ *
  * AGENTS.md, Constraints: "**No `short` project type.** `film` and `series`
  * only." The design bundle's older Appendix A said
  * `'series' | 'feature' | 'short'`; that is retracted and the README says so.
@@ -102,11 +131,22 @@ assertExact<Equals<z.infer<typeof LightSchema>, Light>>()
  * 'film'` **hides** the episode segment. The database still stores one episode
  * row. The router special-cases the shape; the schema never does."
  */
-export const PROJECT_KINDS = ['film', 'series'] as const
+export const PROJECT_TYPES = ['film', 'series'] as const
 
-export type ProjectKind = (typeof PROJECT_KINDS)[number]
+export type ProjectType = (typeof PROJECT_TYPES)[number]
 
-export const ProjectKindSchema = z.enum(PROJECT_KINDS)
+export const ProjectTypeSchema = z.enum(PROJECT_TYPES)
+
+/*
+ * ## `format` - the third axis - is `ScriptFormatSchema` above
+ *
+ * `hollywood` (US Letter) or `asian` (A4). Owned by `@folio/script` because it
+ * is an **input to the pagination engine, not a print preference**: AGENTS.md,
+ * Pagination and the sheet says it "changes line width, page count, page
+ * numbers and eighths". It is stored on the project so every episode is
+ * measured at the same width, and so the project card can read the one
+ * measurement that matches.
+ */
 
 /**
  * What a membership lets someone do.

@@ -66,3 +66,5 @@ export {
   provenanceFromRow,
   screenplayNodeFromRow,
 } from './mapping'
+export * from './episode-slug'
+export * from './workspace'

@@ -324,3 +324,147 @@ is shared with collaborators, given that `memberships.role` is stored and read b
 **Do not solve it with a Zustand field or a localStorage key.** Either makes the setting
 per-person, and two writers on one script then disagree about how many pages it is.
 
+
+## Shell routes phase: judgement calls, and one edit to a past migration
+
+### `projects.kind` was renamed to `project_type`, and `kind` now means screenwriting or filmmaking
+
+The `/app/new` brief collects three axes - `kind: screenwriting | filmmaking`,
+`projectType: film | series`, `format: hollywood | asian` - and AGENTS.md's own
+word for the film-or-series axis is "project type" (Routing, Constraints). The
+schema phase had named that column `kind`, after the design handoff's Appendix
+A. Migration `0002` renames it and adds the other two columns; the SQL is
+hand-written as a rename because drizzle-kit's generated diff re-typed the
+column through a cast that fails on any existing `film` or `series` row. The
+snapshot is drizzle-kit's own. `format` is on the project, not the episode, so
+every episode of a series is measured at one sheet width.
+
+### Migration `0000` was reordered, before it had ever been applied anywhere
+
+The first attempt to apply the migrations to a real Postgres failed inside
+`0000`: drizzle-kit writes every foreign key before every index, and the
+composite key `nodes (document_id, document_kind) -> documents (id, kind)`
+references a unique *index* created sixty statements later. Postgres refuses
+with "there is no unique constraint matching given keys for referenced table".
+The one `CREATE UNIQUE INDEX` was moved ahead of the FK block. This is an edit
+to a past migration and forward-only forbids that in general; it is recorded
+here because the file had never been applied to any database (the dev
+project's `__drizzle_migrations` was empty and the failed attempt rolled back),
+and because as generated it could never have been applied anywhere. `db:migrate`
+reports this class of failure as a bare exit 1 with no message; the error was
+found by running `drizzle-orm`'s migrator directly.
+
+### The migrations are now applied, to the development Supabase project
+
+All three, in order, during this phase. The project also has one auth user,
+`folio-e2e@example.com`, created through the admin API for the signed-in
+Playwright walk. Both are recorded so nobody rediscovers them.
+
+### Creation writes one episode row, titled after the film or `Episode 1`
+
+The brief specifies the row, not its title. A film is one document, so its
+episode carries the film's title; a series' first episode is `Episode 1` until
+the episode board renames it.
+
+### A filmmaking project opens on its list
+
+Open decision 9. Which route a filmmaking project lands on is the substance of
+the missing ADR, so `workspaceHref` sends it back to `/app/filmmaking` rather
+than presuming a `script` route. When the ADR lands, that is the one branch to
+change.
+
+### Project cards: what is read, and from where
+
+`episodes` from `episodes`; `script` from `documents`; `scenes` from
+`scene_derivations` where present; `pages` from `measurements.total_pages` at
+the project's format in `paged` mode, `null` when unmeasured; `lastEditedAt` as
+`greatest(projects.updated_at, max(documents.updated_at))`. The episode count
+is shown for a series only. Assembled by one query, `listProjectsFor`; the
+component computes nothing. No grid/list toggle and no sort control, because
+each is a sub-view and a sub-view is a query param, which is behind a question.
+
+### Account settings: credits are per project, and there is no account ledger
+
+`credit_ledger` carries `project_id` like every table. The settings page shows
+each project's balance from `readBalance` and a sum labelled as a sum. If
+credits are meant to belong to a person, that is a ledger with a `user_id` - a
+schema change and a credits decision. Profile is display only: the
+`folio_sync_auth_user` trigger rewrites `display_name` from the auth claims on
+every `auth.users` update, so an edit here would not survive a sign-in. Plan
+and billing show `—`; nothing is wired to Dodo.
+
+### Purge: proposed, not built
+
+`purgeProject` gates on membership and `owner` role and then refuses. Proposed
+semantics, awaiting a ruling: hard delete of the `projects` row with
+`ON DELETE CASCADE` taking every content table; `credit_ledger` is
+`ON DELETE RESTRICT`, so a project with billing history cannot be hard-deleted
+and would keep a tombstoned row; not recoverable; no auto-purge on a timer.
+Restore gates on membership only, because `memberships.role` is enforced
+nowhere and choosing `owner` here would begin a capability model nobody has
+specified.
+
+## Workspace shell phase: three rulings, and what was built on them
+
+**Ruled by the client, not inferred.** Three open items landed on the workspace chrome and were
+put back as questions before anything was built.
+
+| Item | Ruling | Consequence |
+| --- | --- | --- |
+| AGENTS.md open decision 5 — `/production` scope | **Episode-scoped** | `/app/project/:projectId/:episodeId/production` (film: `/app/project/:projectId/production`). Eight episode routes, six project routes. Production is its own rail section; it does not get the episode nav, it gets the README's 250px column |
+| AGENTS.md open decision 6 — `/build`, `/search` | **Cut** | Not routes, not reserved. The route tree is fourteen and the smoke test asserts fourteen |
+| `assets` in the reserved list | *"keep if it's there in the route"* | Read as: keep it reserved. It is in AGENTS.md's routing rule and in no route tree, so `RESERVED_PROJECT_SEGMENTS` is unchanged, the validator refuses it, and no route is built. Reversible in one array entry |
+
+The evidence for decision 5 was split and is recorded so the ruling can be revisited: the
+Production bundle's status bar reads `ep_001/production` (episode), while the README's width table
+groups Production with the project routes at 250px and the rail lists it beside them.
+
+### The fourteen
+
+`script outline beats storyboard scenes revisions notes production` (episode-scoped) and
+`characters locations timeline bible research insights` (project-scoped). Project `/settings` is
+a stub and is not counted. `apps/web/lib/workspace/routes.ts` is the list; `WORKSPACE_ROUTE_COUNT`
+is asserted in a unit test and in `apps/web/e2e/workspace-routes.ts`.
+
+### The film shape is two static route trees, not a rewrite
+
+`projectType: 'film'` collapses the episode segment. Next has no optional path segment, so the
+collapsed URLs are a second, static tree — `(film)/(writing)/script/page.tsx` and so on — whose
+pages are one-liners over the same shell. Static segments win over `[episodeId]`, which is why a
+film's `/script` reaches the film tree and a series' `/ep_001/script` reaches the episodic one.
+Each page then makes the URL canonical for the project's shape: a film reached through
+`/ep_001/notes` is redirected to `/notes`, a series reached through `/notes` to
+`/ep_NNN/notes`. The database has one episode row for a film and the schema never branches
+(`createProjectFor` writes exactly one row for either type).
+
+### The episode validator is explicit, and it runs at creation too
+
+`parseEpisodeSegment` in `@folio/contracts` checks the reserved list **by name, first**, then the
+`ep_NNN` shape. `[episodeId]/layout.tsx` runs it before any lookup. Every episode insert runs the
+same function through `assertCreatableEpisodeSlug` in `@folio/db`, and Postgres has
+`episodes_slug_shape` underneath both. Static-first precedence would keep `characters` out of
+`[episodeId]` for `/characters`; it does nothing for `/characters/script`, which is the URL the
+smoke test uses to prove the validator, not precedence, is doing the work.
+
+### Judgement calls in this phase, each reversible
+
+- **"Last opened episode" is a per-project cookie the browser writes.** No table exists for a
+  per-person-per-project value and a migration is a question. `lib/workspace/last-episode.ts`.
+- **`script.doc` (Script / Cover) is wired as Script's sub-view param.** The README's interaction
+  table says a header segment switches a sub-view. The alternative is session state.
+- **`insights.lens` accepts both candidate spellings** (`showrunner` and `lens/showrunner`) and
+  yields the id, so open decision 4 is not resolved by the parser. It defaults to `showrunner`
+  because every param defaults to its first value.
+- **`?selected=` is not wired.** Its value shape is the `SCENE_xxx` contradiction above.
+- **An unknown sub-view value is a 404**, not silently the default.
+- **A script that exists but has never been measured prints `—`**, not `0pp` and not `empty`.
+- **Beats count the outline's `beat` nodes; shots are always `—`.** Neither is a table.
+- **The bible badge is `0` by construction**: no bible table, so no canon entry to conflict with.
+- **The Script bundle draws six nav rows and no Beats.** The brief and AGENTS.md's glyph set say
+  seven, with `⋮` Outline and `▥` Storyboard; the six other episode bundles draw `▥`/`▦`. Seven,
+  brief glyphs.
+- **A film's nav group label is the episode title alone**, without `Ep 1 ·`.
+- **`⋯` "Project actions" links to the settings stub**; no menu is specified anywhere.
+- **The episode board's open/closed state is component state**, not persisted.
+- **The `＋` New episode button is wired** to a server action that refuses for a film. It is the
+  one mutation in the chrome and the only way to make the board show more than one row.

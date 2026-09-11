@@ -33,36 +33,30 @@ import type { Route } from 'next'
  * from `@folio/ui` as `UNSPECIFIED_GLYPHS`, separately from `GLYPHS`, so the
  * eighteen stay countable.
  *
- * ## Why `as Route`, and when it deletes itself
+ * ## The `as Route` assertions are gone
  *
- * `next.config.ts` sets `typedRoutes: true`, which types `href` as a union of
- * routes that actually exist. **None of these four exist yet** - this phase
- * builds auth, tokens and chrome, and the brief is explicit that "Sidebar links
- * point at them; they can 404 for now."
- *
- * So the assertion is here, in one file, on four lines, rather than at four
- * call sites. It is a single assertion and not the banned `as unknown as`
- * (AGENTS.md, Conventions > Typing), and it is genuinely temporary: the moment
- * `app/(app)/app/new/page.tsx` exists, `Route` includes `/app/new` and the
- * assertion becomes a no-op that can be deleted. Until then it is the honest
- * shape of the situation - a link to something that is not built - rather than
- * a config flag turned off to hide it.
+ * The previous phase carried four of them because none of these routes
+ * existed. They do now - `app/(app)/app/{new,recents,screenwriting,filmmaking}`
+ * - so `Route` includes all four and every `href` below is checked by the
+ * compiler against a page that is actually there. The `unbuilt` flag went with
+ * them.
  */
 
 export type SidebarItem = {
   readonly label: string
   readonly href: Route
   readonly glyph: GlyphName | UnspecifiedGlyphName
-  /** True while these routes do not exist. Rendered with a `title` that says so. */
-  readonly unbuilt: boolean
 }
 
 export const SIDEBAR: readonly SidebarItem[] = [
-  { label: 'New', href: '/app/new' as Route, glyph: 'create', unbuilt: true },
-  { label: 'Recents', href: '/app/recents' as Route, glyph: 'timeline', unbuilt: true },
-  { label: 'Screenwriting', href: '/app/screenwriting' as Route, glyph: 'writing', unbuilt: true },
-  { label: 'Filmmaking', href: '/app/filmmaking' as Route, glyph: 'production', unbuilt: true },
+  { label: 'New', href: '/app/new', glyph: 'create' },
+  { label: 'Recents', href: '/app/recents', glyph: 'timeline' },
+  { label: 'Screenwriting', href: '/app/screenwriting', glyph: 'writing' },
+  { label: 'Filmmaking', href: '/app/filmmaking', glyph: 'production' },
 ]
 
-/** Reached from the avatar menu, never the sidebar. Also not built yet. */
-export const ACCOUNT_SETTINGS = '/app/settings' as Route
+/** Reached from the avatar menu, never the sidebar. */
+export const ACCOUNT_SETTINGS: Route = '/app/settings'
+
+/** Reached from the project list header, never the sidebar. */
+export const TRASH: Route = '/app/trash'

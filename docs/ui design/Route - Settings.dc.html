@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --sheet-ink:#171310; --sheet-line:rgba(0,0,0,.12); --sheet-edge:rgba(0,0,0,.16);
+  --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --frame-a:oklch(0.32 0.02 50); --frame-b:oklch(0.16 0.01 50);
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --focus:oklch(0.50 0.17 27); --shadow:none;
+  --grid:rgba(40,30,18,.16); --slate:#1d1915; --slate-ink:#efe9df;
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --sheet-ink:#e2dbcf; --sheet-line:rgba(255,255,255,.11); --sheet-edge:rgba(255,255,255,.08);
+  --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --frame-a:oklch(0.30 0.02 50); --frame-b:oklch(0.14 0.01 50);
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --focus:oklch(0.72 0.14 30); --shadow:none;
+  --grid:rgba(240,232,220,.18); --slate:#ebe4d8; --slate-ink:#151311;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s,transform .12s}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ACCOUNT SIDEBAR ── -->
+  <aside style="width:228px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 11px 9px">
+      <span style="width:22px;height:22px;flex:none;border-radius:3px;background:var(--ink);color:var(--desk);font-family:var(--serif);font-size:13px;font-weight:500;display:grid;place-items:center">L</span>
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em">Laper</span>
+      <button title="Collapse sidebar" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:12px">◨</button>
+    </div>
+
+    <div style="padding:0 10px 10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border:1px solid var(--line2);border-radius:3px;color:var(--ink3);font-size:11.5px;cursor:pointer">
+        <span>Search or jump to…</span><span style="font-size:10px">⌘K</span>
+      </div>
+    </div>
+
+    <nav style="display:flex;flex-direction:column;gap:1px;padding:0 8px">
+      <sc-for list="{{ sidebar }}" as="n" hint-placeholder-count="4">
+        <div style-hover="background:var(--hover)" style="position:relative;display:flex;align-items:center;gap:9px;padding:6px 8px;background:{{ n.bg }};border-radius:3px;cursor:pointer;font-size:12.5px;font-weight:{{ n.w }};color:{{ n.ink }}">
+          <span style="position:absolute;left:-3px;top:7px;bottom:7px;width:2px;border-radius:1px;background:{{ n.bar }}"></span>
+          <span style="width:13px;text-align:center;font-size:12px;color:var(--ink2)">{{ n.icon }}</span>{{ n.name }}
+          <span style="margin-left:auto;font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ n.meta }}</span>
+        </div>
+      </sc-for>
+    </nav>
+
+    <div style="flex:1"></div>
+
+    <div style="padding:10px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid var(--line2);border-radius:3px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span style="font-size:10.5px;color:var(--ink2)">Credits</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">95</span>
+        </div>
+        <div style="height:3px;border-radius:2px;background:var(--line);overflow:hidden"><div style="width:19%;height:100%;background:var(--accent)"></div></div>
+        <span style="font-size:9.5px;line-height:1.5;color:var(--ink3)">Free plan. Invite a writer to earn 50 more.</span>
+      </div>
+
+      <div style="position:relative">
+        <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:0;right:0;bottom:calc(100% + 6px);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:4px;display:flex;flex-direction:column;gap:1px;z-index:5">
+            <sc-for list="{{ menu }}" as="m" hint-placeholder-count="4">
+              <div style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:3px;cursor:pointer;font-size:12px;color:{{ m.ink }}">
+                <span style="width:12px;text-align:center;font-size:11px;color:var(--ink3)">{{ m.icon }}</span>{{ m.name }}
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <button onClick="{{ toggleMenu }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:100%;display:flex;align-items:center;gap:8px;padding:6px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;text-align:left">
+          <span style="width:22px;height:22px;flex:none;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center">PP</span>
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+            <span style="font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Prashant Patel</span>
+            <span style="font-size:9.5px;color:var(--ink3)">Free plan</span>
+          </span>
+          <span style="font-size:10px;color:var(--ink3)">⌄</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── PAGE ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line2)">
+      <span style="font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em">{{ pageTitle }}</span>
+      <span style="flex:1;min-width:0;font-size:10.5px;color:var(--ink3)">Reached from the avatar menu</span>
+      
+      <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:26px;height:24px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink3)">{{ themeIcon }}</button>
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line2);border-radius:3px;font-size:11px;color:var(--ink2);cursor:pointer">Free plan<span style="color:var(--accent)">Upgrade</span></div>
+    </header>
+    <div style="flex:1;min-height:0;display:flex">
+      <nav style="width:178px;flex:none;padding:14px 10px;border-right:1px solid var(--line2);display:flex;flex-direction:column;gap:1px">
+        <sc-for list="{{ sections }}" as="x" hint-placeholder-count="4">
+          <div onClick="{{ x.go }}" style-hover="background:var(--hover)" style="position:relative;display:flex;align-items:center;gap:9px;padding:6px 8px;background:{{ x.bg }};border-radius:3px;cursor:pointer;font-size:12px;font-weight:{{ x.w }};color:{{ x.ink }}">
+            <span style="position:absolute;left:-3px;top:7px;bottom:7px;width:2px;border-radius:1px;background:{{ x.bar }}"></span>
+            <span style="width:13px;text-align:center;font-size:11px;color:var(--ink2)">{{ x.icon }}</span>{{ x.name }}
+          </div>
+        </sc-for>
+      </nav>
+
+      <div style="flex:1;min-width:0;overflow-y:auto;padding:18px 20px 32px">
+        <div style="max-width:600px;display:flex;flex-direction:column;gap:18px">
+
+          <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-family:var(--serif);font-size:17px;font-weight:500;letter-spacing:-.01em">Profile</span>
+              <span style="font-size:11.5px;color:var(--ink2)">How you appear on notes, revisions and shared drafts.</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line2);border-radius:3px;background:var(--panel)">
+              <span style="width:40px;height:40px;flex:none;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:13px;font-weight:600;display:grid;place-items:center">PP</span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                <span style="font-size:12.5px">Prashant Patel</span>
+                <span style="font-size:10.5px;color:var(--ink3)">PNG or JPG, square, at least 128px.</span>
+              </span>
+              <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:4px 10px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Change</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));gap:12px">
+              <sc-for list="{{ fields }}" as="f" hint-placeholder-count="3">
+                <label style="display:flex;flex-direction:column;gap:5px">
+                  <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">{{ f.label }}</span>
+                  <input value="{{ f.value }}" onChange="{{ f.set }}" readOnly="{{ f.ro }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:6px 8px;background:var(--panel);border:1px solid var(--line2);border-radius:3px;font-family:inherit;font-size:12px;color:{{ f.ink }}">
+                  <span style="font-size:10px;color:var(--ink3)">{{ f.hint }}</span>
+                </label>
+              </sc-for>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 14px;background:var(--accent);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:500;color:var(--accent-ink)">Save changes</button>
+              <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 12px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11.5px;color:var(--ink2)">Cancel</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px;padding:12px;border:1px solid var(--del);border-radius:3px">
+              <span style="font-size:12px;font-weight:500;color:var(--del)">Danger zone</span>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span style="flex-basis:100%;font-size:11px;line-height:1.55;color:var(--ink2)">Signing out everywhere ends every session but keeps your work. Deleting the account purges projects, renders and credits immediately.</span>
+                <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:4px 10px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;font-size:11px;color:var(--ink2)">Sign out everywhere</button>
+                <button style-hover="background:var(--del-bg)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:4px 10px;background:transparent;border:1px solid var(--del);border-radius:3px;cursor:pointer;font-size:11px;color:var(--del)">Delete account</button>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ isPlan }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-family:var(--serif);font-size:17px;font-weight:500;letter-spacing:-.01em">Plan &amp; credits</span>
+              <span style="font-size:11.5px;color:var(--ink2)">Writing is unlimited. Credits are spent on generation and long-context AI passes.</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:13px;border:1px solid var(--line);border-radius:3px;background:var(--panel)">
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font-size:13px;font-weight:500">Free plan</span>
+                <span style="font-size:11px;color:var(--ink2)">One feature request per day. 500 credits a month.</span>
+              </span>
+              <button style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:5px 14px;background:var(--accent);border:none;border-radius:3px;cursor:pointer;font-size:11.5px;font-weight:500;color:var(--accent-ink)">Upgrade</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px;padding:13px;border:1px solid var(--line2);border-radius:3px">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="flex:1;font-size:11.5px;color:var(--ink2)">Credits remaining</span>
+                <span style="font-family:'Courier Prime',monospace;font-size:12px;font-weight:700">95 / 500</span>
+              </div>
+              <div style="height:4px;border-radius:2px;background:var(--line);overflow:hidden"><div style="width:19%;height:100%;background:var(--accent)"></div></div>
+              <span style="font-size:10.5px;color:var(--ink3)">Resets on 1 October. Invite a writer to earn 50 more.</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Recent usage</span>
+              <sc-for list="{{ usage }}" as="u" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line2);font-size:11.5px">
+                  <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ u.what }}</span>
+                  <span style="font-size:10.5px;color:var(--ink3)">{{ u.when }}</span>
+                  <span style="font-family:'Courier Prime',monospace;font-size:11px;color:var(--ink2);width:58px;text-align:right">{{ u.cost }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ isEditor }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-family:var(--serif);font-size:17px;font-weight:500;letter-spacing:-.01em">Editor defaults</span>
+              <span style="font-size:11.5px;color:var(--ink2)">Applied to new projects. Each project can override them in its own settings.</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Page format</span>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
+                <sc-for list="{{ formats }}" as="f" hint-placeholder-count="2">
+                  <div onClick="{{ f.go }}" style="display:flex;flex-direction:column;gap:3px;padding:10px 11px;border:1px solid {{ f.line }};background:{{ f.bg }};border-radius:3px;cursor:pointer">
+                    <span style="font-size:12px;font-weight:500">{{ f.name }}</span>
+                    <span style="font-family:'Courier Prime',monospace;font-size:10px;color:var(--ink3)">{{ f.meta }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="flex:1;display:flex;flex-direction:column;gap:2px">
+                <span style="font-size:12px">Theme</span>
+                <span style="font-size:10.5px;color:var(--ink3)">Dark is the default. The rail toggle changes it per session.</span>
+              </span>
+              <div style="display:flex;align-items:center;gap:3px;padding:2px;border:1px solid var(--line2);border-radius:3px">
+                <sc-for list="{{ themeTabs }}" as="t" hint-placeholder-count="2">
+                  <button onClick="{{ t.go }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:{{ t.bg }};border:none;border-radius:3px;cursor:pointer;font-size:11px;color:{{ t.ink }}">{{ t.name }}</button>
+                </sc-for>
+              </div>
+            </div>
+            <sc-for list="{{ editorToggles }}" as="t" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line2)">
+                <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:12px">{{ t.name }}</span>
+                  <span style="font-size:10.5px;line-height:1.5;color:var(--ink3)">{{ t.desc }}</span>
+                </span>
+                <button onClick="{{ t.go }}" title="Toggle" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:30px;height:17px;flex:none;padding:2px;display:flex;justify-content:{{ t.just }};background:{{ t.track }};border:1px solid {{ t.trackLine }};border-radius:9px;cursor:pointer">
+                  <span style="width:11px;height:11px;border-radius:50%;background:{{ t.knob }}"></span>
+                </button>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ isNotifs }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-family:var(--serif);font-size:17px;font-weight:500;letter-spacing:-.01em">Notifications</span>
+              <span style="font-size:11.5px;color:var(--ink2)">Email only for now. In-app notices always appear in the notes inbox.</span>
+            </div>
+            <sc-for list="{{ notifs }}" as="t" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line2)">
+                <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:12px">{{ t.name }}</span>
+                  <span style="font-size:10.5px;line-height:1.5;color:var(--ink3)">{{ t.desc }}</span>
+                </span>
+                <button onClick="{{ t.go }}" title="Toggle" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:30px;height:17px;flex:none;padding:2px;display:flex;justify-content:{{ t.just }};background:{{ t.track }};border:1px solid {{ t.trackLine }};border-radius:9px;cursor:pointer">
+                  <span style="width:11px;height:11px;border-radius:50%;background:{{ t.knob }}"></span>
+                </button>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;section&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;profile&quot;,&quot;plan&quot;,&quot;editor&quot;,&quot;notifications&quot;],&quot;default&quot;:&quot;profile&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "dark",
+    section: this.props.section || "profile",
+    format: "hollywood",
+    defaultTheme: "dark",
+    form: { name: "Prashant Patel", email: "prashant@laper.ai", credit: "P. Patel" },
+    flags: { autosave: true, spell: true, pagecount: false, notes: true, revisions: true, jobs: true, digest: false },
+    menuOpen: false
+  };
+
+  shell(active, title, tabs, cur, key) {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    return {
+      theme: s.theme,
+      themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      menuOpen: s.menuOpen,
+      toggleMenu: () => this.setState({ menuOpen: !s.menuOpen }),
+      menu: [
+        { name: "Account settings", icon: "⚙", ink: "var(--ink)" },
+        { name: "Trash", icon: "▧", ink: "var(--ink)" },
+        { name: "Keyboard shortcuts", icon: "⌘", ink: "var(--ink)" },
+        { name: "Sign out", icon: "⎋", ink: "var(--ink2)" }
+      ],
+      pageTitle: title,
+      sidebar: [
+        { name: "New", icon: "＋", meta: "" },
+        { name: "Recents", icon: "◷", meta: "6" },
+        { name: "Screenwriting", icon: "▤", meta: "4" },
+        { name: "Filmmaking", icon: "▶", meta: "2" }
+      ].map((n) => ({
+        ...n,
+        bg: n.name === active ? on : off,
+        ink: n.name === active ? "var(--ink)" : "var(--ink2)",
+        bar: n.name === active ? "var(--accent)" : "transparent",
+        w: n.name === active ? "500" : "400"
+      })),
+      stateTabs: tabs.map((t) => ({
+        ...t,
+        bg: cur === t.id ? on : off,
+        ink: cur === t.id ? "var(--ink)" : "var(--ink2)",
+        go: () => this.setState({ [key]: t.id })
+      }))
+    };
+  }
+
+  seg(list, cur, key) {
+    const on = "var(--sel)", off = "transparent";
+    return list.map((v) => ({
+      ...v,
+      bg: cur === v.id ? on : off,
+      ink: cur === v.id ? "var(--ink)" : "var(--ink2)",
+      go: () => this.setState({ [key]: v.id })
+    }));
+  }
+
+  sw(list) {
+    return list.map((t) => {
+      const on = !!this.state.flags[t.id];
+      return {
+        ...t,
+        just: on ? "flex-end" : "flex-start",
+        track: on ? "var(--accent)" : "transparent",
+        trackLine: on ? "var(--accent)" : "var(--line)",
+        knob: on ? "var(--accent-ink)" : "var(--ink3)",
+        go: () => this.setState((s) => ({ flags: { ...s.flags, [t.id]: !s.flags[t.id] } }))
+      };
+    });
+  }
+
+  pick(list, cur, key) {
+    return list.map((it) => ({
+      ...it,
+      bg: cur === it.id ? "var(--accent-bg)" : "transparent",
+      line: cur === it.id ? "var(--accent-line)" : "var(--line2)",
+      go: () => this.setState({ [key]: it.id })
+    }));
+  }
+
+  renderVals() {
+    const s = this.state, on = "var(--sel)", off = "transparent";
+    const secs = [
+      { id: "profile", name: "Profile", icon: "◍" },
+      { id: "plan", name: "Plan & credits", icon: "◈" },
+      { id: "editor", name: "Editor defaults", icon: "▤" },
+      { id: "notifications", name: "Notifications", icon: "❝" }
+    ];
+
+    return {
+      ...this.shell("", "Account settings", [], s.section, "section"),
+      sections: secs.map((x) => ({
+        ...x,
+        bg: s.section === x.id ? on : off,
+        ink: s.section === x.id ? "var(--ink)" : "var(--ink2)",
+        bar: s.section === x.id ? "var(--accent)" : "transparent",
+        w: s.section === x.id ? "500" : "400",
+        go: () => this.setState({ section: x.id })
+      })),
+      isProfile: s.section === "profile",
+      isPlan: s.section === "plan",
+      isEditor: s.section === "editor",
+      isNotifs: s.section === "notifications",
+
+      fields: [
+        { id: "name", label: "Name", hint: "Shown on notes and revision marks.", ro: false, ink: "var(--ink)" },
+        { id: "email", label: "Email", hint: "Sign-in address. Contact support to change it.", ro: true, ink: "var(--ink2)" },
+        { id: "credit", label: "Credited as", hint: "Used on title pages and production drafts.", ro: false, ink: "var(--ink)" }
+      ].map((f) => ({
+        ...f,
+        value: s.form[f.id],
+        set: (e) => this.setState((st) => ({ form: { ...st.form, [f.id]: e.target.value } }))
+      })),
+
+      usage: [
+        { what: "Not Magic, Just This · showrunner lens", when: "31 minutes ago", cost: "12 cr" },
+        { what: "Winter Ad Spot · 4 shot renders", when: "12 minutes ago", cost: "34 cr" },
+        { what: "The Sound Before Rain · continuity check", when: "2 hours ago", cost: "6 cr" }
+      ],
+
+      formats: this.pick([
+        { id: "hollywood", name: "Hollywood", meta: "US Letter · Courier 12pt" },
+        { id: "asian", name: "Asian", meta: "A4 · Courier 12pt" }
+      ], s.format, "format"),
+
+      themeTabs: [{ id: "dark", name: "Dark" }, { id: "light", name: "Light" }].map((t) => ({
+        ...t,
+        bg: s.defaultTheme === t.id ? on : off,
+        ink: s.defaultTheme === t.id ? "var(--ink)" : "var(--ink2)",
+        go: () => this.setState({ defaultTheme: t.id, theme: t.id })
+      })),
+
+      editorToggles: this.sw([
+        { id: "autosave", name: "Autosave", desc: "Saves every few seconds and keeps a restore point per session." },
+        { id: "spell", name: "Spell check", desc: "Skips scene headings, character cues and transitions." },
+        { id: "pagecount", name: "Live page count", desc: "Repaginates as you type instead of on pause. Heavier on long scripts." }
+      ]),
+
+      notifs: this.sw([
+        { id: "notes", name: "Note replies", desc: "When someone answers a note on your script." },
+        { id: "revisions", name: "Revision published", desc: "When a collaborator locks pages and issues a new colour." },
+        { id: "jobs", name: "Generation finished", desc: "When a render job completes, fails or runs out of credits." },
+        { id: "digest", name: "Weekly digest", desc: "Monday summary of pages written and notes cleared." }
+      ])
+    };
+  }
+}
+</script>
+</body>
+</html>

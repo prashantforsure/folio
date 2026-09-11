@@ -142,8 +142,8 @@ Stop and ask before you:
 | 2 | The numeric thresholds separating review tiers 1 / 2 / 3 | The whole agent review flow |
 | 3 | Whether rename rewrites unlinked prose mentions in action, or only cues, sluglines and `@mentions` | Rename blast radius |
 | 4 | The `?lens=` value shape — `lens/<id>` as written, or just `<id>` | Insights routing |
-| 5 | Whether `/production` is project- or episode-scoped | Flagged in the route doc itself |
-| 6 | Whether `/build` and `/search` are cut or merely undesigned | Route tree |
+| 5 | ~~Whether `/production` is project- or episode-scoped~~ **Ruled: episode-scoped** (`docs/build-decisions.md`, Workspace shell phase) | — |
+| 6 | ~~Whether `/build` and `/search` are cut or merely undesigned~~ **Ruled: cut** (`docs/build-decisions.md`, Workspace shell phase) | — |
 | 7 | Where project settings `transfer`, `keys` and `episodes` went | Settings |
 | 8 | Sheet width for `format: asian` — A4 is ~794px, not 816px | Pagination engine |
 | 9 | The `/app/filmmaking` ADR | Anything past a project list |

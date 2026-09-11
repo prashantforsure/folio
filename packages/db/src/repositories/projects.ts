@@ -1,10 +1,11 @@
 import type { Episode, EpisodeId, EpisodeSlug, Membership, Project, UserId } from '@folio/contracts'
-import { episodeId as brandEpisodeId, formatEpisodeSlug, projectId as brandProjectId } from '@folio/contracts'
+import { episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
 import { asc, eq, isNull } from 'drizzle-orm'
 
 import { episodes, memberships, projects, users } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
+import { mintEpisodeSlug } from './episode-slug'
 import { stamp, stampOrNull } from './mapping'
 
 /**
@@ -31,6 +32,8 @@ export const toProject = (row: ProjectRow): Project => ({
   id: brandProjectId(row.id),
   title: row.title,
   kind: row.kind,
+  projectType: row.projectType,
+  format: row.format,
   tags: row.tags,
   createdBy: row.createdBy as UserId,
   createdAt: stamp(row.createdAt),
@@ -214,7 +217,7 @@ export const appendEpisode = async (
     .insert(episodes)
     .values({
       ...tenant(scope),
-      slug: formatEpisodeSlug(next),
+      slug: mintEpisodeSlug(next),
       ordinal: next,
       title,
     })

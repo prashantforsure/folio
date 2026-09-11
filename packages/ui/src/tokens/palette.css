@@ -160,3 +160,14 @@
   --avatar-bg: oklch(0.55 0.1 300);
   --avatar-ink: #fff;
 }
+
+/*
+ * `--scrim` is the ground behind a modal. The design README gives one value
+ * for the command palette - `rgba(15,12,8,.28)` over the page - and no dark
+ * variant, so it is declared once and does not move with the theme: it is a
+ * darkening, and a darkening reads the same over either desk. The first use
+ * is the Trash route's delete-forever confirmation.
+ */
+:root {
+  --scrim: rgba(15, 12, 8, 0.28);
+}

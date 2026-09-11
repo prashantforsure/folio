@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#efe9df; --panel:#f8f4ec; --rail:#f3eee4; --line:rgba(40,30,18,.16); --line2:rgba(40,30,18,.08);
+  --ink:#1d1915; --ink2:rgba(29,25,21,.66); --ink3:rgba(29,25,21,.44);
+  --sheet:#fffdf8; --sheet-ink:#171310; --sheet-line:rgba(0,0,0,.12); --sheet-edge:rgba(0,0,0,.16);
+  --hover:rgba(40,30,18,.05); --sel:rgba(40,30,18,.08);
+  --accent:oklch(0.50 0.17 27); --accent-bg:oklch(0.50 0.17 27 / .09); --accent-line:oklch(0.50 0.17 27 / .36); --accent-ink:#fff;
+  --frame-a:oklch(0.32 0.02 50); --frame-b:oklch(0.16 0.01 50);
+  --add:oklch(0.48 0.10 150); --add-bg:oklch(0.48 0.10 150 / .10);
+  --del:oklch(0.50 0.14 25); --del-bg:oklch(0.50 0.14 25 / .09);
+  --note:oklch(0.55 0.10 75); --note-bg:oklch(0.55 0.10 75 / .11);
+  --focus:oklch(0.50 0.17 27); --shadow:none;
+  --grid:rgba(40,30,18,.16); --slate:#1d1915; --slate-ink:#efe9df;
+  --serif:"Newsreader",Georgia,serif;
+}
+[data-theme="dark"]{
+  --desk:#151311; --panel:#1c1917; --rail:#181513; --line:rgba(240,232,220,.13); --line2:rgba(240,232,220,.07);
+  --ink:#ebe4d8; --ink2:rgba(235,228,216,.64); --ink3:rgba(235,228,216,.40);
+  --sheet:#262220; --sheet-ink:#e2dbcf; --sheet-line:rgba(255,255,255,.11); --sheet-edge:rgba(255,255,255,.08);
+  --hover:rgba(240,232,220,.06); --sel:rgba(240,232,220,.10);
+  --accent:oklch(0.72 0.14 30); --accent-bg:oklch(0.72 0.14 30 / .14); --accent-line:oklch(0.72 0.14 30 / .40); --accent-ink:#1a1210;
+  --frame-a:oklch(0.30 0.02 50); --frame-b:oklch(0.14 0.01 50);
+  --add:oklch(0.76 0.10 150); --add-bg:oklch(0.76 0.10 150 / .13);
+  --del:oklch(0.74 0.12 25); --del-bg:oklch(0.74 0.12 25 / .13);
+  --note:oklch(0.78 0.09 75); --note-bg:oklch(0.78 0.09 75 / .13);
+  --focus:oklch(0.72 0.14 30); --shadow:none;
+  --grid:rgba(240,232,220,.18); --slate:#ebe4d8; --slate-ink:#151311;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:"Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .12s,border-color .12s,color .12s,box-shadow .12s,transform .12s}
+::selection{background:var(--accent-bg)}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;background:var(--desk);color:var(--ink);overflow:hidden">
+
+  <!-- ── ACCOUNT SIDEBAR ── -->
+  <aside style="width:228px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 11px 9px">
+      <span style="width:22px;height:22px;flex:none;border-radius:3px;background:var(--ink);color:var(--desk);font-family:var(--serif);font-size:13px;font-weight:500;display:grid;place-items:center">L</span>
+      <span style="flex:1;min-width:0;font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em">Laper</span>
+      <button title="Collapse sidebar" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:12px">◨</button>
+    </div>
+
+    <div style="padding:0 10px 10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border:1px solid var(--line2);border-radius:3px;color:var(--ink3);font-size:11.5px;cursor:pointer">
+        <span>Search or jump to…</span><span style="font-size:10px">⌘K</span>
+      </div>
+    </div>
+
+    <nav style="display:flex;flex-direction:column;gap:1px;padding:0 8px">
+      <sc-for list="{{ sidebar }}" as="n" hint-placeholder-count="4">
+        <div style-hover="background:var(--hover)" style="position:relative;display:flex;align-items:center;gap:9px;padding:6px 8px;background:{{ n.bg }};border-radius:3px;cursor:pointer;font-size:12.5px;font-weight:{{ n.w }};color:{{ n.ink }}">
+          <span style="position:absolute;left:-3px;top:7px;bottom:7px;width:2px;border-radius:1px;background:{{ n.bar }}"></span>
+          <span style="width:13px;text-align:center;font-size:12px;color:var(--ink2)">{{ n.icon }}</span>{{ n.name }}
+          <span style="margin-left:auto;font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ n.meta }}</span>
+        </div>
+      </sc-for>
+    </nav>
+
+    <div style="flex:1"></div>
+
+    <div style="padding:10px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid var(--line2);border-radius:3px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span style="font-size:10.5px;color:var(--ink2)">Credits</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">95</span>
+        </div>
+        <div style="height:3px;border-radius:2px;background:var(--line);overflow:hidden"><div style="width:19%;height:100%;background:var(--accent)"></div></div>
+        <span style="font-size:9.5px;line-height:1.5;color:var(--ink3)">Free plan. Invite a writer to earn 50 more.</span>
+      </div>
+
+      <div style="position:relative">
+        <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:0;right:0;bottom:calc(100% + 6px);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:4px;display:flex;flex-direction:column;gap:1px;z-index:5">
+            <sc-for list="{{ menu }}" as="m" hint-placeholder-count="4">
+              <div style-hover="background:var(--hover)" style="display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:3px;cursor:pointer;font-size:12px;color:{{ m.ink }}">
+                <span style="width:12px;text-align:center;font-size:11px;color:var(--ink3)">{{ m.icon }}</span>{{ m.name }}
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <button onClick="{{ toggleMenu }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:100%;display:flex;align-items:center;gap:8px;padding:6px 7px;background:transparent;border:1px solid var(--line2);border-radius:3px;cursor:pointer;text-align:left">
+          <span style="width:22px;height:22px;flex:none;border-radius:50%;background:oklch(0.55 0.10 300);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center">PP</span>
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+            <span style="font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Prashant Patel</span>
+            <span style="font-size:9.5px;color:var(--ink3)">Free plan</span>
+          </span>
+          <span style="font-size:10px;color:var(--ink3)">⌄</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── PAGE ── -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+    <header style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line2)">
+      <span style="font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:-.01em">{{ pageTitle }}</span>
+      <span style="flex:1;min-width:0;font-size:10.5px;color:var(--ink3)">Screenplay projects only</span>
+      <div style="display:flex;align-items:center;gap:3px;padding:2px;border:1px solid var(--line2);border-radius:3px">
+        <sc-for list="{{ stateTabs }}" as="t" hint-placeholder-count="2">
+          <button onClick="{{ t.go }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:{{ t.bg }};border:none;border-radius:3px;cursor:pointer;font-size:11px;color:{{ t.ink }}">{{ t.name }}</button>
+        </sc-for>
+      </div>
+      <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="width:26px;height:24px;display:grid;place-items:center;background:transparent;border:none;border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink3)">{{ themeIcon }}</button>
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line2);border-radius:3px;font-size:11px;color:var(--ink2);cursor:pointer">Free plan<span style="color:var(--accent)">Upgrade</span></div>
+    </header>
+    <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column">
+      <sc-if value="{{ isFull }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px 18px 0;max-width:1240px">
+          <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+            <button onClick="{{ f.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:{{ f.bg }};border:1px solid {{ f.line }};border-radius:3px;cursor:pointer;font-size:11px;color:{{ f.ink }}">{{ f.name }}<span style="font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ f.n }}</span></button>
+          </sc-for>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:3px;padding:2px;border:1px solid var(--line2);border-radius:3px">
+            <sc-for list="{{ viewTabs }}" as="v" hint-placeholder-count="2">
+              <button onClick="{{ v.go }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--focus)" style="padding:3px 9px;background:{{ v.bg }};border:none;border-radius:3px;cursor:pointer;font-size:11px;color:{{ v.ink }}">{{ v.name }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <sc-if value="{{ isGrid }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(208px,1fr));gap:12px;padding:14px 18px 26px;max-width:1240px">
+          <sc-for list="{{ creates }}" as="c" hint-placeholder-count="2">
+          <div style-hover="border-color:var(--accent-line)" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;text-align:center;padding:18px 13px;min-height:196px;border:1px dashed var(--line);border-radius:3px;cursor:pointer">
+            <span style="font-size:16px;color:var(--ink2)">＋</span>
+            <span style="font-size:12.5px;font-weight:500">{{ c.name }}</span>
+            <p style="margin:0;max-width:158px;font-size:11px;line-height:1.55;color:var(--ink3)">{{ c.desc }}</p>
+          </div>
+        </sc-for>
+          <sc-for list="{{ projects }}" as="p" hint-placeholder-count="4">
+          <div style-hover="border-color:var(--accent-line)" style="display:flex;flex-direction:column;gap:7px;padding:12px;min-height:196px;border:1px solid var(--line);border-radius:3px;background:var(--panel);cursor:pointer">
+            <sc-if value="{{ p.isVideo }}" hint-placeholder-val="{{ false }}">
+              <div style="height:58px;border:1px solid var(--line2);border-radius:2px;background:repeating-linear-gradient(135deg,var(--hover) 0 7px,transparent 7px 14px)"></div>
+            </sc-if>
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="font-size:11px;color:var(--ink3)">{{ p.icon }}</span>
+              <span style="flex:1;min-width:0;font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)">{{ p.kind }}</span>
+              <sc-if value="{{ p.chip }}" hint-placeholder-val="{{ false }}">
+                <span style="padding:1px 5px;border-radius:3px;background:{{ p.chipBg }};color:{{ p.chipInk }};font-size:8.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">{{ p.chip }}</span>
+              </sc-if>
+            </div>
+            <span style="font-family:var(--serif);font-size:15px;font-weight:500;line-height:1.25;letter-spacing:-.01em;text-wrap:pretty">{{ p.title }}</span>
+            <p style="margin:0;font-size:11.5px;line-height:1.55;color:var(--ink2);text-wrap:pretty">{{ p.logline }}</p>
+            <div style="flex:1"></div>
+            <span style="font-family:'Courier Prime',monospace;font-size:10px;color:var(--ink3)">{{ p.statsLine }}</span>
+            <div style="display:flex;align-items:center;gap:8px;padding-top:7px;border-top:1px solid var(--line2)">
+              <span style="flex:1;font-size:10.5px;color:var(--ink3)">Edited {{ p.edited }}</span>
+              <span style="font-size:12px;color:var(--ink3)">⋯</span>
+            </div>
+          </div>
+        </sc-for>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isList }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:12px 18px 26px;max-width:1240px">
+        <div style="display:grid;grid-template-columns:minmax(0,2.6fr) 104px 84px 96px 120px 24px;gap:10px;padding:0 10px 6px;border-bottom:1px solid var(--line);font-size:9px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">
+          <span>Title</span><span>Kind</span><span>Length</span><span>Stage</span><span>Edited</span><span></span>
+        </div>
+        <sc-for list="{{ projects }}" as="p" hint-placeholder-count="4">
+          <div style-hover="background:var(--hover)" style="display:grid;grid-template-columns:minmax(0,2.6fr) 104px 84px 96px 120px 24px;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line2);cursor:pointer">
+            <span style="min-width:0;display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;color:var(--ink3)">{{ p.icon }}</span>
+              <span style="min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.title }}</span>
+            </span>
+            <span style="font-size:11px;color:var(--ink2)">{{ p.kind }}</span>
+            <span style="font-family:'Courier Prime',monospace;font-size:10.5px;color:var(--ink2)">{{ p.len }}</span>
+            <span style="font-size:11px;color:var(--ink2)">{{ p.stage }}</span>
+            <span style="font-size:11px;color:var(--ink3)">{{ p.edited }}</span>
+            <span style="text-align:center;font-size:12px;color:var(--ink3)">⋯</span>
+          </div>
+        </sc-for>
+      </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:56px 24px">
+        <div style="max-width:400px;display:flex;flex-direction:column;gap:7px;text-align:center">
+          <span style="font-family:var(--serif);font-size:21px;font-weight:400;letter-spacing:-.01em">{{ emptyTitle }}</span>
+          <p style="margin:0;font-size:12px;line-height:1.6;color:var(--ink2);text-wrap:pretty">{{ emptyCopy }}</p>
+        </div>
+        <div style="width:100%;max-width:520px;display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:12px">
+          <sc-for list="{{ creates }}" as="c" hint-placeholder-count="2">
+          <div style-hover="border-color:var(--accent-line)" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;text-align:center;padding:18px 13px;min-height:176px;border:1px dashed var(--line);border-radius:3px;cursor:pointer">
+            <span style="font-size:16px;color:var(--ink2)">＋</span>
+            <span style="font-size:12.5px;font-weight:500">{{ c.name }}</span>
+            <p style="margin:0;max-width:158px;font-size:11px;line-height:1.55;color:var(--ink3)">{{ c.desc }}</p>
+          </div>
+        </sc-for>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;empty&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;grid&quot;,&quot;list&quot;],&quot;default&quot;:&quot;grid&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "dark",
+    view: this.props.view || "full",
+    layout: this.props.layout || "grid",
+    filter: "all",
+    menuOpen: false
+  };
+
+  shell(active, title, tabs, cur, key) {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--sel)", off = "transparent";
+    return {
+      theme: s.theme,
+      themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      menuOpen: s.menuOpen,
+      toggleMenu: () => this.setState({ menuOpen: !s.menuOpen }),
+      menu: [
+        { name: "Account settings", icon: "⚙", ink: "var(--ink)" },
+        { name: "Trash", icon: "▧", ink: "var(--ink)" },
+        { name: "Keyboard shortcuts", icon: "⌘", ink: "var(--ink)" },
+        { name: "Sign out", icon: "⎋", ink: "var(--ink2)" }
+      ],
+      pageTitle: title,
+      sidebar: [
+        { name: "New", icon: "＋", meta: "" },
+        { name: "Recents", icon: "◷", meta: "6" },
+        { name: "Screenwriting", icon: "▤", meta: "4" },
+        { name: "Filmmaking", icon: "▶", meta: "2" }
+      ].map((n) => ({
+        ...n,
+        bg: n.name === active ? on : off,
+        ink: n.name === active ? "var(--ink)" : "var(--ink2)",
+        bar: n.name === active ? "var(--accent)" : "transparent",
+        w: n.name === active ? "500" : "400"
+      })),
+      stateTabs: tabs.map((t) => ({
+        ...t,
+        bg: cur === t.id ? on : off,
+        ink: cur === t.id ? "var(--ink)" : "var(--ink2)",
+        go: () => this.setState({ [key]: t.id })
+      }))
+    };
+  }
+
+  seg(list, cur, key) {
+    const on = "var(--sel)", off = "transparent";
+    return list.map((v) => ({
+      ...v,
+      bg: cur === v.id ? on : off,
+      ink: cur === v.id ? "var(--ink)" : "var(--ink2)",
+      go: () => this.setState({ [key]: v.id })
+    }));
+  }
+
+  renderVals() {
+    const s = this.state;
+  const video = { chipBg: "var(--note-bg)", chipInk: "var(--note)" };
+  const done = { chipBg: "var(--add-bg)", chipInk: "var(--add)" };
+  const scripts = [
+    { title: "Not Magic, Just This", icon: "▤", kind: "Series", tag: "Series", isVideo: false, chip: "", logline: "A stage magician's assistant inherits the act, and the debts that paid for it.", statsLine: "6 eps · 104pp · Draft 5", len: "104pp", stage: "Draft 5", edited: "31 minutes ago" },
+    { title: "The Sound Before Rain", icon: "▤", kind: "Feature", tag: "Feature", isVideo: false, chip: "", logline: "A field recordist returns to the valley she grew up in to catalogue a storm.", statsLine: "118pp · Draft 2 · 44 scenes", len: "118pp", stage: "Draft 2", edited: "2 hours ago" },
+    { title: "Housekeeping", icon: "▤", kind: "Short", tag: "Short", isVideo: false, chip: "", logline: "Two hotel cleaners decide what to do about room 402.", statsLine: "14pp · Draft 1 · 6 scenes", len: "14pp", stage: "Draft 1", edited: "yesterday" },
+    { title: "Ninth Ward Tapes", icon: "▤", kind: "Series", tag: "Series", isVideo: false, chip: "", logline: "Outline only so far. Six episodes mapped, nothing written.", statsLine: "3 eps · 61pp · Outline", len: "61pp", stage: "Outline", edited: "4 days ago" }
+  ];
+  const videos = [
+    { title: "Winter Ad Spot", icon: "▶", kind: "Quick video", tag: "Quick video", isVideo: true, chip: "4 / 12", ...video, logline: "Thirty seconds of cold light and warm rooms for the January push.", statsLine: "12 shots · 0:48 · 34 credits", len: "0:48", stage: "Rendering", edited: "12 minutes ago" },
+    { title: "Mockup Trailer", icon: "▶", kind: "Quick video", tag: "Quick video", isVideo: true, chip: "Finished", ...done, logline: "Cut-down teaser assembled from the Not Magic storyboard.", statsLine: "26 shots · 1:35 · 96 credits", len: "1:35", stage: "Finished", edited: "3 days ago" }
+  ];
+    const shown = s.filter === "all" ? scripts : scripts.filter((p) => p.tag === s.filter);
+    const count = (tag) => (tag === "all" ? scripts.length : scripts.filter((p) => p.tag === tag).length);
+
+    return {
+      ...this.shell("Screenwriting", "Screenwriting", [{ id: "full", name: "Projects" }, { id: "empty", name: "Empty" }], s.view, "view"),
+      isFull: s.view === "full",
+      isEmpty: s.view === "empty",
+      isGrid: s.layout === "grid",
+      isList: s.layout === "list",
+      viewTabs: this.seg([{ id: "grid", name: "Grid" }, { id: "list", name: "List" }], s.layout, "layout"),
+      filters: [
+        { id: "all", name: "All" },
+        { id: "Series", name: "Series" },
+        { id: "Feature", name: "Feature" },
+        { id: "Short", name: "Short" }
+      ].map((f) => ({
+        ...f,
+        n: count(f.id),
+        bg: s.filter === f.id ? "var(--accent-bg)" : "transparent",
+        line: s.filter === f.id ? "var(--accent-line)" : "var(--line2)",
+        ink: s.filter === f.id ? "var(--accent)" : "var(--ink2)",
+        go: () => this.setState({ filter: f.id })
+      })),
+      creates: [{ name: "New script", desc: "Write professional, structured screenplays." }],
+      projects: shown,
+      emptyTitle: "No screenplays yet",
+      emptyCopy: "A script project opens on a blank sheet in Courier 12pt. Scenes, characters and locations get parsed out as you type."
+    };
+  }
+}
+</script>
+</body>
+</html>

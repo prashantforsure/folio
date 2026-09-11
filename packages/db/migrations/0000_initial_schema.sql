@@ -422,6 +422,13 @@ CREATE TABLE "credit_ledger" (
 	CONSTRAINT "credit_ledger_adjust_states_reason" CHECK ("credit_ledger"."kind" <> 'adjust' OR length(btrim(coalesce("credit_ledger"."reason", ''))) > 0)
 );
 --> statement-breakpoint
+-- Moved up from the index block below. drizzle-kit writes every foreign key
+-- before every index, and the composite key on "nodes" two dozen statements
+-- down references this unique index - so as generated, the file could not be
+-- applied to any Postgres: "there is no unique constraint matching given keys
+-- for referenced table". The reorder was made before this migration had ever
+-- been applied anywhere; see the phase report for the shell routes.
+CREATE UNIQUE INDEX "documents_id_kind_key" ON "documents" USING btree ("id","kind");--> statement-breakpoint
 ALTER TABLE "episodes" ADD CONSTRAINT "episodes_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -495,7 +502,6 @@ CREATE UNIQUE INDEX "episodes_project_ordinal_key" ON "episodes" USING btree ("p
 CREATE UNIQUE INDEX "memberships_project_user_key" ON "memberships" USING btree ("project_id","user_id");--> statement-breakpoint
 CREATE INDEX "memberships_user_idx" ON "memberships" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "projects_created_by_idx" ON "projects" USING btree ("created_by");--> statement-breakpoint
-CREATE UNIQUE INDEX "documents_id_kind_key" ON "documents" USING btree ("id","kind");--> statement-breakpoint
 CREATE INDEX "documents_project_idx" ON "documents" USING btree ("project_id");--> statement-breakpoint
 CREATE INDEX "documents_episode_idx" ON "documents" USING btree ("episode_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "documents_episode_kind_key" ON "documents" USING btree ("episode_id","kind");--> statement-breakpoint

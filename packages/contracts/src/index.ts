@@ -55,6 +55,7 @@ export { assertExact } from './equality'
 
 export type {
   EpisodeId,
+  EpisodeSegmentResult,
   EpisodeSlug,
   JobId,
   LedgerEntryId,
@@ -96,6 +97,7 @@ export {
   ledgerEntryId,
   measurementId,
   membershipId,
+  parseEpisodeSegment,
   projectId,
   revisionId,
   threadCommentId,
@@ -109,6 +111,7 @@ export type {
   MembershipRole,
   PoolerMode,
   ProjectKind,
+  ProjectType,
   ThreadAnchorKind,
   ThreadState,
   TombstoneReason,
@@ -127,10 +130,12 @@ export {
   OutlineNodeTypeSchema,
   POOLER_MODES,
   PROJECT_KINDS,
+  PROJECT_TYPES,
   PageModeSchema,
   PoolerModeSchema,
   PresenceSchema,
   ProjectKindSchema,
+  ProjectTypeSchema,
   ProvenanceSourceSchema,
   ResolveRowStateSchema,
   RevisionColourSchema,
@@ -165,8 +170,16 @@ export {
   ScreenplayNodeSchema,
 } from './model'
 
-export type { Episode, Membership, Project, ProjectCard, User } from './tenancy'
+export type {
+  CreateProjectInput,
+  Episode,
+  Membership,
+  Project,
+  ProjectCard,
+  User,
+} from './tenancy'
 export {
+  CreateProjectInputSchema,
   EpisodeSchema,
   MembershipSchema,
   ProjectCardSchema,
@@ -254,3 +267,11 @@ export {
 
 export type { CreditBalance, LedgerEntry } from './credits'
 export { CreditBalanceSchema, LedgerEntrySchema } from './credits'
+
+export type { EpisodeBoardRow, EpisodeNavMeta, EpisodeSceneRow, RailBadges } from './workspace'
+export {
+  EpisodeBoardRowSchema,
+  EpisodeNavMetaSchema,
+  EpisodeSceneRowSchema,
+  RailBadgesSchema,
+} from './workspace'
