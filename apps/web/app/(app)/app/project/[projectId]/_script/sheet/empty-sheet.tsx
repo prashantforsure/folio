@@ -1,10 +1,10 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 
-import { createBlankScript, importScript } from '../../../../../../../lib/script/actions'
-import { IMPORT_IDLE } from '../../../../../../../lib/script/result'
+import { createBlankScript } from '../../../../../../../lib/script/actions'
+import { ImportForm } from './import-form'
 
 /**
  * The empty state: a sheet with the hints on it and a ghost slugline with a
@@ -30,22 +30,13 @@ const HINTS: readonly { readonly key: string; readonly text: string }[] = [
 export const EmptySheet = ({
   projectId,
   episode,
-  autoOpenImport,
 }: {
   readonly projectId: string
   readonly episode: string
-  readonly autoOpenImport: boolean
 }) => {
   const router = useRouter()
-  const [imported, importAction, importing] = useActionState(importScript, IMPORT_IDLE)
   const [pending, startTransition] = useTransition()
   const [blankError, setBlankError] = useState<string | null>(null)
-  const fileInput = useRef<HTMLInputElement>(null)
-  const form = useRef<HTMLFormElement>(null)
-
-  useEffect(() => {
-    if (imported.status === 'imported') router.refresh()
-  }, [imported.status, router])
 
   return (
     <div className="folio-desk" data-empty-state style={{ height: 1056 }}>
@@ -65,57 +56,36 @@ export const EmptySheet = ({
             INT/EXT. LOCATION - DAY/NIGHT<span className="animate-pulse text-accent">|</span>
           </div>
 
-          <form
-            ref={form}
-            action={importAction}
-            className="mt-[24px] flex flex-col gap-[10px] font-sans"
-            data-import-form
-          >
-            <input type="hidden" name="projectId" value={projectId} />
-            <input type="hidden" name="episode" value={episode} />
-            <input
-              ref={fileInput}
-              type="file"
-              name="file"
-              accept=".fdx,.fountain,.txt"
-              className="sr-only"
-              onChange={() => {
-                form.current?.requestSubmit()
-              }}
-            />
-            <div className="flex flex-wrap items-center gap-[8px]">
-              <button
-                type="button"
-                disabled={importing || pending}
-                autoFocus={autoOpenImport}
-                onClick={() => {
-                  fileInput.current?.click()
-                }}
-                className="folio-focus flex items-center gap-[8px] rounded-chrome bg-ink px-[12px] py-[7px] text-12 font-medium text-desk disabled:opacity-60"
-              >
-                <span className="font-glyph text-11 opacity-70">⤒</span>
-                {importing ? 'Importing…' : 'Import .fdx or .fountain'}
-              </button>
-              <button
-                type="button"
-                disabled={importing || pending}
-                onClick={() => {
-                  startTransition(async () => {
-                    const result = await createBlankScript(projectId, episode)
-                    if (result.status === 'done') router.refresh()
-                    else setBlankError(result.message)
-                  })
-                }}
-                className="folio-small-button !py-[6px] !text-11-5"
-              >
-                {pending ? 'Starting…' : 'Start a blank script'}
-              </button>
-            </div>
-            {imported.status === 'error' || imported.status === 'refused' ? (
-              <p className="m-0 text-11 text-del" role="alert">
-                {imported.message}
-              </p>
-            ) : null}
+          <div className="mt-[24px] flex flex-col gap-[10px] font-sans">
+            <ImportForm projectId={projectId} episode={episode}>
+              {({ importing, open }) => (
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  <button
+                    type="button"
+                    disabled={importing || pending}
+                    onClick={open}
+                    className="folio-focus flex items-center gap-[8px] rounded-chrome bg-ink px-[12px] py-[7px] text-12 font-medium text-desk disabled:opacity-60"
+                  >
+                    <span className="font-glyph text-11 opacity-70">⤒</span>
+                    {importing ? 'Importing…' : 'Import .fdx or .fountain'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={importing || pending}
+                    onClick={() => {
+                      startTransition(async () => {
+                        const result = await createBlankScript(projectId, episode)
+                        if (result.status === 'done') router.refresh()
+                        else setBlankError(result.message)
+                      })
+                    }}
+                    className="folio-small-button !py-[6px] !text-11-5"
+                  >
+                    {pending ? 'Starting…' : 'Start a blank script'}
+                  </button>
+                </div>
+              )}
+            </ImportForm>
             {blankError === null ? null : (
               <p className="m-0 text-11 text-del" role="alert">
                 {blankError}
@@ -124,7 +94,7 @@ export const EmptySheet = ({
             <p className="m-0 text-10-5 leading-[1.5] text-ink3">
               Final Draft (MORE) and (CONT&rsquo;D) are stripped on import; authored (V.O.) and (O.S.) are kept.
             </p>
-          </form>
+          </div>
         </div>
       </div>
     </div>

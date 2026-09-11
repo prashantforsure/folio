@@ -280,6 +280,17 @@ export const importScript = async (
 // Project preferences the Info panel writes
 // ---------------------------------------------------------------------------
 
+/*
+ * Neither of these revalidates. The workspace has already applied the setting
+ * to the sheet it is drawing before the call is made (`script-workspace.tsx`,
+ * "Pagination and format"), and a `revalidatePath` here would answer a
+ * one-column update by re-running `loadScript` over every node in the
+ * episode - seconds on a feature, for a tree the client would then ignore.
+ * Every other route reads the row fresh on its next request, as dynamic
+ * routes do; the stored measurement is re-cut on the next save, which was
+ * already the case.
+ */
+
 export const setPagination = async (
   projectId: string,
   episode: string,
@@ -289,7 +300,6 @@ export const setPagination = async (
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
   await setProjectPagination(gate.scope, paginationFromControl(control))
-  revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'done' }
 }
 
@@ -303,7 +313,6 @@ export const setFormat = async (
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
   await setProjectFormat(gate.scope, parsed.data)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'done' }
 }
 

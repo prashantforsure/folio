@@ -2,19 +2,15 @@
 
 import type { Project } from '@folio/contracts'
 import type { ScriptFormat } from '@folio/script'
-import Link from 'next/link'
 import { useState, useTransition } from 'react'
 
-import { replyThread, resolveThread, setFormat, setPagination } from '../../../../../../../lib/script/actions'
+import { replyThread, resolveThread } from '../../../../../../../lib/script/actions'
 import type { RevisionRow, ThreadCard } from '../../../../../../../lib/script/panel'
 import type { ScriptStats } from '../../../../../../../lib/script/stats'
-import {
-  PAGINATION_CONTROLS,
-  PAGINATION_CONTROL_COPY,
-  controlFromPagination,
-} from '../../../../../../../lib/state/project-preferences'
+import { PAGINATION_CONTROLS, PAGINATION_CONTROL_COPY } from '../../../../../../../lib/state/project-preferences'
 import type { PaginationControl } from '../../../../../../../lib/state/project-preferences'
-import type { SubViewHref } from '../script-workspace'
+import type { SideTab } from '../../../../../../../lib/state/session'
+import { ViewTab } from '../view-tab'
 
 /**
  * The right panel. 296px, `--panel`, 1px left border. Transcribed from
@@ -22,15 +18,23 @@ import type { SubViewHref } from '../script-workspace'
  * import/export, `▤` report), the Info / Collaboration segment, the tab
  * body, and the footer button `◎ Open composer ⌘J`.
  *
+ * ## The tab
+ *
+ * `Info / Collaboration` is session state - `useSession().sideTab`, owned by
+ * the workspace and handed down - never the URL (ruled 2026-09-11,
+ * `lib/workspace/params.ts`). The tabs are buttons.
+ *
  * ## Info
  *
  * Pagination is the bundle's three-way control drawn over the model's pair -
  * `controlFromPagination` / `setPagination` are the boundary, in
  * `lib/state/project-preferences.ts`. Format writes `projects.format`, an
- * engine input. **Project type is shown, not switchable**: film <-> series
- * changes the URL shape of every route and is not a panel toggle; flagged.
- * The statistics are real (`lib/script/stats.ts`), and the bundle's line
- * under them is kept verbatim.
+ * engine input. Both controls are *drawn* here and *decided* in the
+ * workspace, which moves the sheet the moment a segment is pressed and
+ * writes the row behind it; `pending` and `notice` are that write's. **Project
+ * type is shown, not switchable**: film <-> series changes the URL shape of
+ * every route and is not a panel toggle; flagged. The statistics are real
+ * (`lib/script/stats.ts`), and the bundle's line under them is kept verbatim.
  *
  * ## Collaboration
  *
@@ -49,9 +53,15 @@ export type RightPanelProps = {
   readonly projectId: string
   readonly episode: string
   readonly project: Project
-  readonly tab: 'info' | 'collab'
-  readonly infoHref: SubViewHref
-  readonly collabHref: SubViewHref
+  readonly tab: SideTab
+  readonly onPickTab: (tab: SideTab) => void
+  /** The row as the workspace last knew it - ahead of a write in flight. */
+  readonly pagination: PaginationControl
+  readonly format: ScriptFormat
+  readonly preferencesPending: boolean
+  readonly preferencesNotice: string | null
+  readonly onPickPagination: (control: PaginationControl) => void
+  readonly onPickFormat: (format: ScriptFormat) => void
   readonly stats: ScriptStats
   readonly threads: readonly ThreadCard[]
   readonly revisions: readonly RevisionRow[]
@@ -73,30 +83,18 @@ export const RightPanel = ({
   episode,
   project,
   tab,
-  infoHref,
-  collabHref,
+  onPickTab,
+  pagination,
+  format,
+  preferencesPending,
+  preferencesNotice,
+  onPickPagination,
+  onPickFormat,
   stats,
   threads,
   revisions,
   onImport,
 }: RightPanelProps) => {
-  const [pending, startTransition] = useTransition()
-  const [notice, setNotice] = useState<string | null>(null)
-
-  const control = controlFromPagination(project)
-  const choosePagination = (next: PaginationControl): void => {
-    startTransition(async () => {
-      const result = await setPagination(projectId, episode, next)
-      setNotice(result.status === 'done' ? null : result.message)
-    })
-  }
-  const chooseFormat = (next: ScriptFormat): void => {
-    startTransition(async () => {
-      const result = await setFormat(projectId, episode, next)
-      setNotice(result.status === 'done' ? null : result.message)
-    })
-  }
-
   return (
     <aside
       data-right-panel
@@ -125,18 +123,30 @@ export const RightPanel = ({
 
       <div className="flex-none px-[12px] pt-[10px]">
         <div className="folio-segment" role="tablist" aria-label="Panel">
-          <Link href={infoHref} role="tab" aria-current={tab === 'info' ? 'true' : undefined} className="folio-focus">
+          <ViewTab
+            active={tab === 'info'}
+            onPick={() => {
+              onPickTab('info')
+            }}
+          >
             Info
-          </Link>
-          <Link href={collabHref} role="tab" aria-current={tab === 'collab' ? 'true' : undefined} className="folio-focus">
+          </ViewTab>
+          <ViewTab
+            active={tab === 'collab'}
+            onPick={() => {
+              onPickTab('collab')
+            }}
+          >
             Collaboration
-          </Link>
+          </ViewTab>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-[12px] pb-[24px] pt-[14px]">
-        {notice === null ? null : (
-          <p className="m-0 rounded-chrome border border-del bg-del-bg px-[8px] py-[5px] text-10-5 text-del">{notice}</p>
+        {preferencesNotice === null ? null : (
+          <p className="m-0 rounded-chrome border border-del bg-del-bg px-[8px] py-[5px] text-10-5 text-del">
+            {preferencesNotice}
+          </p>
         )}
 
         {tab === 'info' ? (
@@ -149,20 +159,20 @@ export const RightPanel = ({
                     key={entry}
                     type="button"
                     role="radio"
-                    aria-checked={control === entry}
-                    aria-pressed={control === entry}
-                    disabled={pending}
+                    aria-checked={pagination === entry}
+                    aria-pressed={pagination === entry}
+                    disabled={preferencesPending}
                     title={PAGINATION_CONTROL_COPY[entry].note}
                     className="!px-[6px] !text-11"
                     onClick={() => {
-                      choosePagination(entry)
+                      onPickPagination(entry)
                     }}
                   >
                     {PAGINATION_CONTROL_COPY[entry].label}
                   </button>
                 ))}
               </div>
-              <span className="text-10 leading-[1.45] text-ink3">{PAGINATION_CONTROL_COPY[control].note}</span>
+              <span className="text-10 leading-[1.45] text-ink3">{PAGINATION_CONTROL_COPY[pagination].note}</span>
             </section>
 
             <section className="flex flex-col gap-[8px]">
@@ -173,11 +183,11 @@ export const RightPanel = ({
                     key={entry.id}
                     type="button"
                     role="radio"
-                    aria-checked={project.format === entry.id}
-                    aria-pressed={project.format === entry.id}
-                    disabled={pending}
+                    aria-checked={format === entry.id}
+                    aria-pressed={format === entry.id}
+                    disabled={preferencesPending}
                     onClick={() => {
-                      chooseFormat(entry.id)
+                      onPickFormat(entry.id)
                     }}
                   >
                     {entry.label}
@@ -187,7 +197,7 @@ export const RightPanel = ({
               <div className="flex flex-col gap-[5px] text-11-5">
                 <div className="flex items-baseline justify-between">
                   <span className="text-ink2">Page</span>
-                  <span>{FORMATS.find((entry) => entry.id === project.format)?.page}</span>
+                  <span>{FORMATS.find((entry) => entry.id === format)?.page}</span>
                 </div>
                 <div className="flex items-baseline justify-between">
                   <span className="text-ink2">Dialogue</span>

@@ -295,18 +295,87 @@ test('draft state, both themes; the cover and the collaboration tab', async ({ p
   await expect(page.locator('[data-status-bar]')).toContainText('Paged')
   await expect(page.locator('[data-stat="scenes"]')).toHaveText('220')
 
-  await page.goto(`${projectUrl}?panel=collab`)
+  // Neither tab is in the URL: a click, not a `goto`.
+  await page.getByRole('tab', { name: 'Collaboration' }).click()
   await expect(page.locator('[data-right-panel]')).toHaveAttribute('data-panel-tab', 'collab')
   await expect(page.getByText('Open comments', { exact: true })).toBeVisible()
   await expect(page.getByText('Collaborators')).toHaveCount(0)
   await page.screenshot({ path: 'test-results/script-collab-light.png', fullPage: false })
 
-  await page.goto(`${projectUrl}?doc=cover`)
+  await page.getByRole('tab', { name: /Cover$/ }).click()
   await expect(page.locator('[data-cover]')).toBeVisible()
   await page.locator('[data-cover-field="title"]').fill('STANDPIPE')
   await page.locator('[data-cover-field="author"]').fill('Script walk')
   await expect(page.locator('[data-cover-status]')).toHaveAttribute('data-cover-status', 'saved', { timeout: 30_000 })
+  // A reload opens on the script - the cover is not remembered - and the panel tab is (session).
   await page.reload()
+  await expect(page.locator('main[data-route="script"]')).toHaveAttribute('data-doc-tab', 'script')
+  await expect(page.locator('[data-right-panel]')).toHaveAttribute('data-panel-tab', 'collab')
+  await page.getByRole('tab', { name: /Cover$/ }).click()
   await expect(page.locator('[data-cover-field="title"]')).toHaveValue('STANDPIPE')
   await page.screenshot({ path: 'test-results/script-cover-light.png', fullPage: false })
+})
+
+test('the tabs, pagination and format switch in place: the URL never moves and the route is not requested again', async ({
+  page,
+  account,
+  scriptProjectUrl,
+}) => {
+  await signIn(page, account)
+  projectUrl = projectUrl === '' && scriptProjectUrl !== null ? scriptProjectUrl : projectUrl
+  await page.goto(projectUrl)
+  await expect(page.locator('[data-sheet] [data-node-id]').first()).toBeVisible()
+  // Hydrating 2,900 nodes on a dev server takes seconds; a click before that is replayed, not switched.
+  await expect(page.locator('[data-script-header]')).toHaveAttribute('data-mounted', 'true', { timeout: 60_000 })
+  await page.getByRole('tab', { name: 'Info' }).click()
+  await page.getByRole('radio', { name: 'Paged' }).click()
+  await expect(page.locator('[data-status-bar]')).toContainText('Paged')
+
+  const routePath = new URL(projectUrl).pathname
+  // A GET to the route path is a navigation or an RSC refresh. A server action is a POST to the same
+  // path and is expected: the preference writes go through one.
+  const loads: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === routePath) loads.push(request.url())
+  })
+  const sheetHandle = await page.locator('[data-sheet]').elementHandle()
+  const main = page.locator('main[data-route="script"]')
+  const pagesBefore = await page.locator('[data-sheet] .folio-page').count()
+  expect(pagesBefore).toBeGreaterThan(1)
+
+  // Cover: the cover shows, the URL is still the route, the editor's DOM node is the same one.
+  await page.getByRole('tab', { name: /Cover$/ }).click()
+  await expect(main).toHaveAttribute('data-doc-tab', 'cover')
+  await expect(page).toHaveURL(projectUrl)
+  await expect(page.locator('[data-cover]')).toBeVisible()
+  await expect(page.locator('[data-sheet]')).toBeHidden()
+
+  await page.getByRole('tab', { name: 'Collaboration' }).click()
+  await expect(page.locator('[data-right-panel]')).toHaveAttribute('data-panel-tab', 'collab')
+  await expect(page).toHaveURL(projectUrl)
+
+  await page.getByRole('tab', { name: /Script$/ }).click()
+  await expect(page.locator('[data-sheet]')).toBeVisible()
+  expect(await page.locator('[data-sheet]').evaluate((el, before) => el === before, sheetHandle)).toBe(true)
+  await page.getByRole('tab', { name: 'Info' }).click()
+
+  // Pagination: Minimal draws one page and says so in the status bar, before the row is written.
+  await page.getByRole('radio', { name: 'Minimal' }).click()
+  await expect(page.locator('[data-status-bar]')).toContainText('Minimal')
+  await expect(page.locator('[data-sheet]')).toHaveAttribute('data-page-mode', 'continuous')
+  await expect(page.locator('[data-sheet] .folio-page')).toHaveCount(1)
+  await page.getByRole('radio', { name: 'Paged' }).click()
+  await expect(page.locator('[data-status-bar]')).toContainText('Paged')
+  await expect(page.locator('[data-sheet] .folio-page')).toHaveCount(pagesBefore)
+  await expect(page).toHaveURL(projectUrl)
+
+  // And the row was written: a reload draws the same setting from the server.
+  await page.getByRole('radio', { name: 'Minimal' }).click()
+  await expect(page.locator('[data-sheet]')).toHaveAttribute('data-page-mode', 'continuous')
+  await expect(page.getByRole('radio', { name: 'Minimal' })).toBeEnabled()
+  expect(loads).toEqual([])
+  await page.reload()
+  await expect(page.locator('[data-status-bar]')).toContainText('Minimal')
+  await page.getByRole('radio', { name: 'Paged' }).click()
+  await expect(page.getByRole('radio', { name: 'Paged' })).toBeEnabled()
 })

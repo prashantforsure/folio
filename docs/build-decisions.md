@@ -451,7 +451,8 @@ smoke test uses to prove the validator, not precedence, is doing the work.
 - **"Last opened episode" is a per-project cookie the browser writes.** No table exists for a
   per-person-per-project value and a migration is a question. `lib/workspace/last-episode.ts`.
 - **`script.doc` (Script / Cover) is wired as Script's sub-view param.** The README's interaction
-  table says a header segment switches a sub-view. The alternative is session state.
+  table says a header segment switches a sub-view. The alternative is session state. *Withdrawn
+  2026-09-11, Script route phase: the segment is client state and the URL is the bare route.*
 - **`insights.lens` accepts both candidate spellings** (`showrunner` and `lens/showrunner`) and
   yields the id, so open decision 4 is not resolved by the parser. It defaults to `showrunner`
   because every param defaults to its first value.
@@ -612,6 +613,33 @@ offsets) and drawn as decorations. `script-lines.test.ts` asserts exact agreemen
 `liveRepaginate` runs the same `paginate` in the browser on every change; the server's record
 replaces it on the next save.
 
+### Ruled by the client, later the same day: the tabs leave the URL
+
+The brief specified `?doc=script|cover` and `?panel=info|collab`, and both were built as query
+params - first as navigations, then (a first ruling that a tab click "must not leave the route")
+as `history.pushState` with the workspace reading `useSearchParams` back. The client then ruled
+again, on seeing it: clicking Cover, Info or Collaboration must be instant **and the address must
+not change** - "on the URL it's still `/script`, not `/script?doc=cover`" - and the same for
+Pagination and Format in the panel.
+
+So the Script route now has **no sub-view params**. `SUB_VIEW_SCHEMAS.script` is `z.object({})`;
+`?doc=` and `?panel=` are unknown keys, ignored like `?content=`, never a 404. The design README's
+URL-shape table already wrote the route as the bare path, and its state table already put
+`rightPanelTab` in session; the brief's `?panel=` was the override, and this withdraws it.
+
+| Switch | Where it lives now | Why there |
+| --- | --- | --- |
+| `▤ Script / ▣ Cover` | Component state in `script-workspace.tsx` | The route opens on the script; the cover is looked at and left. Same reading as the Scenes ruling: selection is state, not a URL |
+| `Info / Collaboration` | `useSession().sideTab` | Where AGENTS.md's exception table ("panels ... session state") and the README always had it; survives Outline and back, dies with the tab |
+| Pagination, Format | The project row, applied ahead of the write | See the judgement call below |
+
+What it costs: a cover cannot be linked to. Nothing in the product linked to one, and the
+`title_pages` row is reachable from the tab in one click. What it keeps: both sheets stay
+mounted, the one not showing `hidden`, so the Plate editor's state and a pending autosave survive
+a look at the cover. The tabs are `<button role="tab">`, not links (`_script/view-tab.tsx`); the
+`data-sub-*` attributes on `<main>` are gone with the params, and `data-doc-tab` /
+`data-panel-tab` carry the state for the walk.
+
 ### Judgement calls in this phase, each reversible
 
 - **Autosave is 1.5s after the last change; a `versions` snapshot is requested at most every five
@@ -621,10 +649,16 @@ replaces it on the next save.
 - **`⌘1`–`⌘8`, not bare digits**, as the bundle writes them; a bare `3` in dialogue is a `3`.
 - **The Format control is live** (writes `projects.format`); **the Project type control is
   shown disabled** — film ↔ series reshapes every URL and is not a panel toggle.
-- **`?panel=` is a query param** on the client's instruction, although the README and AGENTS.md's
-  exception table put the tab in session state. `useSession().sideTab` is not read by Script.
 - **`?content=` is not a param.** `empty` is `loadScript` finding no document. Unknown keys are
   ignored, so a stale `?content=empty` link is neither honoured nor a 404.
+- **The Info panel's Pagination and Format controls move the sheet before the row is written.**
+  The workspace keeps the row's three settings as it last knew them, re-paginates in the browser
+  with the new one on the click (the same `paginate` the live mode runs), and calls the action
+  behind it; a refused write snaps the setting back and the panel says why. The two actions no
+  longer `revalidatePath` - that re-ran `loadScript` over every node for a one-column update, and
+  the client did not apply the returned measurement anyway (it is seeded once). The stored
+  measurement is re-cut on the next save, as before. `lib/state/project-preferences.ts` still
+  forbids a per-person copy of these; what the workspace holds is the row, ahead of a write.
 - **In `continuous` mode the server also computes the `paged` record**, because the bundle's copy
   says the page count stays live in minimal mode and export needs it.
 - **The cover's fields are Fountain's keys** laid out the conventional way; nothing in the bundle
@@ -637,3 +671,7 @@ replaces it on the next save.
 - **The episode nav is not revalidated on autosave.** Its page count follows the next navigation.
 - **Two writers still cannot be told apart by role.** `memberships.role` is read by nothing; the
   gate is membership. Unchanged from every earlier phase and flagged again.
+- **A second E2E account exists on the dev Supabase project:** `folio-script-e2e@example.com`,
+  created through the admin API for the Script walk (the shell phase's `folio-e2e@example.com`
+  password was not recorded anywhere). Its password is not in the repo either. Each run of
+  `script-route.spec.ts` leaves one project behind on that account.

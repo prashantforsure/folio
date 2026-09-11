@@ -93,7 +93,7 @@ export const EMPTY_NAV_META: Readonly<Record<string, string>> = {
 const nav = { kind: 'episode-nav', width: EPISODE_NAV_WIDTH } as const
 
 export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
-  { route: 'script', scope: 'episode', rail: 'writing', title: 'Script', defaults: { doc: 'script' }, column: nav },
+  { route: 'script', scope: 'episode', rail: 'writing', title: 'Script', defaults: {}, column: nav },
   { route: 'outline', scope: 'episode', rail: 'writing', title: 'Outline', defaults: {}, column: nav },
   { route: 'beats', scope: 'episode', rail: 'writing', title: 'Beats', defaults: { view: 'beats' }, column: nav },
   { route: 'storyboard', scope: 'episode', rail: 'writing', title: 'Storyboard', defaults: { view: 'board' }, column: nav },

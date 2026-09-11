@@ -388,12 +388,14 @@
   }
 
   .folio-segment > button[aria-pressed='true'],
+  .folio-segment > button[aria-selected='true'],
   .folio-segment > a[aria-current='true'] {
     background: var(--sel);
     color: var(--ink);
   }
 
   .folio-segment[data-view='true'] > button[aria-pressed='true'],
+  .folio-segment[data-view='true'] > button[aria-selected='true'],
   .folio-segment[data-view='true'] > a[aria-current='true'] {
     background: var(--accent-bg);
     color: var(--accent);

@@ -112,7 +112,6 @@ describe('sub-view params', () => {
   })
 
   it('defaults each param to its first value', () => {
-    expect(parseSubViews('script', {})).toEqual({ ok: true, params: { doc: 'script' } })
     expect(parseSubViews('beats', {})).toEqual({ ok: true, params: { view: 'beats' } })
     expect(parseSubViews('storyboard', {})).toEqual({ ok: true, params: { view: 'board' } })
     expect(parseSubViews('scenes', {})).toEqual({ ok: true, params: { view: 'cards' } })
@@ -125,6 +124,13 @@ describe('sub-view params', () => {
     expect(parseSubViews('bible', {})).toEqual({ ok: true, params: { view: 'entry' } })
     expect(parseSubViews('research', {})).toEqual({ ok: true, params: { view: 'library' } })
     expect(parseSubViews('outline', {})).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('script', {})).toEqual({ ok: true, params: {} })
+  })
+
+  it('gives script no params: the cover and the panel tab are client state, ruled 2026-09-11', () => {
+    // A stale `?doc=cover` or `?panel=collab` link is an unknown key - it opens the route, not a 404.
+    expect(parseSubViews('script', { doc: 'cover', panel: 'collab' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('script', { doc: 'grid', panel: 'composer' })).toEqual({ ok: true, params: {} })
   })
 
   it('gives insights two params, report and lens, never one', () => {
@@ -173,7 +179,7 @@ describe('sub-view params', () => {
     // pagination, content, state/mode: not sub-views - AGENTS.md exception table.
     expect(parseSubViews('script', { pagination: 'live', content: 'empty' })).toEqual({
       ok: true,
-      params: { doc: 'script' },
+      params: {},
     })
     expect(parseSubViews('production', { state: 'generating', mode: 'blocked' })).toEqual({
       ok: true,

@@ -8,26 +8,32 @@ import type {
   NodeId,
   ScreenplayNode,
   ScreenplayNodeType,
+  ScriptFormat,
   SheetSpec,
 } from '@folio/script'
 import { formatEighths, paginate, readSlugline, resolveSheet } from '@folio/script'
 import type { TElement } from 'platejs'
 import type { PlateEditor } from 'platejs/react'
-import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 
-import { createMention, saveScript } from '../../../../../../lib/script/actions'
+import { createMention, saveScript, setFormat, setPagination } from '../../../../../../lib/script/actions'
 import type { IdentityLog } from '../../../../../../lib/script/identity'
 import { newIdentityLog, retirementsSince } from '../../../../../../lib/script/identity'
 import type { SheetLayout } from '../../../../../../lib/script/layout'
 import { charsPerLineFor, layoutSheet } from '../../../../../../lib/script/layout'
 import { lineCountOf, lineEndsOf } from '../../../../../../lib/script/lines'
 import type { RevisionRow, ThreadCard } from '../../../../../../lib/script/panel'
-import type { MeasureOutcome, SaveConflict } from '../../../../../../lib/script/result'
+import type { MeasureOutcome, SaveConflict, SimpleResult } from '../../../../../../lib/script/result'
 import type { ScriptValue } from '../../../../../../lib/script/slate-model'
 import { fromSlateValue, isScriptElement } from '../../../../../../lib/script/slate-model'
 import type { ScriptStats } from '../../../../../../lib/script/stats'
-import { controlFromPagination, PAGINATION_CONTROL_COPY } from '../../../../../../lib/state/project-preferences'
+import type { PaginationControl, ProjectPagination } from '../../../../../../lib/state/project-preferences'
+import {
+  controlFromPagination,
+  PAGINATION_CONTROL_COPY,
+  paginationFromControl,
+} from '../../../../../../lib/state/project-preferences'
+import type { SideTab } from '../../../../../../lib/state/session'
 import { useSession } from '../../../../../../lib/state/session'
 import { eighths } from '../../../../../../lib/workspace/format'
 import type { CaretInfo } from './editor/plate-editor'
@@ -35,9 +41,11 @@ import { ScriptEditor } from './editor/plate-editor'
 import { RightPanel } from './panel/right-panel'
 import { CoverSheet } from './sheet/cover-sheet'
 import { EmptySheet } from './sheet/empty-sheet'
+import { IMPORT_INPUT_ID, ImportForm } from './sheet/import-form'
 import { PageFrames } from './sheet/page-frames'
 import { StatusBar } from './status-bar'
 import { TypeBar } from './type-bar'
+import { ViewTab } from './view-tab'
 
 /**
  * The Script route's main column, from the 46px header to the 27px status
@@ -70,6 +78,30 @@ import { TypeBar } from './type-bar'
  * next save; without it the breaks move on save. Either way the record the
  * sheet draws was produced by the one engine, and the page number never
  * touches a node.
+ *
+ * ## Switching the document and the panel tab
+ *
+ * Neither is in the URL - ruled 2026-09-11, `lib/workspace/params.ts`. The
+ * `▤ Script / ▣ Cover` segment is component state here, so the route always
+ * opens on the script; `Info / Collaboration` is `useSession().sideTab`, so
+ * the tab a writer picked survives a trip to Outline and back, as the design
+ * README's state table says it should. A click flips the state and requests
+ * nothing: both sheets stay mounted and the one not showing is `hidden`, so
+ * the Plate editor keeps its state and a pending autosave keeps its timer
+ * across a look at the cover.
+ *
+ * ## Pagination and format
+ *
+ * Per project, on the row (`lib/state/project-preferences.ts`) - and the
+ * row is still the only place they are *decided*. What is here is the row as
+ * this client last knew it, seeded from the server render and moved ahead of
+ * the write: a click re-paginates in the browser with the new setting,
+ * through the same `paginate` the live mode uses, and the server action
+ * writes the row behind it. If the write is refused the setting snaps back
+ * and the panel says why. Nothing is revalidated - a second `loadScript` for
+ * a one-column update was the delay the client called "routing" - and the
+ * next save's record, measured against the written row, replaces the local
+ * one as every save's does.
  */
 
 const AUTOSAVE_MS = 1500
@@ -78,8 +110,11 @@ const SNAPSHOT_EVERY_MS = 5 * 60 * 1000
 /** Derivation - project-wide, the expensive half of a save - at most this often between explicit saves. */
 const DERIVE_EVERY_MS = 20 * 1000
 
-/** A same-route link that changes one sub-view. `typedRoutes` accepts the object form. */
-export type SubViewHref = { readonly pathname: string; readonly query: Readonly<Record<string, string>> }
+/** The header segment. `cover` is the title page on the same sheet geometry. */
+export type ScriptDoc = 'script' | 'cover'
+
+/** The three project-row settings the Info panel writes. */
+export type ScriptPreferences = ProjectPagination & { readonly format: ScriptFormat }
 
 export type ScriptDraft = {
   readonly documentId: string
@@ -100,14 +135,7 @@ export type ScriptWorkspaceProps = {
   readonly project: Project
   readonly revisionLabel: string
   readonly routeId: string
-  readonly doc: 'script' | 'cover'
-  readonly panel: 'info' | 'collab'
-  readonly hrefs: {
-    readonly script: SubViewHref
-    readonly cover: SubViewHref
-    readonly info: SubViewHref
-    readonly collab: SubViewHref
-  }
+  readonly scriptState: 'empty' | 'draft' | 'unreadable'
   readonly draft: ScriptDraft | null
   readonly titlePage: TitlePage | null
   readonly unreadable: string | null
@@ -165,14 +193,13 @@ export const ScriptWorkspace = ({
   project,
   revisionLabel,
   routeId,
-  doc,
-  panel,
-  hrefs,
+  scriptState,
   draft,
   titlePage,
   unreadable,
 }: ScriptWorkspaceProps) => {
   const session = useSession()
+
   // Session flags come from sessionStorage and the clock from Date.now(): both
   // differ between the server render and the first client render, so neither
   // is read until after hydration. Until then the route draws its defaults.
@@ -206,10 +233,24 @@ export const ScriptWorkspace = ({
   }, [navOpen])
 
   // ---------------------------------------------------------------------------
+  // The two switches. Neither is in the URL; see the header.
+  // ---------------------------------------------------------------------------
+
+  const [doc, setDoc] = useState<ScriptDoc>('script')
+  const panel: SideTab = mounted ? session.sideTab : 'info'
+
+  // ---------------------------------------------------------------------------
   // Document state
   // ---------------------------------------------------------------------------
 
   const [measurement, setMeasurement] = useState<MeasureOutcome | null>(draft?.measurement ?? null)
+  const [preferences, setPreferences] = useState<ScriptPreferences>({
+    pageMode: project.pageMode,
+    liveRepaginate: project.liveRepaginate,
+    format: project.format,
+  })
+  const [preferencesPending, startPreference] = useTransition()
+  const [preferencesNotice, setPreferencesNotice] = useState<string | null>(null)
   const [stats, setStats] = useState<ScriptStats>(
     draft?.stats ?? { scenes: 0, words: 0, characters: 0, locations: 0, beats: 0, shots: 0, relations: 0 },
   )
@@ -249,7 +290,7 @@ export const ScriptWorkspace = ({
     [labels],
   )
 
-  const paged = project.pageMode === 'paged'
+  const paged = preferences.pageMode === 'paged'
   const layout = useMemo<SheetLayout>(
     () =>
       layoutSheet(
@@ -340,30 +381,31 @@ export const ScriptWorkspace = ({
     }, AUTOSAVE_MS)
   }, [])
 
+  /** The one engine, run here, with the settings given - the row's as last known, or the ones just chosen. */
   const repaginateLocally = useCallback(
-    (next: readonly TElement[]) => {
+    (next: readonly TElement[], using: ScriptPreferences) => {
       const read = fromSlateValue(next)
       if (!read.ok) return
       const record = paginate(read.value, {
-        format: project.format,
-        pageMode: project.pageMode,
-        liveRepaginate: true,
+        format: using.format,
+        pageMode: using.pageMode,
+        liveRepaginate: using.liveRepaginate,
         mentionLabels: labels,
       })
       if (!record.ok) return
       const pagedRecord =
-        project.pageMode === 'paged'
+        using.pageMode === 'paged'
           ? record
           : paginate(read.value, {
-              format: project.format,
+              format: using.format,
               pageMode: 'paged',
-              liveRepaginate: true,
+              liveRepaginate: using.liveRepaginate,
               mentionLabels: labels,
             })
       if (!pagedRecord.ok) return
       setMeasurement({ ok: true, record: record.value, paged: pagedRecord.value })
     },
-    [labels, project.format, project.pageMode],
+    [labels],
   )
 
   const onValueChange = useCallback(
@@ -371,15 +413,53 @@ export const ScriptWorkspace = ({
       setValue(next)
       setSaveState((state) => (state.kind === 'saving' ? state : { kind: 'dirty' }))
       scheduleSave()
-      if (project.liveRepaginate) {
+      if (preferences.liveRepaginate) {
         if (liveTimer.current !== null) window.clearTimeout(liveTimer.current)
         liveTimer.current = window.setTimeout(() => {
           liveTimer.current = null
-          repaginateLocally(next)
+          repaginateLocally(next, preferences)
         }, LIVE_REPAGINATE_MS)
       }
     },
-    [project.liveRepaginate, repaginateLocally, scheduleSave],
+    [preferences, repaginateLocally, scheduleSave],
+  )
+
+  // ---------------------------------------------------------------------------
+  // Pagination and format: ahead of the row, then written to it
+  // ---------------------------------------------------------------------------
+
+  const valueRef = useRef(value)
+  valueRef.current = value
+
+  const choosePreferences = useCallback(
+    (next: ScriptPreferences, write: () => Promise<SimpleResult>) => {
+      const previous = preferences
+      setPreferences(next)
+      setPreferencesNotice(null)
+      if (draft !== null) repaginateLocally(valueRef.current, next)
+      startPreference(async () => {
+        const result = await write()
+        if (result.status === 'done') return
+        setPreferences(previous)
+        if (draft !== null) repaginateLocally(valueRef.current, previous)
+        setPreferencesNotice(result.message)
+      })
+    },
+    [draft, preferences, repaginateLocally],
+  )
+  const choosePagination = useCallback(
+    (control: PaginationControl) => {
+      choosePreferences({ ...preferences, ...paginationFromControl(control) }, () =>
+        setPagination(projectId, episode, control),
+      )
+    },
+    [choosePreferences, episode, preferences, projectId],
+  )
+  const chooseFormat = useCallback(
+    (format: ScriptFormat) => {
+      choosePreferences({ ...preferences, format }, () => setFormat(projectId, episode, format))
+    },
+    [choosePreferences, episode, preferences, projectId],
   )
 
   useEffect(() => {
@@ -503,7 +583,7 @@ export const ScriptWorkspace = ({
     }
   }, [measurement, value])
 
-  const paginationLabel = PAGINATION_CONTROL_COPY[controlFromPagination(project)].label
+  const paginationLabel = PAGINATION_CONTROL_COPY[controlFromPagination(preferences)].label
   const refusal = measurement?.ok === false ? measurement.refusal : null
 
   const setCaretType = useCallback((type: ScreenplayNodeType) => {
@@ -534,22 +614,38 @@ export const ScriptWorkspace = ({
     )
   }, [doc, draft, labels, layout, log, onCreateMention, onValueChange, sheet])
 
-  const importRef = useRef<HTMLDivElement>(null)
 
   return (
-    <>
+    <main
+      data-route="script"
+      data-doc-tab={doc}
+      data-script-state={scriptState}
+      className="flex min-w-0 flex-1 flex-col overflow-hidden"
+    >
       <header data-script-header data-mounted={mounted ? 'true' : 'false'} className="flex h-[46px] flex-none items-center gap-[12px] border-b border-line px-[14px]">
         <div className="flex min-w-0 items-baseline gap-[7px]">
           <h1 className="m-0 font-serif text-21 font-medium leading-none tracking-title">Script</h1>
         </div>
         <div className="flex-1" />
         <div className="folio-segment" data-view="true" role="tablist" aria-label="Document">
-          <Link href={hrefs.script} role="tab" aria-current={doc === 'script' ? 'true' : undefined} className="folio-focus !flex items-center gap-[6px] !px-[11px] !py-[4px]">
+          <ViewTab
+            active={doc === 'script'}
+            onPick={() => {
+              setDoc('script')
+            }}
+            className="folio-focus !flex items-center gap-[6px] !px-[11px] !py-[4px]"
+          >
             <span className="font-glyph text-10 opacity-70">▤</span>Script
-          </Link>
-          <Link href={hrefs.cover} role="tab" aria-current={doc === 'cover' ? 'true' : undefined} className="folio-focus !flex items-center gap-[6px] !px-[11px] !py-[4px]">
+          </ViewTab>
+          <ViewTab
+            active={doc === 'cover'}
+            onPick={() => {
+              setDoc('cover')
+            }}
+            className="folio-focus !flex items-center gap-[6px] !px-[11px] !py-[4px]"
+          >
             <span className="font-glyph text-10 opacity-70">▣</span>Cover
-          </Link>
+          </ViewTab>
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-[7px]">
@@ -622,7 +718,6 @@ export const ScriptWorkspace = ({
 
       <div className="flex min-h-0 min-w-0 flex-1">
         <div
-          ref={importRef}
           data-editor-column
           className="relative flex min-w-0 flex-1 flex-col items-center overflow-auto px-0 pb-[40px] pt-[14px]"
         >
@@ -630,25 +725,29 @@ export const ScriptWorkspace = ({
             <TypeBar current={caret.type} onPick={setCaretType} disabled={false} />
           ) : null}
           <div style={{ zoom }} className="flex w-[816px] flex-none flex-col items-center">
-            {doc === 'cover' ? (
+            <div hidden={doc !== 'cover'} data-doc="cover" className="flex w-full flex-col items-center">
               <CoverSheet projectId={projectId} episode={episode} titlePage={titlePage} episodeTitle={episodeTitle} />
-            ) : draft === null ? (
-              <EmptySheet projectId={projectId} episode={episode} autoOpenImport={false} />
-            ) : (
-              <div className="folio-desk" data-sheet data-page-mode={project.pageMode} style={{ minHeight: layout.heightPx }}>
-                {pageMap === null ? null : (
-                  <div hidden data-page-map>
-                    {JSON.stringify(pageMap)}
-                  </div>
-                )}
-                {paged ? (
-                  <PageFrames frames={layout.frames} />
-                ) : (
-                  <div className="folio-page" style={{ top: 0, height: layout.heightPx }} aria-hidden="true" />
-                )}
-                {editorArea}
-              </div>
-            )}
+            </div>
+            <div hidden={doc !== 'script'} data-doc="script" className="flex w-full flex-col items-center">
+              {draft === null ? (
+                <EmptySheet projectId={projectId} episode={episode} />
+              ) : (
+                <div className="folio-desk" data-sheet data-page-mode={preferences.pageMode} style={{ minHeight: layout.heightPx }}>
+                  {pageMap === null ? null : (
+                    <div hidden data-page-map>
+                      {JSON.stringify(pageMap)}
+                    </div>
+                  )}
+                  {paged ? (
+                    <PageFrames frames={layout.frames} />
+                  ) : (
+                    <div className="folio-page" style={{ top: 0, height: layout.heightPx }} aria-hidden="true" />
+                  )}
+                  {editorArea}
+                </div>
+              )}
+            </div>
+            {draft === null ? null : <ImportForm projectId={projectId} episode={episode} />}
             {doc === 'script' ? (
               <div className="flex w-[816px] flex-wrap gap-[16px] px-[2px] pt-[12px] font-sans text-10-5 text-ink3">
                 <span>
@@ -671,13 +770,18 @@ export const ScriptWorkspace = ({
             episode={episode}
             project={project}
             tab={panel}
-            infoHref={hrefs.info}
-            collabHref={hrefs.collab}
+            onPickTab={session.setSideTab}
+            pagination={controlFromPagination(preferences)}
+            format={preferences.format}
+            preferencesPending={preferencesPending}
+            preferencesNotice={preferencesNotice}
+            onPickPagination={choosePagination}
+            onPickFormat={chooseFormat}
             stats={stats}
             threads={draft?.threads ?? []}
             revisions={draft?.revisions ?? []}
             onImport={() => {
-              importRef.current?.querySelector<HTMLInputElement>('input[type=file]')?.click()
+              document.getElementById(IMPORT_INPUT_ID)?.click()
             }}
           />
         ) : null}
@@ -701,6 +805,6 @@ export const ScriptWorkspace = ({
         savedLabel={agoLabel(saveState, now)}
         routeId={routeId}
       />
-    </>
+    </main>
   )
 }

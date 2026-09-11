@@ -5,10 +5,9 @@ import type { RevisionRow, ThreadCard } from '../../../../../../lib/script/panel
 import { loadScript } from '../../../../../../lib/script/server'
 import { toSlateValue } from '../../../../../../lib/script/slate-model'
 import type { EpisodeContext } from '../../../../../../lib/workspace/context'
-import { episodeRouteHref } from '../../../../../../lib/workspace/hrefs'
 import type { RawSearchParams } from '../../../../../../lib/workspace/params'
 import { parseSubViews } from '../../../../../../lib/workspace/params'
-import type { ScriptDraft, SubViewHref } from './script-workspace'
+import type { ScriptDraft } from './script-workspace'
 import { ScriptWorkspace } from './script-workspace'
 
 /**
@@ -20,9 +19,11 @@ import { ScriptWorkspace } from './script-workspace'
  * draws. The `<main data-route data-sub-*>` contract the smoke test reads is
  * kept exactly.
  *
- * `?doc` and `?panel` are parsed and refused here as every sub-view is; an
- * unknown value is a 404. `empty` is not a param: it is `loadScript`
- * finding no screenplay document.
+ * The query is parsed as every route's is, and Script's schema is empty
+ * (`lib/workspace/params.ts`): the `▤ Script / ▣ Cover` segment and the
+ * panel tab are client state, not `?doc=` and `?panel=`, so a tab click is
+ * not a request and this component does not run again for one. `empty` is
+ * not a param either: it is `loadScript` finding no screenplay document.
  */
 export const ScriptRoute = async ({
   context,
@@ -31,22 +32,10 @@ export const ScriptRoute = async ({
   readonly context: EpisodeContext
   readonly searchParams: Promise<RawSearchParams>
 }) => {
-  const parsed = parseSubViews('script', await searchParams)
-  if (!parsed.ok) notFound()
-  const { doc, panel } = parsed.params
-  const { scope, project, episode, address } = context
+  if (!parseSubViews('script', await searchParams).ok) notFound()
+  const { scope, project, episode } = context
 
   const load = await loadScript(scope, project, episode)
-
-  const base = episodeRouteHref(address, 'script')
-  const href = (next: { readonly doc?: 'script' | 'cover'; readonly panel?: 'info' | 'collab' }): SubViewHref => {
-    const query: Record<string, string> = {}
-    const d = next.doc ?? doc
-    const p = next.panel ?? panel
-    if (d !== 'script') query['doc'] = d
-    if (p !== 'info') query['panel'] = p
-    return { pathname: base, query }
-  }
 
   let draft: ScriptDraft | null = null
   let unreadable: string | null = null
@@ -126,32 +115,17 @@ export const ScriptRoute = async ({
   const revisionLabel = `Rev. ${colour.charAt(0).toUpperCase()}${colour.slice(1)}`
 
   return (
-    <main
-      data-route="script"
-      data-sub-doc={doc}
-      data-sub-panel={panel}
-      data-script-state={load.state}
-      className="flex min-w-0 flex-1 flex-col overflow-hidden"
-    >
-      <ScriptWorkspace
-        projectId={project.id}
-        episode={episode.slug}
-        episodeTitle={episode.title}
-        project={project}
-        revisionLabel={revisionLabel}
-        routeId={`${episode.slug}/script`}
-        doc={doc}
-        panel={panel}
-        hrefs={{
-          script: href({ doc: 'script' }),
-          cover: href({ doc: 'cover' }),
-          info: href({ panel: 'info' }),
-          collab: href({ panel: 'collab' }),
-        }}
-        draft={draft}
-        titlePage={load.state === 'unreadable' ? null : load.titlePage}
-        unreadable={unreadable}
-      />
-    </main>
+    <ScriptWorkspace
+      projectId={project.id}
+      episode={episode.slug}
+      episodeTitle={episode.title}
+      project={project}
+      revisionLabel={revisionLabel}
+      routeId={`${episode.slug}/script`}
+      scriptState={load.state}
+      draft={draft}
+      titlePage={load.state === 'unreadable' ? null : load.titlePage}
+      unreadable={unreadable}
+    />
   )
 }

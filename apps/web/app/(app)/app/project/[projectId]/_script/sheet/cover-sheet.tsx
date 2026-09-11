@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { saveTitlePage } from '../../../../../../../lib/script/actions'
 
 /**
- * The title page, under `?doc=cover`.
+ * The title page, under the header's `▣ Cover` tab.
  *
  * AGENTS.md, Export: "a separate document on the same sheet geometry,
  * exported with the script." So it is the same 816 x 1056 sheet, the same

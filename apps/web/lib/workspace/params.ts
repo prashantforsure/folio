@@ -23,37 +23,39 @@ import type { WorkspaceRoute } from './routes'
  * `sideTab` (session), `format` and `projectType` (the project row), and the
  * `empty` flag on the entity routes (a data state).
  *
- * ## Two that need naming
+ * ## `insights.lens`
  *
- * **`script.doc`.** The Script header carries a `▤ Script / ▣ Cover` segment,
- * and the README's interaction table says a header segment "switches sub-view
- * within a route". So `doc` is wired as Script's sub-view. It is the one
- * param in this file that is an inference rather than a transcription, and
- * it is flagged in the phase report; the alternative reading is that the
- * cover is session state, like the right panel's tab.
+ * Insights takes two params - `report` and `lens` - and they are never
+ * collapsed into one. `lens` defaults to the first built-in, per the rule
+ * above. Its *value shape* is AGENTS.md open decision 4 (`lens/<id>` or
+ * `<id>`), which is not resolved here: the parser accepts either spelling and
+ * yields the id, so whichever is ruled canonical later already works and the
+ * other can be redirected. The built-in ids are the bundle's; authored lenses
+ * have no table yet, so nothing else parses.
  *
- * **`insights.lens`.** Insights takes two params - `report` and `lens` - and
- * they are never collapsed into one. `lens` defaults to the first built-in,
- * per the rule above. Its *value shape* is AGENTS.md open decision 4
- * (`lens/<id>` or `<id>`), which is not resolved here: the parser accepts
- * either spelling and yields the id, so whichever is ruled canonical later
- * already works and the other can be redirected. The built-in ids are the
- * bundle's; authored lenses have no table yet, so nothing else parses.
+ * ## Script has no sub-view params - ruled 2026-09-11
  *
- * ## `script.panel` is a query param, on the client's instruction
+ * The Script route's URL is the bare path, `.../script`, as the design
+ * README's URL-shape table writes it. Its two switches are not in the URL:
  *
- * The design README and AGENTS.md's exception table put the right panel's tab
- * in session state (`sideTab` in `lib/state/session.ts`). The brief for the
- * Script route phase specifies `?panel=info|collab` as a sub-view, and the
- * brief is the client's, so the URL wins here and `useSession().sideTab` is
- * not read by the Script route. `composer` is deliberately not a value: ruled
- * 2026-09-11 - the composer is a floating window, not a panel - so
- * `?panel=composer` is a 404 like any other unknown sub-view value.
+ *   `▤ Script / ▣ Cover`      component state in `script-workspace.tsx`
+ *   `Info / Collaboration`    session state, `useSession().sideTab`
+ *
+ * The client ruled that clicking either must be instant and must not change
+ * the address - "on the URL it's still /script". The panel tab is where the
+ * README's state table and AGENTS.md's exception table ("theme, zoom,
+ * panels ... session state") always put it; the Script-phase brief's
+ * `?panel=` overrode that and the ruling withdraws the override. The
+ * document switch was the one param in this file that was an inference (the
+ * workspace-shell phase flagged the alternative as "session state") and it
+ * now takes the reading the Scenes route took for selection: state, not a
+ * URL. So `?doc=cover` and `?panel=collab` are unknown keys here - a stale
+ * link opens on the script with the Info tab, and is not a 404.
  *
  * `script.content` stays unwired. `empty` is a data state - whether a
  * screenplay document exists - and a param that forced it would let a URL
- * hide a script that exists. Unknown keys are ignored, so a stale
- * `?content=empty` link is neither honoured nor a 404.
+ * hide a script that exists. `composer` is not a panel either: ruled
+ * 2026-09-11, the composer is a floating window.
  *
  * ## `selected` is not wired
  *
@@ -84,7 +86,7 @@ const first = <const T extends readonly [string, ...string[]]>(values: T) =>
  * it.
  */
 export const SUB_VIEW_SCHEMAS = {
-  script: z.object({ doc: first(['script', 'cover']), panel: first(['info', 'collab']) }),
+  script: z.object({}),
   outline: z.object({}),
   beats: z.object({ view: first(['beats', 'arrangement']) }),
   storyboard: z.object({ view: first(['board', 'canvas', 'list']) }),
