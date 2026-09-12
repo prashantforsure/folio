@@ -57,6 +57,7 @@ export type {
   EpisodeId,
   EpisodeSegmentResult,
   EpisodeSlug,
+  GenerationId,
   JobId,
   LedgerEntryId,
   MeasurementId,
@@ -64,6 +65,7 @@ export type {
   ProjectId,
   ReservedProjectSegment,
   RevisionId,
+  ShotId,
   ThreadCommentId,
   ThreadId,
   UserId,
@@ -75,6 +77,7 @@ export {
   EPISODE_SLUG_PATTERN,
   EpisodeIdSchema,
   EpisodeSlugSchema,
+  GenerationIdSchema,
   JobIdSchema,
   LedgerEntryIdSchema,
   LocationIdSchema,
@@ -85,6 +88,7 @@ export {
   RESERVED_PROJECT_SEGMENTS,
   RevisionIdSchema,
   RunIdSchema,
+  ShotIdSchema,
   ThreadCommentIdSchema,
   ThreadIdSchema,
   UserIdSchema,
@@ -92,6 +96,7 @@ export {
   episodeId,
   episodeSlug,
   formatEpisodeSlug,
+  generationId,
   isReservedProjectSegment,
   jobId,
   ledgerEntryId,
@@ -100,6 +105,7 @@ export {
   parseEpisodeSegment,
   projectId,
   revisionId,
+  shotId,
   threadCommentId,
   threadId,
   userId,
@@ -107,20 +113,29 @@ export {
 } from './ids'
 
 export type {
+  JobKind,
+  JobStatus,
   LedgerEntryKind,
   MembershipRole,
   PoolerMode,
   ProjectKind,
   ProjectType,
+  ShotOrigin,
+  ShotState,
   ThreadAnchorKind,
   ThreadState,
   TombstoneReason,
 } from './enums'
 export {
+  CameraAngleSchema,
   ConfidenceSchema,
   DeliveryModifierSchema,
   DocumentKindSchema,
   InteriorExteriorSchema,
+  JOB_KINDS,
+  JOB_STATUSES,
+  JobKindSchema,
+  JobStatusSchema,
   LEDGER_ENTRY_KINDS,
   LedgerEntryKindSchema,
   LightSchema,
@@ -139,14 +154,21 @@ export {
   ProvenanceSourceSchema,
   ResolveRowStateSchema,
   RevisionColourSchema,
+  SHOT_ORIGINS,
+  SHOT_STATES,
   ScreenplayNodeTypeSchema,
   ScriptFormatSchema,
+  ShotMovementSchema,
+  ShotOriginSchema,
+  ShotSizeSchema,
+  ShotStateSchema,
   THREAD_ANCHOR_KINDS,
   THREAD_STATES,
   TOMBSTONE_REASONS,
   ThreadAnchorKindSchema,
   ThreadStateSchema,
   TombstoneReasonSchema,
+  isTerminalJobStatus,
 } from './enums'
 
 export type { OrderKey, PageRequest, Timestamp } from './primitives'
@@ -164,6 +186,7 @@ export {
 
 export {
   FolioDocumentSchema,
+  InlineContentSchema,
   OutlineDocumentSchema,
   OutlineNodeSchema,
   ScreenplayDocumentSchema,
@@ -291,6 +314,27 @@ export {
   CanvasSpotSchema,
   UNSET_BEAT_TIMING,
 } from './beats'
+
+export type {
+  FrameGeneration,
+  FrameState,
+  Job,
+  Shot,
+  ShotEdit,
+  ShotRow,
+  StoryboardScene,
+} from './storyboard'
+export {
+  FRAME_GENERATION_COST,
+  FrameGenerationSchema,
+  FrameStateSchema,
+  JobSchema,
+  ShotEditSchema,
+  ShotRowSchema,
+  ShotSchema,
+  ShotSpecSchema,
+  StoryboardSceneSchema,
+} from './storyboard'
 
 export type {
   EpisodeBoardRow,

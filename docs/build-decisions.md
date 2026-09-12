@@ -869,3 +869,245 @@ Typing on that script costs ~46ms of main-thread work per keystroke in productio
 floor is ~3ms), down from over 140ms in development before this pass; the slowest keystroke measured
 by the Event Timing API fell from 360ms to ~110ms. Plate's chunk size is 100 blocks (from its
 default 1,000) so a change re-renders four pages of blocks rather than a third of the feature.
+
+## Outline and Beats phase: one document kind, and a beat is one of its blocks
+
+**Nothing here needed a ruling and nothing open was resolved.** The two routes sit entirely on
+decisions already made: the Outline is "a different document kind in the same table" with the
+seven-block set (AGENTS.md, The node model; `packages/script`'s `outline.ts`; the `nodes` check
+constraint), and `@folio/contracts`' `EpisodeNavMeta` already counted the nav's Beats row from
+"`nodes` of `type = 'beat'` in the episode's outline document... the outline's numbered beats are
+the only beats that exist." Both routes are built on that sentence rather than around it.
+
+### A beat is an outline `beat` block
+
+The Beats route invents no beat. Its number is the block's ordinal among the outline's beat blocks
+(`outline.ts` ruled the number is never stored); its name and one-line are the block's text; add,
+rename, reorder and delete are document writes through `planNodeWrite` / `commitNodePlan` with
+`kind = 'outline'`, so "Reordering here renumbers the beat sheet; it never moves a scene in the
+script" is true by construction - nothing in `lib/beats/actions.ts` can name a screenplay node.
+What the outline cannot say - a duration, a minute position, a spot on the unplaced canvas - is
+authored data hung off the block by node id in a new table, on `scenes.scene_node_id`'s pattern.
+
+- **Migration `0005`: `beats`** (`beat_node_id` PK = the block's node id, `duration_minutes`,
+  `placed_at_minute`, `canvas_x` / `canvas_y`; applied to the dev project 2026-09-12). No foreign
+  key to `nodes`, deliberately, as `scenes`: a block deleted and brought back by undo is the same
+  beat and finds its timing where it left it. **`placed_at_minute IS NULL` is *unplaced*** - the
+  brief's status is one nullable column, not a status that could disagree with a position. No
+  row is created on read; the first timing write upserts it.
+- **Scene links live on `scenes.beats`.** The column was declared for "beat links" and is
+  carried through every re-derive; the route writes beat node ids into it (`linkBeatScene`,
+  `array_append` if absent; `unlinkBeatScene`, `array_remove`, one statement each) and reads it
+  back inverted. One home for the fact, the one that was already reserved for it. Still not a
+  foreign key: a deleted block leaves its id in the array and the route lists only links whose
+  block exists.
+- **The headline convention** (`packages/script`'s `beats.ts`, 12 tests): a beat block's text
+  splits at the **first colon** into the name and the line - the outline bundle's bold lead and
+  run of text are the beats bundle's name over its line, one block, two renderings. A name cannot
+  contain a colon; `writeBeatHeadline` replaces one with a dash rather than refusing. Editing the
+  name or line on the Beats route writes the block as plain text runs, so a mention inside a beat
+  block would be flattened to its label - the outline editor offers no `@` combobox this phase,
+  so no block can carry one yet; flagged.
+
+### The Outline editor
+
+`lib/outline/slate-model.ts` is the twin of `lib/script/slate-model.ts` over the other closed
+union, and deliberately not a generalisation of it: two files, two unions, no shared element
+type, so an `h2` cannot reach the Script editor through a shared mapping any more than it can
+reach its table through a shared enum. Same four guards (the discriminant is the union's, the
+save goes through `readOutlineNode`, a `Record` over the union proves coverage, Plate mints
+nothing and `lib/script/identity.ts` on `apply` is the only minter). A `rule` is a Slate void
+with one empty text and loses its children on the way out, because the reader refuses
+`content: []` on a rule. Tested in `apps/web/tests/outline-slate-model.test.ts`.
+
+The save sends the whole list - an outline is tens of blocks - and the server plans the fewest
+rows (`saveOutline`: gate + rows in one round trip, then one statement). Last-write-wins with the
+conflict banner, `⌘S` for a `manual` snapshot, autosave at one second. No measurement, no
+derivation, nothing after the response: the outline is not paginated ("Prose · not paginated")
+and changes no entity. A save returns the H1 and beat counts and the workspace writes the nav's
+`Outline` and `Beats` rows in place, so the chrome stays honest without a layout revalidation per
+keystroke.
+
+### Judgement calls in this phase, each reversible
+
+- **Beat is a seventh button on the outline's block toolbar.** The bundle draws six; the closed
+  set has seven and the Beats route lists the seventh. `⌘⇧B` is its shortcut, by analogy with
+  the bundle's `⌘⇧Q` / `⌘⇧R`.
+- **Bold and Italic are not drawn.** `InlineRun` has no mark; a `bold: true` on a text node is
+  an unexpected field the save refuses. Adding a mark to the inline model is a node-schema change
+  (AGENTS.md, When to ask first). Flagged for a ruling.
+- **The `@` mention combobox is not on the outline.** Stored mentions are drawn; new ones cannot
+  be typed here. The Script route's combobox creates records and is a separate lift.
+- **H2 is 18px, H3 16px.** The bundle sizes only H1 (20px). Two type steps added to the tokens:
+  `--text-18` and `--text-34` (the sheet title).
+- **The nav column keeps the shared episode nav.** The Outline bundle's `In this outline` map and
+  `Overall worldview` groups and the Beats bundle's draggable beat list and `Runtime placed` card
+  are not drawn - the Revisions precedent: the nav is chrome and `Route - Script.dc.html` wins on
+  chrome. Reorder is `⌥↑↓` on either sheet, as both bundles' hint rows say.
+- **The Beats sheet's fields.** Name and line are inputs drawn as the sheet's type and written on
+  blur; the minutes in the placement label are a field; `＋ Scene` opens a picker over the
+  episode's present scenes and each chip carries an `×`; `Delete beat` retires the block. None of
+  these controls are in the bundle, which draws a finished sheet with no way to make one.
+- **The caret line reads "Type to add a beat"**, not the bundle's "…or press / for a template".
+  Templates are not built and a placeholder promising one would be a placeholder.
+- **The sheet's title is the bundle's `Beat Editing`**, with the outline document's creation date.
+- **Placed cards are positioned by minute** (`left = 16 + start × 62px`, width `duration × 62px`,
+  no narrower than an unplaced card), so the tick row means something; the bundle lays its mock
+  cards out in a flex row. Drag is pointer events with capture; a drop on the track places at the
+  card's left edge, a drop on the canvas unplaces and remembers the spot. Two beats placed at the
+  same minute overlap; flagged.
+- **Beat colour bars are `--accent` (placed) and `--note` (unplaced)**, not the bundle's six
+  oklch hues - hexes outside the tokens, the Scenes precedent for "Colour by".
+- **The canvas toolbar is Fit / − / ＋ as text**, per the Scenes precedent; `⌖` / `✋` / `⛶` / `?`
+  are left off.
+- **The Outline panel's Format control is shown, not live.** It writes an engine input the outline
+  does not use; the Script route's panel is where it is changed. Project type is disabled as there.
+- **The Script route's Info panel still prints `Beats: 0`.** Counting beat blocks there would add
+  a sequential read to the save path (`ScriptStats.beats` is the literal `0` for that reason).
+  The Outline's own panel counts them from its blocks. Left, flagged.
+- **`shots` in the Outline's statistics is `0`** - the Storyboard phase was landing its table in
+  the same working tree while this was built; wiring the count is a one-line change once it has.
+- **Membership, not role.** Anyone who can open the project can edit the outline and the beats.
+  Unchanged from every earlier phase and flagged again.
+
+### Verified end to end
+
+`apps/web/e2e/outline-beats.spec.ts` against the dev Supabase project through the running dev
+server on port 3000, with the Scenes phase's E2E account: both empty states in both themes (no
+outline; the Beats route's `No beats yet`); `?view=grid` on Beats is a 404; starting the outline
+writes the document and the nav reads `0 acts` / `0`; `⌘1`, prose and a beat through the slash
+menu autosave and a reload reads the three blocks back typed as `h1 / body / beat` with the bold
+lead on the beat; the nav reads `1 act` / `1`; the Beats route lists the outline's beat with name
+and line split at the colon; a beat added there is block `2` of the outline; a duration typed on
+the sheet, a card dragged onto the track at the `6'` mark (`6'–12'`, footer `6m of 16m`) and a
+card dragged back to the canvas all survive a reload; with a two-scene script imported, linking
+a scene prints `Scene 1 · pg 1` on the beat and `1 of 2` under `Beats linked` on the Outline's
+panel, and unlinking removes it. Five tests, ~7.5 minutes. One run failed mid-walk on another
+session's in-flight edit to `packages/contracts/src/enums.ts` (`SHOT_SIZES is not defined`) and
+passed once that landed; the same session committed this phase's files mid-work as
+`ace66b4 phase 10 building`, throwaway smoke script included (since deleted).
+
+## Storyboard route phase: the first job, the first reservation, and a ledger bug it found
+
+### What was built, table by table
+
+Three authored tables in migration `0006` (`packages/db/src/schema/storyboard.ts`, RLS on, the
+member-all policy, `anon` revoked), all applied to the dev Supabase project:
+
+- **`shots`** — a scene does not say how it is shot. Keyed by `scene_node_id`, the heading node's
+  id, on the pattern of `scenes` and `beats`: no foreign key to `nodes`, so a heading brought back
+  by undo finds its shots. Ordered by a fractional `order_key` declared `COLLATE "C"` from birth
+  (the Scenes phase's collation finding; a new column can carry the right collation without a
+  ruling on the old one). `description` is inline content as JSON, so an `@mention` is a record
+  id. `origin` (`typed | auto_board`) and `state` (`proposed | accepted`) are the brief's
+  "proposed, then accepted"; a typed shot is born accepted, and the database checks the pair.
+- **`jobs`** — the job row *is* the status (AGENTS.md's exception table on `production.state`).
+  `cost` is what the ledger's `reserve` entry for the same `job_id` holds. **There is still no
+  queue library and `apps/worker` is still empty**: a dependency needs approval, so a job written
+  here is `queued` and stays so, visibly, until a worker exists. `cancel_requested_at` is how a
+  running one will be asked to stop. `credit_ledger.job_id` keeps no foreign key to `jobs` —
+  adding a constraint to the append-only money table is a ledger change and is behind a question.
+- **`frame_generations`** — "every generation row links to its job and, on failure, to its refund
+  ledger entry": two foreign keys and the frame's address. A shot's frame is its latest row here
+  read with its job, folded into the seven `FrameState`s the route draws. Nothing on `shots`
+  mirrors it.
+
+The nav's Storyboard row now counts accepted shots joined through a present heading to the
+episode's screenplay: `—` with no script, `0 shots` with a script and no accepted shot, `N shots`
+otherwise. Proposals are not shots yet and are not counted anywhere a count is printed.
+
+### "Propose shots for this scene" is a pure function, and says so
+
+`@folio/script`'s `shots.ts` owns the three closed vocabularies (size, movement, camera angle) and
+`proposeShots`: a **rule-based, deterministic** first shot list — establishing wide naming the
+resolved location, a two-shot when two or more people speak, one medium close-up per speaker
+(first-appearance order, at most four) quoting their first line, a closing wide when the scene ends
+on action after dialogue. Every character reference is a structural `@mention` to the record the
+cue resolves to through the alias table's bound cues (`canonicalKey(readCue(raw).name)`, exactly
+`derive`'s lookup), so `(O.S.)` never makes a second person and an unbound cue is text, never a
+minted record. The scene is cut at the next heading derivation accepted, as the Scenes excerpt is,
+so a demoted `INTERCUT` line stays inside its scene as action.
+
+A model would make a better proposal. This package cannot call one, and there is no model
+integration anywhere in the repository (a dependency, and the agent's own phase). The *shape* of a
+proposal — `ShotSpec`, mentions as ids, accepted by the writer per shot or all at once, edited
+means accepted — is what a later agent-backed proposer keeps. 13 tests, including a property that
+the same scene always proposes the same list.
+
+### Reserve then execute, in one statement — and the bug the first reservation found
+
+`queueFrameGeneration` (`repositories/storyboard.ts`) is one statement: the shot's checks (this
+project's, a present scene's of this episode's screenplay, accepted), the balance, the job insert
+conditioned on `available >= cost`, the `reserve` entry from the job's returned id (idempotent on
+`reserve:job:<id>`), the generation row. A short balance writes nothing and returns the balance it
+saw, so the banner prints the numbers. `cancelJob` is one statement the same way: a queued job is
+cancelled and its reservation released; a running one gets `cancel_requested_at`. Two clicks racing
+on the last credits can both pass under READ COMMITTED — an advisory lock needs the session pooler
+a request does not have — and over-reserve by one cost; flagged, not hidden.
+
+**`readBalance` and the `credit_balances` view double-counted a held reservation.** Both summed
+*every* entry into `settled` (which already contains the negative `reserve`) and then added the
+held reservations again for `available`: a grant of 8 with one 4-credit job queued read as
+**0** available. Nothing had ever written a `reserve` before this route, so the arithmetic had never
+run against a real row; the E2E walk found it on its first reservation. Corrected in
+`repositories/credits.ts` and in migration **`0007`** (`CREATE OR REPLACE VIEW`, same columns,
+same `security_invoker`, applied to dev): `settled` is every kind except the provisional pair
+`reserve` / `release`; a reservation is closed by a `spend` or a `release`; a failed job that
+consumed the work is a `spend` closing it plus a `refund`. This is a read-model correction on the
+ledger — no write path changed, no price decided — and AGENTS.md puts the ledger behind a question,
+so it is called out here rather than folded in quietly.
+
+**`FRAME_GENERATION_COST = 4` is a placeholder**, one constant in `@folio/contracts`, named on the
+button (`Draw frame · 4 cr`), the subheader (`Frame · 4 credits each`), the reservation and the
+job row. Pricing is unruled; the E2E walk reads the number off the page rather than asserting it.
+
+### Judgement calls in this phase, each reversible
+
+- **Proposals are `shots` rows in state `proposed`**, not a separate proposals table. They are
+  drawn as amber dashed frames with `Accept` / `Discard`, counted as `N proposed` beside the real
+  count, never as shots, and have no frame button. Auto board on a scene replaces a proposal still
+  waiting and never touches an accepted shot.
+- **Editing a proposal accepts it.** A writer who changed a proposal has taken it.
+- **Selection is component state**, per the Scenes ruling; `?selected=SCENE_xxx` is not read and
+  waits on the id-shape decision.
+- **Reorder is `↑` / `↓`**, not the bundle's drag. The subheader says so. Fractional keys mean a
+  move is one `UPDATE`.
+- **The description is edited as text** and parsed back to inline content through the label book
+  (`lib/storyboard/mentions.ts`, tested): `@Meera` becomes a reference, longest label first,
+  case-insensitively; `@Nobody` stays text. The codec never creates a record.
+- **The canvas's `Storyboard` / `Lens` ports are labels**, as the bundle draws them; a lens is a
+  later phase's object. `Generate` there is the same frame job as the board's tile and is disabled
+  while one is in flight.
+- **The shot list's columns are not sortable.** A shot list's order is the shot order.
+- **Credits print in the route header as a link to Production**, where AGENTS.md puts them; the
+  button beside every frame names the cost and the balance in its title.
+- **`⤒ Export boards` and `Display options` are not drawn** — export is a job that does not exist,
+  and the display menu had nothing to switch.
+- **The nav's `Boards drawn 1 / 3` footer block is not drawn**: the nav is the Script bundle's
+  chrome, shared by seven routes.
+- **Membership, not role**, as everywhere.
+
+### Verified end to end
+
+`apps/web/e2e/storyboard-route.spec.ts` against the dev Supabase project through the running dev
+server on port 3000, with the Scenes phase's E2E account: the empty state in both themes, the nav
+reading `—`, `?view=grid` a 404; a two-heading import with an `INTERCUT - PHONE CALL` line gives
+two columns and `0 shots`; Auto board on scene 1 proposes five shots (establishing with a location
+mention, a two-shot with two character mentions, two medium close-ups quoting first lines, a
+closing wide), counted as `5 proposed` and `0` shots; discarding one and accepting the rest reads
+`4` on the header, the footer and the nav, and again after a reload; editing a shot's lens and a
+description typed with `@Meera` (resolved) and `@Nobody` (text) saves; moving, adding by hand
+(born accepted, at the end) and removing renumber the column; with `0 credits` the frame button
+still says `Draw frame · 4 cr` and the server refuses with `0 available, 4 needed`; after a
+`grant` of 8 written to the ledger as a purchase would, a click queues the job and the balance
+reads `4 credits`, still queued and still `4` after a reload, `cancelled` and `8 credits` after
+cancelling, and two more reservations exhaust the grant so a third is refused with the numbers;
+the canvas and the shot list draw the same rows in both themes. Five tests, ~6.5 minutes.
+
+`apps/web/e2e/scenes-route.spec.ts` was written in the same phase — the Scenes route had no walk of
+its own: the empty state in both themes and a 404; the same import gives two cards with real
+excerpts, `pg 1`, eighths from the measurement record, `2 chars · 2 lines` and cast chips, and the
+`INTERCUT` line inside scene 1's excerpt rather than a third card; a synopsis written in the detail
+card survives a reload; the index and list views agree, `Ready` / `Draft` following the synopsis.
+Four tests, ~4 minutes. The existing workspace, smoke and glyph walks (24 tests) pass unchanged
+alongside, with the nav's Storyboard row now live.

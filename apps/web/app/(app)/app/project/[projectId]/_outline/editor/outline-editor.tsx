@@ -357,6 +357,14 @@ export const OutlineEditor = ({
     onCaret({ blockId: block?.[0].id ?? null, type: block?.[0].type ?? null })
   }, [currentBlock, onCaret])
 
+  // The selection is set by `autoSelect` before any `onSelectionChange`, and
+  // a click on the block it already sits in changes nothing - so the caret is
+  // reported once on mount, and again after every change to the value (a
+  // block retyped under the caret is a change to what the caret is in).
+  useEffect(() => {
+    reportCaret()
+  }, [reportCaret])
+
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       const live = readSlashQuery()
@@ -499,6 +507,7 @@ export const OutlineEditor = ({
         renderLeaf={OutlineLeaf}
         onValueChange={({ value }) => {
           onValueChange(value)
+          reportCaret()
           if (slash !== null && readSlashQuery() === null) setSlash(null)
         }}
         onSelectionChange={() => {

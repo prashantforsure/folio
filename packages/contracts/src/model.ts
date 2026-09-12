@@ -1,11 +1,13 @@
 import {
   isErr,
+  readInlineContent,
   readOutlineDocument,
   readOutlineNode,
   readScreenplayDocument,
   readScreenplayNode,
 } from '@folio/script'
 import type {
+  InlineContent,
   ModelDefect,
   OutlineDocument,
   OutlineNode,
@@ -107,6 +109,15 @@ assertExact<Equals<z.infer<typeof ScreenplayNodeSchema>, ScreenplayNode>>()
 assertExact<Equals<z.infer<typeof OutlineNodeSchema>, OutlineNode>>()
 assertExact<Equals<z.infer<typeof ScreenplayDocumentSchema>, ScreenplayDocument>>()
 assertExact<Equals<z.infer<typeof OutlineDocumentSchema>, OutlineDocument>>()
+
+/**
+ * Inline content on its own - a storyboard shot's description, which
+ * carries `@mentions` the way an action line does and is held to the same
+ * reader. Not a node: it has no id, no type and no provenance of its own.
+ */
+export const InlineContentSchema = fromReader(readInlineContent, 'inline content')
+
+assertExact<Equals<z.infer<typeof InlineContentSchema>, InlineContent>>()
 
 /**
  * A document of either kind, discriminated by `kind`.

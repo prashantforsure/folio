@@ -22,6 +22,7 @@ import {
 import { dbOf, scoped } from '../scope'
 import type { ProjectScope } from '../scope'
 import { toEpisode } from './projects'
+import { countAcceptedShots } from './storyboard'
 
 /**
  * What the workspace chrome reads: the rail's badges, the episode board, the
@@ -157,14 +158,14 @@ export const readEpisodeBoard = async (
 /**
  * The facts behind the episode nav's seven rows.
  *
- * Six small reads, issued together. Each is a plain builder query against
+ * Seven small reads, issued together. Each is a plain builder query against
  * the table that owns the fact; the documents are read first because every
  * other count hangs off a document id.
  *
- * `shots` is `null` unconditionally: shots are not a table
- * (`schema/threads.ts` says why `anchor_shot_id` is a bare uuid), so there is
- * nothing to count. The row renders `—` for the reason the convention gives -
- * a thing that does not exist yet - not because a field was forgotten.
+ * `shots` is `countAcceptedShots` (`storyboard.ts`) when the episode has a
+ * screenplay, and `null` when it does not - there is no script to board, so
+ * the row renders `—`; a script with no accepted shot yet is `0`. Proposals
+ * the writer has not taken are not shots and are not counted.
  */
 export const readEpisodeNavMeta = async (
   scope: ProjectScope,
@@ -188,7 +189,7 @@ export const readEpisodeNavMeta = async (
     return rows[0]?.n ?? 0
   }
 
-  const [pages, acts, beats, scenes, draft, openNotes] = await Promise.all([
+  const [pages, acts, beats, scenes, draft, openNotes, shots] = await Promise.all([
     screenplay === null
       ? Promise.resolve(null)
       : db
@@ -241,13 +242,14 @@ export const readEpisodeNavMeta = async (
         ),
       )
       .then((rows) => rows[0]?.n ?? 0),
+    screenplay === null ? Promise.resolve(null) : countAcceptedShots(scope, screenplay.id),
   ])
 
   return {
     script: screenplay === null ? 'absent' : { pages },
     acts,
     beats,
-    shots: null,
+    shots,
     scenes,
     draft,
     openNotes,

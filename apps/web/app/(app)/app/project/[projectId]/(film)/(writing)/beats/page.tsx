@@ -1,8 +1,11 @@
-import { EpisodeRoutePage } from '../../../_chrome/episode-route-page'
+import { BeatsRoute } from '../../../_beats/beats-route'
+import { enterEpisodeRoute } from '../../../../../../../../lib/workspace/context'
 
-/** Empty shell this phase, collapsed (film) shape. See `_chrome/episode-route-page.tsx`. */
-const Page = (props: PageProps<'/app/project/[projectId]/beats'>) => (
-  <EpisodeRoutePage route="beats" {...props} />
-)
+/** The Beats route, film shape. See the episodic page. */
+const Page = async ({ params, searchParams }: PageProps<'/app/project/[projectId]/beats'>) => {
+  const { projectId } = await params
+  const context = await enterEpisodeRoute(projectId, null, 'beats')
+  return <BeatsRoute context={context} searchParams={searchParams} />
+}
 
 export default Page

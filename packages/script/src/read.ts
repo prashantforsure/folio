@@ -229,6 +229,15 @@ const readContent = (raw: unknown, path: string): Result<InlineContent, ModelDef
   return ok(runs)
 }
 
+/**
+ * Inline content on its own, for a value that is not a node but carries a
+ * node's kind of text - a storyboard shot's description. The same reader
+ * `readScreenplayNode` runs over `content`, so a mention there is held to
+ * exactly the same shape as one in an action line.
+ */
+export const readInlineContent = (input: unknown): Result<InlineContent, ModelDefect> =>
+  readContent(input, '')
+
 const readModifiers = (
   raw: unknown,
   path: string,

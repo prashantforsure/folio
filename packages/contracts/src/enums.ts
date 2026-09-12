@@ -1,4 +1,5 @@
 import {
+  CAMERA_ANGLES,
   CONFIDENCES,
   DELIVERY_MODIFIERS,
   DOCUMENT_KINDS,
@@ -13,8 +14,11 @@ import {
   REVISION_COLOURS,
   SCREENPLAY_NODE_TYPES,
   SCRIPT_FORMATS,
+  SHOT_MOVEMENTS,
+  SHOT_SIZES,
 } from '@folio/script'
 import type {
+  CameraAngle,
   Confidence,
   DeliveryModifier,
   DocumentKind,
@@ -29,6 +33,8 @@ import type {
   RevisionColour,
   ScreenplayNodeType,
   ScriptFormat,
+  ShotMovement,
+  ShotSize,
 } from '@folio/script'
 import { z } from 'zod'
 
@@ -266,3 +272,80 @@ export const POOLER_MODES = ['session', 'transaction'] as const
 export type PoolerMode = (typeof POOLER_MODES)[number]
 
 export const PoolerModeSchema = z.enum(POOLER_MODES)
+
+// ---------------------------------------------------------------------------
+// Storyboard: shots, jobs, generations
+// ---------------------------------------------------------------------------
+
+/**
+ * A shot's three closed vocabularies are the pure core's (`@folio/script`,
+ * `shots.ts`), borrowed here the way the eight element types are.
+ */
+export const ShotSizeSchema = z.enum(SHOT_SIZES)
+export const ShotMovementSchema = z.enum(SHOT_MOVEMENTS)
+export const CameraAngleSchema = z.enum(CAMERA_ANGLES)
+
+assertExact<Equals<z.infer<typeof ShotSizeSchema>, ShotSize>>()
+assertExact<Equals<z.infer<typeof ShotMovementSchema>, ShotMovement>>()
+assertExact<Equals<z.infer<typeof CameraAngleSchema>, CameraAngle>>()
+
+/**
+ * Where a shot came from, and whether the writer has taken it.
+ *
+ * The Storyboard brief: "Provenance. Proposed, then accepted." Two columns,
+ * because they answer different questions. `origin` is history and never
+ * changes: `typed` is a shot the writer added by hand, `auto_board` one the
+ * proposer wrote. `state` is the writer's verdict: `proposed` until they
+ * accept it (or edit it, which is acceptance), `accepted` from then on. A
+ * typed shot is born accepted - the database checks the pair.
+ *
+ * Only an accepted shot is on the shot list. A proposal is drawn as one,
+ * counted separately, and is what "a list you accept or edit" means.
+ */
+export const SHOT_ORIGINS = ['typed', 'auto_board'] as const
+
+export type ShotOrigin = (typeof SHOT_ORIGINS)[number]
+
+export const ShotOriginSchema = z.enum(SHOT_ORIGINS)
+
+export const SHOT_STATES = ['proposed', 'accepted'] as const
+
+export type ShotState = (typeof SHOT_STATES)[number]
+
+export const ShotStateSchema = z.enum(SHOT_STATES)
+
+/**
+ * What a job does. One kind this phase - a frame for a shot. Export, agent
+ * runs and reels join it as they are built; the column is an enum so a
+ * consumer switching on it is told when they do.
+ */
+export const JOB_KINDS = ['frame_generation'] as const
+
+export type JobKind = (typeof JOB_KINDS)[number]
+
+export const JobKindSchema = z.enum(JOB_KINDS)
+
+/**
+ * A job's lifecycle. AGENTS.md, Jobs, credits and cost, and the Production
+ * bundle's six modes, which are driven "from the job row":
+ *
+ *   `queued`     written, reservation held, not yet picked up
+ *   `running`    a worker has it
+ *   `finished`   done; the reservation became a spend
+ *   `failed`     it ran and broke; the reservation was refunded
+ *   `blocked`    moderation refused it; the reason is on the row, in the
+ *                writer's terms, and the reservation was released
+ *   `cancelled`  the writer stopped it before it finished; released
+ *
+ * The three terminal-and-not-finished states each name what the ledger did,
+ * so a balance can always be explained from a job row and its entries.
+ */
+export const JOB_STATUSES = ['queued', 'running', 'finished', 'failed', 'blocked', 'cancelled'] as const
+
+export type JobStatus = (typeof JOB_STATUSES)[number]
+
+export const JobStatusSchema = z.enum(JOB_STATUSES)
+
+/** A job that will not change again. */
+export const isTerminalJobStatus = (status: JobStatus): boolean =>
+  status === 'finished' || status === 'failed' || status === 'blocked' || status === 'cancelled'

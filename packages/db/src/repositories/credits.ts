@@ -83,10 +83,26 @@ export const appendLedgerEntry = async (
 /**
  * The balance, computed from the ledger. Never read from a column.
  *
- * `settled` is the sum of everything. `reserved` is the sum of reservations
- * that have not been released or spent - which is what "**Reserve then
- * execute**" needs in order to mean anything: a cost check has to compare
- * against what is left after work already promised, not against the raw total.
+ * `settled` is the sum of every entry **except the provisional pair**,
+ * `reserve` and `release`. `reserved` is the sum of reservations that have
+ * not been released or spent - which is what "**Reserve then execute**"
+ * needs in order to mean anything: a cost check has to compare against what
+ * is left after work already promised, not against the raw total.
+ *
+ * ## Why the provisional pair is out of `settled` - a bug found by the first reservation
+ *
+ * This function, and the `credit_balances` view it mirrors, first summed
+ * *everything* into `settled` and then added the held reservations to get
+ * `available`. A held reservation is a negative entry, so it was subtracted
+ * twice: a grant of 8 with one 4-credit job queued read as 0 available, not
+ * 4. Nothing had written a `reserve` before the Storyboard route, so the
+ * arithmetic had never been exercised. The corrected model, and the one the
+ * kinds were designed around: a reservation is provisional and is *closed*
+ * by a `spend` (the work ran) or a `release` (it did not); the settled sum
+ * counts the real charges and credits - grant, purchase, spend, refund,
+ * expire, adjust - and `available` is that less what is still held. A
+ * failed job that consumed the work is a `spend` closing the reservation
+ * plus a `refund` giving it back. The view is corrected in migration `0007`.
  *
  * The held-reservation subquery keys on `job_id`, so a reservation with no job
  * is counted as held forever. That is the safe direction - it under-reports
@@ -99,7 +115,7 @@ export const readBalance = async (scope: ProjectScope): Promise<CreditBalance> =
   const totals = await db
     .select({ settled: sql<number>`coalesce(sum(${creditLedger.delta}), 0)::int` })
     .from(creditLedger)
-    .where(scoped(scope, creditLedger))
+    .where(scoped(scope, creditLedger, sql`${creditLedger.kind} NOT IN ('reserve', 'release')`))
 
   const held = await db
     .select({ reserved: sql<number>`coalesce(sum(${creditLedger.delta}), 0)::int` })

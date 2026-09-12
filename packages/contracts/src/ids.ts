@@ -78,8 +78,15 @@ export type RevisionId = Branded<'RevisionId'>
 export type VersionId = Branded<'VersionId'>
 export type MeasurementId = Branded<'MeasurementId'>
 export type LedgerEntryId = Branded<'LedgerEntryId'>
-/** A BullMQ job. No table this phase; the ledger carries the id as a forward reference. */
+/**
+ * A job. Was a forward reference with no table; `jobs` is a table since the
+ * Storyboard phase and the ledger's `job_id` now resolves to a row of it.
+ */
 export type JobId = Branded<'JobId'>
+/** A storyboard shot. Authored, hangs off a scene by the heading node's id. */
+export type ShotId = Branded<'ShotId'>
+/** One attempt at drawing a shot's frame. Links a shot to its job, and on failure to its refund. */
+export type GenerationId = Branded<'GenerationId'>
 
 export const projectId = (raw: string): ProjectId => raw as ProjectId
 export const episodeId = (raw: string): EpisodeId => raw as EpisodeId
@@ -92,6 +99,8 @@ export const versionId = (raw: string): VersionId => raw as VersionId
 export const measurementId = (raw: string): MeasurementId => raw as MeasurementId
 export const ledgerEntryId = (raw: string): LedgerEntryId => raw as LedgerEntryId
 export const jobId = (raw: string): JobId => raw as JobId
+export const shotId = (raw: string): ShotId => raw as ShotId
+export const generationId = (raw: string): GenerationId => raw as GenerationId
 
 // ---------------------------------------------------------------------------
 // The schemas
@@ -126,6 +135,8 @@ export const VersionIdSchema = brandedUuid(versionId)
 export const MeasurementIdSchema = brandedUuid(measurementId)
 export const LedgerEntryIdSchema = brandedUuid(ledgerEntryId)
 export const JobIdSchema = brandedUuid(jobId)
+export const ShotIdSchema = brandedUuid(shotId)
+export const GenerationIdSchema = brandedUuid(generationId)
 
 // The five brands the pure core owns must survive the round trip through Zod.
 // If one of these stops compiling, a schema has started minting its own brand

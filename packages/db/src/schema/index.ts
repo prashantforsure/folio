@@ -30,6 +30,9 @@
  *   beats                        duration, timeline position, canvas spot - hung off a beat block
  *   resolve_decisions            authored input, never derived output
  *   credit_ledger                append-only
+ *   shots                        a scene does not say how it is shot - keyed by the heading node's id
+ *   jobs                         the job row is the status; written by the system on a click
+ *   frame_generations            shot to job, and on failure to the refund entry
  *
  * ## DERIVED CACHE - reproducible by re-running `derive` over the node list
  *
@@ -73,10 +76,11 @@
  *
  * ## What is deliberately absent
  *
- * Bible entries, research sources, props, lenses, story threads, jobs,
- * generations, storyboard shots, and any table for project settings `transfer`
- * or `keys`. The last of those is AGENTS.md open decision 7 and was left open
- * on purpose. The rest are out of this phase's scope.
+ * Bible entries, research sources, props, lenses, story threads, and any table
+ * for project settings `transfer` or `keys`. The last of those is AGENTS.md
+ * open decision 7 and was left open on purpose. The rest are out of scope so
+ * far. Jobs, generations and storyboard shots were on this list until the
+ * Storyboard phase; `storyboard.ts` says what each now is.
  */
 
 export * from './columns'
@@ -88,3 +92,4 @@ export * from './measurement'
 export * from './derived'
 export * from './beats'
 export * from './credits'
+export * from './storyboard'

@@ -43,6 +43,20 @@
       "when": 1789162377852,
       "tag": "0005_beats_route",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789166000568,
+      "tag": "0006_storyboard_route",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789168348355,
+      "tag": "0007_credit_balance_arithmetic",
+      "breakpoints": true
     }
   ]
 }

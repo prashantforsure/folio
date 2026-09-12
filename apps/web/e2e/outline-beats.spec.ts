@@ -87,6 +87,11 @@ const waitSaved = async (page: Page): Promise<void> => {
 
 const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
 
+/** Hydrated: the route header's mount effect has run, so buttons and fields are live. */
+const waitMounted = async (page: Page, header: 'outline' | 'beats'): Promise<void> => {
+  await expect(page.locator(`[data-${header}-header]`)).toHaveAttribute('data-mounted', 'true', { timeout: 60_000 })
+}
+
 let scriptUrl = ''
 let outlineUrl = ''
 let beatsUrl = ''
@@ -133,9 +138,10 @@ test('empty states, both themes; a bad Beats view is a 404', async ({ page, acco
 test('starting the outline and typing blocks saves them, and a reload reads them back', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(outlineUrl)
+  await waitMounted(page, 'outline')
   await page.locator('[data-start-outline]').click()
   await expect(page.locator('main[data-route="outline"]')).toHaveAttribute('data-outline-state', 'draft', { timeout: 60_000 })
-  await expect(page.locator('[data-outline-header]')).toHaveAttribute('data-mounted', 'true', { timeout: 60_000 })
+  await waitMounted(page, 'outline')
   await expect(page.locator('[data-nav-meta="outline"]')).toHaveText('0 acts')
   await expect(page.locator('[data-nav-meta="beats"]')).toHaveText('0')
 
@@ -193,6 +199,7 @@ test('the Beats route lists the outline beat, and a beat added there lands in th
   await signIn(page, account)
   await page.goto(beatsUrl)
   await expect(page.locator('main[data-route="beats"]')).toHaveAttribute('data-beats-state', 'beats')
+  await waitMounted(page, 'beats')
   const beats = page.locator('[data-beat]')
   await expect(beats).toHaveCount(1)
   await expect(beats.first().locator('[data-beat-name]')).toHaveValue('Opening Image')
@@ -230,6 +237,7 @@ test('the Beats route lists the outline beat, and a beat added there lands in th
 test('duration and placement are authored: the arrangement places a beat and the footer sums it', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(beatsUrl)
+  await waitMounted(page, 'beats')
   const beats = page.locator('[data-beat]')
   await expect(beats).toHaveCount(2)
   await beats.first().locator('[data-beat-duration]').fill('6')
@@ -241,10 +249,13 @@ test('duration and placement are authored: the arrangement places a beat and the
   await expect(page.locator('[data-footer-placed]')).toHaveText('0m of 16m')
 
   await page.goto(`${beatsUrl}?view=arrangement`)
+  await waitMounted(page, 'beats')
   await expect(page.locator('[data-unplaced-card]')).toHaveCount(2)
   await expect(page.locator('[data-placed-card]')).toHaveCount(0)
 
-  // Drag the first card onto the track, at the 6' mark.
+  // Drag the first card onto the track so its left edge lands on the 6' mark:
+  // the card is held 40px in from its edge, the mark is 16 + 6 × 62 from the
+  // track's left, and the drop reads the card's edge, not the pointer.
   const card = page.locator('[data-unplaced-card]').first()
   const track = page.locator('[data-beat-track]')
   const from = await card.boundingBox()
@@ -253,7 +264,7 @@ test('duration and placement are authored: the arrangement places a beat and the
   await page.mouse.move(from.x + 40, from.y + 20)
   await page.mouse.down()
   await page.mouse.move(from.x + 60, from.y + 10, { steps: 4 })
-  await page.mouse.move(to.x + 16 + 6 * 62 + 4, to.y + 40, { steps: 12 })
+  await page.mouse.move(to.x + 16 + 6 * 62 + 40, to.y + 60, { steps: 12 })
   await page.mouse.up()
   await expect(page.locator('[data-placed-card]')).toHaveCount(1, { timeout: 60_000 })
   await expect(page.locator('[data-placed-card]').first()).toContainText("6'–12'")
@@ -271,12 +282,17 @@ test('duration and placement are authored: the arrangement places a beat and the
 
   // Back on the sheet the placement label says where it sits.
   await page.goto(beatsUrl)
-  await expect(beats.first().locator('[data-beat-placement]')).toContainText("6'–12' · 6m")
+  await waitMounted(page, 'beats')
+  // The minutes in the label are a field, so the label reads as text plus the field's value.
+  await expect(beats.first().locator('[data-beat-placement]')).toContainText("6'–12'")
+  await expect(beats.first().locator('[data-beat-duration]')).toHaveValue('6')
   await expect(beats.first().locator('[data-beat-unplaced]')).toHaveCount(0)
-  await expect(beats.nth(1).locator('[data-beat-placement]')).toContainText('unplaced · 10m')
+  await expect(beats.nth(1).locator('[data-beat-placement]')).toContainText('unplaced')
+  await expect(beats.nth(1).locator('[data-beat-duration]')).toHaveValue('10')
 
   // And dragging it off the track unplaces it.
   await page.goto(`${beatsUrl}?view=arrangement`)
+  await waitMounted(page, 'beats')
   const placed = page.locator('[data-placed-card]').first()
   const canvas = page.locator('[data-beat-canvas]')
   const placedBox = await placed.boundingBox()
@@ -304,6 +320,7 @@ test('a beat names the scenes that deliver it', async ({ page, account }) => {
   await expect(page.locator('[data-nav-meta="scenes"]')).toHaveText('2', { timeout: 60_000 })
 
   await page.goto(beatsUrl)
+  await waitMounted(page, 'beats')
   const beats = page.locator('[data-beat]')
   await expect(beats).toHaveCount(2)
   await expect(beats.first().locator('[data-beat-scene]')).toHaveCount(0)
@@ -325,6 +342,7 @@ test('a beat names the scenes that deliver it', async ({ page, account }) => {
   await expect(page.locator('[data-beats-linked]')).toHaveText('1 of 2')
 
   await page.goto(beatsUrl)
+  await waitMounted(page, 'beats')
   await beats.first().locator('[data-beat-scene]').first().locator('[data-unlink-scene]').click()
   await expect(beats.first().locator('[data-beat-scene]')).toHaveCount(0, { timeout: 60_000 })
   await expect(page.locator('[data-beats-save]')).toHaveAttribute('data-save-state', 'saved', { timeout: 60_000 })

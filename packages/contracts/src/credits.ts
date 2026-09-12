@@ -105,7 +105,7 @@ export type LedgerEntry = z.infer<typeof LedgerEntrySchema>
  */
 export const CreditBalanceSchema = z.object({
   projectId: ProjectIdSchema,
-  /** Sum of every entry. */
+  /** Sum of every entry except the provisional pair, `reserve` and `release`. See `readBalance`. */
   settled: CreditDeltaSchema,
   /** Sum of reservations not yet released or spent. Zero or negative. */
   reserved: CreditDeltaSchema,

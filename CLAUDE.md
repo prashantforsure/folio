@@ -40,12 +40,21 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 - `packages/script` — the pure core, done: node model, seven operations, Fountain both ways, FDX
   import (callable from `apps/web` through `fast-xml-parser`, approved in the Script phase),
   derivation, pagination at **six lines per inch** (ruled 2026-09-11; AGENTS.md still says twelve),
-  and the draft diff (`diffScreenplays`, node id as join key, lines at the sheet measure).
-  20 test files, 408 tests.
-- `packages/contracts`, `packages/db` — built: Zod boundary schemas, 31-table Drizzle schema, five
-  forward-only migrations (all applied to the dev Supabase project; `0003` adds the pagination
+  the draft diff (`diffScreenplays`, node id as join key, lines at the sheet measure), and the
+  outline's beats (`beats.ts`: a beat is an outline `beat` block, numbered by ordinal, its name
+  split from its line at the first colon), and shots (`shots.ts`: the three closed vocabularies
+  and `proposeShots`, a deterministic first shot list whose mentions are the records the alias
+  table binds — not a model; there is none in the repository).
+- `packages/contracts`, `packages/db` — built: Zod boundary schemas, the Drizzle schema, forward-only
+  migrations (all applied to the dev Supabase project; `0003` adds the pagination
   preference to `projects` and `title_pages`; `0004` adds `scenes_touched` / `page_count` to
-  `revisions` and the `before_restore` / `restore` version reasons), project-scoped repositories.
+  `revisions` and the `before_restore` / `restore` version reasons; `0005` adds `beats` — duration,
+  minute position and canvas spot hung off a beat block by node id, no FK, like `scenes`; scene
+  links are `scenes.beats`; `0006` adds `shots`, `jobs` and `frame_generations` — the job row is
+  the status, a shot's frame is its latest generation read with its job; `0007` corrects the
+  `credit_balances` view, which double-counted a held reservation), project-scoped repositories.
+  **The ledger's `settled` excludes `reserve` / `release`**; a reservation is closed by a `spend`
+  or a `release`.
 - `packages/ui` — tokens as CSS custom properties, plus `Glyph`, `RevisionSwatch`, `Avatar`.
   Nothing else; no component reads a colour into JavaScript.
 - `apps/web` — auth (Google OAuth + email/password), the signed-in home shell and its six routes,
@@ -54,7 +63,15 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   the boundary), server-side pagination drawn as page frames, autosave with last-write-wins, FDX
   and Fountain import, the cover — the **Scenes route** (derived cards over the measurement) and
   the **Revisions route** (`?view=diff|history`: any two drafts on the sheet with asterisks, issue /
-  lock / restore through `lib/revisions/actions.ts`). Other route bodies are unbuilt on purpose.
+  lock / restore through `lib/revisions/actions.ts`), the **Outline route** (a second Plate editor
+  over the seven-block union, `lib/outline/slate-model.ts` the boundary, whole-list save, not
+  paginated) and the **Beats route** (`?view=beats|arrangement`: the outline's beat blocks as a
+  sheet and as a minute timeline, timing and scene links through `lib/beats/actions.ts`) and the
+  **Storyboard route** (`?view=board|canvas|list`: one column per present scene, Auto board
+  proposes rows in state `proposed` that the writer accepts or edits, every shot's frame in all
+  seven job states, `Draw frame · N cr` reserving `FRAME_GENERATION_COST` — a placeholder — in
+  one statement through `lib/storyboard/actions.ts`; a queued job stays queued until a worker
+  exists). Other route bodies are unbuilt on purpose.
   `lib/workspace/routes.ts` is the route tree. **The Script autosave is a delta and every write
   it runs is one statement**: over the transaction pooler a parameterised statement costs two
   round trips and cannot be pipelined (`packages/db/src/client.ts`), so on the request path the
@@ -64,7 +81,8 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 - Unwritten and unblocked: **FDX export**.
 - **Nothing needs a live database** to typecheck, lint, build or unit-test. The signed-in E2E
   walks (`shell-routes.spec.ts`, `workspace.spec.ts`, `script-route.spec.ts`,
-  `revisions-route.spec.ts`) need
+  `revisions-route.spec.ts`, `outline-beats.spec.ts`, `scenes-route.spec.ts`,
+  `storyboard-route.spec.ts`) need
   `E2E_EMAIL`/`E2E_PASSWORD` and skip without them; `E2E_PORT` points them at a running dev
   server. The Script walk imports the golden corpus and diffs the rendered page map against it.
 

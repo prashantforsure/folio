@@ -120,11 +120,35 @@ export {
 
 export type { DefectReason, ModelDefect } from './read'
 export {
+  readInlineContent,
   readOutlineDocument,
   readOutlineNode,
   readScreenplayDocument,
   readScreenplayNode,
 } from './read'
+
+export type {
+  CameraAngle,
+  ProposeShotsInput,
+  ShotMovement,
+  ShotSize,
+  ShotSpec,
+} from './shots'
+export {
+  CAMERA_ANGLES,
+  CAMERA_ANGLE_LABEL,
+  SHOT_MOVEMENTS,
+  SHOT_MOVEMENT_LABEL,
+  SHOT_SIZES,
+  SHOT_SIZE_LABEL,
+  boundCueMap,
+  excerpt,
+  isCameraAngle,
+  isShotMovement,
+  isShotSize,
+  proposeShots,
+  shotLabel,
+} from './shots'
 
 export { contentLength, normaliseContent } from './inline'
 export { makeScreenplayNode, modifiersOf } from './node'

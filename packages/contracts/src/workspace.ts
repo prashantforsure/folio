@@ -89,9 +89,12 @@ export type EpisodeBoardRow = z.infer<typeof EpisodeBoardRowSchema>
  *                 document, counted. `null` when there is no outline document.
  *                 Beats are not a table in this phase; the outline's numbered
  *                 beats are the only beats that exist.
- *   `shots`       Shots are not a table (`comment_threads.anchor_shot_id` is a
- *                 bare uuid for the same reason). `null`, always, until they
- *                 are. The row shows `—`.
+ *   `shots`       `shots` where `state = 'accepted'`, joined through the scene's
+ *                 heading node to this episode's screenplay document. `null`
+ *                 when the episode has no screenplay - there is nothing to
+ *                 board - and the row shows `—`; a script with no accepted
+ *                 shot yet counts to `0`. Proposals are not shots yet and are
+ *                 not counted.
  *   `scenes`      `scene_derivations` where `presence = 'present'`, joined
  *                 through `nodes` to this episode's screenplay document.
  *                 Legitimately zero.
