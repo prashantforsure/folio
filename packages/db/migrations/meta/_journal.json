@@ -57,6 +57,20 @@
       "when": 1789168348355,
       "tag": "0007_credit_balance_arithmetic",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789193138475,
+      "tag": "0008_characters_route",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789198390725,
+      "tag": "0009_locations_route",
+      "breakpoints": true
     }
   ]
 }

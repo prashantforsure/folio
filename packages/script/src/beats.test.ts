@@ -1,13 +1,6 @@
-import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
-import {
-  outlineBeats,
-  outlineHeadings,
-  outlineWordCount,
-  readBeatHeadline,
-  writeBeatHeadline,
-} from './beats'
+import { outlineBeats, outlineHeadings, outlineWordCount, readBeatHeadline } from './beats'
 import { characterId, nodeId } from './ids'
 import { mention, text } from './inline'
 import { NO_LABELS, labelBook } from './measure'
@@ -49,39 +42,6 @@ describe('readBeatHeadline', () => {
 
   it('reads an empty block as nothing', () => {
     expect(readBeatHeadline('')).toEqual({ name: '', line: '' })
-  })
-})
-
-describe('writeBeatHeadline', () => {
-  it('writes `Name: line`', () => {
-    expect(writeBeatHeadline({ name: 'The Kick', line: 'one strike, no thinking.' })).toBe(
-      'The Kick: one strike, no thinking.',
-    )
-  })
-
-  it('writes the name alone when the line is empty, and the line alone when the name is', () => {
-    expect(writeBeatHeadline({ name: 'The Kick', line: '  ' })).toBe('The Kick')
-    expect(writeBeatHeadline({ name: '', line: 'one strike.' })).toBe('one strike.')
-  })
-
-  it('never lets a colon into the name, so the split on the way back is the same', () => {
-    const written = writeBeatHeadline({ name: 'Act: One', line: 'the pitch' })
-    expect(readBeatHeadline(written)).toEqual({ name: 'Act - One', line: 'the pitch' })
-  })
-
-  it('round-trips every trimmed, colon-free name', () => {
-    fc.assert(
-      fc.property(
-        fc
-          .string({ minLength: 1, maxLength: 40 })
-          .map((value) => value.replaceAll(':', '').trim())
-          .filter((value) => value !== '' && !/^\s|\s$/u.test(value)),
-        fc.string({ maxLength: 80 }).map((value) => value.trim()),
-        (name, line) => {
-          expect(readBeatHeadline(writeBeatHeadline({ name, line }))).toEqual({ name, line })
-        },
-      ),
-    )
   })
 })
 

@@ -87,6 +87,8 @@ export type JobId = Branded<'JobId'>
 export type ShotId = Branded<'ShotId'>
 /** One attempt at drawing a shot's frame. Links a shot to its job, and on failure to its refund. */
 export type GenerationId = Branded<'GenerationId'>
+/** An arc turn on a character record. Authored; see `characters.ts`. */
+export type ArcTurnId = Branded<'ArcTurnId'>
 
 export const projectId = (raw: string): ProjectId => raw as ProjectId
 export const episodeId = (raw: string): EpisodeId => raw as EpisodeId
@@ -101,6 +103,7 @@ export const ledgerEntryId = (raw: string): LedgerEntryId => raw as LedgerEntryI
 export const jobId = (raw: string): JobId => raw as JobId
 export const shotId = (raw: string): ShotId => raw as ShotId
 export const generationId = (raw: string): GenerationId => raw as GenerationId
+export const arcTurnId = (raw: string): ArcTurnId => raw as ArcTurnId
 
 // ---------------------------------------------------------------------------
 // The schemas
@@ -137,6 +140,7 @@ export const LedgerEntryIdSchema = brandedUuid(ledgerEntryId)
 export const JobIdSchema = brandedUuid(jobId)
 export const ShotIdSchema = brandedUuid(shotId)
 export const GenerationIdSchema = brandedUuid(generationId)
+export const ArcTurnIdSchema = brandedUuid(arcTurnId)
 
 // The five brands the pure core owns must survive the round trip through Zod.
 // If one of these stops compiling, a schema has started minting its own brand

@@ -481,6 +481,44 @@ const scoreCandidates = (
   return scored.map(({ ref, confidence }) => ({ ref, confidence }))
 }
 
+/** One existing character a cue resembles, and how closely. */
+export type CharacterMatch = {
+  readonly id: CharacterId
+  readonly confidence: Confidence
+}
+
+/**
+ * Every existing character a cue resembles, best first.
+ *
+ * The same scoring the queue uses (`scoreCandidates`), over the same pool a
+ * pass would build from these records, so the list is exactly what later
+ * passes would propose one at a time as each proposal was rejected. That is
+ * what the Characters route's "Walk-on" needs: to say "this cue is nobody"
+ * in one act, it rejects every one of these and `new-record` together, and
+ * the row then stands open with no proposal - the state `resolveSubject`
+ * documents as the writer having said this cue must never be asked about
+ * again. Nothing here binds; it is a list for a human to decide over.
+ *
+ * `cue` is read with `readCue`, so modifiers come off before matching, as
+ * they do in a pass.
+ */
+export const matchCharacters = (
+  cue: string,
+  characters: readonly CharacterRecord[],
+): readonly CharacterMatch[] => {
+  const key = canonicalKey(readCue(cue).name)
+  if (key === '') return []
+  const pool: Candidate[] = characters.map((record) => ({
+    ref: { kind: 'existing', id: record.id },
+    name: record.authored.name,
+    nameKey: canonicalKey(record.authored.name),
+    boundKeys: record.authored.boundCues.map(canonicalKey),
+  }))
+  return scoreCandidates(key, pool).flatMap(({ ref, confidence }) =>
+    ref.kind === 'existing' ? [{ id: characterId(ref.id), confidence }] : [],
+  )
+}
+
 const NEW_RECORD: ProposalTarget = { kind: 'new-record' }
 
 /**

@@ -79,7 +79,6 @@ export const OutlineRoute = async ({
       value: toSlateValue(load.nodes),
       labels: load.labels,
       stats: load.stats,
-      beatsLinked: load.beatsLinked,
       threads,
       history,
     }

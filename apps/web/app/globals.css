@@ -475,12 +475,11 @@
 }
 
 /*
- * The prose sheet - the Outline and the Beats sheet. `Route - Outline.dc.html`
- * and `Route - Beats.dc.html`, transcribed: the same 816px sheet as the
- * script, a 14px ruler above it, `56px 0 88px` inside, Courier Prime 16px at
- * 1.95 for prose and Newsreader for the title and headings. Not paginated -
- * the panel says so - so blocks wrap on their own (`pre-wrap`) and there is
- * no line engine here.
+ * The prose sheet - the Outline. `Route - Outline.dc.html`, transcribed: the
+ * same 816px sheet as the script, a 14px ruler above it, `56px 0 88px`
+ * inside, Courier Prime 16px at 1.95 for prose and Newsreader for the title
+ * and headings. Not paginated - the panel says so - so blocks wrap on their
+ * own (`pre-wrap`) and there is no line engine here.
  *
  * Each block carries a 7px ring in the left margin at `left:74px` on the
  * sheet, which is 22px left of the 96px text inset. The inset is on the
@@ -769,152 +768,8 @@
   }
 }
 
-/*
- * The Beats route. The sheet view shares the prose sheet above; the
- * arrangement is a placed track over a minute rule and a dot-grid canvas of
- * unplaced cards, `Route - Beats.dc.html`.
- */
-@layer components {
-  .folio-beat-field {
-    background: transparent;
-    border: none;
-    padding: 0;
-    margin: 0;
-    color: inherit;
-    font: inherit;
-    letter-spacing: inherit;
-    outline: none;
-    resize: none;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .folio-beat-field::placeholder {
-    color: var(--ink3);
-    opacity: 1;
-  }
-
-  .folio-beat-field:focus-visible {
-    box-shadow: 0 0 0 2px var(--focus);
-    border-radius: 2px;
-  }
-
-  .folio-beat-number {
-    flex: none;
-    width: 26px;
-    height: 26px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--sheet-line);
-    border-radius: 50%;
-    font-size: var(--text-12);
-    color: var(--ink2);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .folio-beat-chip {
-    padding: 2px 7px;
-    border-radius: var(--radius-chrome);
-    background: var(--hover);
-    font-family: var(--font-sans);
-    font-size: var(--text-10);
-    color: var(--ink2);
-    white-space: nowrap;
-  }
-
-  .folio-beat-unplaced {
-    align-self: flex-start;
-    padding: 2px 7px;
-    border-radius: var(--radius-chrome);
-    background: var(--note-bg);
-    color: var(--note);
-    font-family: var(--font-sans);
-    font-size: var(--text-10);
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .folio-beat-card {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 12px 13px 11px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-chrome);
-    touch-action: none;
-  }
-
-  .folio-beat-card:hover {
-    border-color: var(--accent-line);
-  }
-
-  .folio-beat-card[data-dragging='true'] {
-    opacity: 0.85;
-    border-color: var(--accent);
-    z-index: 5;
-  }
-
-  .folio-beat-card[data-selected='true'] {
-    border-color: var(--accent-line);
-    box-shadow: 0 0 0 2px var(--accent-bg);
-  }
-
-  .folio-beat-colour {
-    width: 26px;
-    height: 3px;
-    border-radius: var(--radius-sheet);
-  }
-
-  .folio-beat-minutes {
-    padding: 2px 7px;
-    border: 1px solid var(--line2);
-    border-radius: var(--radius-chrome);
-    font-family: ui-monospace, monospace;
-    font-size: var(--text-10);
-    color: var(--ink2);
-    white-space: nowrap;
-  }
-
-  .folio-beat-ticks {
-    height: 28px;
-    flex: none;
-    position: relative;
-    border-bottom: 1px solid var(--line2);
-    background: var(--panel);
-    overflow: hidden;
-  }
-
-  .folio-beat-tick {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    display: flex;
-    align-items: flex-start;
-    padding-top: 4px;
-    border-left: 1px solid var(--line);
-  }
-
-  .folio-beat-tick > span {
-    padding-left: 5px;
-    font-family: ui-monospace, monospace;
-    font-size: var(--text-9-5);
-    color: var(--ink3);
-  }
-
-  .folio-beat-canvas {
-    background-color: var(--desk);
-    background-image: radial-gradient(var(--grid) 1px, transparent 1px);
-    background-position: 8px 8px;
-  }
-
-  .folio-beat-canvas[data-drop='true'],
-  .folio-beat-track[data-drop='true'] {
-    box-shadow: inset 0 0 0 2px var(--accent-line);
-  }
-}
-
 /* The status bar's "Hide nav": the episode nav is server-rendered in the layout, so the flag rides on <html>. */
-html[data-nav-open='false'] [data-episode-nav] {
+html[data-nav-open='false'] [data-episode-nav],
+html[data-nav-open='false'] [data-context-column] {
   display: none;
 }

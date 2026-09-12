@@ -54,6 +54,7 @@ export type { Equals, Extends } from './equality'
 export { assertExact } from './equality'
 
 export type {
+  ArcTurnId,
   EpisodeId,
   EpisodeSegmentResult,
   EpisodeSlug,
@@ -72,6 +73,7 @@ export type {
   VersionId,
 } from './ids'
 export {
+  ArcTurnIdSchema,
   CharacterIdSchema,
   DocumentIdSchema,
   EPISODE_SLUG_PATTERN,
@@ -93,6 +95,7 @@ export {
   ThreadIdSchema,
   UserIdSchema,
   VersionIdSchema,
+  arcTurnId,
   episodeId,
   episodeSlug,
   formatEpisodeSlug,
@@ -251,6 +254,37 @@ export {
 } from './history'
 
 export type {
+  ArcTurnEdit,
+  ArcTurnRow,
+  CastRow,
+  CharacterGroup,
+  CharacterMap,
+  CharacterProfile,
+  CharacterProfileEdit,
+  CueVariantRow,
+  EpisodeBar,
+  KeyLineRow,
+  MapColumn,
+  PlaceRow,
+  PresenceGap,
+  RelationshipEdit,
+  RelationshipRow,
+  ResolveItem,
+  ResolveProposal,
+  SceneRef,
+  WalkOnRow,
+} from './characters'
+export {
+  ArcTurnEditSchema,
+  CHARACTER_GROUPS,
+  CHARACTER_HUES,
+  CharacterGroupSchema,
+  CharacterProfileEditSchema,
+  KeyLinesEditSchema,
+  RelationshipEditSchema,
+} from './characters'
+
+export type {
   Measurement,
   MeasurementNode,
   MeasurementPage,
@@ -304,16 +338,6 @@ export {
 
 export type { CreditBalance, LedgerEntry } from './credits'
 export { CreditBalanceSchema, LedgerEntrySchema } from './credits'
-
-export type { BeatAuthoredRow, BeatRow, BeatScene, BeatTiming, CanvasSpot } from './beats'
-export {
-  BeatAuthoredSchema,
-  BeatRowSchema,
-  BeatSceneSchema,
-  BeatTimingSchema,
-  CanvasSpotSchema,
-  UNSET_BEAT_TIMING,
-} from './beats'
 
 export type {
   FrameGeneration,

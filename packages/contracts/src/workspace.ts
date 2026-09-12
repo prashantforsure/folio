@@ -71,11 +71,11 @@ export const EpisodeBoardRowSchema = z.object({
 export type EpisodeBoardRow = z.infer<typeof EpisodeBoardRowSchema>
 
 // ---------------------------------------------------------------------------
-// The seven episode-nav metas, as raw facts
+// The six episode-nav metas, as raw facts
 // ---------------------------------------------------------------------------
 
 /**
- * The facts behind the seven rows of the episode nav. Formatting - `104pp`,
+ * The facts behind the six rows of the episode nav. Formatting - `104pp`,
  * `3 acts`, `Draft 5` - is the chrome's job; this is what it formats.
  *
  *   `script`      `documents` with `kind = 'screenplay'` for this episode:
@@ -85,10 +85,6 @@ export type EpisodeBoardRow = z.infer<typeof EpisodeBoardRowSchema>
  *                 has never been measured.
  *   `acts`        `nodes` of `type = 'h1'` in the episode's outline document,
  *                 counted. `null` when there is no outline document.
- *   `beats`       `nodes` of `type = 'beat'` in the episode's outline
- *                 document, counted. `null` when there is no outline document.
- *                 Beats are not a table in this phase; the outline's numbered
- *                 beats are the only beats that exist.
  *   `shots`       `shots` where `state = 'accepted'`, joined through the scene's
  *                 heading node to this episode's screenplay document. `null`
  *                 when the episode has no screenplay - there is nothing to
@@ -106,7 +102,6 @@ export type EpisodeBoardRow = z.infer<typeof EpisodeBoardRowSchema>
 export const EpisodeNavMetaSchema = z.object({
   script: z.union([z.literal('absent'), z.object({ pages: z.int().min(0).nullable() })]),
   acts: z.int().min(0).nullable(),
-  beats: z.int().min(0).nullable(),
   shots: z.int().min(0).nullable(),
   scenes: z.int().min(0),
   draft: z.int().min(1).nullable(),

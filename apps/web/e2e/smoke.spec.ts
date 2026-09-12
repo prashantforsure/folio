@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test'
  * What exists, walked in both themes.
  *
  * **This is not the smoke test AGENTS.md asks for.** That one "walks all
- * fourteen routes in both themes and both states"; none of the fourteen is
+ * thirteen routes in both themes and both states"; none of the thirteen is
  * built. Naming the difference here rather than letting the file title imply
  * coverage it does not have.
  *

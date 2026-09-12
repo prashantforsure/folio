@@ -30,12 +30,11 @@ import {
  */
 
 describe('the route tree', () => {
-  it('is fourteen routes under the rulings on decisions 5, 6 and assets', () => {
+  it('is thirteen routes under the rulings on decisions 5, 6 and assets', () => {
     expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
     expect(WORKSPACE_ROUTES).toEqual([
       'script',
       'outline',
-      'beats',
       'storyboard',
       'scenes',
       'revisions',
@@ -53,7 +52,7 @@ describe('the route tree', () => {
     expect(WORKSPACE_ROUTES).not.toContain('search')
     // assets: reserved, no route.
     expect(WORKSPACE_ROUTES).not.toContain('assets')
-    // Settings is a stub, not one of the fourteen.
+    // Settings is a stub, not one of the thirteen.
     expect(WORKSPACE_ROUTES).not.toContain('settings')
   })
 })
@@ -72,7 +71,7 @@ describe('the rail', () => {
     ])
   })
 
-  it('lights Writing for all seven episode nav routes and itself for the rest', () => {
+  it('lights Writing for all six episode nav routes and itself for the rest', () => {
     for (const item of EPISODE_NAV) expect(railSectionOf(item.route)).toBe('writing')
     expect(railSectionOf('production')).toBe('production')
     expect(railSectionOf('bible')).toBe('bible')
@@ -80,11 +79,10 @@ describe('the rail', () => {
 })
 
 describe('the episode nav', () => {
-  it('is seven rows with Storyboard above Scenes, and 238px', () => {
+  it('is six rows with Storyboard above Scenes, and 238px', () => {
     expect(EPISODE_NAV.map((item) => `${item.label} ${GLYPHS[item.glyph]}`)).toEqual([
       'Script ▤',
       'Outline ⋮',
-      'Beats ⧗',
       'Storyboard ▥',
       'Scenes ▢',
       'Revisions ⇄',
@@ -107,12 +105,11 @@ describe('the episode nav', () => {
 })
 
 describe('sub-view params', () => {
-  it('has a schema for every one of the fourteen', () => {
+  it('has a schema for every one of the thirteen', () => {
     expect(Object.keys(SUB_VIEW_SCHEMAS).sort()).toEqual([...WORKSPACE_ROUTES].sort())
   })
 
   it('defaults each param to its first value', () => {
-    expect(parseSubViews('beats', {})).toEqual({ ok: true, params: { view: 'beats' } })
     expect(parseSubViews('storyboard', {})).toEqual({ ok: true, params: { view: 'board' } })
     expect(parseSubViews('scenes', {})).toEqual({ ok: true, params: { view: 'cards' } })
     expect(parseSubViews('revisions', {})).toEqual({ ok: true, params: { view: 'diff' } })
@@ -211,7 +208,6 @@ describe('the meta convention', () => {
   const empty: EpisodeNavMeta = {
     script: 'absent',
     acts: null,
-    beats: null,
     shots: null,
     scenes: 0,
     draft: null,
@@ -221,7 +217,6 @@ describe('the meta convention', () => {
   it('prints a new project as the brief specifies', () => {
     expect(EPISODE_NAV.map((item) => navMeta(item.route, empty))).toEqual([
       'empty',
-      '—',
       '—',
       '—',
       '0',
@@ -234,7 +229,6 @@ describe('the meta convention', () => {
     const populated: EpisodeNavMeta = {
       script: { pages: 104 },
       acts: 3,
-      beats: 6,
       shots: 38,
       scenes: 34,
       draft: 5,
@@ -243,7 +237,6 @@ describe('the meta convention', () => {
     expect(EPISODE_NAV.map((item) => navMeta(item.route, populated))).toEqual([
       '104pp',
       '3 acts',
-      '6',
       '38 shots',
       '34',
       'Draft 5',

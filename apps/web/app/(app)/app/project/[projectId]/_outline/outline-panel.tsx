@@ -12,9 +12,10 @@ import { ViewTab } from '../_script/view-tab'
 /**
  * The Outline's right panel. 296px, `--panel`, 1px left border - the Script
  * panel's chrome (`Route - Script.dc.html` wins on chrome) with the Outline
- * bundle's own Info body: an **Outline document** section (Blocks · Type ·
- * Beats linked, and the line "The outline is its own document. It reads
- * entities but never edits the script."), Format and Project type as the
+ * bundle's own Info body: an **Outline document** section (Blocks · Type,
+ * and the line "The outline is its own document. It reads entities but
+ * never edits the script." - the bundle's `Beats linked` row went with the
+ * Beats route, which was what linked them), Format and Project type as the
  * Script draws them, and Statistics with the bundle's closing line "Counts
  * come from the script and beats, not from this page."
  *
@@ -36,8 +37,6 @@ export type OutlinePanelProps = {
   readonly tab: SideTab
   readonly onPickTab: (tab: SideTab) => void
   readonly blockCount: number
-  readonly beatsLinked: number
-  readonly beatCount: number
   readonly stats: OutlineStats
   readonly threads: readonly ThreadCard[]
   readonly history: readonly RevisionRow[]
@@ -60,8 +59,6 @@ const OutlinePanelBody = ({
   tab,
   onPickTab,
   blockCount,
-  beatsLinked,
-  beatCount,
   stats,
   threads,
   history,
@@ -123,12 +120,6 @@ const OutlinePanelBody = ({
               <div className="flex items-baseline justify-between">
                 <span className="text-ink2">Type</span>
                 <span>Prose · not paginated</span>
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-ink2">Beats linked</span>
-                <span className="tabular-nums text-accent" data-beats-linked>
-                  {beatCount === 0 ? '—' : `${String(beatsLinked)} of ${String(beatCount)}`}
-                </span>
               </div>
             </div>
             <span className="text-10 leading-[1.45] text-ink3">

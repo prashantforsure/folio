@@ -133,7 +133,7 @@ Icon rail, then a context panel, then the page. Left to right.
 
 | Section | Width |
 |---|---|
-| Episode nav (Script, Outline, Beats, Storyboard, Scenes, Revisions, Notes) | **238px** — not "about 240" |
+| Episode nav (Script, Outline, Storyboard, Scenes, Revisions, Notes — Beats was cut, see the override table) | **238px** — not "about 240" |
 | Timeline, Insights, Research, Production | 250px |
 | Bible | 252px |
 | Characters, Locations | 256px |
@@ -163,7 +163,7 @@ Then a scrolling `nav`, `padding: 0 6px 14px`, `gap: 12px` between groups (10px 
   |---|---|---|
   | Script | `▤` | `104pp` / `empty` |
   | Outline | `⋮` | `3 acts` |
-  | Beats | `⧗` | `6` |
+  | ~~Beats~~ | ~~`⧗`~~ | ~~`6`~~ — cut 2026-09-12 |
   | Storyboard | `▥` | `38 shots` / `—` |
   | Scenes | `▢` | `34` / `0` |
   | Revisions | `⇄` | `Draft 5` / `—` |
@@ -515,6 +515,7 @@ Build the right-hand column. Do not resolve these by reading the bundle.
 | `kind: 'series' \| 'feature' \| 'short'` (old Appendix A) | `film \| series` only | No `short` project type |
 | A settings page with sub-routes (shell only) | A stub | No design exists; where `transfer`, `keys` and `episodes` went is open decision #7 |
 | 12 lines per inch (AGENTS.md) vs 16px/16px on a 96dpi sheet (bundles) | **Ruled 2026-09-11: six** — the bundle's geometry (`docs/build-decisions.md`, Script route phase) | 6 lpi is the standard single-spaced 12pt Courier metric; the engine and the golden maps are on six |
+| `Route - Beats.dc.html`, a `⧗ Beats` nav row and a `Beats linked` row in the Outline panel | **No Beats route** — cut 2026-09-12 (`docs/build-decisions.md`, "Beats route removed"). Six nav rows, seventeen glyphs, thirteen routes | A second rendering of the outline's beat blocks whose timing nothing read. The outline's `beat` block itself is unchanged |
 
 ## Changes from the original spec doc
 

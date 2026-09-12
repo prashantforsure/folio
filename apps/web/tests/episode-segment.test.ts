@@ -88,9 +88,9 @@ describe('assertCreatableEpisodeSlug - the repository', () => {
 })
 
 describe('railSectionFromSegments', () => {
-  const WRITING = ['script', 'outline', 'beats', 'storyboard', 'scenes', 'revisions', 'notes'] as const
+  const WRITING = ['script', 'outline', 'storyboard', 'scenes', 'revisions', 'notes'] as const
 
-  it('lights Writing on all seven episode routes - Notes and Revisions included', () => {
+  it('lights Writing on all six episode routes - Notes and Revisions included', () => {
     for (const route of WRITING) {
       expect(railSectionFromSegments(['ep_001', '(writing)', route])).toBe('writing')
       expect(railSectionFromSegments(['(film)', '(writing)', route])).toBe('writing')

@@ -23,11 +23,10 @@ export const countOrAbsent = (value: number | null, suffix = ''): string =>
   value === null ? ABSENT : `${String(value)}${suffix}`
 
 /**
- * The seven episode nav metas, from the brief's table:
+ * The six episode nav metas, from the brief's table:
  *
  *   Script      `104pp` / `empty`     the script says `empty`
  *   Outline     `3 acts` / `—`        exists or not
- *   Beats       `6` / `—`             exists or not
  *   Storyboard  `38 shots` / `—`      exists or not
  *   Scenes      `34` / `0`            counts to zero
  *   Revisions   `Draft 5` / `—`       exists or not
@@ -45,8 +44,6 @@ export const navMeta = (route: EpisodeNavRoute, meta: EpisodeNavMeta): string =>
       return meta.script === 'absent' ? 'empty' : countOrAbsent(meta.script.pages, 'pp')
     case 'outline':
       return meta.acts === null ? ABSENT : `${String(meta.acts)} ${meta.acts === 1 ? 'act' : 'acts'}`
-    case 'beats':
-      return countOrAbsent(meta.beats)
     case 'storyboard':
       return meta.shots === null
         ? ABSENT
@@ -100,6 +97,6 @@ export const projectInitials = (title: string): string => {
 /** `E1`, `E12`. The episode board's number column. */
 export const episodeNumber = (ordinal: number): string => `E${String(ordinal)}`
 
-/** `Ep 1 · Standpipe`. The group label above the seven rows. */
+/** `Ep 1 · Standpipe`. The group label above the six rows. */
 export const episodeGroupLabel = (ordinal: number, title: string): string =>
   `Ep ${String(ordinal)} · ${title}`

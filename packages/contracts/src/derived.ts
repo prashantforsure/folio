@@ -7,6 +7,7 @@ import type {
 } from '@folio/script'
 import { z } from 'zod'
 
+import { CharacterGroupSchema } from './characters'
 import {
   ConfidenceSchema,
   InteriorExteriorSchema,
@@ -71,6 +72,21 @@ export const CharacterAuthoredSchema = z.object({
   name: TitleSchema,
   bio: z.string().max(20_000).nullable(),
   notes: AuthoredNotesSchema,
+  /** The profile the Characters route authors on top. `characters.ts` says what each is. */
+  group: CharacterGroupSchema,
+  role: z.string().max(200).nullable(),
+  age: z.string().max(40).nullable(),
+  wants: z.string().max(2_000).nullable(),
+  wantsSource: z.string().max(200).nullable(),
+  needs: z.string().max(2_000).nullable(),
+  needsSource: z.string().max(200).nullable(),
+  flaw: z.string().max(2_000).nullable(),
+  flawSource: z.string().max(200).nullable(),
+  voiceRules: z.array(z.string().min(1).max(500)),
+  /** Dialogue node ids the writer picked as key lines. Read back from the node. */
+  keyLines: z.array(NodeIdSchema),
+  /** Set when the writer merged this record into another. The row is kept. */
+  mergedInto: CharacterIdSchema.nullable(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 })
@@ -103,6 +119,8 @@ export const CharacterRelationshipSchema = z.object({
   characterId: CharacterIdSchema,
   otherId: CharacterIdSchema,
   what: z.string().trim().min(1).max(200),
+  /** How it moves across the draft - "Polite in E1. Adversaries by E2 Sc 9." */
+  shift: z.string().max(500).nullable(),
 })
 
 export type CharacterRelationshipRow = z.infer<typeof CharacterRelationshipSchema>

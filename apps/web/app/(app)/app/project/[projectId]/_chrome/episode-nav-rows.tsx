@@ -17,7 +17,7 @@ export type EpisodeNavRow = {
 }
 
 /**
- * The seven rows. A Client Component only so it can read which route is
+ * The six rows. A Client Component only so it can read which route is
  * rendering below the `(writing)` layout; everything it prints - the label,
  * the glyph, the formatted meta, the href - arrives from the server as data.
  *

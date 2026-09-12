@@ -15,7 +15,7 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   the frame; [app/(app)/app/(home)/layout.tsx](app/(app)/app/(home)/layout.tsx) draws the
   four-item sidebar for the six list routes (three views over one query in `_projects/`, plus
   `new`, `trash`, `settings`); [app/(app)/app/project/[projectId]/layout.tsx](app/(app)/app/project/[projectId]/layout.tsx)
-  draws the 66px rail for the workspace. The fourteen workspace routes are empty shells.
+  draws the 66px rail for the workspace. The thirteen workspace routes are empty shells.
 - **The workspace, in one directory:** [lib/workspace/](lib/workspace/). `routes.ts` is the route
   tree and both orders (rail, episode nav); `params.ts` the sub-view params; `hrefs.ts` every
   workspace URL and the film/series shape; `context.ts` the membership gate and the `cache()`d

@@ -10,34 +10,23 @@ import type { BeatNode, H1Node, H2Node, H3Node, OutlineNode } from './outline'
  * AGENTS.md, The node model, gives the Outline "numbered beats" as one of its
  * seven blocks, and `outline.ts` rules that a beat's number "is **not**
  * stored. It is the block's ordinal among the beats of its document, computed
- * at render". `@folio/contracts`' `EpisodeNavMeta` counts the nav's Beats row
- * from the same blocks: "the outline's numbered beats are the only beats that
- * exist."
- *
- * So the Beats route has no beat of its own to invent. **A beat is an outline
- * `beat` block.** What the route adds - a duration, a minute position on the
- * episode timeline, a spot on the unplaced canvas, the scenes that deliver it
- * - is authored data hanging off that block by its node id, in `packages/db`,
- * the way a synopsis hangs off a scene heading. This file is the pure half:
- * which blocks are beats, in what order, and how a block's one line of prose
- * splits into the *name* the beat sheet sets in serif and the *one-line*
- * under it.
+ * at render". This file is that computation, plus the other pure reads the
+ * Outline route makes over its own list: the document map of headings and the
+ * word count.
  *
  * ## The headline convention
  *
  * The outline bundle draws a beat as a bold lead and a run of text -
- * `**Opening Image:** empty pitch, Ade training alone...` - and the beats
- * bundle draws the same beat as a name, `Opening Image`, over a line, `Empty
- * pitch, Ade training alone...`. One block, two renderings. The split is on
- * the **first colon**: everything before it is the name, everything after it
- * (trimmed) is the line. A block with no colon is a name with no line. A name
- * therefore cannot contain a colon; a line can contain any number.
+ * `**Opening Image:** empty pitch, Ade training alone...`. The lead runs to
+ * the **first colon**: everything before it is the beat's name, everything
+ * after it (trimmed) is its line. A block with no colon is a name with no
+ * line. The editor decorates the same range (`outline-editor.tsx`); nothing
+ * about the split is stored, for the same reason the number is not: a second
+ * copy of the name would drift from the block the writer is editing.
  *
- * That is a convention over authored text, not a stored field, for the same
- * reason the number is not stored: a second copy of the name would drift
- * from the block the writer is editing. `writeBeatHeadline` is its inverse,
- * and `readBeatHeadline(writeBeatHeadline(h))` is an identity for every
- * trimmed name without a colon - the property test says so.
+ * There was a Beats route that rendered these blocks as a sheet with timing
+ * and scene links hung off them; it was removed (`docs/build-decisions.md`,
+ * "Beats route removed"). The outline's beat blocks are unchanged by that.
  *
  * ## Mentions
  *
@@ -59,20 +48,6 @@ export const readBeatHeadline = (text: string): BeatHeadline => {
   const at = text.indexOf(BEAT_HEADLINE_SEPARATOR)
   if (at === -1) return { name: text.trim(), line: '' }
   return { name: text.slice(0, at).trim(), line: text.slice(at + 1).trim() }
-}
-
-/**
- * The block text for a headline: `Name: line`, or `Name` alone when the
- * line is empty, or the line alone when the name is. A colon in the name
- * would split wrongly on the way back and is replaced with a dash rather
- * than refused - the writer typed it into a name field, not a block.
- */
-export const writeBeatHeadline = (headline: BeatHeadline): string => {
-  const name = headline.name.trim().replaceAll(BEAT_HEADLINE_SEPARATOR, ' -')
-  const line = headline.line.trim()
-  if (name === '') return line
-  if (line === '') return name
-  return `${name}${BEAT_HEADLINE_SEPARATOR} ${line}`
 }
 
 // ---------------------------------------------------------------------------

@@ -20,14 +20,14 @@ import { SearchTrigger } from './search-trigger'
  *
  * Transcribed from `Route - Script.dc.html`, top to bottom: the header row
  * (project title in Newsreader 15px/500, `＋`, `⋯`), the search trigger, then
- * a scrolling `nav` with two groups - the episode board and the seven routes,
+ * a scrolling `nav` with two groups - the episode board and the six routes,
  * then the scenes. The credits card the bundle draws in the footer is cut
  * (AGENTS.md, Constraints); nothing is rendered in its place.
  *
  * ## Every value on this panel is read, none is written
  *
  *   episode board   `readEpisodeBoard`  - `episodes`, and `measurements.total_pages`
- *   the seven metas `readEpisodeNavMeta` - see `@folio/contracts` `EpisodeNavMeta`
+ *   the six metas `readEpisodeNavMeta` - see `@folio/contracts` `EpisodeNavMeta`
  *                    for the table each field comes from
  *   scenes          `listEpisodeScenes` - `scene_derivations` with
  *                    `measurement_scenes.eighths`
@@ -37,13 +37,14 @@ import { SearchTrigger } from './search-trigger'
  * states, and that is what this renders for one: `empty`, `—`, `—`, `—`,
  * `0`, `—`, `0`, and the scenes group's copy.
  *
- * ## Seven rows, Storyboard above Scenes
+ * ## Six rows, Storyboard above Scenes
  *
  * `EPISODE_NAV` is the order and it deliberately differs from the rail. The
- * Script bundle itself draws six rows - it has no Beats row - and the other
- * six episode bundles draw seven with `▥` on Outline and `▦` on Storyboard.
- * Where bundles disagree the brief and AGENTS.md's glyph set are followed:
- * seven rows, `⋮` Outline, `▥` Storyboard. Flagged in the phase report.
+ * Script bundle draws six rows with no Beats row; the other episode bundles
+ * drew a seventh, Beats, which was built and then removed
+ * (`docs/build-decisions.md`, "Beats route removed"), so six it is. Where
+ * bundles disagree on glyphs the brief and AGENTS.md's set are followed:
+ * `⋮` Outline, `▥` Storyboard.
  *
  * ## Film
  *

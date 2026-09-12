@@ -15,9 +15,8 @@ import { BLOCK_TOOL_ORDER } from '../../../../../../lib/outline/slate-model'
  * Bold and Italic. Two departures, both flagged in the phase report:
  *
  *   - **Beat is a seventh button.** Numbered beats are one of the seven
- *     blocks AGENTS.md names and the whole reason the Beats route has a
- *     list; a block set drawn short of its own member is a toolbar that
- *     cannot make the thing the route is for.
+ *     blocks AGENTS.md names; a block set drawn short of its own member is
+ *     a toolbar that cannot make one of the outline's own blocks.
  *   - **Bold and Italic are not drawn.** `InlineRun` has no mark, so a mark
  *     cannot be saved (`lib/outline/slate-model.ts`); adding one is a
  *     node-schema change. A button that does nothing is a placeholder.

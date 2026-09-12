@@ -171,3 +171,23 @@
 :root {
   --scrim: rgba(15, 12, 8, 0.28);
 }
+
+/*
+ * `--chip-1` .. `--chip-6` are the six character-chip hues
+ * `Route - Characters.dc.html` writes inline on its fixture records -
+ * `oklch(0.50 0.17 27)`, `oklch(0.55 0.10 300)`, `oklch(0.45 0.05 250)`,
+ * `oklch(0.48 0.10 150)`, `oklch(0.55 0.08 75)`, `oklch(0.40 0.02 260)` - with
+ * white on top. The bundle gives no rule for which record gets which; the
+ * Characters route picks by a stable hash of the record id (`figures.ts`), so
+ * one person is one colour everywhere. Identity marks, not palette colours:
+ * they do not move with the theme, like `--avatar-bg`.
+ */
+:root {
+  --chip-1: oklch(0.5 0.17 27);
+  --chip-2: oklch(0.55 0.1 300);
+  --chip-3: oklch(0.45 0.05 250);
+  --chip-4: oklch(0.48 0.1 150);
+  --chip-5: oklch(0.55 0.08 75);
+  --chip-6: oklch(0.4 0.02 260);
+  --chip-ink: #fff;
+}

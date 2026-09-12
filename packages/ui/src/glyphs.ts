@@ -62,8 +62,6 @@ export const GLYPHS = {
   script: '▤',
   /** Episode nav: Outline. */
   outline: '⋮',
-  /** Episode nav: Beats. */
-  beats: '⧗',
   /** Episode nav: Storyboard. */
   storyboard: '▥',
   /** Episode nav: Scenes. */

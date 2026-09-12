@@ -39,7 +39,7 @@ import { ThemeToggle } from '../../../../_shell/theme-toggle'
  * driven by one attribute, so the visible state and the accessible state
  * cannot disagree.
  *
- * **Writing stays lit on all seven episode routes** - script, outline, beats,
+ * **Writing stays lit on all six episode routes** - script, outline,
  * storyboard, scenes, revisions and notes, Notes and Revisions included.
  * `railSectionFromSegments` decides, and it is a pure function with a test
  * for exactly that list. Production is episode-scoped too (open decision 5,

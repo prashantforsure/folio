@@ -16,7 +16,7 @@ import { defineConfig, devices } from '@playwright/test'
  *
  * ## This is not yet the smoke test AGENTS.md asks for
  *
- * "The E2E smoke test walks all fourteen routes in both themes and both states."
+ * "The E2E smoke test walks all thirteen routes in both themes and both states."
  * Those routes do not exist. What is here walks what does exist, in both
  * themes, and it is named honestly rather than allowed to look like the real
  * thing.

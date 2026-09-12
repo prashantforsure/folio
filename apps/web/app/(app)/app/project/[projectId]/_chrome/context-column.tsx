@@ -20,18 +20,28 @@ type ColumnRoute = Exclude<WorkspaceRoute, EpisodeNavRoute>
  * correctly beside the rail.
  *
  * The `＋` the bundles draw in this header ("New character", "＋ thread") is
- * not rendered: each is a mutation on an entity that has no route body yet.
+ * rendered only where a route supplies it as `action` - Characters was the
+ * first, with a record to create. `footer` is the strip under the list the
+ * entity bundles draw (the derivation legend); the same rule.
+ *
+ * `html[data-nav-open='false']` hides the column, as it hides the episode
+ * nav: the footer's "Hide nav" is one flag on `<html>` (`globals.css`).
  */
 export const ContextColumn = ({
   route,
   title,
   find,
+  action,
+  footer,
   children,
 }: {
   readonly route: ColumnRoute
   readonly title: string
   /** The find input's placeholder, where the bundle has one. */
   readonly find?: string
+  /** The header's right-hand control, where the route has one. */
+  readonly action?: ReactNode
+  readonly footer?: ReactNode
   readonly children?: ReactNode
 }) => (
   <aside
@@ -44,6 +54,7 @@ export const ContextColumn = ({
       <span className="min-w-0 flex-1 truncate font-serif text-15 font-medium tracking-title">
         {title}
       </span>
+      {action}
     </div>
 
     {find === undefined ? null : (
@@ -68,5 +79,6 @@ export const ContextColumn = ({
     >
       {children}
     </nav>
+    {footer}
   </aside>
 )

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 /**
- * Do the eighteen glyphs actually draw?
+ * Do the seventeen glyphs actually draw?
  *
  * AGENTS.md, UI fidelity: "Every glyph is a Unicode character rendered as
  * text", followed by the set. `tests/glyphs.test.ts` proves we ship the right
@@ -46,7 +46,6 @@ const GLYPHS = [
   ['settings', '⚙'],
   ['script', '▤'],
   ['outline', '⋮'],
-  ['beats', '⧗'],
   ['storyboard', '▥'],
   ['scenes', '▢'],
   ['revisions', '⇄'],
@@ -125,14 +124,14 @@ const measure = (glyphs: readonly (readonly [string, string])[]) => `
 type Measured = Record<string, { width: number; notdef: number }>
 
 for (const theme of ['dark', 'light'] as const) {
-  test(`all eighteen glyphs render in the ${theme} theme`, async ({ page }) => {
+  test(`all seventeen glyphs render in the ${theme} theme`, async ({ page }) => {
     await page.goto('/sign-in')
     await page.evaluate((next) => {
       document.documentElement.setAttribute('data-theme', next)
     }, theme)
     await page.evaluate(buildProof(GLYPHS, [...SIZES]))
     // The faces are `font-display: swap`; measuring before they land would
-    // measure the fallback. None of the eighteen comes from them, but the
+    // measure the fallback. None of the seventeen comes from them, but the
     // stack should be settled all the same.
     await page.evaluate(() => document.fonts.ready)
 

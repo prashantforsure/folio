@@ -155,7 +155,7 @@ Stop and ask before you:
 ```
 apps/web/                    Next.js app. UI and server actions only — no logic that belongs in packages/script.
   app/(app)/                 Signed-in shell: sidebar, theme, avatar. Everything user-facing lives under /app.
-  app/(app)/project/         Project workspace: rail, episode nav, the fourteen routes.
+  app/(app)/project/         Project workspace: rail, episode nav, the thirteen routes.
   lib/                       Web-only glue: auth session, server action helpers, query client. Not domain logic.
 apps/worker/                 BullMQ consumers. Long-running. Generation, export, agent runs. Never a serverless fn.
 apps/sync/                   Deferred. Do not create this directory until realtime is actually scheduled.
@@ -246,13 +246,14 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 - `projectType: 'film'` **hides** the episode segment. The database still stores one episode row.
   The router special-cases the shape; the schema never does.
 - Rail order is fixed: Writing `✎` · Characters `◍` · Locations `⌖` · Timeline `◷` · Bible `◈` ·
-  Research `▧` · Insights `◎` · Production `▶`. Writing stays lit across all seven episode routes.
+  Research `▧` · Insights `◎` · Production `▶`. Writing stays lit across all six episode routes.
 - Episode nav order deliberately differs from the rail: **Storyboard sits above Scenes.**
 
 ### UI fidelity
 
 - **Every glyph is a Unicode character rendered as text.** The known set:
-  `✎ ◍ ⌖ ◷ ◈ ▧ ◎ ▶ ☾ ☀ ⚙ ▤ ⋮ ⧗ ▥ ▢ ⇄ ❝`
+  `✎ ◍ ⌖ ◷ ◈ ▧ ◎ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝` (`⧗` left with the Beats route, removed 2026-09-12 —
+  `docs/build-decisions.md`, "Beats route removed")
 - Rail active state is a 2px `-accent` bar at `left:-5px` **plus** the `-sel` background. Not a
   colour change alone.
 - Episode nav column is **238px**. Not "about 240".
@@ -487,7 +488,7 @@ pnpm --filter @folio/db drizzle-kit check
 pnpm --filter web test:e2e
 ```
 
-The E2E smoke test walks all fourteen routes in both themes and both states. It is not optional
+The E2E smoke test walks all thirteen routes in both themes and both states. It is not optional
 coverage — it is the thing that catches a route shipped without its empty state.
 
 > **Note while the repo is still being scaffolded:** these commands are the contract the scaffold

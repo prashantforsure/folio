@@ -10,7 +10,7 @@ import { StoryboardWorkspace } from './storyboard-workspace'
 /**
  * The Storyboard route, server side: one read, then the client workspace.
  *
- * Replaces `RouteShell` for this route the way Beats does: the header
+ * Replaces `RouteShell` for this route the way Scenes does: the header
  * carries the live count, the view segment and the credit balance, and the
  * route has a subheader and a footer. The `<main data-route data-sub-view>`
  * contract the smoke test reads is kept exactly; `?view=` is parsed as every

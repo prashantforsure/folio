@@ -2,7 +2,7 @@
  * The smoke-test contract for the project workspace. **This file grows every
  * phase; it is not rewritten.**
  *
- * AGENTS.md, Validation: "The E2E smoke test walks all fourteen routes in
+ * AGENTS.md, Validation: "The E2E smoke test walks all thirteen routes in
  * both themes and both states. It is not optional coverage - it is the thing
  * that catches a route shipped without its empty state."
  *
@@ -70,7 +70,6 @@ export const RAIL_LABELS: readonly string[] = [
 export const EPISODE_NAV_ORDER: readonly string[] = [
   'script',
   'outline',
-  'beats',
   'storyboard',
   'scenes',
   'revisions',
@@ -83,7 +82,6 @@ export const EPISODE_NAV_WIDTH = 238
 export const EMPTY_NAV_META: Readonly<Record<string, string>> = {
   script: 'empty',
   outline: '—',
-  beats: '—',
   storyboard: '—',
   scenes: '0',
   revisions: '—',
@@ -95,7 +93,6 @@ const nav = { kind: 'episode-nav', width: EPISODE_NAV_WIDTH } as const
 export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
   { route: 'script', scope: 'episode', rail: 'writing', title: 'Script', defaults: {}, column: nav },
   { route: 'outline', scope: 'episode', rail: 'writing', title: 'Outline', defaults: {}, column: nav },
-  { route: 'beats', scope: 'episode', rail: 'writing', title: 'Beats', defaults: { view: 'beats' }, column: nav },
   { route: 'storyboard', scope: 'episode', rail: 'writing', title: 'Storyboard', defaults: { view: 'board' }, column: nav },
   { route: 'scenes', scope: 'episode', rail: 'writing', title: 'Scenes', defaults: { view: 'cards' }, column: nav },
   { route: 'revisions', scope: 'episode', rail: 'writing', title: 'Revisions', defaults: { view: 'diff' }, column: nav },
@@ -158,7 +155,7 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
   },
 ]
 
-/** Fourteen. Decision 5 episode-scoped production, decision 6 cut, assets reserved. */
-export const WORKSPACE_ROUTE_COUNT = 14
+/** Thirteen. Decision 5 episode-scoped production, decision 6 cut, assets reserved; Beats cut 2026-09-12. */
+export const WORKSPACE_ROUTE_COUNT = 13
 
 export const THEMES = ['dark', 'light'] as const

@@ -9,7 +9,7 @@ import { ContextColumn } from './context-column'
  * `/production` is **episode-scoped** - AGENTS.md open decision 5, ruled by
  * the client for this phase and recorded in `docs/build-decisions.md`. Reels
  * and frames were always episode-scoped; the ruling put the route beside
- * them. It is not one of the seven writing routes, so it does not get the
+ * them. It is not one of the six writing routes, so it does not get the
  * episode nav; it gets the README's 250px context column, empty this phase.
  */
 export const ProductionLayout = async ({

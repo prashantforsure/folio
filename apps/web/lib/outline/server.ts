@@ -2,7 +2,6 @@ import type { DocumentRecord, Episode, Project, Thread, Version } from '@folio/c
 import type { ProjectScope } from '@folio/db'
 import {
   listOpenThreads,
-  listSceneLinks,
   listVersions,
   readDocumentByKind,
   readEntityCounts,
@@ -29,8 +28,9 @@ import { labelBook, outlineBeats, outlineWordCount } from '@folio/script'
  * not from this page." Scenes come from `readEpisodeNavMeta` (derived rows in
  * state `present`), characters / locations / relations from the derived
  * caches through `readEntityCounts`, beats and words from the outline's own
- * blocks, and shots are `0` because shots are not a table. Nothing here is
- * estimated and nothing here calls `derive`.
+ * blocks (a beat is one of its blocks; there is no Beats route), and shots
+ * are `0` because shots are not a table. Nothing here is estimated and
+ * nothing here calls `derive`.
  */
 
 export type OutlineStats = {
@@ -54,14 +54,8 @@ export type OutlineLoad =
       readonly stats: OutlineStats
       readonly threads: readonly Thread[]
       readonly versions: readonly Version[]
-      /** How many of the outline's beats name at least one scene - the panel's `Beats linked`. */
-      readonly beatsLinked: number
     }
   | { readonly state: 'unreadable'; readonly document: DocumentRecord; readonly detail: string }
-
-/** How many beat blocks have a scene naming them, from `scenes.beats`. */
-const countLinkedBeats = (nodes: readonly OutlineNode[], linked: ReadonlySet<string>): number =>
-  outlineBeats(nodes).filter((beat) => linked.has(beat.id as string)).length
 
 export const loadOutline = async (
   scope: ProjectScope,
@@ -71,14 +65,13 @@ export const loadOutline = async (
   const document = await readDocumentByKind(scope, episode.id, 'outline')
   if (document === null) return { state: 'empty' }
 
-  const [read, labels, threads, versions, meta, counts, linked] = await Promise.all([
+  const [read, labels, threads, versions, meta, counts] = await Promise.all([
     readOutlineNodes(scope, document.id),
     readMentionLabels(scope),
     listOpenThreads(scope),
     listVersions(scope, document.id, 20),
     readEpisodeNavMeta(scope, episode.id, project.format),
     readEntityCounts(scope),
-    listSceneLinks(scope, episode.id, project.format),
   ])
   if (!read.ok) {
     return { state: 'unreadable', document, detail: `${read.error.at || 'block'}: ${read.error.reason.kind}` }
@@ -105,6 +98,5 @@ export const loadOutline = async (
         (thread.anchor.kind === 'outline_block' || thread.anchor.kind === 'beat') && ids.has(thread.anchor.nodeId),
     ),
     versions,
-    beatsLinked: countLinkedBeats(nodes, new Set(linked.flatMap((scene) => scene.beats.map(String)))),
   }
 }

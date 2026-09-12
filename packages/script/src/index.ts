@@ -260,6 +260,7 @@ export { canonicalKey } from './alias'
 export type {
   AmbiguousBinding,
   BrokenLocationEdge,
+  CharacterMatch,
   DanglingMention,
   DeriveError,
   DeriveOptions,
@@ -267,7 +268,10 @@ export type {
   MintedRecord,
   RejectedSceneHeading,
 } from './derive'
-export { countDerivationIds, derive } from './derive'
+export { countDerivationIds, derive, matchCharacters } from './derive'
+
+export type { CueRewrite, HeadingRewrite } from './rename'
+export { cueSpelling, renameCharacterCues, renameLocationHeadings, setSpelling } from './rename'
 
 export type { HeadingParts } from './fountain-syntax'
 export { headingParts } from './fountain-syntax'
@@ -375,5 +379,4 @@ export {
   outlineNodeText,
   outlineWordCount,
   readBeatHeadline,
-  writeBeatHeadline,
 } from './beats'

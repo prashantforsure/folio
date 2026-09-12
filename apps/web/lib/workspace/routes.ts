@@ -1,38 +1,37 @@
 import type { GlyphName } from '@folio/ui'
 
 /**
- * The route tree of the project workspace, as data. Fourteen routes.
+ * The route tree of the project workspace, as data. Thirteen routes.
  *
  * AGENTS.md, Routing, plus three rulings the client made for this phase
  * (recorded in `docs/build-decisions.md`, "Workspace shell phase"):
  *
- *   - open decision 5: `/production` is **episode-scoped**, so eight routes
+ *   - open decision 5: `/production` is **episode-scoped**, so seven routes
  *     carry an episode and six are project-wide;
  *   - open decision 6: `/build` and `/search` are **cut** - not routes, not
  *     reserved;
  *   - `assets` stays in `RESERVED_PROJECT_SEGMENTS` with no route.
  *
  * Project `/settings` is a stub (AGENTS.md, Constraints) and is not one of the
- * fourteen. The count is what the E2E smoke test walks, so it is exported and
+ * thirteen. The count is what the E2E smoke test walks, so it is exported and
  * asserted rather than implied.
  *
  * ## Two orders, and they differ on purpose
  *
  * `RAIL` is the eight sections in the rail's fixed order. `EPISODE_NAV` is
- * the seven rows of the episode nav, and **Storyboard sits above Scenes**
+ * the six rows of the episode nav, and **Storyboard sits above Scenes**
  * there - AGENTS.md, Routing: "Episode nav order deliberately differs from the
  * rail." Neither list is derived from the other.
  *
- * Writing is a section, not a route: it is lit on all seven episode nav
+ * Writing is a section, not a route: it is lit on all six episode nav
  * routes and links to the current episode's script. Production is both - an
  * episode-scoped route and a rail section of its own.
  */
 
-/** The seven episode routes the episode nav lists, in nav order. */
+/** The six episode routes the episode nav lists, in nav order. */
 export const EPISODE_NAV_ROUTES = [
   'script',
   'outline',
-  'beats',
   'storyboard',
   'scenes',
   'revisions',
@@ -41,7 +40,7 @@ export const EPISODE_NAV_ROUTES = [
 
 export type EpisodeNavRoute = (typeof EPISODE_NAV_ROUTES)[number]
 
-/** Every episode-scoped route: the seven, plus production (decision 5). */
+/** Every episode-scoped route: the six, plus production (decision 5). */
 export const EPISODE_ROUTES = [...EPISODE_NAV_ROUTES, 'production'] as const
 
 export type EpisodeRoute = (typeof EPISODE_ROUTES)[number]
@@ -60,10 +59,10 @@ export type ProjectRoute = (typeof PROJECT_ROUTES)[number]
 
 export type WorkspaceRoute = EpisodeRoute | ProjectRoute
 
-/** The fourteen. The smoke test asserts this number. */
+/** The thirteen. The smoke test asserts this number. */
 export const WORKSPACE_ROUTES: readonly WorkspaceRoute[] = [...EPISODE_ROUTES, ...PROJECT_ROUTES]
 
-export const WORKSPACE_ROUTE_COUNT = 14
+export const WORKSPACE_ROUTE_COUNT = 13
 
 export const isEpisodeRoute = (value: string): value is EpisodeRoute =>
   (EPISODE_ROUTES as readonly string[]).includes(value)
@@ -75,7 +74,6 @@ export const isProjectRoute = (value: string): value is ProjectRoute =>
 export const ROUTE_TITLE: Record<WorkspaceRoute, string> = {
   script: 'Script',
   outline: 'Outline',
-  beats: 'Beats',
   storyboard: 'Storyboard',
   scenes: 'Scenes',
   revisions: 'Revisions',
@@ -94,7 +92,7 @@ export const ROUTE_TITLE: Record<WorkspaceRoute, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * The eight rail sections. `writing` covers the seven episode nav routes;
+ * The eight rail sections. `writing` covers the six episode nav routes;
  * every other section is exactly one route.
  */
 export const RAIL_SECTIONS = [
@@ -128,7 +126,7 @@ export const RAIL: readonly RailItem[] = [
   { section: 'production', label: 'Production', glyph: 'production' },
 ]
 
-/** Which rail section a route lights. The seven writing routes all light Writing. */
+/** Which rail section a route lights. The six writing routes all light Writing. */
 export const railSectionOf = (route: WorkspaceRoute): RailSection =>
   route === 'production' || isProjectRoute(route) ? route : 'writing'
 
@@ -142,11 +140,10 @@ export type EpisodeNavItem = {
   readonly glyph: GlyphName
 }
 
-/** Script ▤ · Outline ⋮ · Beats ⧗ · Storyboard ▥ · Scenes ▢ · Revisions ⇄ · Notes ❝ */
+/** Script ▤ · Outline ⋮ · Storyboard ▥ · Scenes ▢ · Revisions ⇄ · Notes ❝ */
 export const EPISODE_NAV: readonly EpisodeNavItem[] = [
   { route: 'script', label: 'Script', glyph: 'script' },
   { route: 'outline', label: 'Outline', glyph: 'outline' },
-  { route: 'beats', label: 'Beats', glyph: 'beats' },
   { route: 'storyboard', label: 'Storyboard', glyph: 'storyboard' },
   { route: 'scenes', label: 'Scenes', glyph: 'scenes' },
   { route: 'revisions', label: 'Revisions', glyph: 'revisions' },

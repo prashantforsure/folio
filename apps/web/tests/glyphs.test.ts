@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
  *
  * AGENTS.md, UI fidelity writes the set out:
  *
- *     ✎ ◍ ⌖ ◷ ◈ ▧ ◎ ▶ ☾ ☀ ⚙ ▤ ⋮ ⧗ ▥ ▢ ⇄ ❝
+ *     ✎ ◍ ⌖ ◷ ◈ ▧ ◎ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝
  *
  * That line is transcribed below, in order, and compared. A test that iterated
  * `GLYPHS` and asserted things about whatever it found would keep passing after
@@ -37,7 +37,6 @@ const SPECIFIED = [
   '⚙',
   '▤',
   '⋮',
-  '⧗',
   '▥',
   '▢',
   '⇄',
@@ -45,7 +44,7 @@ const SPECIFIED = [
 ]
 
 describe('the glyph set', () => {
-  it('is exactly the eighteen characters AGENTS.md lists, in that order', () => {
+  it('is exactly the seventeen characters AGENTS.md lists, in that order', () => {
     expect(Object.values(GLYPHS)).toEqual(SPECIFIED)
   })
 
@@ -78,7 +77,7 @@ describe('the glyph set', () => {
 
 describe('text presentation', () => {
   /*
-   * From Unicode's emoji-variation-sequences: of the eighteen, exactly U+25B6,
+   * From Unicode's emoji-variation-sequences: of the seventeen, exactly U+25B6,
    * U+2600 and U+2699 have an emoji presentation. `☾` U+263E does NOT - the
    * confusable is U+263A, which is not in our set.
    */

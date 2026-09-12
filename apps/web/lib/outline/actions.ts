@@ -14,7 +14,7 @@ import {
   snapshotVersion,
 } from '@folio/db'
 import type { DocumentId, NodeId, OutlineNode } from '@folio/script'
-import { outlineBeats, text, typed } from '@folio/script'
+import { text, typed } from '@folio/script'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
@@ -42,11 +42,10 @@ import type { SaveOutlineResult } from './result'
  *
  * ## What a save reports back
  *
- * The nav's `Outline` row prints `N acts` (the H1 count) and its `Beats`
- * row prints the beat count, both read from this document. The save
- * returns both counts from the list it just wrote so the workspace can keep
- * the rows in the nav honest without a `revalidatePath` over the whole
- * layout on every keystroke.
+ * The nav's `Outline` row prints `N acts` (the H1 count), read from this
+ * document. The save returns the count from the list it just wrote so the
+ * workspace can keep the row in the nav honest without a `revalidatePath`
+ * over the whole layout on every keystroke.
  */
 
 const RetirementSchema = z.object({
@@ -128,7 +127,6 @@ export const saveOutline = async (raw: SaveOutlineInput): Promise<SaveOutlineRes
     conflict,
     snapshotTaken: snapshot,
     acts: next.filter((node) => node.type === 'h1').length,
-    beats: outlineBeats(next).length,
   }
 }
 

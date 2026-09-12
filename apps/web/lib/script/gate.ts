@@ -118,5 +118,40 @@ export const openEpisode = async (
   return { actor, scope, project, episode }
 }
 
-export const isRefusal = <T extends EpisodeGate>(value: T | GateRefusal): value is GateRefusal =>
+export const isRefusal = <T extends EpisodeGate | ProjectGate>(value: T | GateRefusal): value is GateRefusal =>
   'status' in value
+
+// ---------------------------------------------------------------------------
+// The project-scoped gate
+// ---------------------------------------------------------------------------
+
+/**
+ * The same gate without an episode, for the project-scoped routes -
+ * Characters first. Identity, then membership and the project row in one
+ * round trip, then a scope. A refusal is the same message for a stranger
+ * and a missing project, for the reason the episode gate gives.
+ */
+export type ProjectGate = {
+  readonly actor: UserId
+  readonly scope: ProjectScope<'transaction'>
+  readonly project: Project
+}
+
+export const openProject = async (rawProjectId: unknown): Promise<ProjectGate | GateRefusal> => {
+  const parsedId = ProjectIdSchema.safeParse(typeof rawProjectId === 'string' ? rawProjectId : '')
+  if (!parsedId.success) return REFUSED
+
+  const identity = await currentIdentity()
+  if (identity === null) return { status: 'refused', message: 'Sign in to keep writing.' }
+  const actor = brandUserId(identity.id)
+
+  const db = await transactionDatabase()
+  const scope = await openProjectForRequest(parsedId.data, actor)
+  const [membership, project] = await Promise.all([
+    readMembershipFor(db, actor, parsedId.data),
+    readProject(scope),
+  ])
+  if (membership === null) return REFUSED
+  if (project === null || project.kind !== 'screenwriting') return REFUSED
+  return { actor, scope, project }
+}

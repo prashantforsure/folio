@@ -21,13 +21,14 @@
  *   versions                     immutable snapshots of authored data
  *   revisions
  *   locked_pages
- *   characters                   name, bio, notes
+ *   characters                   name, bio, notes, and the profile the Characters route authors
  *   character_bound_cues         the alias table's authored half
  *   character_relationships
- *   locations                    name, parent, scheduled days
+ *   character_arc_turns          one turn of an arc, pointing at a heading node or at nothing
+ *   locations                    name, parent, scheduled days, description, the merge tombstone
  *   location_bound_sluglines
- *   scenes                       synopsis, story time, beat and thread links
- *   beats                        duration, timeline position, canvas spot - hung off a beat block
+ *   location_arc_notes           one note per location per episode - "how this place changes"
+ *   scenes                       synopsis, story time, beat and thread links (both opaque)
  *   resolve_decisions            authored input, never derived output
  *   credit_ledger                append-only
  *   shots                        a scene does not say how it is shot - keyed by the heading node's id
@@ -90,6 +91,5 @@ export * from './threads'
 export * from './history'
 export * from './measurement'
 export * from './derived'
-export * from './beats'
 export * from './credits'
 export * from './storyboard'

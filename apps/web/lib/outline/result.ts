@@ -16,9 +16,8 @@ export type SaveOutlineResult =
       readonly updatedAt: Timestamp
       readonly conflict: SaveConflict | null
       readonly snapshotTaken: boolean
-      /** Counted from the list as written: what the nav's Outline and Beats rows will say. */
+      /** Counted from the list as written: what the nav's Outline row will say. */
       readonly acts: number
-      readonly beats: number
     }
   | { readonly status: 'ids-unusable'; readonly ids: readonly NodeId[] }
   | { readonly status: 'invalid'; readonly message: string }

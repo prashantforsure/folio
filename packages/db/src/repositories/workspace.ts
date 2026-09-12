@@ -6,7 +6,7 @@ import type {
   RailBadges,
 } from '@folio/contracts'
 import type { NodeId, ScriptFormat } from '@folio/script'
-import { and, asc, count, eq, max } from 'drizzle-orm'
+import { and, asc, count, eq, isNotNull, max } from 'drizzle-orm'
 
 import {
   commentThreads,
@@ -26,7 +26,7 @@ import { countAcceptedShots } from './storyboard'
 
 /**
  * What the workspace chrome reads: the rail's badges, the episode board, the
- * seven nav metas and the scenes group.
+ * six nav metas and the scenes group.
  *
  * AGENTS.md, UI fidelity: badges are "live counts, never placeholders" and the
  * nav meta convention is "things that legitimately count to zero show `0`;
@@ -98,10 +98,14 @@ const screenplayPages = async (
  * Characters = unresolved cues · Locations = unmatched sluglines · Bible =
  * open canon conflicts.
  *
- * The first two are `resolve_rows` in state `open`, split by subject kind.
- * The queue is rows, not a computed view (AGENTS.md, Entity identity), and an
- * open row is by definition something in the script that points at no
- * record - which is what "unresolved" and "unmatched" mean.
+ * The first two are `resolve_rows` in state `open` **with a proposal**, split
+ * by subject kind. The queue is rows, not a computed view (AGENTS.md, Entity
+ * identity), and an open row is by definition something in the script that
+ * points at no record - which is what "unresolved" and "unmatched" mean. An
+ * open row *without* a proposal is one the writer has already decided: every
+ * candidate and `new-record` rejected, the "Walk-on" the Characters bundle
+ * draws. The spec makes the badge "its pending count", and a walk-on is not
+ * pending - it is answered, and `derive` keeps it answered.
  *
  * **`bible` is the count of an empty set, and it is written out as one.**
  * There is no bible table in this schema - `@folio/contracts` lists bible
@@ -116,7 +120,7 @@ export const readRailBadges = async (scope: ProjectScope): Promise<RailBadges> =
   const rows = await dbOf(scope)
     .select({ kind: resolveRows.subjectKind, n: count() })
     .from(resolveRows)
-    .where(scoped(scope, resolveRows, eq(resolveRows.state, 'open')))
+    .where(scoped(scope, resolveRows, eq(resolveRows.state, 'open'), isNotNull(resolveRows.proposalTarget)))
     .groupBy(resolveRows.subjectKind)
   const open = (kind: 'cue' | 'slugline'): number => rows.find((row) => row.kind === kind)?.n ?? 0
   return {
@@ -152,13 +156,13 @@ export const readEpisodeBoard = async (
 }
 
 // ---------------------------------------------------------------------------
-// The seven nav metas
+// The six nav metas
 // ---------------------------------------------------------------------------
 
 /**
- * The facts behind the episode nav's seven rows.
+ * The facts behind the episode nav's six rows.
  *
- * Seven small reads, issued together. Each is a plain builder query against
+ * Six small reads, issued together. Each is a plain builder query against
  * the table that owns the fact; the documents are read first because every
  * other count hangs off a document id.
  *
@@ -181,15 +185,15 @@ export const readEpisodeNavMeta = async (
   const screenplay = docs.find((doc) => doc.kind === 'screenplay') ?? null
   const outline = docs.find((doc) => doc.kind === 'outline') ?? null
 
-  const countNodes = async (documentId: string, type: 'h1' | 'beat'): Promise<number> => {
+  const countActs = async (documentId: string): Promise<number> => {
     const rows = await db
       .select({ n: count() })
       .from(nodes)
-      .where(scoped(scope, nodes, eq(nodes.documentId, documentId), eq(nodes.type, type)))
+      .where(scoped(scope, nodes, eq(nodes.documentId, documentId), eq(nodes.type, 'h1')))
     return rows[0]?.n ?? 0
   }
 
-  const [pages, acts, beats, scenes, draft, openNotes, shots] = await Promise.all([
+  const [pages, acts, scenes, draft, openNotes, shots] = await Promise.all([
     screenplay === null
       ? Promise.resolve(null)
       : db
@@ -206,8 +210,7 @@ export const readEpisodeNavMeta = async (
           )
           .limit(1)
           .then((rows) => rows[0]?.pages ?? null),
-    outline === null ? Promise.resolve(null) : countNodes(outline.id, 'h1'),
-    outline === null ? Promise.resolve(null) : countNodes(outline.id, 'beat'),
+    outline === null ? Promise.resolve(null) : countActs(outline.id),
     screenplay === null
       ? Promise.resolve(0)
       : db
@@ -248,7 +251,6 @@ export const readEpisodeNavMeta = async (
   return {
     script: screenplay === null ? 'absent' : { pages },
     acts,
-    beats,
     shots,
     scenes,
     draft,

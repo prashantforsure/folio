@@ -1111,3 +1111,185 @@ excerpts, `pg 1`, eighths from the measurement record, `2 chars · 2 lines` and 
 card survives a reload; the index and list views agree, `Ready` / `Draft` following the synopsis.
 Four tests, ~4 minutes. The existing workspace, smoke and glyph walks (24 tests) pass unchanged
 alongside, with the nav's Storyboard row now live.
+
+## Characters route phase: the alias table on screen, and the first sanctioned write-back
+
+### What was built, table by table
+
+Migration **`0008`** (`packages/db/src/schema/derived.ts`, applied to the dev Supabase project) adds
+the authored half the spec calls "profile, arc and relationships authored on top". No derived table
+changed and no derivation path writes any of it:
+
+- **`characters`** gains `group` (`principal | supporting`, default `supporting`), `role`, `age`,
+  the three drives each with a `_source` line (`wants` / `wants_source` …), `voice_rules text[]`,
+  and `key_lines uuid[]` — dialogue node ids the writer picked, **not a foreign key**: the text is
+  read from the node at render and a line the script has lost is dropped on read, never shown from
+  a copy.
+- **`character_relationships`** gains `shift` beside `what`. The shared-scene count on the row is
+  derived (the two records' `scenes` arrays intersected); the words are the writer's.
+- **`character_arc_turns`** — one turn per row, `position`-ordered, `scene_node_id` nullable and
+  **not a foreign key** on the pattern of `scenes` and `shots`: a heading brought back by undo finds
+  its turn. A turn with no present scene is the spec's "unwritten" flag, read from the join, never
+  stored. RLS on, the member-all policy, `anon` revoked.
+
+The route reads the authored tables beside the derived caches (`repositories/characters.ts`) and
+joins by id in `lib/characters/server.ts`. Nothing recombines the halves into a row.
+
+### The alias table, and what each button on the route writes
+
+Every rule in AGENTS.md, Entity identity is a write the writer can make and see:
+
+- **Match** in the queue binds the cue's spelling to the proposed record (`bindCue`: one statement,
+  gated on the `(project_id, cue)` unique index — a spelling somebody else holds is refused, never
+  tie-broken) and records an `accepted` decision. **Other…** binds to a record the writer picks, or
+  records `accepted new-record` so the next pass mints. **`＋ alias`** on the profile binds any
+  spelling by hand — the Devanagari spelling of a name is the E2E walk's example — and `×` unbinds,
+  refusing the last one.
+- **Walk-on** is one act: `matchCharacters` (new in `@folio/script`'s `derive.ts`, the queue's own
+  scoring over the same pool a pass builds) lists every record the cue resembles, and the action
+  records a rejection of each and of `new-record` in one insert. The row then stands open with no
+  proposal — the state the pure core keeps for "never ask again" — listed under **Walk-ons** in the
+  column, and out of the badge.
+- **The rail badge is the pending count**: open rows *with a proposal*. `readRailBadges` was
+  counting every open row, which would have kept a walk-on in the badge forever; the spec says
+  "pending" and a walk-on is answered.
+- **Rename** is the sanctioned write-back, built as AGENTS.md's exception table specifies:
+  `renameCharacterCues` (`@folio/script`'s new `rename.ts`, 10 tests) rewrites every cue whose name —
+  modifiers taken off — has the old name's key, keeping the modifiers where they were, and leaves
+  every other bound alias alone; `renameCharacterRecord` swaps the name and the name's alias-table
+  row in one statement, refusing a spelling another record holds ("merge instead"); a
+  `before_rename` version is taken of every document that changes; `rewriteCueNodes` writes the
+  changed nodes across every document in one statement, ids and order untouched, so every anchor
+  survives; the diff comes back as *N cues across M episodes* and is printed. The profile asks first
+  and says the number.
+- **Merge into…** is one statement: the loser's bound cues, relationships (both directions,
+  de-duplicated), arc turns and key lines move to the winner; the loser keeps its row with
+  `merged_into` set, a tombstone anything pointing at it can follow (the route redirects a merged
+  id to the survivor). **Delete** is refused while the record is present in the script — a record
+  deleted under a live cue would be minted again on the next pass, which is not what Delete means.
+
+Profile fields, relationships, arc turns and key lines are authored and re-derive nothing;
+binding, deciding, merging and renaming each **await** a project-wide pass before answering,
+because what the writer sees next is that pass's output.
+
+### `/characters/:characterId`, as the spec writes it
+
+The route spec names both `/characters` and `/characters/:characterId`, and the id is the record's
+UUID — a character is "a stable UUID with a name attribute" — so the URL survives every rename and
+there is no slug to mint or to go stale. That is the difference from the Scenes ruling: a scene's
+URL id was the open `SCENE_xxx` shape; a character's is not open. `/characters` shows the first
+record in nav order on the profile view; `map` and `resolve` are project-wide and name no record.
+A merged id redirects; an unknown UUID is a 404; a non-UUID segment is a 404 before any lookup.
+`?view=profile | map | resolve` is the sub-view param as every route's is.
+
+### Judgement calls in this phase, each reversible
+
+- **Group defaults to `supporting`.** A minted record is somebody until the writer says who; forty
+  principals on import would say nothing. The nav's groups are the writer's.
+- **A rename rewrites the cues that *are* the name, not every bound alias.** `YOUNG MEERA` bound to
+  Meera stays `YOUNG MEERA` when Meera Pawar is renamed; it is a row the writer chose. The reading
+  of "rewrites every cue in every episode" taken here is every cue *that is the name*, in every
+  episode. Flagged: the other reading rewrites aliases too.
+- **The cue spelling of a name is its invariant uppercase** (`cueSpelling`), which a script with
+  no case passes through unchanged.
+- **Scene refs print the rank within the episode** (`E2 Sc 9`), not `scene_derivations.number`,
+  which `derive` assigns across the whole project in reading order. **Finding, not fixed:** the
+  Scenes route prints that project-wide number, so on a series' second episode its cards are
+  numbered from the first episode's last. That is `derive`'s to change and is escalated here.
+- **Voice share is project-wide** ("N% of the dialogue across K episodes"), not the bundle's
+  `· E1`: per-episode lines per character are not a stored fact and would mean walking every node
+  on every render.
+- **The presence gap is reported from five absent scenes up** (`GAP_SCENES`), inside one episode,
+  between two appearances; the threshold is named in `figures.ts`.
+- **"What stands out" lists principal pairs with no shared scene**, computed; the bundle's card is
+  fixture prose. Nothing on the route calls a model.
+- **Key lines are picked from the character's own dialogue** (`listDialogue`, a read-shaped action
+  that walks the script on demand, capped at 400 lines), with the scene each sits in found by order
+  key under `COLLATE "C"`.
+- **Elsewhere** links to Bible, Timeline, Insights and Production with `—` where nothing exists to
+  count, the computed gap on Insights · Presence, and the bundle's `not yet` on Production · cast.
+- **The portrait box is drawn and says why it does nothing** in its title — there is no file storage.
+  **`Cast report · PDF` is not drawn** — export is a job that does not exist (the Scenes precedent).
+  The map tab's `▦` and the profile tab's `▤` are drawn as the Storyboard route drew its own.
+- **Chip hues are `--chip-1..6` in `packages/ui`**, the six the bundle writes inline on its fixture,
+  picked by a stable hash of the record id so one person is one colour everywhere.
+- **The cue-level rename prompt ("rename everywhere, or create a new character?") is the Script
+  editor's**, not this route's, and is not built: a changed cue reaches this route as a queue row,
+  where Match / Other… / Walk-on is the same question asked after the fact.
+- **`ContextColumn` gained `action` and `footer` slots** so the column's `＋` and the derivation
+  legend could be drawn without a second column component; `Hide nav` now hides a context column as
+  it hides the episode nav.
+- **Membership, not role**, as everywhere.
+
+### Verified end to end
+
+`apps/web/e2e/characters-route.spec.ts` against the dev Supabase project through the running dev
+server on port 3000, with the Scenes phase's E2E account: the empty state in both themes with no
+badge, `?view=grid` and `/characters/not-a-uuid` both 404; an import with `MEERA`, `MEERA (V.O.)`,
+`MEERA PAWAR`, `SURESH KADAM`, `SURESH`, `YOUNG MEERA` and `CLERK` derives exactly three records
+and three queue rows — `likely`, `possible`, `likely` — with the badge, the column row and the tab
+all reading `3`; Match binds `MEERA PAWAR` and the badge reads `2`; Walk-on on `YOUNG MEERA` reads
+`1` and lists it under Walk-ons; Other… → a new character mints `SURESH`, the badge is gone and all
+of it survives a reload; a role, a drive, an arc turn (unwritten, then pointed at `E1 Sc 2`) and a
+Devanagari alias are authored and survive a reload; renaming `MEERA` to `Meera Pawar` asks, says
+`3 cues will be rewritten`, reports `3 cues rewritten across 1 episode`, and the Script route then
+shows `MEERA PAWAR` on every cue that was the name with the `(V.O.)` kept and `YOUNG MEERA` untouched,
+the role, turn and alias still on the profile; merging `SURESH` into `SURESH KADAM` lands on the
+survivor with `SURESH × 1` among its cues and three records; Delete is disabled on a present record;
+the map draws three rows in both themes. Seven tests.
+
+## Beats route removed: a second rendering of the outline with nothing reading it
+
+**Ruled by the client, 2026-09-12: the `/beats` route is cut.** Not redesigned, not deferred -
+removed. The question put was whether a writer needed it; the answer was that it was "making
+things too much messy" and did not serve a purpose, and that is the ruling.
+
+### Why it did not earn its place
+
+The Outline and Beats phase built the route on one sentence - "a beat is an outline `beat` block" -
+and that sentence is what made the route redundant. Add, rename, reorder and delete were already
+the Outline's (`⌘⇧B` is a block button). What the route added that the Outline could not say was a
+typed duration, a free minute position on a track, an `x/y` spot on an unplaced canvas, and a
+beat → scene link on `scenes.beats`. None of those numbers was anchored to anything: a beat "placed
+at 6'" was a number the writer made up and the app could not check, and **no designed consumer
+read any of it** - the Insights bundle's pacing and presence views, Timeline and Storyboard mention
+no beat. The only surface it reached outside itself was the Outline panel's `Beats linked · N of M`
+row. A route whose unique data nothing reads is a second rendering of the outline with a table
+attached, and that is what was cut.
+
+### What went
+
+- The route in both shapes (`[episodeId]/(writing)/beats` and `(film)/(writing)/beats`), `_beats/`,
+  `lib/beats/`, `?view=beats|arrangement` from `SUB_VIEW_SCHEMAS`, the `beats` row of the episode
+  nav and `EpisodeNavMeta.beats`, the `⧗` glyph (AGENTS.md's set is seventeen), `@folio/contracts`'
+  `beats.ts`, `packages/db`'s `schema/beats.ts` and `repositories/beats.ts`, the `.folio-beat-*`
+  classes, and the three Beats tests of `outline-beats.spec.ts` - the two Outline tests survive as
+  `outline-route.spec.ts`.
+- The Outline panel's `Beats linked` row (the bundle draws it; the route was the only thing that
+  linked one), the outline save's `beats` count (it fed the nav row), and `writeBeatHeadline` (the
+  route was the only writer of a `Name: line` block).
+- The workspace is **thirteen routes**; the episode nav is **six rows**, Storyboard still above
+  Scenes. Every count in `routes.ts`, the unit tests, the E2E contract and AGENTS.md was moved.
+
+### What stays, and one thing left undone
+
+- **The outline's `beat` block is untouched.** It is one of AGENTS.md's seven, the toolbar still
+  makes one, its number is still its ordinal, and its bold lead still ends at the first colon
+  (`packages/script`'s `beats.ts` keeps `readBeatHeadline` and `BEAT_HEADLINE_SEPARATOR` for the
+  editor's decoration and the panel's count).
+- **`scenes.beats` stays, opaque again.** The column predates the route (declared in `0000` for
+  "beat links") and `derive` carries it through every reconcile; rows the route wrote keep their
+  ids, unread. Dropping it would touch the derived-cache reconcile for nothing.
+- **The `beats` table is orphaned, not dropped.** Its Drizzle definition is gone, so the schema no
+  longer knows the table and the next `db:generate` will emit `DROP TABLE beats`. That migration was
+  **not** written in this change: a concurrent session had `0008` in flight and a generated
+  snapshot would have folded its half-landed schema in. Whoever runs `db:generate` next will get the
+  drop; it is expected, and the table's only writer is gone. (AGENTS.md, When to ask first: a
+  migration that drops a column is asked for - it was, and this section is the answer.)
+
+### Flagged
+
+- The Script route's Info panel still prints `Beats: 0` - the bundle's row, the outline's block
+  count, not read on the save path for the reason `lib/script/stats.ts` gives. Unchanged.
+- `Route - Beats.dc.html` and its screenshot stay in the design bundle as the record of what was
+  drawn; the README's override table now says not to build it.

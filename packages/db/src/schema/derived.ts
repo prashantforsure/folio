@@ -1,3 +1,4 @@
+import { CHARACTER_GROUPS } from '@folio/contracts'
 import { CONFIDENCES, INTERIOR_EXTERIOR, LIGHT_STATES, PRESENCE_STATES, RESOLVE_ROW_STATES } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import {
@@ -20,7 +21,7 @@ import {
   timestampColumn,
   updatedAtColumn,
 } from './columns'
-import { projects, users } from './tenancy'
+import { episodes, projects, users } from './tenancy'
 
 /**
  * The derived entity caches - and the authored rows they must never touch.
@@ -37,9 +38,10 @@ import { projects, users } from './tenancy'
  * this side the guarantee has to be re-established by a different mechanism,
  * and the mechanism is that authored and derived live in **different tables**:
  *
- *   characters                  AUTHORED       name, bio, notes
+ *   characters                  AUTHORED       name, bio, notes, the profile
  *   character_bound_cues        AUTHORED       the alias table's authored half
  *   character_relationships     AUTHORED
+ *   character_arc_turns         AUTHORED
  *   character_derivations       DERIVED CACHE  counts, presence, scenes
  *   character_cue_tallies       DERIVED CACHE  the counted spellings
  *
@@ -70,6 +72,7 @@ export const resolveSubjectKindEnum = pgEnum('resolve_subject_kind', [
 export const resolveVerdictEnum = pgEnum('resolve_verdict', ['accepted', 'rejected'])
 export const interiorExteriorEnum = pgEnum('interior_exterior', INTERIOR_EXTERIOR)
 export const lightEnum = pgEnum('light', LIGHT_STATES)
+export const characterGroupEnum = pgEnum('character_group', CHARACTER_GROUPS)
 
 // ---------------------------------------------------------------------------
 // Characters
@@ -93,6 +96,13 @@ export const lightEnum = pgEnum('light', LIGHT_STATES)
  * turned out to be one person. The row is kept rather than deleted so that
  * anything still pointing at the loser resolves, which is the same reasoning as
  * a node tombstone.
+ *
+ * The profile columns (Characters route phase) are the "profile, arc and
+ * relationships authored on top" of the spec: group, role, age, the three
+ * drives each with a source line, voice rules, and the writer's key lines as
+ * dialogue node ids. `@folio/contracts`'s `characters.ts` says what each is
+ * for. All authored; a re-derive touches none of them, which the table split
+ * guarantees rather than a comment.
  */
 export const characters = pgTable(
   'characters',
@@ -104,6 +114,18 @@ export const characters = pgTable(
     notes: jsonb('notes').notNull().default(sql`'{}'::jsonb`),
     /** Set when the writer merged this record into another. Never derived. */
     mergedInto: uuid('merged_into'),
+    group: characterGroupEnum('group').notNull().default('supporting'),
+    role: text('role'),
+    age: text('age'),
+    wants: text('wants'),
+    wantsSource: text('wants_source'),
+    needs: text('needs'),
+    needsSource: text('needs_source'),
+    flaw: text('flaw'),
+    flawSource: text('flaw_source'),
+    voiceRules: text('voice_rules').array().notNull().default(sql`ARRAY[]::text[]`),
+    /** Dialogue node ids. Not a foreign key: a line that leaves the script is dropped on read. */
+    keyLines: uuid('key_lines').array().notNull().default(sql`ARRAY[]::uuid[]`),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
@@ -166,11 +188,50 @@ export const characterRelationships = pgTable(
       .notNull()
       .references(() => characters.id, { onDelete: 'cascade' }),
     what: text('what').notNull(),
+    /** How it moves across the draft. Authored beside `what`; the shared-scene count is derived. */
+    shift: text('shift'),
   },
   (table) => [
     primaryKey({ columns: [table.characterId, table.otherId] }),
     index('character_relationships_project_idx').on(table.projectId),
     check('character_relationships_not_self', sql`${table.characterId} <> ${table.otherId}`),
+  ],
+)
+
+/**
+ * One turn of a character's arc. AUTHORED.
+ *
+ * "Arc beats with an **unwritten** flag." A turn is a line of the writer's
+ * and, when it names one, a scene: `scene_node_id` is the heading node's id
+ * on the pattern of `scenes.scene_node_id` - **no foreign key to `nodes`**,
+ * so a heading that leaves the script and comes back by undo finds its turn
+ * still pointing at it. The route prints the scene's current episode and
+ * number, so a turn survives a renumbering; a turn with no scene, or whose
+ * scene is absent, is what the profile flags as "not on the page". The flag
+ * is read from the join, not stored, so it cannot disagree with the script.
+ *
+ * `position` orders the turns within a record; the route keeps it dense.
+ */
+export const characterArcTurns = pgTable(
+  'character_arc_turns',
+  {
+    id: idColumn(),
+    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    /** The heading node's id, or null for a turn not on the page. Not a foreign key. */
+    sceneNodeId: uuid('scene_node_id'),
+    text: text('text').notNull(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [
+    index('character_arc_turns_character_idx').on(table.characterId, table.position),
+    index('character_arc_turns_project_idx').on(table.projectId),
+    check('character_arc_turns_position_not_negative', sql`${table.position} >= 0`),
+    check('character_arc_turns_text_not_empty', sql`length(btrim(${table.text})) > 0`),
   ],
 )
 
@@ -260,6 +321,11 @@ export const characterCueTallies = pgTable(
  * "it is reported as data and the record rolls up as a root, never thrown
  * over". A constraint that rejected the write would turn a reportable data
  * problem into a failed save, which is the opposite of what the pure core does.
+ *
+ * `merged_into` (Locations route phase) is the same tombstone `characters`
+ * carries: set when the writer merged this record into another, kept rather
+ * than deleted so a `@mention` or a scene still pointing at the loser can
+ * follow it. Never derived.
  */
 export const locations = pgTable(
   'locations',
@@ -272,6 +338,8 @@ export const locations = pgTable(
     scheduledDays: integer('scheduled_days').notNull().default(0),
     description: text('description'),
     notes: jsonb('notes').notNull().default(sql`'{}'::jsonb`),
+    /** Set when the writer merged this record into another. Never derived. */
+    mergedInto: uuid('merged_into'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
@@ -281,6 +349,40 @@ export const locations = pgTable(
     check('locations_name_not_empty', sql`length(btrim(${table.name})) > 0`),
     check('locations_not_own_parent', sql`${table.parentId} IS DISTINCT FROM ${table.id}`),
     check('locations_scheduled_days_not_negative', sql`${table.scheduledDays} >= 0`),
+    check('locations_not_merged_into_self', sql`${table.mergedInto} IS DISTINCT FROM ${table.id}`),
+  ],
+)
+
+/**
+ * The arc note a writer keeps on a location, one per episode. AUTHORED.
+ *
+ * The Locations spec's "an arc note per episode" - "How this place changes"
+ * on the record view: `Introduced dry. The tap coughs; nobody panics yet.`
+ * against E1. Keyed by the episode row, not its slug (ADR 0002), so a
+ * reorder that rewrites `ordinal` leaves the note on the episode it was
+ * written about. A note is a line of the writer's and nothing derived hangs
+ * off it; a re-derive touches none of this, which the table split
+ * guarantees rather than a comment. The pure core's `entities.ts` names
+ * arc notes as "schema (`packages/db`)", and this is that schema.
+ */
+export const locationArcNotes = pgTable(
+  'location_arc_notes',
+  {
+    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id, { onDelete: 'cascade' }),
+    episodeId: uuid('episode_id')
+      .notNull()
+      .references(() => episodes.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.locationId, table.episodeId] }),
+    index('location_arc_notes_project_idx').on(table.projectId),
+    check('location_arc_notes_text_not_empty', sql`length(btrim(${table.text})) > 0`),
   ],
 )
 
@@ -385,11 +487,10 @@ export const locationSluglineTallies = pgTable(
  *
  * `beats` and `threads` are opaque strings: neither was a table when the
  * column was declared, and they are carried so a re-derive cannot drop them.
- * `beats` now holds **beat block node ids** - the Beats route writes them
- * (`repositories/beats.ts`, "a beat names the scenes that deliver it") and
- * reads them back inverted. Still not a foreign key: a beat block that leaves
- * the outline leaves its id here, and the route lists only links whose block
- * exists. `threads` is still opaque; Timeline is not a table.
+ * Nothing writes `beats` any more - the Beats route that filled it with
+ * outline beat block ids was removed (`docs/build-decisions.md`, "Beats
+ * route removed"); rows written before that keep their ids, unread. Neither
+ * column is a foreign key; Timeline is not a table.
  */
 export const scenes = pgTable(
   'scenes',

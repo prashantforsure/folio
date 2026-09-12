@@ -42,7 +42,7 @@ import { stamp, stampOrNull } from './mapping'
  * ## What is read, and from where
  *
  * The board is one column per present scene of the episode - the same
- * chain `workspace.ts` and `beats.ts` walk: `scene_derivations` in state
+ * chain `workspace.ts` walks: `scene_derivations` in state
  * `present`, through the heading node to the episode's screenplay document.
  * Under each column, its `shots` in `order_key` order, and for each shot the
  * latest `frame_generations` row with its `jobs` row, folded into a

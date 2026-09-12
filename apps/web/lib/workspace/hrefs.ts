@@ -38,7 +38,8 @@ export type EpisodeAddress = {
 }
 
 type ProjectPath = `/app/project/${string}`
-type ProjectRoutePath = `${ProjectPath}/${ProjectRoute}`
+export type ProjectRoutePath = `${ProjectPath}/${ProjectRoute}`
+export type CharacterPath = `${ProjectPath}/characters/${string}`
 type CollapsedEpisodePath = `${ProjectPath}/${EpisodeRoute}`
 type EpisodicEpisodePath = `${ProjectPath}/${string}/${EpisodeRoute}`
 
@@ -51,6 +52,15 @@ export const projectRouteHref = (projectId: ProjectId, route: ProjectRoute): Pro
 
 export const projectSettingsHref = (projectId: ProjectId): `${ProjectPath}/settings` =>
   `/app/project/${projectId}/settings`
+
+/**
+ * One character's profile: `/characters/:characterId`, the route the spec
+ * writes beside `/characters`. The id is the record's UUID - a character is
+ * "a stable UUID with a name attribute" - so the URL survives every rename
+ * and there is no slug to mint or to go stale.
+ */
+export const characterHref = (projectId: ProjectId, characterId: string): CharacterPath =>
+  `/app/project/${projectId}/characters/${characterId}`
 
 /** The episode's index; it redirects to `./script`. Episodic shape only. */
 export const episodeHref = (

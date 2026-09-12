@@ -46,11 +46,10 @@ import { OutlineStatusBar } from './outline-status-bar'
  *
  * ## What the panel and the nav read from a save
  *
- * The nav's `Outline` row prints `N acts` and its `Beats` row the beat
- * count, both read from this document on the server. A save returns the
- * two counts from the list it wrote and the workspace writes them into the
- * nav's rows directly (`data-nav-meta`), so the chrome stays honest without
- * re-rendering the layout on every keystroke.
+ * The nav's `Outline` row prints `N acts`, read from this document on the
+ * server. A save returns the count from the list it wrote and the workspace
+ * writes it into the nav's row directly (`data-nav-meta`), so the chrome
+ * stays honest without re-rendering the layout on every keystroke.
  *
  * ## The panel tab
  *
@@ -68,7 +67,6 @@ export type OutlineDraft = {
   readonly value: OutlineValue
   readonly labels: readonly MentionLabel[]
   readonly stats: OutlineStats
-  readonly beatsLinked: number
   readonly threads: readonly ThreadCard[]
   readonly history: readonly RevisionRow[]
 }
@@ -131,12 +129,10 @@ const readValue = (value: readonly TElement[]): { readonly beatOrdinal: Readonly
   return { beatOrdinal, lastBlockId: last, beats: beatOrdinal.size, acts }
 }
 
-/** The nav's two rows this document feeds, updated in place after a save. */
-const writeNavMeta = (acts: number, beats: number): void => {
+/** The nav's row this document feeds, updated in place after a save. */
+const writeNavMeta = (acts: number): void => {
   const outline = document.querySelector('[data-nav-meta="outline"]')
   if (outline !== null) outline.textContent = `${String(acts)} act${acts === 1 ? '' : 's'}`
-  const beatsRow = document.querySelector('[data-nav-meta="beats"]')
-  if (beatsRow !== null) beatsRow.textContent = String(beats)
 }
 
 const dateLabel = (iso: string): string => {
@@ -270,7 +266,7 @@ export const OutlineWorkspace = ({
           baselineIds.current = ids
           setConflict(result.conflict)
           setSaveState({ kind: 'saved', at: Date.now() })
-          writeNavMeta(result.acts, result.beats)
+          writeNavMeta(result.acts)
         } else if (result.status === 'ids-unusable') {
           setSaveState({ kind: 'error', message: `${String(result.ids.length)} id(s) were already used. Reload to continue.` })
         } else {
@@ -455,7 +451,7 @@ export const OutlineWorkspace = ({
               <span>
                 <b className="font-mono font-bold text-ink2">⌥↑↓</b> move a block
               </span>
-              <span>Beats written here sync to the Beats route; the script is never rewritten from this page</span>
+              <span>The script is never rewritten from this page</span>
             </div>
           </div>
         </div>
@@ -468,8 +464,6 @@ export const OutlineWorkspace = ({
             tab={panel}
             onPickTab={session.setSideTab}
             blockCount={value.length}
-            beatsLinked={draft?.beatsLinked ?? 0}
-            beatCount={shape.beats}
             stats={draft === null ? { scenes: 0, words: 0, characters: 0, locations: 0, beats: 0, shots: 0, relations: 0 } : { ...draft.stats, words, beats: shape.beats }}
             threads={draft?.threads ?? []}
             history={draft?.history ?? []}

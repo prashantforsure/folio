@@ -353,6 +353,35 @@ export const recordResolveDecision = async (
 }
 
 /**
+ * Several decisions on one row, in one statement. What "Walk-on" writes: a
+ * rejection of every candidate and of `new-record` together, so the row
+ * stands open with no proposal and the writer is never asked again. Same
+ * `onConflictDoNothing` as the singular, for the same reason.
+ */
+export const recordResolveDecisions = async (
+  scope: ProjectScope,
+  subject: Parameters<typeof resolveRowKey>[0],
+  decisions: readonly { readonly verdict: 'accepted' | 'rejected'; readonly target: ProposalTarget }[],
+): Promise<void> => {
+  if (decisions.length === 0) return
+  await dbOf(scope)
+    .insert(resolveDecisions)
+    .values(
+      decisions.map((decision) => ({
+        ...tenant(scope),
+        rowKey: resolveRowKey(subject),
+        verdict: decision.verdict,
+        target: decision.target,
+        targetKey: proposalTargetKey(decision.target),
+        decidedBy: scope.actor,
+      })),
+    )
+    .onConflictDoNothing({
+      target: [resolveDecisions.projectId, resolveDecisions.rowKey, resolveDecisions.targetKey],
+    })
+}
+
+/**
  * Every decision made in this project, for feeding back into the next pass.
  *
  * A rejection has to outlive the derived row it rejected - a cue deleted and

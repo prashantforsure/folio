@@ -22,10 +22,10 @@ import {
  *
  *   - the rail is eight items, in order, and its active state is both the
  *     2px bar at `left:-5px` and the `--sel` background;
- *   - Writing stays lit across all seven episode routes, Notes and Revisions
+ *   - Writing stays lit across all six episode routes, Notes and Revisions
  *     included, and Production lights its own item;
  *   - the episode nav measures exactly 238px, in the order Script · Outline
- *     · Beats · Storyboard · Scenes · Revisions · Notes;
+ *     · Storyboard · Scenes · Revisions · Notes;
  *   - every nav meta on a new episode prints the empty convention;
  *   - every sub-view param resolves to its first value, and a value that is
  *     not a view is a 404;
@@ -170,7 +170,7 @@ let seriesId = ''
 let filmId = ''
 const RUN = Date.now().toString(36)
 
-test('the contract is fourteen routes', () => {
+test('the contract is thirteen routes', () => {
   expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
   expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'episode')).toHaveLength(8)
   expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'project')).toHaveLength(6)
@@ -202,7 +202,7 @@ test('＋ adds a second episode to the series and the board lists both', async (
 })
 
 for (const theme of THEMES) {
-  test(`walks all fourteen routes of a series, ${theme} theme`, async ({ page, account }) => {
+  test(`walks all thirteen routes of a series, ${theme} theme`, async ({ page, account }) => {
     await signIn(page, account)
     await page.goto(`/app/project/${seriesId}/ep_001/script`)
     await setTheme(page, theme)

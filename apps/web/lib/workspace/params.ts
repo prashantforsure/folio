@@ -82,13 +82,12 @@ const first = <const T extends readonly [string, ...string[]]>(values: T) =>
 
 /**
  * One schema per route. A route with no sub-view has an empty object, so
- * `parseSubViews` is total over the fourteen and a page cannot forget to call
+ * `parseSubViews` is total over the thirteen and a page cannot forget to call
  * it.
  */
 export const SUB_VIEW_SCHEMAS = {
   script: z.object({}),
   outline: z.object({}),
-  beats: z.object({ view: first(['beats', 'arrangement']) }),
   storyboard: z.object({ view: first(['board', 'canvas', 'list']) }),
   scenes: z.object({ view: first(['cards', 'index', 'list']) }),
   revisions: z.object({ view: first(['diff', 'history']) }),
