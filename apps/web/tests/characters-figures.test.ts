@@ -47,6 +47,9 @@ const row = (
   speaking: [],
   episode: episodeSlug(`ep_${String(episodeOrdinal).padStart(3, '0')}`),
   episodeOrdinal,
+  ie: 'INT',
+  light: 'day',
+  timeOfDay: 'DAY',
   ...parts,
 })
 

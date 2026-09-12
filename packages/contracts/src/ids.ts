@@ -89,6 +89,18 @@ export type ShotId = Branded<'ShotId'>
 export type GenerationId = Branded<'GenerationId'>
 /** An arc turn on a character record. Authored; see `characters.ts`. */
 export type ArcTurnId = Branded<'ArcTurnId'>
+/** A story thread on the Timeline. Authored; never a comment `ThreadId`. See `timeline.ts`. */
+export type StoryThreadId = Branded<'StoryThreadId'>
+/** A bible entry. Authored; `/bible/:entryId` is this UUID. See `bible.ts`. */
+export type BibleEntryId = Branded<'BibleEntryId'>
+/** One numbered fact on a bible entry. Authored. */
+export type BibleFactId = Branded<'BibleFactId'>
+/** An open question on a bible entry, with an author. Authored. */
+export type BibleQuestionId = Branded<'BibleQuestionId'>
+/** One ordered key/value field of the Pitch. Authored. */
+export type BiblePitchFieldId = Branded<'BiblePitchFieldId'>
+/** A glossary term. Authored; its use count is not. */
+export type BibleTermId = Branded<'BibleTermId'>
 
 export const projectId = (raw: string): ProjectId => raw as ProjectId
 export const episodeId = (raw: string): EpisodeId => raw as EpisodeId
@@ -104,6 +116,12 @@ export const jobId = (raw: string): JobId => raw as JobId
 export const shotId = (raw: string): ShotId => raw as ShotId
 export const generationId = (raw: string): GenerationId => raw as GenerationId
 export const arcTurnId = (raw: string): ArcTurnId => raw as ArcTurnId
+export const storyThreadId = (raw: string): StoryThreadId => raw as StoryThreadId
+export const bibleEntryId = (raw: string): BibleEntryId => raw as BibleEntryId
+export const bibleFactId = (raw: string): BibleFactId => raw as BibleFactId
+export const bibleQuestionId = (raw: string): BibleQuestionId => raw as BibleQuestionId
+export const biblePitchFieldId = (raw: string): BiblePitchFieldId => raw as BiblePitchFieldId
+export const bibleTermId = (raw: string): BibleTermId => raw as BibleTermId
 
 // ---------------------------------------------------------------------------
 // The schemas
@@ -141,6 +159,12 @@ export const JobIdSchema = brandedUuid(jobId)
 export const ShotIdSchema = brandedUuid(shotId)
 export const GenerationIdSchema = brandedUuid(generationId)
 export const ArcTurnIdSchema = brandedUuid(arcTurnId)
+export const StoryThreadIdSchema = brandedUuid(storyThreadId)
+export const BibleEntryIdSchema = brandedUuid(bibleEntryId)
+export const BibleFactIdSchema = brandedUuid(bibleFactId)
+export const BibleQuestionIdSchema = brandedUuid(bibleQuestionId)
+export const BiblePitchFieldIdSchema = brandedUuid(biblePitchFieldId)
+export const BibleTermIdSchema = brandedUuid(bibleTermId)
 
 // The five brands the pure core owns must survive the round trip through Zod.
 // If one of these stops compiling, a schema has started minting its own brand

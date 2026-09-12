@@ -380,3 +380,51 @@ export {
   outlineWordCount,
   readBeatHeadline,
 } from './beats'
+
+export type {
+  Chronology,
+  ContinuityFinding,
+  ContinuityFindingKind,
+  StoryDayColumn,
+  StoryJump,
+  StorySpan,
+  StoryTime,
+  TimelineScene,
+} from './timeline'
+export {
+  STORY_CLOCK_PATTERN,
+  chronology,
+  compareStoryTime,
+  continuityFindings,
+  formatStoryDay,
+  formatStoryTime,
+  isStoryClock,
+  precedesStoryTime,
+  storyJumps,
+  storySpan,
+} from './timeline'
+
+export type {
+  BibleEntryKind,
+  BibleEntryStatus,
+  BibleSection,
+  ConflictCandidate,
+  TermUsage,
+} from './bible'
+export {
+  BIBLE_ENTRY_KINDS,
+  BIBLE_ENTRY_STATUSES,
+  BIBLE_ENTRY_STATUS_LABEL,
+  BIBLE_SECTIONS,
+  BIBLE_SECTION_LABEL,
+  PITCH_FIELD_KEYS,
+  PITCH_TITLE,
+  isBibleEntryStatus,
+  isBibleSection,
+  isCheckedAgainstDraft,
+  isReadableByLenses,
+  liveCites,
+  openConflicts,
+  sceneOpenings,
+  termUsage,
+} from './bible'

@@ -21,6 +21,7 @@ import {
 } from '../schema'
 import { dbOf, scoped } from '../scope'
 import type { ProjectScope } from '../scope'
+import { countOpenCanonConflicts } from './bible'
 import { toEpisode } from './projects'
 import { countAcceptedShots } from './storyboard'
 
@@ -107,31 +108,34 @@ const screenplayPages = async (
  * draws. The spec makes the badge "its pending count", and a walk-on is not
  * pending - it is answered, and `derive` keeps it answered.
  *
- * **`bible` is the count of an empty set, and it is written out as one.**
- * There is no bible table in this schema - `@folio/contracts` lists bible
- * entries as deliberately absent from this phase - and a canon conflict is a
- * disagreement between a canon entry and the script. With no entries there is
- * nothing to disagree with, so the count is zero by construction, not by
- * assumption. It is a constant here because the set it counts has no table to
- * be queried; when `bible_entries` lands, this becomes a query like the two
- * above, and the badge changes without the chrome knowing.
+ * **`bible` is the open canon conflicts** - facts of `canon` entries carrying
+ * a recorded conflict whose scene is still present in the derived cache
+ * (`bible.ts`, `countOpenCanonConflicts`; the same three conditions
+ * `@folio/script`'s `openConflicts` applies). Until the Bible phase this was
+ * the constant `0`, "the count of an empty set, written out as one" - there
+ * was no bible table. Now it is a query like the two above, and the badge
+ * changed without the chrome knowing, as that note promised.
+ *
+ * The two reads run **in parallel**: over the transaction pooler each
+ * statement is two round trips (`../client.ts`), and this runs on every
+ * workspace render, so the second must not wait on the first.
  */
 export const readRailBadges = async (scope: ProjectScope): Promise<RailBadges> => {
-  const rows = await dbOf(scope)
-    .select({ kind: resolveRows.subjectKind, n: count() })
-    .from(resolveRows)
-    .where(scoped(scope, resolveRows, eq(resolveRows.state, 'open'), isNotNull(resolveRows.proposalTarget)))
-    .groupBy(resolveRows.subjectKind)
+  const [rows, bible] = await Promise.all([
+    dbOf(scope)
+      .select({ kind: resolveRows.subjectKind, n: count() })
+      .from(resolveRows)
+      .where(scoped(scope, resolveRows, eq(resolveRows.state, 'open'), isNotNull(resolveRows.proposalTarget)))
+      .groupBy(resolveRows.subjectKind),
+    countOpenCanonConflicts(scope),
+  ])
   const open = (kind: 'cue' | 'slugline'): number => rows.find((row) => row.kind === kind)?.n ?? 0
   return {
     characters: open('cue'),
     locations: open('slugline'),
-    bible: OPEN_CANON_CONFLICTS_WITHOUT_A_BIBLE,
+    bible,
   }
 }
-
-/** See `readRailBadges`. Zero entries, zero conflicts; not a placeholder. */
-const OPEN_CANON_CONFLICTS_WITHOUT_A_BIBLE = 0
 
 // ---------------------------------------------------------------------------
 // The episode board

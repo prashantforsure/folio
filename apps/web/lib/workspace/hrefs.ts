@@ -40,6 +40,8 @@ export type EpisodeAddress = {
 type ProjectPath = `/app/project/${string}`
 export type ProjectRoutePath = `${ProjectPath}/${ProjectRoute}`
 export type CharacterPath = `${ProjectPath}/characters/${string}`
+export type LocationPath = `${ProjectPath}/locations/${string}`
+export type BibleEntryPath = `${ProjectPath}/bible/${string}`
 type CollapsedEpisodePath = `${ProjectPath}/${EpisodeRoute}`
 type EpisodicEpisodePath = `${ProjectPath}/${string}/${EpisodeRoute}`
 
@@ -72,3 +74,20 @@ export const episodeRouteHref = (address: EpisodeAddress, route: EpisodeRoute): 
   address.shape === 'collapsed'
     ? `/app/project/${address.projectId}/${route}`
     : `/app/project/${address.projectId}/${address.episode}/${route}`
+
+/**
+ * One location's record: `/locations/:locationId`, as the spec writes it
+ * beside `/locations`. The record's UUID, for the reason `characterHref`
+ * gives - the same identity model, so the same URL shape.
+ */
+export const locationHref = (projectId: ProjectId, locationId: string): LocationPath =>
+  `/app/project/${projectId}/locations/${locationId}`
+
+/**
+ * One bible entry: `/bible/:entryId`, as the spec writes it beside `/bible`.
+ * The entry's UUID - an entry is authored, retitled freely, and its cites
+ * and conflicts point at it by id - so the URL survives every retitle and
+ * there is no slug to mint or to go stale.
+ */
+export const bibleEntryHref = (projectId: ProjectId, entryId: string): BibleEntryPath =>
+  `/app/project/${projectId}/bible/${entryId}`

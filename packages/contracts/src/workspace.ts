@@ -35,12 +35,11 @@ import { EpisodeSchema } from './tenancy'
  *                 is a cue pointing at no record.
  *   `locations`   `resolve_rows` where `subject_kind = 'slugline'` and
  *                 `state = 'open'`.
- *   `bible`       There is no bible table - `index.ts` lists bible entries as
- *                 deliberately absent. A canon conflict is a disagreement
- *                 between a canon entry and the script, so with zero entries
- *                 there are zero conflicts. The repository returns the count of
- *                 that empty set, which is `0`, and says so where it does it.
- *                 When the table lands, this is the field that changes.
+ *   `bible`       `bible_facts` of `canon` entries carrying a recorded conflict
+ *                 whose scene is present - open canon conflicts, the three
+ *                 conditions `@folio/script`'s `openConflicts` states. Was
+ *                 the constant `0` until the Bible phase, when there was no
+ *                 table; the field did not change, the repository did.
  */
 export const RailBadgesSchema = z.object({
   characters: z.int().min(0),

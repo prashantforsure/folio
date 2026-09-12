@@ -132,24 +132,27 @@ export const readDerivationInput = async (scope: ProjectScope): Promise<DerivedE
     sluglinesByLocation.set(row.locationId, list)
   }
 
-  const locationRecords: LocationRecord[] = locationRows.map((row) => ({
-    id: row.id as LocationId,
-    authored: {
-      name: row.name,
-      parent: row.parentId === null ? null : (row.parentId as LocationId),
-      boundSluglines: sluglinesByLocation.get(row.id) ?? [],
-      scheduledDays: row.scheduledDays,
-      description: row.description,
-      notes: emptyNotes(row.notes),
-    },
-    sluglines: [],
-    children: [],
-    depth: 0,
-    own: NO_COUNTS,
-    rollup: NO_COUNTS,
-    scenes: [],
-    presence: 'absent',
-  }))
+  const locationRecords: LocationRecord[] = locationRows
+    // A record merged into another is retired, as a merged character is.
+    .filter((row) => row.mergedInto === null)
+    .map((row) => ({
+      id: row.id as LocationId,
+      authored: {
+        name: row.name,
+        parent: row.parentId === null ? null : (row.parentId as LocationId),
+        boundSluglines: sluglinesByLocation.get(row.id) ?? [],
+        scheduledDays: row.scheduledDays,
+        description: row.description,
+        notes: emptyNotes(row.notes),
+      },
+      sluglines: [],
+      children: [],
+      depth: 0,
+      own: NO_COUNTS,
+      rollup: NO_COUNTS,
+      scenes: [],
+      presence: 'absent',
+    }))
 
   const authoredScene = new Map(sceneRows.map((row) => [row.sceneNodeId, row]))
   const sceneRecords: SceneRecord[] = sceneDerivationRows.map((row) => {
@@ -298,7 +301,7 @@ export const readMentionLabels = async (
       .where(scoped(scope, characters))
       .orderBy(asc(characters.name)),
     db
-      .select({ id: locations.id, name: locations.name })
+      .select({ id: locations.id, name: locations.name, mergedInto: locations.mergedInto })
       .from(locations)
       .where(scoped(scope, locations))
       .orderBy(asc(locations.name)),
@@ -307,7 +310,9 @@ export const readMentionLabels = async (
     ...characterRows
       .filter((row) => row.mergedInto === null)
       .map((row) => ({ entity: 'character' as const, id: characterId(row.id), label: row.name })),
-    ...locationRows.map((row) => ({ entity: 'location' as const, id: locationId(row.id), label: row.name })),
+    ...locationRows
+      .filter((row) => row.mergedInto === null)
+      .map((row) => ({ entity: 'location' as const, id: locationId(row.id), label: row.name })),
   ]
 }
 

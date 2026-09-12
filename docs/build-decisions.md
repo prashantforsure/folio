@@ -1293,3 +1293,280 @@ attached, and that is what was cut.
   count, not read on the save path for the reason `lib/script/stats.ts` gives. Unchanged.
 - `Route - Beats.dc.html` and its screenshot stay in the design bundle as the record of what was
   drawn; the README's override table now says not to build it.
+
+---
+
+## Locations route phase: the tree on screen, and the second sanctioned write-back
+
+### What was built, table by table
+
+Migration **`0009`** (`packages/db/src/schema/derived.ts`, applied to the dev Supabase project) adds
+the two things the route still needed. No derived table changed and no derivation path writes
+either:
+
+- **`locations.merged_into`** — the same tombstone `characters` carries: set when the writer merged
+  this record into another, kept so a `@mention` or a scene still pointing at the loser can follow
+  it. `readDerivationInput` and `readMentionLabels` skip a merged record as they skip a merged
+  character.
+- **`location_arc_notes`** — one note per location per episode, the spec's "an arc note per
+  episode" ("How this place changes"). Keyed by the episode row, not its slug (ADR 0002), so a
+  reorder leaves the note on the episode it was written about. RLS on, the member-all policy,
+  `anon` revoked.
+
+`0009` was generated with the orphaned `beats` table temporarily re-declared, so that drizzle-kit's
+non-interactive run did not have to be asked whether `location_arc_notes` was a *rename* of
+`beats`, and so that the `DROP TABLE beats` — an ask-first item — stayed out of this route's
+migration. The Timeline phase, running beside this one, then wrote it as `0010` on its own.
+
+Everything else the route reads already existed: `locations` (name, `parent_id`, `description`,
+`scheduled_days`), `location_bound_sluglines`, `location_derivations` with its `own_*` / `rollup_*`
+counts, `location_slugline_tallies`, and the queue's `slugline` and `structure` rows. The
+repository is `repositories/locations.ts`; the route joins the halves by id in
+`lib/locations/server.ts` and never recombines them into a row.
+
+### The tree, and who writes it
+
+AGENTS.md, Entity identity: "a location is a **tree, not a list**", and the pure core's ruling is
+that the records come from the headings while the edges are drawn by a human. `locations.parent_id`
+is written by exactly two things, both the writer's act:
+
+- **`Inside`** on the record head — a select over every record outside the record's own subtree —
+  which calls `setParent`. A cycle is refused before the write (`wouldCycle` in `figures.ts`); the
+  pure core would report one as data, but a writer asking for one is a mistake worth refusing.
+- **The resolve view's second list.** A record whose own name reads like `<head> - <rest>` gets the
+  pure core's structure proposal: `attach` under an existing record, or `new-parent` when two or
+  more sets share a head nobody has made. **Attach** writes the edge; **Create and attach** mints
+  the primary set by hand (its name bound as its set text, unless a live record already carries
+  that name) and then writes the edge; **Keep separate** records the rejection and the same guess
+  is never made again. Accepting one `new-parent` turns every sibling's proposal into an `attach`
+  on the next pass, which the E2E walk exercises.
+
+Every count on the route is the roll-up — `location_derivations.rollup_*`, the pure core's tree
+walk, stored — and the record's sub-location strip says so: "counted in the parent total". The
+header pill and the footer's `N locations` count **primary sets**, as the bundle's `locCount`
+does, because the number a production office wants is the number of sets.
+
+### The alias table, and what each button on the route writes
+
+- **Match** in the queue binds the set text to the proposed record (`bindSlugline`: one statement,
+  gated on the `(project_id, slugline)` unique index) and records an `accepted` decision.
+  **Other…** binds to a record the writer picks from the tree. **New record** records `accepted
+  new-record` so the next pass mints. There is no Walk-on: a heading is always somewhere, so a
+  slugline is never nobody.
+- **`＋ alias`** on the record binds any set text by hand — `THE CHAWL` on the Kamathi Chawl record
+  is the walk's example; a whole heading typed there is read down to its set with `readSlugline`
+  — and `×` unbinds, refusing the last one.
+- **Rename** is the second sanctioned write-back, built to the same shape as the character rename:
+  `renameLocationHeadings` (`@folio/script`'s `rename.ts`, 6 tests) rewrites every Scene node
+  whose set has the old name's key, keeping the prefix as typed (`INT.` stays `INT.`, `INT` stays
+  `INT`) and putting the time of day back after ` - `; `renameLocationRecord` swaps the name and
+  the name's alias-table row in one statement, refusing a set another record holds; a
+  `before_rename` version is taken of every document that changes; `rewriteHeadingNodes` writes
+  the changed nodes across every document in one statement, ids and order untouched, so every
+  scene record, synopsis, shot list and arc turn keyed by the heading node survives; the diff comes
+  back as *N headings across M episodes*. The record asks first and says the number.
+- **Merge into…** is one statement: the loser's bound set texts and arc notes move to the winner
+  (a note the winner already has for that episode stays the winner's), the loser's sub-locations
+  hang off the winner, a winner that hung off the loser takes the loser's parent so no cycle is
+  written, and the loser keeps its row with `merged_into` set. **Delete** is refused while the
+  record is present in the script; its sub-locations move up a level when it goes.
+
+A description and an arc note re-derive nothing. Binding, deciding, merging, renaming **and moving
+the edge** each await a project-wide pass before answering, because a parent set's counts are its
+subtree's and what the writer sees next is that pass's output.
+
+### `/locations/:locationId`, as the spec writes it
+
+The record's UUID, for the reason the Characters phase gave — the same identity model, so the
+same URL shape. `/locations` shows the first record in tree order on the record view; `breakdown`
+and `resolve` are project-wide and name none. A merged id redirects; an unknown UUID is a 404; a
+non-UUID segment is a 404 before any lookup. `?view=record | breakdown | resolve` is the sub-view
+param as every route's is.
+
+### Judgement calls in this phase, each reversible
+
+- **A rename rewrites the headings whose set *is* the name, not every bound alias and not a
+  descendant's heading.** `THE CHAWL` bound to Kamathi Chawl stays; `KAMATHI CHAWL - CORRIDOR` is
+  the corridor record's own name and stays when the chawl is renamed. The reading of "rewrites every
+  scene heading that uses it" taken here is every heading *that is the name*. Flagged: the other
+  reading rewrites the head segment of every descendant's heading too.
+- **The rebuilt heading normalises the separator to ` - `.** `EXT CHAWL CORRIDOR -- DAWN` renamed
+  reads `EXT KAMATHI CHAWL - DAWN`; the reading already collapsed the double hyphen to reach the
+  set, and ` - ` is what every other heading this product writes takes.
+- **Interior / exterior is read over the subtree, not stored.** A set is `INT.` in one heading
+  and `EXT.` in the next; the route prints `INT`, `EXT`, or `INT/EXT` from its scenes' readings,
+  and a primary set with no heading of its own reads its sub-sets'. `null` prints `—`.
+- **The kind line is computed** (`kindOf`): `Primary set · N sub-locations`, `Sub-location`,
+  `Recurring interior`, `Single exterior`, `0 scenes · record kept`. The bundle's fixture prose.
+- **"Sluglines that resolve here" are the counted headings** (`INT. CHAWL CORRIDOR - DAY × 6`, the
+  tallies as `derive` counts them, per heading spelling) plus every bound set text the script does
+  not contain at `× 0`. The bundle draws the prefix and set without the time; the tallies carry
+  the whole heading and that is what is shown.
+- **Pages are the measurement's eighths summed over the set's scenes**, at the project's format in
+  `paged` mode — the same row the episode board counts from — and `—` while none of them is
+  measured. "Screen time by episode" is in pages when the episodes are measured and in scenes
+  when they are not, and its label says which.
+- **The scene list's gist is the authored synopsis**, or for a primary set the sub-set the heading
+  resolved to. Nothing summarises a scene.
+- **The day/night bar has three states.** Day on the left, night on the right, and the `--line2`
+  track showing for a heading that says neither (`CONTINUOUS`, `LATER`); a two-way split would
+  fold those into day. `--day` / `--night` are new tokens in `packages/ui`, transcribed from the
+  bundle's two theme blocks, and `--text-8-5` is a new step of the type scale (the I/E label and
+  the chip letter).
+- **The nav's I/E column is 30px, not the bundle's 26px.** `INT/EXT` at 8.5px/600 with `.06em`
+  tracking is wider than 26px and collided with the name. Four pixels, flagged.
+- **The rail badge is unmatched sluglines only** — open `slugline` rows with a proposal, as the
+  spec writes it. Structure proposals show on the Resolve tab's list but do not count toward the
+  badge; the spec's badge copy names sluglines.
+- **`Editable` and `IdentityChip` moved to `packages/ui`** because two routes now use them
+  (AGENTS.md, Conventions > Files). `CharacterChip` stays in `_characters` as the one place a
+  character's name becomes an initial; the drawing is the shared chip.
+- **`SceneIndexRow` gained `ie`, `light` and `timeOfDay`**, read defensively off
+  `scene_derivations.reading`. The Characters route ignores them.
+- **Not drawn:** `Location report · PDF` (export is a job that does not exist; the Cast report
+  precedent); the bundle's description tags (no column); the reference thumbnails and the
+  `Establishing plate · E1 done` / `Night plate` rows (a plate concept nothing has, and invented
+  states are placeholders). The reference box is drawn and says in its title why it does nothing.
+  Shooting days are shown from the roll-up but not edited here — they are a Production fact.
+- **Membership, not role**, as everywhere.
+
+### Verified end to end
+
+`apps/web/e2e/locations-route.spec.ts` against the dev Supabase project through the running dev
+server on port 3000, with the Scenes phase's E2E account: the empty state in both themes with no
+badge, `?view=grid` and `/locations/not-a-uuid` both 404; an import with seven headings in five
+places — `KAMATHI CHAWL - CORRIDOR` twice, `KAMATHI CHAWL - COURTYARD`, `WARD OFFICE`,
+`WATER TANKER STAND`, `WATER TANKER`, `CORRIDOR` — derives exactly four records and two queue rows
+(`likely`, `possible`) with the badge, the column row and the tab all reading `2`, and two
+structure proposals for a `KAMATHI CHAWL` nobody has made; the corridor's record reads `INT`,
+`Recurring interior`, two headings at `× 1`, `1 / 1` day/night, first seen `E1 Sc 1`, last `E1 Sc
+3`; Match binds `WATER TANKER` and the badge reads `1`; New record mints `CORRIDOR` and the badge
+is gone; Create and attach mints `KAMATHI CHAWL` and hangs the corridor under it, the courtyard's
+proposal becomes an Attach and is taken, the nav shows the chawl first at `3` with two rows under
+it and the header still reads four sets, and all of it survives a reload; a description, an E1
+note and a `THE CHAWL` alias are authored and survive a reload; the minted `CORRIDOR` is moved
+inside the chawl through `Inside` and the roll-up reads `4`; renaming `KAMATHI CHAWL - CORRIDOR`
+to `Chawl Corridor` asks, says `2 headings will be rewritten`, reports `2 headings rewritten
+across 1 episode`, keeps the parent, and the Script route then shows `INT. CHAWL CORRIDOR -
+NIGHT` and `INT. CHAWL CORRIDOR - DAY` with the courtyard and the bare corridor untouched; merging
+`CORRIDOR` into `Chawl Corridor` lands on the survivor with `INT. CORRIDOR - NIGHT × 1` among its
+headings and `3` scenes, five records remain, the loser's URL follows the tombstone, and Delete is
+disabled on a present record; the breakdown draws five rows in tree order in both themes with the
+chawl's cell and total at `4`. Seven tests, 6.8 minutes.
+
+## Timeline route phase: two authored things, and an order the script never states
+
+The brief: "Story order versus what actually happened, across all episodes. Two authored things
+power it." Both were built as inputs a writer types, and nothing on the route parses a date out of
+a slugline - the walk imports scripts full of `DAY`, `NIGHT` and `DAWN` and proves the route is
+still empty until a day is given by hand.
+
+### What was built, table by table
+
+Two migrations, both applied to the dev Supabase project:
+
+- **`0010_drop_beats`** — the drop the "Beats route removed" section sanctioned and `0009` declined
+  to fold into the Locations route's migration. Alone in its file so it can be held back on its own.
+  The dev table held eight rows, all from the removed route's own E2E run.
+- **`0011_timeline_route`** (`packages/db/src/schema/timeline.ts`, `derived.ts`):
+  - **`story_threads`** — AUTHORED. `name`, `colour` (a closed enum, `story_thread_colour`),
+    `position`. RLS on, the member-all policy, `anon` revoked.
+  - **`scenes.threads`** now holds story thread ids, as text, in the writer's order. The column was
+    declared opaque in `0000` for exactly this; putting the link on the scene's authored row is what
+    makes it survive a re-derive for the same reason a synopsis does. **No foreign key**, on purpose:
+    a deleted thread is removed from every scene by `array_remove` in one statement before the row
+    goes, and any id that slips past is dropped on read - the `characters.key_lines` rule. The
+    **first** id is the grid row a scene's card sits in.
+  - **`scenes.story_day`** (any integer; Day 1 first by convention), **`scenes.story_clock`**
+    (`HH:MM`, 24-hour, checked; text because that shape sorts as a clock does), **`scenes.flashback`**.
+    A clock without a day is refused by the contract *and* a column check. `scenes.story_time` - the
+    opaque text of the same age - has no writer and is not dropped: a column drop is asked for.
+
+Both migrations were generated through drizzle-kit's own API (`generateDrizzleJson` /
+`generateMigration`) from a one-off script rather than `db:generate`, because the CLI wanted a TTY to
+ask whether `story_threads` was `beats` renamed; splitting the drop from the create is what made the
+question moot, and `db:generate` afterwards reports no schema changes.
+
+The pure core (`packages/script/src/timeline.ts`, 20 tests) owns everything that is a function of
+story time and page order: `compareStoryTime` (day, then clock, unclocked last), `precedesStoryTime`
+(strict; **an unknown clock never precedes** - two scenes on one day with one clock missing are in
+neither order, so a finding the writer cannot act on is never raised), `continuityFindings`,
+`storyJumps`, `chronology`, `storySpan`. Nothing in it reads a node.
+
+### A finding is a flag, not an error - and how a flashback is read
+
+A finding is exactly the brief's sentence: a scene whose story time precedes the scene before it on
+the page. Two readings of "the scene before it" were possible when flashbacks are involved, and the
+one taken is: **a flashback is skipped when looking back**. The scene after a flashback is compared
+with the last frame-story scene, not with the flashback - so returning to the present is not a jump,
+and a real step backwards hidden behind a flashback is still found (tested: `does not let a flashback
+hide a real step backwards`).
+
+The flag itself: a flashback-flagged scene that precedes still *is* a finding, and the core reports
+it as `kind: 'flashback'`. The continuity view lists only `order` findings as cards - re-asking about
+a flashback is the false positive the brief warns against - and says at its foot how many flashbacks
+it is not listing. `Flashback` on a finding's card sets the flag and keeps the time; the card leaves
+the list, the tab's badge drops, the footer's flashback count rises. "Mark it and it stops appearing"
+holds without a fourth authored field.
+
+### Judgement calls in this phase, each reversible
+
+- **The link is `scenes.threads`, not a join table.** Reasons above; the cost is that a thread's
+  scene count is counted in the loader, not by the database, and reorder within a scene's list has
+  no UI yet (the first id is the row; `＋` appends).
+- **Story view shows unplaced scenes** (dashed `no time` chip) so they can be picked and placed;
+  chronology does not, and says so in the strip (`N scenes have no story time and aren't shown in
+  Chronology`, `Continue from Day N`).
+- **`Assume continuous` and `Continue from Day N` are one write** (`placeUnplacedScenes`): every
+  unplaced present scene gets one day, no clock, in one `UPDATE … WHERE = ANY`. A declared
+  assumption the writer then corrects, not a guess - and it raises no finding, because one day with
+  no clocks has no order to disagree with. The bundle's line about `CONTINUOUS` and `LATER` being
+  respected is kept as copy; nothing parses them, and nothing needs to for a single-day placement.
+- **`⇅ Chain to previous scene`** gives the scene the day of the last placed frame-story scene before
+  it on the page, and no clock.
+- **`↷ Skips ahead`** is a calendar gap - `day > previous.day + 1` - not the bundle's "skips a
+  placed day", so the arrow means the same thing whatever else is placed.
+- **The span counts the frame story only**: `2 days + 1 flashback`. A flashback "sits outside the
+  day count", which is what the flag says.
+- **Thread colours are six named tokens** (`--thread-terracotta|slate|moss|ochre|violet|teal` in
+  `packages/ui`): the bundle's four `--t-*` transcribed and renamed by hue, plus two invented and
+  marked as such. A row stores a name, never a colour.
+- **Thread rows have no drag reorder**: `position` exists and is kept dense by insertion; the
+  bundle's `⠿` handle is not drawn.
+- **Selection, hidden threads and "Place by hand" are React state in a provider the layout mounts**
+  (`timeline-state.tsx`), because the column (layout) and the grid (page) are two trees. `?selected=`
+  stays blocked on the `SCENE_xxx` ruling; hidden threads are a filter, not a sub-view.
+- **Not drawn, and flagged:** `＋ Event` and `Anchors · fixed dates` (a third authored thing the
+  brief does not name); the panel's `Must already be true` / `Becomes true after` facts (same); the
+  `Series / Episode 1` scope toggle (story order's columns are already the episodes); the bundle's
+  `Swap on the page` fix (a node write - the timeline reads page order, it never rearranges it); a
+  Timeline rail badge (the bundle draws the open-findings count there; AGENTS.md, UI fidelity names
+  three badges and Timeline is not among them - the count sits on the Continuity tab instead).
+- **Scene refs print the rank within the episode** (`E2 Sc 3`), the Characters reading, not
+  `derive`'s project-wide number. The finding from that phase stands.
+- **Membership, not role**, as everywhere.
+
+### Verified end to end
+
+`apps/web/e2e/timeline-route.spec.ts` against the dev Supabase project through the running dev
+server on port 3000, with a dedicated `e2e-timeline@example.com` account (made through the Admin API
+so as not to reset the Scenes-phase account under a concurrent session): the empty state in both
+themes with the column at 250px, `Story spans —`, `?view=grid` a 404; two episodes imported with
+`DAY`, `NIGHT` and `DAWN` in every slugline and the route still empty with `Scenes without a time 7`;
+`Assume continuous` places all seven on Day 1, the grid draws two episode columns (`4 placed`,
+`3 placed`), chronology draws one column of `7 scenes`, continuity says `agree everywhere`; `E2 Sc 3`
+set to `Day 2 · 06:40` raises nothing and the span reads `2 days`; `E2 Sc 2` set to `Day 2 · 09:15`
+puts `↶` on `E2 Sc 3`, `1` on the Continuity tab, the amber flag and `Earlier than E2 Sc 2 (Day 2 ·
+09:15)` on its panel; a clock with the day cleared is refused with `A clock needs a day.`; the
+continuity card reads `E2 Sc 3 happens before E2 Sc 2, but comes after it on the page.` in both
+themes; `Flashback` drops the card, prints `1 flashback is earlier than the scene before it on the
+page, as flagged.`, clears the badge, and the panel then reads `Flashback. Sits outside the day
+count.` with the span at `2 days + 1 flashback`; a thread is made, linked from the panel (the card
+moves rows, `6` stay on `No thread`), hidden (row opacity `.35`), renamed and recoloured in place,
+unlinked, relinked and deleted (every link goes with it); a second thread and its link, both story
+times and the flashback survive a reload; chronology draws `Day 1 · 5 scenes` and `Day 2 · 2 scenes`
+with `E2 Sc 3` before `E2 Sc 2` in the Day 2 column, both themes. Five tests, 6.9 minutes.
+
+Also fixed on the way: `workspace.spec.ts` still asserted eight episode routes after the Beats cut;
+it is seven, and the thirteen-route walk now runs again (with the Timeline empty-state text added to
+its contract row).

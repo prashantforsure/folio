@@ -79,6 +79,8 @@
   --color-transparent: transparent;
   --color-current: currentColor;
   --color-scrim: var(--scrim);
+  --color-day: var(--day);
+  --color-night: var(--night);
 
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
@@ -98,6 +100,12 @@
  */
 @theme {
   --text-8: 8px;
+  /*
+   * 8.5px is the I/E label on a location row and sub-location card and the
+   * letter inside a 20px identity chip (`Route - Locations.dc.html`,
+   * `Route - Characters.dc.html`). Named by value like the rest.
+   */
+  --text-8-5: 8.5px;
   --text-9: 9px;
   --text-9-5: 9.5px;
   --text-10: 10px;

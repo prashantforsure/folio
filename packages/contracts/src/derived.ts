@@ -25,6 +25,7 @@ import {
   UserIdSchema,
 } from './ids'
 import { AuthoredNotesSchema, TimestampSchema, TitleSchema } from './primitives'
+import { StoryClockSchema } from './timeline'
 
 /**
  * The derived entities at the boundary, split along the line that matters.
@@ -262,15 +263,26 @@ export type LocationSluglineTally = z.infer<typeof LocationSluglineTallySchema>
  * reorders, which is exactly the lifetime a scene record needs, and it means
  * moving a scene up the script does not detach its synopsis."
  *
- * `beats` and `threads` are lists of opaque strings because neither Beats nor
- * Timeline is a table in this phase. They are carried so a re-derive cannot
- * drop them; they are not foreign keys and are not pretending to be.
+ * `beats` and `threads` are lists of opaque strings: neither Beats nor
+ * Timeline was a table when the column was declared. They are carried so a
+ * re-derive cannot drop them; they are not foreign keys and are not
+ * pretending to be. Since the Timeline phase `threads` holds story thread
+ * ids (`timeline.ts`) - still text, still no foreign key, a stale id
+ * dropped on read.
+ *
+ * `storyTime` is the opaque text column of the same age, and nothing writes
+ * it: story time is the three typed fields after it (`storyDay`,
+ * `storyClock`, `flashback` - `timeline.ts` says what each is). The column
+ * stays because dropping one is asked for (AGENTS.md, When to ask first).
  */
 export const SceneAuthoredSchema = z.object({
   id: NodeIdSchema,
   projectId: ProjectIdSchema,
   synopsis: z.string().max(20_000).nullable(),
   storyTime: z.string().max(200).nullable(),
+  storyDay: z.number().int().nullable(),
+  storyClock: StoryClockSchema.nullable(),
+  flashback: z.boolean(),
   beats: z.array(z.string().min(1).max(200)).max(200),
   threads: z.array(z.string().min(1).max(200)).max(200),
   notes: AuthoredNotesSchema,

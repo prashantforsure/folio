@@ -42,3 +42,6 @@ export {
 export type { RevisionColourName } from './revision-swatch'
 
 export { Avatar } from './avatar'
+
+export { Editable } from './editable'
+export { IdentityChip } from './identity-chip'

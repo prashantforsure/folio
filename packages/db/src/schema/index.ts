@@ -28,12 +28,18 @@
  *   locations                    name, parent, scheduled days, description, the merge tombstone
  *   location_bound_sluglines
  *   location_arc_notes           one note per location per episode - "how this place changes"
- *   scenes                       synopsis, story time, beat and thread links (both opaque)
+ *   scenes                       synopsis, story time (day, clock, flashback), beat links (opaque), thread links
+ *   story_threads                a named, coloured storyline; the scenes it runs through are `scenes.threads`
  *   resolve_decisions            authored input, never derived output
  *   credit_ledger                append-only
  *   shots                        a scene does not say how it is shot - keyed by the heading node's id
  *   jobs                         the job row is the status; written by the system on a click
  *   frame_generations            shot to job, and on failure to the refund entry
+ *   bible_entries                sectioned, statused - the status is the first context gate
+ *   bible_facts                  numbered rules citing heading nodes, each able to carry a conflict
+ *   bible_questions              open questions, each with an author
+ *   bible_pitch_fields           the Pitch's ordered key/value fields, kept apart from the facts
+ *   bible_terms                  glossary terms; the use count is computed, never here
  *
  * ## DERIVED CACHE - reproducible by re-running `derive` over the node list
  *
@@ -77,11 +83,13 @@
  *
  * ## What is deliberately absent
  *
- * Bible entries, research sources, props, lenses, story threads, and any table
- * for project settings `transfer` or `keys`. The last of those is AGENTS.md
- * open decision 7 and was left open on purpose. The rest are out of scope so
- * far. Jobs, generations and storyboard shots were on this list until the
- * Storyboard phase; `storyboard.ts` says what each now is.
+ * Research sources, props, lenses, and any table for project
+ * settings `transfer` or `keys`. The last of those is AGENTS.md open decision
+ * 7 and was left open on purpose. The rest are out of scope so far. Jobs,
+ * generations and storyboard shots were on this list until the Storyboard
+ * phase, story threads until the Timeline phase, bible entries until the
+ * Bible phase; `storyboard.ts`, `timeline.ts` and `bible.ts` say what each
+ * now is.
  */
 
 export * from './columns'
@@ -93,3 +101,5 @@ export * from './measurement'
 export * from './derived'
 export * from './credits'
 export * from './storyboard'
+export * from './timeline'
+export * from './bible'

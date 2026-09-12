@@ -6,13 +6,17 @@ import type { KeyboardEvent } from 'react'
 /**
  * A line of authored text that edits in place.
  *
- * Every field the profile authors - role, age, the one-line, a drive and
- * its source, a voice rule, a relationship's `what` - is this: the text as
- * a button when it is not being edited (or the placeholder in `--ink3`
- * when it is empty), an input or textarea when it is, saved on Enter or
- * blur if it changed, abandoned on Escape. One component so every field on
- * the route behaves the same way and the bundle's typography is set at the
- * call site, not re-invented per field.
+ * Every field an entity route authors - a character's role, age, the
+ * one-line, a drive and its source; a location's description and its arc
+ * note - is this: the text as a button when it is not being edited (or the
+ * placeholder in `--ink3` when it is empty), an input or textarea when it
+ * is, saved on Enter or blur if it changed, abandoned on Escape. One
+ * component so every field on both routes behaves the same way and the
+ * bundle's typography is set at the call site, not re-invented per field.
+ *
+ * Here rather than in a route directory because two routes use it -
+ * AGENTS.md, Conventions > Files: "Anything used by two routes moves to
+ * `packages/ui`." Presentational: it knows nothing about what it edits.
  *
  * `onSave` receives the trimmed text; an empty string means "clear" and
  * the caller decides what that stores (the actions store `null`).

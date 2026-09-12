@@ -120,6 +120,7 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     title: 'Locations',
     defaults: { view: 'record' },
     column: { kind: 'context', width: 256 },
+    emptyState: { text: 'No locations yet' },
   },
   {
     route: 'timeline',
@@ -128,6 +129,7 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     title: 'Timeline',
     defaults: { view: 'story' },
     column: { kind: 'context', width: 250 },
+    emptyState: { text: 'Your scenes have a page order, not a story time' },
   },
   {
     route: 'bible',
@@ -136,6 +138,7 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     title: 'Bible',
     defaults: { view: 'entry' },
     column: { kind: 'context', width: 252 },
+    emptyState: { text: 'The rules of the world live here' },
   },
   {
     route: 'research',

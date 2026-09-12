@@ -1,13 +1,13 @@
+import { IdentityChip } from '@folio/ui'
+
 import { initialOf } from '../../../../../../lib/characters/figures'
 
 /**
- * The round initial chip every character carries: 20px in the nav and on a
- * relationship row, 22px in the map's header, 44px on the profile's
- * portrait. `Route - Characters.dc.html` draws it as a circle in one of six
- * hues with white on top; the hue is `--chip-N` from `packages/ui` and the
- * index is the record's (`figures.ts`, `hueOf`).
- *
- * The font size follows the bundle: 8.5px/600 at 20px, 15px/600 at 44px.
+ * The round initial chip every character carries. The drawing is
+ * `@folio/ui`'s `IdentityChip` - the Locations route draws the same chip on
+ * "Who is here most" - and this is the one place a name becomes an initial
+ * (`figures.ts`, `initialOf`) for a character. The hue is the record's
+ * (`hueOf`), picked once and carried on every row.
  */
 export const CharacterChip = ({
   name,
@@ -20,19 +20,7 @@ export const CharacterChip = ({
   readonly size?: number
   readonly className?: string
 }) => (
-  <span
-    aria-hidden="true"
-    className={`grid flex-none place-items-center rounded-full font-semibold ${className ?? ''}`}
-    style={{
-      width: size,
-      height: size,
-      background: `var(--chip-${String(hue)})`,
-      color: 'var(--chip-ink)',
-      fontSize: size >= 40 ? 15 : 8.5,
-    }}
-  >
-    {initialOf(name)}
-  </span>
+  <IdentityChip initial={initialOf(name)} hue={hue} size={size} {...(className === undefined ? {} : { className })} />
 )
 
 /** The walk-ons' chip: a `·` on `--line`, the bundle's "5 unnamed" row. */

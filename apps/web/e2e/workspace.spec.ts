@@ -172,7 +172,7 @@ const RUN = Date.now().toString(36)
 
 test('the contract is thirteen routes', () => {
   expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
-  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'episode')).toHaveLength(8)
+  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'episode')).toHaveLength(7)
   expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'project')).toHaveLength(6)
 })
 

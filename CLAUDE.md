@@ -44,7 +44,11 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   outline's reads (`beats.ts`: a beat is an outline `beat` block, numbered by ordinal, its bold
   lead ending at the first colon; headings and word count), and shots (`shots.ts`: the three
   closed vocabularies and `proposeShots`, a deterministic first shot list whose mentions are the
-  records the alias table binds — not a model; there is none in the repository).
+  records the alias table binds — not a model; there is none in the repository), and the timeline
+  (`timeline.ts`: story time is `{ day, clock }` authored per scene, `precedesStoryTime` is strict
+  and an unknown clock never precedes, `continuityFindings` skips flashbacks when looking back
+  and reports a flashback's own jump as `kind: 'flashback'`; `chronology`, `storyJumps`,
+  `storySpan`).
 - `packages/contracts`, `packages/db` — built: Zod boundary schemas, the Drizzle schema, forward-only
   migrations (all applied to the dev Supabase project; `0003` adds the pagination
   preference to `projects` and `title_pages`; `0004` adds `scenes_touched` / `page_count` to
@@ -56,11 +60,22 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   `credit_balances` view, which double-counted a held reservation; `0008` adds the character
   profile — group, role, age, drives with sources, voice rules, key lines as dialogue node ids —
   `character_relationships.shift`, and `character_arc_turns`, a turn pointing at a heading node or
-  at nothing, no FK), project-scoped repositories.
+  at nothing, no FK; `0009` adds `locations.merged_into` — the same tombstone characters carry —
+  and `location_arc_notes`, one note per location per episode, keyed by the episode row; `0010`
+  **drops the orphaned `beats` table** — the sanctioned drop, alone in its file; `0011` adds
+  `story_threads` (name, colour from a closed enum, position) and `scenes.story_day` /
+  `story_clock` / `flashback` — `scenes.threads` now holds story thread ids as text, first id =
+  grid row, no FK, removed by `array_remove` on delete and dropped on read otherwise;
+  `scenes.story_time` is unwritten and stays), project-scoped repositories. **`db:generate`
+  needs a TTY** when a table is dropped and another created in one diff; `0010`/`0011` were
+  produced through `drizzle-kit/api` from a one-off script (`docs/build-decisions.md`,
+  "Timeline route phase") and `db:generate` now reports no changes.
   **The ledger's `settled` excludes `reserve` / `release`**; a reservation is closed by a `spend`
   or a `release`.
-- `packages/ui` — tokens as CSS custom properties, plus `Glyph`, `RevisionSwatch`, `Avatar`.
-  Nothing else; no component reads a colour into JavaScript.
+- `packages/ui` — tokens as CSS custom properties, plus `Glyph`, `RevisionSwatch`, `Avatar`,
+  and the two the entity routes share: `Editable` (a line that edits in place) and `IdentityChip`
+  (the round initial chip). Nothing else; no component reads a colour into JavaScript. The six
+  `--thread-*` tokens are the Timeline's thread colours (four transcribed, two invented).
 - `apps/web` — auth (Google OAuth + email/password), the signed-in home shell and its six routes,
   the project workspace **chrome** (rail, episode nav, param validation), and the **Script route**
   — Plate on Slate mapped one-to-one onto the eight-type union (`lib/script/slate-model.ts` is
@@ -81,7 +96,24 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   write `resolve_decisions` and re-derive; the rail badge is open rows *with a proposal*; rename
   is the sanctioned write-back — `renameCharacterCues` in `packages/script`, a `before_rename`
   version per document, one rewrite statement, the diff returned — and merge / delete through
-  `lib/characters/actions.ts`). Other route bodies are unbuilt on purpose.
+  `lib/characters/actions.ts`) and the **Locations route** (`/locations` and
+  `/locations/:locationId`; `?view=record|breakdown|resolve`: the tree column with day/night bars
+  and roll-up counts, the record with the alias table, sub-locations, every scene at the set or
+  below with eighths from the measurement, an arc note per episode and the `Inside` edge; the
+  breakdown per episode; the resolve queue whose Match / Other… / New record settle sluglines and
+  whose Attach / Create and attach / Keep separate are the only way the tree is written from a
+  proposal. Rename is the second sanctioned write-back — `renameLocationHeadings` in
+  `packages/script`, same shape as the cue rename — through `lib/locations/actions.ts`; the
+  header count is primary sets) and the **Timeline route** (`/timeline`, project scope;
+  `?view=story|chrono|continuity`: the thread column at 250px with create / rename / recolour /
+  delete and an eye that dims a row, the grid — threads down, episodes or story days across, a
+  `No thread` row, unplaced scenes shown in story order only — the 272px scene panel where story
+  time is typed (day, `HH:MM`, flashback) and threads are linked, `Assume continuous` /
+  `Continue from Day N` as one bulk `UPDATE`, the continuity list of `order` findings with
+  `Retime` / `Flashback` / `Open in Script`; selection and hidden threads are React state in a
+  provider the layout mounts, `_timeline/timeline-state.tsx`; writes through
+  `lib/timeline/actions.ts`, none of which re-derives or touches a node). Other route bodies are
+  unbuilt on purpose.
   `lib/workspace/routes.ts` is the route tree. **The Script autosave is a delta and every write
   it runs is one statement**: over the transaction pooler a parameterised statement costs two
   round trips and cannot be pipelined (`packages/db/src/client.ts`), so on the request path the
@@ -92,7 +124,8 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 - **Nothing needs a live database** to typecheck, lint, build or unit-test. The signed-in E2E
   walks (`shell-routes.spec.ts`, `workspace.spec.ts`, `script-route.spec.ts`,
   `revisions-route.spec.ts`, `outline-route.spec.ts`, `scenes-route.spec.ts`,
-  `storyboard-route.spec.ts`, `characters-route.spec.ts`) need
+  `storyboard-route.spec.ts`, `characters-route.spec.ts`, `locations-route.spec.ts`,
+  `timeline-route.spec.ts`) need
   `E2E_EMAIL`/`E2E_PASSWORD` and skip without them; `E2E_PORT` points them at a running dev
   server. The Script walk imports the golden corpus and diffs the rendered page map against it.
 

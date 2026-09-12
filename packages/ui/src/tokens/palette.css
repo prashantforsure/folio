@@ -191,3 +191,67 @@
   --chip-6: oklch(0.4 0.02 260);
   --chip-ink: #fff;
 }
+
+/*
+ * `--day` / `--night` are the two ends of the day-against-night bar
+ * `Route - Locations.dc.html` draws on every location row, sub-location card
+ * and breakdown cell, transcribed from that bundle's `:root` and
+ * `[data-theme="dark"]` blocks. They move with the theme, as the bundle's
+ * do: the same three-block shape as the palette above.
+ */
+:root {
+  --day: oklch(0.78 0.09 80);
+  --night: oklch(0.6 0.07 265);
+}
+
+[data-theme='light'] {
+  --day: oklch(0.8 0.09 80);
+  --night: oklch(0.42 0.06 265);
+}
+
+[data-theme='dark'] {
+  --day: oklch(0.78 0.09 80);
+  --night: oklch(0.6 0.07 265);
+}
+
+/*
+ * `--thread-*` are the story thread colours of the Timeline. The first four
+ * are transcribed from `Route - Timeline.dc.html`'s `:root` and
+ * `[data-theme="dark"]` blocks - `--t-water`, `--t-fraud`, `--t-love`,
+ * `--t-past` - and renamed by hue, because the bundle's names are one
+ * fixture's storylines. They move with the theme, as the bundle's do.
+ *
+ * `--thread-violet` and `--thread-teal` are INVENTED: the bundle draws four
+ * threads and a project may have more. Violet is the palette's own hue 300
+ * (`--chip-2`); teal is a hue nothing else in the palette uses, so a thread
+ * is never mistaken for an accent, an add or a note.
+ *
+ * The set is closed - `@folio/contracts`' `STORY_THREAD_COLOURS` is the same
+ * six names - so a thread row stores a name and never a colour.
+ */
+:root {
+  --thread-terracotta: oklch(0.72 0.14 30);
+  --thread-slate: oklch(0.72 0.04 260);
+  --thread-moss: oklch(0.76 0.1 150);
+  --thread-ochre: oklch(0.78 0.09 75);
+  --thread-violet: oklch(0.74 0.1 300);
+  --thread-teal: oklch(0.74 0.09 200);
+}
+
+[data-theme='light'] {
+  --thread-terracotta: oklch(0.5 0.17 27);
+  --thread-slate: oklch(0.35 0.03 260);
+  --thread-moss: oklch(0.48 0.1 150);
+  --thread-ochre: oklch(0.6 0.1 75);
+  --thread-violet: oklch(0.5 0.12 300);
+  --thread-teal: oklch(0.48 0.09 200);
+}
+
+[data-theme='dark'] {
+  --thread-terracotta: oklch(0.72 0.14 30);
+  --thread-slate: oklch(0.72 0.04 260);
+  --thread-moss: oklch(0.76 0.1 150);
+  --thread-ochre: oklch(0.78 0.09 75);
+  --thread-violet: oklch(0.74 0.1 300);
+  --thread-teal: oklch(0.74 0.09 200);
+}

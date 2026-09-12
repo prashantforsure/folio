@@ -2,6 +2,7 @@ import { CHARACTER_GROUPS } from '@folio/contracts'
 import { CONFIDENCES, INTERIOR_EXTERIOR, LIGHT_STATES, PRESENCE_STATES, RESOLVE_ROW_STATES } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import {
+  boolean,
   check,
   index,
   integer,
@@ -489,8 +490,21 @@ export const locationSluglineTallies = pgTable(
  * column was declared, and they are carried so a re-derive cannot drop them.
  * Nothing writes `beats` any more - the Beats route that filled it with
  * outline beat block ids was removed (`docs/build-decisions.md`, "Beats
- * route removed"); rows written before that keep their ids, unread. Neither
- * column is a foreign key; Timeline is not a table.
+ * route removed"); rows written before that keep their ids, unread.
+ * `threads` is the Timeline's link since that phase: the ids of the
+ * `story_threads` rows (`timeline.ts`) the scene runs through, in the
+ * writer's order, the first being the row its card sits in. Still text,
+ * still no foreign key - a deleted thread is removed from every scene by
+ * the repository in one statement, and a stale id is dropped on read.
+ *
+ * Story time is the Timeline's other authored thing, and it is three typed
+ * columns rather than the `story_time` text beside them: `story_day` (any
+ * integer; Day 1 first by convention), `story_clock` (`HH:MM`, checked),
+ * `flashback`. "Authored, not parsed: `DAY` and `NIGHT` in a slugline are
+ * time of day, not a date" - so nothing in a derivation pass touches them,
+ * which the table split guarantees. A clock needs a day (checked); the
+ * flashback flag stands alone. `story_time` predates the shape and has no
+ * writer; dropping a column is asked for, so it stays.
  */
 export const scenes = pgTable(
   'scenes',
@@ -499,14 +513,28 @@ export const scenes = pgTable(
     sceneNodeId: uuid('scene_node_id').primaryKey(),
     projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
     synopsis: text('synopsis'),
+    /** Opaque and unwritten. Story time is the three columns after it. */
     storyTime: text('story_time'),
+    storyDay: integer('story_day'),
+    /** `HH:MM`, 24-hour. Text, because that shape sorts as a clock does. */
+    storyClock: text('story_clock'),
+    flashback: boolean('flashback').notNull().default(false),
     beats: text('beats').array().notNull().default(sql`ARRAY[]::text[]`),
+    /** Story thread ids, as text. See the note above. */
     threads: text('threads').array().notNull().default(sql`ARRAY[]::text[]`),
     notes: jsonb('notes').notNull().default(sql`'{}'::jsonb`),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
-  (table) => [index('scenes_project_idx').on(table.projectId)],
+  (table) => [
+    index('scenes_project_idx').on(table.projectId),
+    check(
+      'scenes_story_clock_shape',
+      sql`${table.storyClock} IS NULL OR ${table.storyClock} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    ),
+    /** A time of day on no day orders nothing. */
+    check('scenes_story_clock_needs_day', sql`${table.storyClock} IS NULL OR ${table.storyDay} IS NOT NULL`),
+  ],
 )
 
 /**

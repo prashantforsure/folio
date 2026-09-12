@@ -7,8 +7,22 @@ import type {
   Timestamp,
 } from '@folio/contracts'
 import { arcTurnId as brandArcTurnId, episodeSlug as brandEpisodeSlug } from '@folio/contracts'
-import type { CharacterId, LocationId, NodeId, Presence, ScreenplayNode } from '@folio/script'
-import { characterId as brandCharacterId, isErr, locationId as brandLocationId } from '@folio/script'
+import type {
+  CharacterId,
+  InteriorExterior,
+  Light,
+  LocationId,
+  NodeId,
+  Presence,
+  ScreenplayNode,
+} from '@folio/script'
+import {
+  INTERIOR_EXTERIOR,
+  LIGHT_STATES,
+  characterId as brandCharacterId,
+  isErr,
+  locationId as brandLocationId,
+} from '@folio/script'
 import { asc, eq, sql } from 'drizzle-orm'
 
 import {
@@ -259,6 +273,28 @@ export type SceneIndexRow = {
   readonly speaking: readonly CharacterId[]
   readonly episode: EpisodeSlug
   readonly episodeOrdinal: number
+  /** The heading as read: interior/exterior and the day/night reduction (Locations route). */
+  readonly ie: InteriorExterior
+  readonly light: Light
+  readonly timeOfDay: string | null
+}
+
+const isInteriorExterior = (value: unknown): value is InteriorExterior =>
+  typeof value === 'string' && (INTERIOR_EXTERIOR as readonly string[]).includes(value)
+
+const isLight = (value: unknown): value is Light =>
+  typeof value === 'string' && (LIGHT_STATES as readonly string[]).includes(value)
+
+/** The stored `SluglineReading`, read defensively: the JSON column is text only. */
+const readingOf = (
+  value: unknown,
+): { readonly ie: InteriorExterior; readonly light: Light; readonly timeOfDay: string | null } => {
+  const raw = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  return {
+    ie: isInteriorExterior(raw['ie']) ? raw['ie'] : 'INT',
+    light: isLight(raw['light']) ? raw['light'] : 'unspecified',
+    timeOfDay: typeof raw['timeOfDay'] === 'string' ? raw['timeOfDay'] : null,
+  }
 }
 
 export const listSceneIndex = async (scope: ProjectScope): Promise<readonly SceneIndexRow[]> => {
@@ -267,6 +303,7 @@ export const listSceneIndex = async (scope: ProjectScope): Promise<readonly Scen
       sceneNodeId: sceneDerivations.sceneNodeId,
       number: sceneDerivations.number,
       heading: sceneDerivations.heading,
+      reading: sceneDerivations.reading,
       locationId: sceneDerivations.locationId,
       lines: sceneDerivations.lines,
       cast: sceneDerivations.cast,
@@ -300,6 +337,7 @@ export const listSceneIndex = async (scope: ProjectScope): Promise<readonly Scen
       speaking: row.speaking as CharacterId[],
       episode: brandEpisodeSlug(row.episode),
       episodeOrdinal: row.episodeOrdinal,
+      ...readingOf(row.reading),
     }
   })
 }

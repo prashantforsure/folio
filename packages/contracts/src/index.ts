@@ -36,9 +36,11 @@
  *
  * What is deliberately **not** here, and why:
  *
- *   - **Bible entries, research sources, props, lenses, story threads.** Real
- *     entities, sketched in the design handoff's Appendix A, and out of scope
- *     for this phase - the brief names its tables and these are not among them.
+ *   - **Research sources, props, lenses.** Real entities, sketched in the
+ *     design handoff's Appendix A, and out of scope so far - each brief names
+ *     its tables and these are not among them. Story threads were on this
+ *     list until the Timeline phase and bible entries until the Bible phase;
+ *     `timeline.ts` and `bible.ts` are what they are.
  *   - **Jobs and generations.** Same. The ledger carries `jobId` as a forward
  *     reference with no foreign key so that early rows are not unattributable.
  *   - **A scene *record* id.** `docs/adr/0001-node-identity.md` Ruling 3 says
@@ -55,6 +57,11 @@ export { assertExact } from './equality'
 
 export type {
   ArcTurnId,
+  BibleEntryId,
+  BibleFactId,
+  BiblePitchFieldId,
+  BibleQuestionId,
+  BibleTermId,
   EpisodeId,
   EpisodeSegmentResult,
   EpisodeSlug,
@@ -67,6 +74,7 @@ export type {
   ReservedProjectSegment,
   RevisionId,
   ShotId,
+  StoryThreadId,
   ThreadCommentId,
   ThreadId,
   UserId,
@@ -74,6 +82,11 @@ export type {
 } from './ids'
 export {
   ArcTurnIdSchema,
+  BibleEntryIdSchema,
+  BibleFactIdSchema,
+  BiblePitchFieldIdSchema,
+  BibleQuestionIdSchema,
+  BibleTermIdSchema,
   CharacterIdSchema,
   DocumentIdSchema,
   EPISODE_SLUG_PATTERN,
@@ -91,11 +104,17 @@ export {
   RevisionIdSchema,
   RunIdSchema,
   ShotIdSchema,
+  StoryThreadIdSchema,
   ThreadCommentIdSchema,
   ThreadIdSchema,
   UserIdSchema,
   VersionIdSchema,
   arcTurnId,
+  bibleEntryId,
+  bibleFactId,
+  biblePitchFieldId,
+  bibleQuestionId,
+  bibleTermId,
   episodeId,
   episodeSlug,
   formatEpisodeSlug,
@@ -109,6 +128,7 @@ export {
   projectId,
   revisionId,
   shotId,
+  storyThreadId,
   threadCommentId,
   threadId,
   userId,
@@ -374,3 +394,73 @@ export {
   RailBadgesSchema,
   SceneBoardRowSchema,
 } from './workspace'
+
+export type {
+  StoryThread,
+  StoryThreadColour,
+  StoryThreadEdit,
+  StoryThreadRow,
+  StoryTimeEdit,
+  TimelineEpisodeColumn,
+  TimelineSceneRow,
+} from './timeline'
+export {
+  STORY_THREAD_COLOURS,
+  StoryClockSchema,
+  StoryThreadColourSchema,
+  StoryThreadEditSchema,
+  StoryThreadSchema,
+  StoryTimeEditSchema,
+  StoryTimeSchema,
+} from './timeline'
+
+export type {
+  ArcNoteEdit,
+  BreakdownCell,
+  BreakdownRow,
+  LocationArcNoteRow,
+  LocationCounts,
+  LocationEdit,
+  LocationEpisodeBar,
+  LocationPersonRow,
+  LocationRecordView,
+  LocationRow,
+  LocationSceneRow,
+  SluglineResolveItem,
+  SluglineResolveProposal,
+  SluglineVariantRow,
+  StructureResolveItem,
+  StructureResolveProposal,
+} from './locations'
+export { ArcNoteEditSchema, LocationEditSchema, ParentEditSchema } from './locations'
+
+export type {
+  BibleConflictEdit,
+  BibleCounts,
+  BibleEntryCreate,
+  BibleEntryEdit,
+  BibleEntryLinks,
+  BibleEntryView,
+  BibleFactEdit,
+  BibleFactRow,
+  BibleNavEntry,
+  BiblePitchFieldEdit,
+  BiblePitchFieldRow,
+  BibleQuestionEdit,
+  BibleQuestionRow,
+  BibleTermEdit,
+  CanonConflictRow,
+  GlossaryRow,
+} from './bible'
+export {
+  BibleConflictEditSchema,
+  BibleEntryCreateSchema,
+  BibleEntryEditSchema,
+  BibleEntryKindSchema,
+  BibleEntryStatusSchema,
+  BibleFactEditSchema,
+  BiblePitchFieldEditSchema,
+  BibleQuestionEditSchema,
+  BibleSectionSchema,
+  BibleTermEditSchema,
+} from './bible'

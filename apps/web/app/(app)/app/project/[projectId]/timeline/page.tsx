@@ -1,8 +1,11 @@
-import { ProjectRoutePage } from '../_chrome/project-route-page'
+import { TimelineRoute } from '../_timeline/timeline-route'
+import { loadProject } from '../../../../../../lib/workspace/context'
 
-/** Empty shell this phase. See `_chrome/project-route-page.tsx`. */
-const Page = (props: PageProps<'/app/project/[projectId]/timeline'>) => (
-  <ProjectRoutePage route="timeline" {...props} />
-)
+/** `/timeline`. Project scope; `?view=story|chrono|continuity`. */
+const Page = async ({ params, searchParams }: PageProps<'/app/project/[projectId]/timeline'>) => {
+  const { projectId } = await params
+  const context = await loadProject(projectId)
+  return <TimelineRoute context={context} searchParams={searchParams} />
+}
 
 export default Page

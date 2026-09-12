@@ -3,6 +3,7 @@
 import type { CastRow, CharacterGroup, CharacterProfile, ProjectId, SceneRef } from '@folio/contracts'
 import { CHARACTER_GROUPS } from '@folio/contracts'
 import type { NodeId } from '@folio/script'
+import { Editable } from '@folio/ui'
 import Link from 'next/link'
 import { useState } from 'react'
 
@@ -22,7 +23,7 @@ import { characterHref } from '../../../../../../lib/workspace/hrefs'
 import type { ProjectRoutePath } from '../../../../../../lib/workspace/hrefs'
 import type { ElsewhereLinks, Run } from './characters-workspace'
 import { CharacterChip } from './chip'
-import { Editable } from './editable'
+
 import { KeyLinePicker } from './key-line-picker'
 import { ProfilePanel } from './profile-panel'
 
