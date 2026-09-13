@@ -28,8 +28,11 @@ import { bibleEntryHref, projectRouteHref } from '../../../../../../lib/workspac
  * alone names the first in nav order, `?view=glossary` names the Glossary
  * row. The find filter is component state - a filter is not a sub-view.
  *
- * A section with no entry is still drawn, at `0`: the sections are the
- * brief's, not the writer's, and an empty one is where the next entry goes.
+ * With no entry at all the list is blank, as the bundle's is (`sections:
+ * empty ? []`): "Start with sections" is what makes them appear. Once one
+ * entry exists every section is drawn, an empty one at `0` - the sections
+ * are the brief's, not the writer's, and an empty one is where the next
+ * entry goes.
  */
 export const BibleNav = ({
   projectId,
@@ -56,6 +59,7 @@ export const BibleNav = ({
 
   const glossaryHref = `${projectRouteHref(projectId, 'bible')}?view=glossary` as const
   const glossaryActive = view === 'glossary'
+  const empty = entries.length === 0
 
   return (
     <>
@@ -79,7 +83,7 @@ export const BibleNav = ({
 
       {BIBLE_SECTIONS.map((section) => {
         const rows = shown.filter((row) => row.section === section)
-        if (rows.length === 0 && query !== '') return null
+        if (rows.length === 0 && (query !== '' || empty)) return null
         return (
           <div key={section} className="flex flex-col gap-[1px]" data-bible-section={section}>
             <div className="flex items-center pb-[3px] pl-[8px] pr-[8px]">
@@ -130,7 +134,7 @@ export const BibleNav = ({
         )
       })}
 
-      {query === '' ? (
+      {query === '' && !empty ? (
         <div className="flex flex-col gap-[1px]" data-bible-section="reference">
           <div className="flex items-center pb-[3px] pl-[8px] pr-[8px]">
             <span className="flex-1 text-9-5 font-semibold uppercase tracking-label text-ink3">Reference</span>

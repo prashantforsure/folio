@@ -9,26 +9,24 @@ import type {
   NodeId,
   RevisionColour,
   ScreenplayNode,
-  ScreenplayNodeType,
   ScriptFormat,
   SheetSpec,
 } from '@folio/script'
-import { formatEighths, paginate, readSlugline, resolveSheet } from '@folio/script'
-import type { TElement } from 'platejs'
-import type { PlateEditor } from 'platejs/react'
+import { formatEighths, readSlugline, resolveSheet } from '@folio/script'
+import type { Editor } from '@tiptap/react'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 
-import { createMention, saveScript, setFormat, setPagination } from '../../../../../../lib/script/actions'
-import { digestOf } from '../../../../../../lib/script/digest'
+import { createMention, exportScriptFdx, saveScript, setFormat, setPagination } from '../../../../../../lib/script/actions'
 import type { IdentityLog } from '../../../../../../lib/script/identity'
 import { newIdentityLog, retirementsSince } from '../../../../../../lib/script/identity'
-import type { SheetLayout } from '../../../../../../lib/script/layout'
-import { charsPerLineFor, layoutSheet } from '../../../../../../lib/script/layout'
-import { lineCountOf, lineEndsOfBlock } from '../../../../../../lib/script/lines'
+import type { LabelFor } from '../../../../../../lib/script/inline'
 import type { RevisionRow, ThreadCard } from '../../../../../../lib/script/panel'
+import type { Measurer } from '../../../../../../lib/script/measure-client'
+import { createMeasurer } from '../../../../../../lib/script/measure-client'
+import { measureNodes } from '../../../../../../lib/script/measure'
+import { fromDoc } from '../../../../../../lib/script/pm-model'
 import type { MeasureOutcome, SaveConflict, SimpleResult } from '../../../../../../lib/script/result'
-import type { ScriptValue } from '../../../../../../lib/script/slate-model'
-import { fromSlateValue, isScriptElement } from '../../../../../../lib/script/slate-model'
 import type { ScriptStats } from '../../../../../../lib/script/stats'
 import type { PaginationControl, ProjectPagination } from '../../../../../../lib/state/project-preferences'
 import {
@@ -39,15 +37,17 @@ import {
 import type { SideTab } from '../../../../../../lib/state/session'
 import { useSession } from '../../../../../../lib/state/session'
 import { eighths } from '../../../../../../lib/workspace/format'
-import type { CaretInfo } from './editor/plate-editor'
-import { ScriptEditor } from './editor/plate-editor'
+import type { EditorStore } from './editor/editor-store'
+import { createEditorStore, useSlice } from './editor/editor-store'
+import type { SheetInputs } from './editor/extensions'
+import { ScriptEditor, updateSheet } from './editor/tiptap-editor'
 import { RightPanel } from './panel/right-panel'
 import { CoverSheet } from './sheet/cover-sheet'
 import { EmptySheet } from './sheet/empty-sheet'
 import { IMPORT_INPUT_ID, ImportForm } from './sheet/import-form'
 import { PageFrames } from './sheet/page-frames'
+import { StaticSheet, staticLayout } from './sheet/static-sheet'
 import { StatusBar } from './status-bar'
-import { TypeBar } from './type-bar'
 import { ViewTab } from './view-tab'
 
 /**
@@ -56,12 +56,16 @@ import { ViewTab } from './view-tab'
  *
  * ## The single source of truth, and where it is at each moment
  *
- * On the server it is the `nodes` table. Here it is the Slate value the
- * writer is typing into - and that value becomes authoritative again only
- * by going back through `fromSlateValue` (the strict reader) and
- * `saveScript`. Nothing else reads the Slate value: the layout reads block
- * ids, types and line counts; the status bar reads the *record*; the stats
- * come from the server. So no surface here can quietly become the script.
+ * On the server it is the `nodes` table. Here it is the ProseMirror
+ * document the writer is typing into, held by the Tiptap editor - **not by
+ * React**. It becomes authoritative again only by going back through
+ * `fromDoc` (the strict reader) and `saveScript`. Nothing else reads the
+ * document: the layout reads block ids, types and line counts inside the
+ * editor's own decorations plugin; the status bar reads the *record* and
+ * the caret; the stats come from the server. So no surface here can quietly
+ * become the script, and a keystroke renders no component at all - what
+ * the chrome needs arrives through `editor-store.ts`, one slice each, and
+ * only when it changed.
  *
  * ## Saving
  *
@@ -69,7 +73,7 @@ import { ViewTab } from './view-tab'
  * Last-write-wins: the server writes regardless and reports a conflict when
  * `documents.updated_at` moved, and the banner says so. `⌘S` saves now and
  * asks for a snapshot; otherwise a snapshot is requested at most every five
- * minutes (an assumption, flagged). A value the strict reader refuses is
+ * minutes (an assumption, flagged). A document the strict reader refuses is
  * not saved - the banner names the defect - which is the editor being told
  * it made a shape the script cannot hold, rather than the script being
  * widened to hold it.
@@ -80,11 +84,13 @@ import { ViewTab } from './view-tab'
  * keystroke is one node; the server lays the delta over its rows and has
  * the whole list back before it decides anything (`actions.ts`). The
  * baseline the delta is against is the list the server last confirmed,
- * kept here as one JSON string per node so "changed" is one comparison.
+ * kept here as one JSON string per node so "changed" is one comparison -
+ * and ProseMirror keeps every block a change did not touch as the same
+ * object, so the JSON of an untouched block is looked up, not re-made.
  *
  * One save is in flight at a time. A change that lands while one is out
  * marks another wanted, and it runs when the first returns - against the
- * value *then*, read through a ref, never the value the first closed over.
+ * document *then*, read from the editor, never one the first closed over.
  * A save that throws - the network, not the script - clears the in-flight
  * flag in `finally` so the next change can try again.
  *
@@ -103,6 +109,10 @@ import { ViewTab } from './view-tab'
  * server has confirmed it - which is still "the breaks move on save", with
  * the server's answer and without the server's bytes.
  *
+ * The record, the sheet, the page mode and the label book reach the editor
+ * as data (`updateSheet`); its decorations plugin turns them into margins
+ * and page gaps and hands back the page frames it computed.
+ *
  * ## Switching the document and the panel tab
  *
  * Neither is in the URL - ruled 2026-09-11, `lib/workspace/params.ts`. The
@@ -111,7 +121,7 @@ import { ViewTab } from './view-tab'
  * the tab a writer picked survives a trip to Outline and back, as the design
  * README's state table says it should. A click flips the state and requests
  * nothing: both sheets stay mounted and the one not showing is `hidden`, so
- * the Plate editor keeps its state and a pending autosave keeps its timer
+ * the editor keeps its state and a pending autosave keeps its timer
  * across a look at the cover.
  *
  * ## Pagination and format
@@ -145,7 +155,6 @@ export type ScriptDraft = {
   readonly documentId: string
   readonly updatedAt: string
   readonly nodes: readonly ScreenplayNode[]
-  readonly value: ScriptValue
   readonly measurement: MeasureOutcome
   readonly stats: ScriptStats
   readonly labels: readonly MentionLabel[]
@@ -183,38 +192,26 @@ const sheetFor = (measurement: MeasureOutcome | null): SheetSpec => {
   return letter.value
 }
 
-/** Wrapped through the per-block cache in `lines.ts`: a keystroke wraps one block, not three thousand. */
-const blocksOf = (
-  value: readonly TElement[],
-  sheet: SheetSpec,
-  labelFor: (entity: MentionEntity, id: string) => string | undefined,
-) =>
-  value.flatMap((element) => {
-    if (!isScriptElement(element)) return []
-    const lines = lineCountOf(lineEndsOfBlock(element, labelFor, charsPerLineFor(sheet, element.type)))
-    return [{ id: element.id, type: element.type, lines }]
-  })
-
 /**
- * A node's JSON, remembered on the Slate element it was read from. The delta
- * compares every node to the baseline by its JSON; Slate keeps untouched
- * elements as the same objects, so a save serialises the blocks that changed
- * and looks the rest up.
+ * A node's JSON, remembered on the ProseMirror block it was read from. The
+ * delta compares every node to the baseline by its JSON; ProseMirror keeps
+ * untouched blocks as the same objects, so a save serialises the blocks
+ * that changed and looks the rest up.
  */
-const serialisedNode = new WeakMap<TElement, string>()
+const serialisedNode = new WeakMap<ProseMirrorNode, string>()
 
-const serialise = (element: TElement | undefined, node: ScreenplayNode): string => {
-  if (element === undefined) return JSON.stringify(node)
-  const hit = serialisedNode.get(element)
+const serialise = (block: ProseMirrorNode | undefined, node: ScreenplayNode): string => {
+  if (block === undefined) return JSON.stringify(node)
+  const hit = serialisedNode.get(block)
   if (hit !== undefined) return hit
   const json = JSON.stringify(node)
-  serialisedNode.set(element, json)
+  serialisedNode.set(block, json)
   return json
 }
 
-/** A record computed here for one value, with the digest a save vouches for it by. */
+/** A record computed here for one document, with the digest a save vouches for it by. */
 type LocalRecord = {
-  readonly value: readonly TElement[]
+  readonly doc: ProseMirrorNode
   readonly measurement: MeasureOutcome
   readonly digest: string
 }
@@ -249,6 +246,12 @@ const agoLabel = (state: SaveState, now: number): string => {
       return `saved ${String(minutes)}m ago`
     }
   }
+}
+
+const labelBookOf = (labels: readonly MentionLabel[]): LabelFor => {
+  const book = new Map<string, string>()
+  for (const label of labels) book.set(`${label.entity}:${label.id}`, label.label)
+  return (entity, id) => book.get(`${entity}:${id}`)
 }
 
 export const ScriptWorkspace = ({
@@ -320,11 +323,9 @@ export const ScriptWorkspace = ({
     draft?.stats ?? { scenes: 0, words: 0, characters: 0, locations: 0, beats: 0, shots: 0, relations: 0 },
   )
   const [labels, setLabels] = useState<readonly MentionLabel[]>(draft?.labels ?? [])
-  const [value, setValue] = useState<readonly TElement[]>(() => (draft?.value ?? []).map((block) => ({ ...block })))
   const [saveState, setSaveState] = useState<SaveState>(draft === null ? { kind: 'new' } : { kind: 'saved', at: 0 })
   const [conflict, setConflict] = useState<SaveConflict | null>(null)
   const [defect, setDefect] = useState<string | null>(null)
-  const [caret, setCaret] = useState<CaretInfo>({ blockId: null, type: null })
   const [now, setNow] = useState(0)
   useEffect(() => {
     setNow(Date.now())
@@ -338,7 +339,7 @@ export const ScriptWorkspace = ({
   }, [])
 
   const log = useMemo<IdentityLog>(() => newIdentityLog(), [])
-  const editorRef = useRef<PlateEditor | null>(null)
+  const editorRef = useRef<Editor | null>(null)
   const baseUpdatedAt = useRef(draft?.updatedAt ?? '')
   // Lazily: a `useRef(initial)` evaluates its argument on every render, and
   // this one serialises every node.
@@ -352,8 +353,18 @@ export const ScriptWorkspace = ({
   const liveTimer = useRef<number | null>(null)
   const inFlight = useRef(false)
   const queued = useRef(false)
-  /** The record computed here for a value, so a save can vouch for it by digest. */
+  /** The record computed here for a document, so a save can vouch for it by digest. */
   const localRecordFor = useRef<LocalRecord | null>(null)
+  /** Live measurement, scheduled in idle time on the first live repaginate. */
+  const measurer = useRef<Measurer | null>(null)
+  const liveSerial = useRef(0)
+  useEffect(
+    () => () => {
+      measurer.current?.dispose()
+      measurer.current = null
+    },
+    [],
+  )
   const preferencesRef = useRef<ScriptPreferences>({
     pageMode: project.pageMode,
     liveRepaginate: project.liveRepaginate,
@@ -361,10 +372,10 @@ export const ScriptWorkspace = ({
   })
 
   // Every record carries its own `SheetSpec` object, equal to the last one
-  // unless the format changed. The editor's context hands the sheet to
-  // every block, so a new-but-equal object would re-render three thousand
-  // blocks per live repaginate. The previous object is kept while it is
-  // equal; the ref write is the usual "remember the last" during render.
+  // unless the format changed. The sheet is an input to every line end, so
+  // a new-but-equal object would re-decorate three thousand blocks per live
+  // repaginate. The previous object is kept while it is equal; the ref write
+  // is the usual "remember the last" during render.
   const sheetRef = useRef<{ readonly key: string; readonly spec: SheetSpec } | null>(null)
   const sheet = useMemo(() => {
     const next = sheetFor(measurement)
@@ -374,33 +385,51 @@ export const ScriptWorkspace = ({
     sheetRef.current = { key, spec: next }
     return next
   }, [measurement])
-  const labelFor = useCallback(
-    (entity: MentionEntity, id: string): string | undefined =>
-      labels.find((label) => label.entity === entity && label.id === id)?.label,
-    [labels],
-  )
+  const labelFor = useMemo(() => labelBookOf(labels), [labels])
 
   const paged = preferences.pageMode === 'paged'
-  // `layoutSheet` builds a fresh frames array every time; the frames change
-  // only when a page is added, a label moves or a comment grows a page, so
-  // the previous array is kept while its rows are equal and `<PageFrames>`
-  // - a hundred-odd sheets - is not drawn again for a keystroke.
-  const framesRef = useRef<{ readonly key: string; readonly frames: SheetLayout['frames'] } | null>(null)
-  const layout = useMemo<SheetLayout>(() => {
-    const next = layoutSheet(
-      blocksOf(value, sheet, labelFor),
-      measurement?.ok === true ? measurement.record : null,
-      sheet,
-      paged,
-    )
-    const key = next.frames
-      .map((frame) => `${String(frame.ordinal)}:${frame.label}:${String(frame.topPx)}:${String(frame.heightPx)}:${frame.locked ? 'L' : ''}`)
-      .join('|')
-    const last = framesRef.current
-    if (last !== null && last.key === key) return { ...next, frames: last.frames }
-    framesRef.current = { key, frames: next.frames }
-    return next
-  }, [value, sheet, labelFor, measurement, paged])
+  const record: MeasurementRecord | null = measurement?.ok === true ? measurement.record : null
+
+  // The layout the server's first paint draws, and the editor's starting
+  // point. After that the editor's decorations plugin owns the layout and
+  // reports the frames through the store.
+  const initialLayout = useMemo(
+    () => staticLayout(draft?.nodes ?? [], record, sheet, paged, labelFor),
+    // Once: the first render's inputs. Later inputs go to the editor through `updateSheet`.
+    [],
+  )
+  const [store] = useState<EditorStore>(() =>
+    createEditorStore(
+      (draft?.nodes ?? []).map((node) => node.id as string),
+      { frames: initialLayout.frames, heightPx: initialLayout.heightPx, paged: initialLayout.paged },
+    ),
+  )
+  const layout = useSlice(store.layout)
+  const caret = useSlice(store.caret)
+  const ids = useSlice(store.ids)
+
+  const sheetInputs = useMemo<SheetInputs>(() => ({ sheet, record, paged, labelFor }), [labelFor, paged, record, sheet])
+  const initialSheetInputs = useRef(sheetInputs)
+  const sheetInputsRef = useRef(sheetInputs)
+  sheetInputsRef.current = sheetInputs
+  /** What the editor was last told. Only the fields that changed are sent: a new record diffs, a new sheet rebuilds. */
+  const sentSheetInputs = useRef(sheetInputs)
+  useEffect(() => {
+    const editor = editorRef.current
+    const last = sentSheetInputs.current
+    if (editor === null || sheetInputs === last) return
+    const partial: { -readonly [K in keyof SheetInputs]?: SheetInputs[K] } = {}
+    if (sheetInputs.sheet !== last.sheet) partial.sheet = sheetInputs.sheet
+    if (sheetInputs.record !== last.record) partial.record = sheetInputs.record
+    if (sheetInputs.paged !== last.paged) partial.paged = sheetInputs.paged
+    if (sheetInputs.labelFor !== last.labelFor) partial.labelFor = sheetInputs.labelFor
+    sentSheetInputs.current = sheetInputs
+    if (Object.keys(partial).length > 0) updateSheet(editor, partial)
+  }, [sheetInputs])
+
+  const labelsRef = useRef(labels)
+  labelsRef.current = labels
+  const readLabels = useCallback(() => labelsRef.current, [])
 
   // ---------------------------------------------------------------------------
   // Saving
@@ -408,39 +437,39 @@ export const ScriptWorkspace = ({
 
   /**
    * The one engine, run here with the same inputs the server uses. `null`
-   * when the value will not read or the engine refuses; the server's answer
-   * then carries the refusal.
+   * when the document will not read or the engine refuses; the server's
+   * answer then carries the refusal.
    */
   const measureLocally = useCallback(
-    (next: readonly TElement[], using: ScriptPreferences): LocalRecord | null => {
-      const read = fromSlateValue(next)
+    (next: ProseMirrorNode, using: ScriptPreferences): LocalRecord | null => {
+      const read = fromDoc(next)
       if (!read.ok) return null
-      const base = {
+      const reply = measureNodes({
+        serial: 0,
+        nodes: read.value,
         format: using.format,
+        pageMode: using.pageMode,
         liveRepaginate: using.liveRepaginate,
         mentionLabels: labels,
         lockedPages: draft?.lockedPages ?? [],
         revision: draft?.revision ?? 'white',
-      }
-      const record = paginate(read.value, { ...base, pageMode: using.pageMode })
-      if (!record.ok) return null
-      const pagedRecord =
-        using.pageMode === 'paged' ? record : paginate(read.value, { ...base, pageMode: 'paged' })
-      if (!pagedRecord.ok) return null
-      const measurement: MeasureOutcome = { ok: true, record: record.value, paged: pagedRecord.value }
-      return { value: next, measurement, digest: digestOf([record.value, pagedRecord.value]) }
+      })
+      if (reply.measurement === null || reply.digest === null) return null
+      return { doc: next, measurement: reply.measurement, digest: reply.digest }
     },
     [draft, labels],
   )
 
   const save = useCallback(
     async (snapshot: boolean): Promise<void> => {
-      if (draft === null) return
+      const editor = editorRef.current
+      if (draft === null || editor === null) return
       if (inFlight.current) {
         queued.current = true
         return
       }
-      const read = fromSlateValue(value)
+      const current = editor.state.doc
+      const read = fromDoc(current)
       if (!read.ok) {
         const where = `block ${String(read.error.index + 1)}`
         const what =
@@ -455,21 +484,21 @@ export const ScriptWorkspace = ({
       inFlight.current = true
       setSaveState({ kind: 'saving' })
       const nodes = read.value
-      const ids = nodes.map((node) => node.id)
+      const nodeIds = nodes.map((node) => node.id)
       const before = baseline.current
-      // The strict reader yields one node per top-level element, in order.
-      const serialised = nodes.map((node, index) => serialise(value[index], node))
+      // The strict reader yields one node per top-level block, in order.
+      const serialised = nodes.map((node, index) => serialise(current.maybeChild(index) ?? undefined, node))
       const upserts = nodes.filter((node, index) => before.byId.get(node.id as string) !== serialised[index])
       const sameOrder =
-        ids.length === before.ids.length && ids.every((id, index) => id === before.ids[index])
-      const retirements = retirementsSince(before.ids as readonly NodeId[], ids, log)
+        nodeIds.length === before.ids.length && nodeIds.every((id, index) => id === before.ids[index])
+      const retirements = retirementsSince(before.ids as readonly NodeId[], nodeIds, log)
       const wantSnapshot = snapshot || Date.now() - lastSnapshot.current > SNAPSHOT_EVERY_MS
       const wantDerive = snapshot || Date.now() - lastDerive.current > DERIVE_EVERY_MS
       // The record this save vouches for: live mode's, when it is for this
-      // value, else one computed now. Applied below only if the server
+      // document, else one computed now. Applied below only if the server
       // confirms it is its own answer.
       const held = localRecordFor.current
-      const local = held !== null && held.value === value ? held : measureLocally(value, preferencesRef.current)
+      const local = held !== null && held.doc === current ? held : measureLocally(current, preferencesRef.current)
       try {
         const result = await saveScript({
           projectId,
@@ -477,7 +506,7 @@ export const ScriptWorkspace = ({
           documentId: draft.documentId,
           baseUpdatedAt: baseUpdatedAt.current,
           upserts: [...upserts],
-          order: sameOrder ? null : [...ids],
+          order: sameOrder ? null : [...nodeIds],
           retirements: [...retirements],
           snapshot: wantSnapshot,
           derive: wantDerive,
@@ -494,9 +523,9 @@ export const ScriptWorkspace = ({
           if (result.measurement !== null) setMeasurement(result.measurement)
           else if (local !== null) setMeasurement(local.measurement)
           // Same book, same array: `labelFor` keys the per-block wrap cache
-          // and the editor's context, and a save happens every few seconds.
-          setLabels((current) =>
-            JSON.stringify(current) === JSON.stringify(result.labels) ? current : result.labels,
+          // and every line end, and a save happens every few seconds.
+          setLabels((existing) =>
+            JSON.stringify(existing) === JSON.stringify(result.labels) ? existing : result.labels,
           )
           setConflict(result.conflict)
           setSaveState({ kind: 'saved', at: Date.now() })
@@ -518,7 +547,7 @@ export const ScriptWorkspace = ({
         void saveRef.current(false)
       }
     },
-    [draft, episode, log, measureLocally, projectId, value],
+    [draft, episode, log, measureLocally, projectId],
   )
 
   const saveRef = useRef(save)
@@ -532,52 +561,76 @@ export const ScriptWorkspace = ({
     }, AUTOSAVE_MS)
   }, [])
 
-  /** Live mode, and a preference change: measure here and draw it now. */
+  /**
+   * Live mode, and a preference change: measure - off the main thread when
+   * a worker is available - and draw it when the reply lands, unless the
+   * document has moved on since, in which case the next pause measures again.
+   */
   const repaginateLocally = useCallback(
-    (next: readonly TElement[], using: ScriptPreferences) => {
-      const local = measureLocally(next, using)
-      if (local === null) return
-      localRecordFor.current = local
-      setMeasurement(local.measurement)
+    (using: ScriptPreferences) => {
+      const editor = editorRef.current
+      if (editor === null) return
+      const current = editor.state.doc
+      const read = fromDoc(current)
+      if (!read.ok) return
+      measurer.current ??= createMeasurer()
+      liveSerial.current += 1
+      const serial = liveSerial.current
+      void measurer.current
+        .measure({
+          serial,
+          nodes: read.value,
+          format: using.format,
+          pageMode: using.pageMode,
+          liveRepaginate: using.liveRepaginate,
+          mentionLabels: labelsRef.current,
+          lockedPages: draft?.lockedPages ?? [],
+          revision: draft?.revision ?? 'white',
+        })
+        .then((reply) => {
+          if (reply.serial !== liveSerial.current || reply.measurement === null || reply.digest === null) return
+          localRecordFor.current = { doc: current, measurement: reply.measurement, digest: reply.digest }
+          setMeasurement(reply.measurement)
+        })
     },
-    [measureLocally],
+    [draft],
   )
 
-  const onValueChange = useCallback(
-    (next: readonly TElement[]) => {
-      setValue(next)
-      setSaveState((state) => (state.kind === 'saving' ? state : { kind: 'dirty' }))
-      scheduleSave()
-      if (preferences.liveRepaginate) {
+  preferencesRef.current = preferences
+
+  // A change in the editor: mark dirty (without a render when already
+  // dirty), schedule the save, and in live mode the repagination.
+  useEffect(
+    () =>
+      store.version.subscribe(() => {
+        setSaveState((state) => (state.kind === 'saving' || state.kind === 'dirty' ? state : { kind: 'dirty' }))
+        scheduleSave()
+        const using = preferencesRef.current
+        if (!using.liveRepaginate) return
         if (liveTimer.current !== null) window.clearTimeout(liveTimer.current)
         liveTimer.current = window.setTimeout(() => {
           liveTimer.current = null
-          repaginateLocally(next, preferences)
+          repaginateLocally(using)
         }, LIVE_REPAGINATE_MS)
-      }
-    },
-    [preferences, repaginateLocally, scheduleSave],
+      }),
+    [repaginateLocally, scheduleSave, store],
   )
 
   // ---------------------------------------------------------------------------
   // Pagination and format: ahead of the row, then written to it
   // ---------------------------------------------------------------------------
 
-  const valueRef = useRef(value)
-  valueRef.current = value
-  preferencesRef.current = preferences
-
   const choosePreferences = useCallback(
     (next: ScriptPreferences, write: () => Promise<SimpleResult>) => {
       const previous = preferences
       setPreferences(next)
       setPreferencesNotice(null)
-      if (draft !== null) repaginateLocally(valueRef.current, next)
+      if (draft !== null) repaginateLocally(next)
       startPreference(async () => {
         const result = await write()
         if (result.status === 'done') return
         setPreferences(previous)
-        if (draft !== null) repaginateLocally(valueRef.current, previous)
+        if (draft !== null) repaginateLocally(previous)
         setPreferencesNotice(result.message)
       })
     },
@@ -611,7 +664,7 @@ export const ScriptWorkspace = ({
       }
     }
     // A tab going to the background is the moment a laptop lid closes: a
-    // change waiting on the 1.5s timer is saved now rather than maybe never.
+    // change waiting on the timer is saved now rather than maybe never.
     const onHidden = (): void => {
       if (document.visibilityState !== 'hidden' || saveTimer.current === null) return
       window.clearTimeout(saveTimer.current)
@@ -651,38 +704,49 @@ export const ScriptWorkspace = ({
     [episode, projectId],
   )
 
+  const onEditor = useCallback((editor: Editor | null) => {
+    editorRef.current = editor
+    // Created after a save already moved the inputs on: it is told everything once.
+    if (editor !== null && sheetInputsRef.current !== sentSheetInputs.current) {
+      sentSheetInputs.current = sheetInputsRef.current
+      updateSheet(editor, sheetInputsRef.current)
+    }
+  }, [])
+
   // ---------------------------------------------------------------------------
-  // Status bar figures, from the record
+  // Status bar figures, from the record and the caret
   // ---------------------------------------------------------------------------
 
   const status = useMemo(() => {
-    const record: MeasurementRecord | null = measurement?.ok === true ? measurement.paged : null
-    const pages = record === null ? '—' : String(record.totals.pages)
+    const pagedRecord: MeasurementRecord | null = measurement?.ok === true ? measurement.paged : null
+    const pages = pagedRecord === null ? '—' : String(pagedRecord.totals.pages)
     let page = '—'
     let sceneLabel = 'No scenes yet'
-    if (record !== null && caret.blockId !== null) {
-      const placed = record.nodes.find((node) => node.id === caret.blockId)
+    const editor = editorRef.current
+    if (pagedRecord !== null && caret.blockId !== null && editor !== null) {
+      const placed = pagedRecord.nodes.find((node) => node.id === caret.blockId)
       const ordinal = placed?.runs[0]?.page
-      if (ordinal !== undefined) page = record.pages[ordinal - 1]?.label ?? String(ordinal)
-      const index = value.findIndex((element) => isScriptElement(element) && element.id === caret.blockId)
+      if (ordinal !== undefined) page = pagedRecord.pages[ordinal - 1]?.label ?? String(ordinal)
+      const blocks = editor.state.doc
+      const index = ids.indexOf(caret.blockId)
       for (let at = index; at >= 0; at -= 1) {
-        const element = value[at]
-        if (!isScriptElement(element) || element.type !== 'scene') continue
-        const scene = record.scenes.find((entry) => entry.id === element.id)
+        const block = blocks.maybeChild(at)
+        if (block === null || block.type.name !== 'scene') continue
+        const id = block.attrs['id']
+        const scene = pagedRecord.scenes.find((entry) => entry.id === id)
         if (scene !== undefined) {
           sceneLabel = `Scene ${String(scene.number)} · ${eighths(scene.eighths)} pg`
           break
         }
-        const heading = element.children.map((child) => ('text' in child ? child.text : '')).join('')
-        if (!readSlugline(heading).ok) continue
+        if (!readSlugline(block.textContent).ok) continue
         break
       }
-    } else if (record !== null && record.totals.scenes > 0) {
-      sceneLabel = `${String(record.totals.scenes)} scenes`
+    } else if (pagedRecord !== null && pagedRecord.totals.scenes > 0) {
+      sceneLabel = `${String(pagedRecord.totals.scenes)} scenes`
     }
-    if (record === null && caret.blockId === null) page = '1'
-    return { page, pages: record === null ? '1' : pages, sceneLabel }
-  }, [caret.blockId, measurement, value])
+    if (pagedRecord === null && caret.blockId === null) page = '1'
+    return { page, pages: pagedRecord === null ? '1' : pages, sceneLabel }
+  }, [caret.blockId, ids, measurement])
 
   /**
    * The paged record as a page map, in the golden file's row format with the
@@ -692,56 +756,52 @@ export const ScriptWorkspace = ({
    * `packages/script/src/testing/golden/us-letter.json`. Nothing in the
    * product reads it.
    */
-  // The id sequence as one string: it changes on a split, merge or paste,
-  // not on a keystroke, so the map below - 100 KB of JSON in a hidden
-  // element - is not rebuilt and re-diffed by React for every character.
-  const idsKey = useMemo(
-    () => value.map((element) => (isScriptElement(element) ? element.id : '')).join('\n'),
-    [value],
-  )
+  // The id sequence is a new array only on a split, merge or paste, not on a
+  // keystroke (`editor-store.ts`), so the map below - 100 KB of JSON in a
+  // hidden element - is not rebuilt and re-diffed by React for every character.
   const pageMap = useMemo(() => {
     if (measurement?.ok !== true) return null
-    const record = measurement.paged
+    const pagedRecord = measurement.paged
     const position = new Map<string, number>()
-    idsKey.split('\n').forEach((id, index) => {
+    ids.forEach((id, index) => {
       if (id !== '') position.set(id, index)
     })
     const at = (id: string): string => {
       const index = position.get(id)
       return index === undefined ? '?' : String(index)
     }
-    const rows = (at: (id: string) => string) => ({
-      pages: record.pages.map((page) =>
+    const rows = (key: (id: string) => string) => ({
+      pages: pagedRecord.pages.map((entry) =>
         [
-          page.ordinal,
-          page.label,
-          page.linesUsed,
-          page.firstNode === null ? '-' : at(page.firstNode),
-          page.artefacts.length === 0
+          entry.ordinal,
+          entry.label,
+          entry.linesUsed,
+          entry.firstNode === null ? '-' : key(entry.firstNode),
+          entry.artefacts.length === 0
             ? '-'
-            : page.artefacts
+            : entry.artefacts
                 .map(
                   (artefact) =>
-                    `${artefact.kind}@${at(artefact.kind === 'more' ? artefact.afterNode : artefact.beforeNode)}`,
+                    `${artefact.kind}@${key(artefact.kind === 'more' ? artefact.afterNode : artefact.beforeNode)}`,
                 )
                 .join(' '),
         ].join(' | '),
       ),
-      scenes: record.scenes.map((scene) =>
-        [scene.number, at(scene.id), scene.startPage, scene.endPage, scene.lines, formatEighths(scene.eighths)].join(' | '),
+      scenes: pagedRecord.scenes.map((scene) =>
+        [scene.number, key(scene.id), scene.startPage, scene.endPage, scene.lines, formatEighths(scene.eighths)].join(' | '),
       ),
     })
     const byPosition = rows(at)
     const byId = rows((id) => id)
     return {
-      totals: record.totals,
-      breaks: record.breaks.map((entry) => entry.rule),
+      totals: pagedRecord.totals,
+      breaks: pagedRecord.breaks.map((entry) => entry.rule),
       pages: byPosition.pages,
       scenes: byPosition.scenes,
       pagesById: byId.pages,
       scenesById: byId.scenes,
     }
-  }, [measurement, idsKey])
+  }, [measurement, ids])
 
   const paginationLabel = PAGINATION_CONTROL_COPY[controlFromPagination(preferences)].label
   const refusal = measurement?.ok === false ? measurement.refusal : null
@@ -749,40 +809,69 @@ export const ScriptWorkspace = ({
   const onImport = useCallback(() => {
     document.getElementById(IMPORT_INPUT_ID)?.click()
   }, [])
+  // Export: the action returns the .fdx text and the browser is handed the
+  // file; nothing is stored. A save in flight is flushed first so the file
+  // is the draft on screen, not the draft of a second ago.
+  const [exporting, setExporting] = useState(false)
+  const [exportNotice, setExportNotice] = useState<string | null>(null)
+  const onExport = useCallback(() => {
+    if (draft === null || exporting) return
+    setExporting(true)
+    setExportNotice(null)
+    const flush = saveTimer.current === null && !inFlight.current ? Promise.resolve() : saveRef.current(false)
+    void flush
+      .then(() => exportScriptFdx(projectId, episode))
+      .then((result) => {
+        if (result.status !== 'exported') {
+          setExportNotice(result.message)
+          return
+        }
+        const url = URL.createObjectURL(new Blob([result.xml], { type: 'application/xml' }))
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = result.filename
+        anchor.click()
+        URL.revokeObjectURL(url)
+        const plural = (count: number, noun: string): string => `${String(count)} ${noun}${count === 1 ? '' : 's'}`
+        const notes: string[] = []
+        if (result.omitted > 0) notes.push(`${plural(result.omitted, 'comment')} left out`)
+        if (result.subtitlesAsGeneral > 0) notes.push(`${plural(result.subtitlesAsGeneral, 'subtitle')} written as centred General`)
+        if (result.unresolvedMentions > 0) notes.push(`${plural(result.unresolvedMentions, 'mention')} with no record`)
+        if (result.emptyBlocks > 0) notes.push(`${plural(result.emptyBlocks, 'empty block')} Final Draft will drop`)
+        setExportNotice(notes.length === 0 ? `Exported ${result.filename}.` : `Exported ${result.filename} · ${notes.join(' · ')}.`)
+      })
+      .catch((cause: unknown) => {
+        setExportNotice(cause instanceof Error ? cause.message : 'The export did not reach the server.')
+      })
+      .finally(() => {
+        setExporting(false)
+      })
+  }, [draft, episode, exporting, projectId])
   const onToggleNav = useCallback(() => {
     session.setNavOpen(!navOpen)
   }, [navOpen, session])
   const onCycleZoom = useCallback(() => {
     session.setZoom(session.zoom === 'fit' ? 1 : session.zoom === 1 ? 0.75 : 'fit')
   }, [session])
-  const setCaretType = useCallback((type: ScreenplayNodeType) => {
-    const editor = editorRef.current
-    if (editor === null) return
-    const entry = editor.api.above<TElement>({ match: (n) => isScriptElement(n) })
-    if (entry === undefined) return
-    editor.tf.setNodes({ type, ...(type === 'character' ? {} : { modifiers: [] }) }, { at: entry[1] })
-    editor.tf.focus()
-  }, [])
 
   const editorArea = useMemo(() => {
     if (draft === null) return null
     return (
       <ScriptEditor
         documentId={draft.documentId}
-        initialValue={draft.value}
-        sheet={sheet}
-        layout={layout}
-        labels={labels}
+        nodes={draft.nodes}
+        store={store}
         log={log}
-        onValueChange={onValueChange}
-        onCaret={setCaret}
+        labelFor={initialSheetInputs.current.labelFor}
+        labels={readLabels}
+        sheet={initialSheetInputs.current}
         onCreateMention={onCreateMention}
-        editorRef={editorRef}
+        onEditor={onEditor}
         autoFocus={doc === 'script'}
+        fallback={<StaticSheet nodes={draft.nodes} layout={initialLayout} sheet={initialSheetInputs.current.sheet} labelFor={initialSheetInputs.current.labelFor} />}
       />
     )
-  }, [doc, draft, labels, layout, log, onCreateMention, onValueChange, sheet])
-
+  }, [doc, draft, initialLayout, log, onCreateMention, onEditor, readLabels, store])
 
   return (
     <main
@@ -833,7 +922,7 @@ export const ScriptWorkspace = ({
               event.preventDefault()
             }}
             onClick={() => {
-              editorRef.current?.undo()
+              editorRef.current?.commands.undo()
             }}
           >
             ↩
@@ -890,9 +979,6 @@ export const ScriptWorkspace = ({
           data-editor-column
           className="relative flex min-w-0 flex-1 flex-col items-center overflow-auto px-0 pb-[40px] pt-[14px]"
         >
-          {doc === 'script' && draft !== null ? (
-            <TypeBar current={caret.type} onPick={setCaretType} disabled={false} />
-          ) : null}
           <div style={{ zoom }} className="flex w-[816px] flex-none flex-col items-center">
             <div hidden={doc !== 'cover'} data-doc="cover" className="flex w-full flex-col items-center">
               <CoverSheet projectId={projectId} episode={episode} titlePage={titlePage} episodeTitle={episodeTitle} />
@@ -907,7 +993,7 @@ export const ScriptWorkspace = ({
                       {JSON.stringify(pageMap)}
                     </div>
                   )}
-                  {paged ? (
+                  {layout.paged ? (
                     <PageFrames frames={layout.frames} />
                   ) : (
                     <div className="folio-page" style={{ top: 0, height: layout.heightPx }} aria-hidden="true" />
@@ -920,6 +1006,9 @@ export const ScriptWorkspace = ({
             {doc === 'script' ? (
               <div className="flex w-[816px] flex-wrap gap-[16px] px-[2px] pt-[12px] font-sans text-10-5 text-ink3">
                 <span>
+                  <b className="font-mono font-bold text-ink2">/</b> at the start of a line lists the eight block types · <b className="font-mono font-bold text-ink2">⌘1</b>–<b className="font-mono font-bold text-ink2">⌘8</b> picks one directly
+                </span>
+                <span>
                   <b className="font-mono font-bold text-ink2">Tab</b> Action → Character → Dialogue → Parenthetical
                 </span>
                 <span>
@@ -927,6 +1016,15 @@ export const ScriptWorkspace = ({
                 </span>
                 <span>
                   <b className="font-mono font-bold text-ink2">INT.</b> on an empty Action line becomes a Scene Heading
+                </span>
+                <span>
+                  <b className="font-mono font-bold text-ink2">Enter</b> selects or creates in a Scene, Character or Transition selector
+                </span>
+                <span>
+                  <b className="font-mono font-bold text-ink2">(</b> on an empty Dialogue line opens a Parenthetical
+                </span>
+                <span>
+                  <b className="font-mono font-bold text-ink2">Click</b> a location, time, cue or cut to change it
                 </span>
               </div>
             ) : null}
@@ -950,6 +1048,9 @@ export const ScriptWorkspace = ({
             threads={draft?.threads ?? []}
             revisions={draft?.revisions ?? []}
             onImport={onImport}
+            onExport={onExport}
+            exporting={exporting}
+            exportNotice={exportNotice}
           />
         ) : null}
       </div>

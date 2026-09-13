@@ -334,6 +334,319 @@
   }
 
   /*
+   * The ghost: what the caret block promises before it is written - the
+   * heading's three segments, CHARACTER, CUT TO:, the parenthetical's cue.
+   * Flows after the text when there is text; placed at the block's own inset
+   * when there is none, because an empty Slate block ends in a <br>. Never
+   * selectable, never a click target, so Slate never sees it as a point.
+   */
+  .folio-ghost {
+    color: var(--ink3);
+    white-space: pre;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .folio-ghost[data-placed='true'] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding-left: inherit;
+  }
+
+  .folio-ghost > b {
+    font-weight: 400;
+    color: var(--accent);
+    opacity: 0.85;
+  }
+
+  /*
+   * The block selector, under the segment it completes: a prompt, the two
+   * key hints as keycaps, a two-line list. Same chrome as the slash menu and
+   * the mention combobox; the editable keeps focus throughout. Reopened from
+   * a pill it is the same box (`data-mode='edit'`).
+   */
+  .folio-picker {
+    position: fixed;
+    z-index: 30;
+    width: 264px;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-chrome);
+    font-family: var(--font-sans);
+    font-size: var(--text-11-5);
+    color: var(--ink);
+    text-transform: none;
+    white-space: normal;
+    user-select: none;
+  }
+
+  .folio-picker-prompt {
+    padding: 4px 8px 2px;
+    font-size: var(--text-10-5);
+    color: var(--ink3);
+  }
+
+  .folio-picker-hints {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 2px 8px 6px;
+    font-size: var(--text-10-5);
+    color: var(--ink3);
+  }
+
+  .folio-picker-hints > span {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .folio-picker-hints kbd {
+    min-width: 34px;
+    padding: 1px 5px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--sel);
+    font-family: var(--font-mono);
+    font-size: var(--text-9-5);
+    color: var(--ink2);
+    text-align: center;
+  }
+
+  .folio-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: 208px;
+    overflow-y: auto;
+    border-top: 1px solid var(--line2);
+    padding-top: 3px;
+  }
+
+  .folio-picker-choice {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 5px 8px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-chrome);
+    cursor: pointer;
+    color: var(--ink2);
+    text-align: left;
+  }
+
+  .folio-picker-choice[aria-selected='true'] {
+    background: var(--sel);
+    color: var(--ink);
+  }
+
+  .folio-picker-choice-text {
+    font-weight: 600;
+    font-size: var(--text-11-5);
+  }
+
+  .folio-picker-choice-detail {
+    font-size: var(--text-10-5);
+    color: var(--ink3);
+  }
+
+  .folio-picker-choice[data-kind='new'] > .folio-picker-choice-detail {
+    color: var(--accent);
+  }
+
+  .folio-picker-foot {
+    margin-top: 2px;
+    border-top: 1px solid var(--line2);
+    padding: 4px 8px 2px;
+    font-size: var(--text-9-5);
+    color: var(--ink3);
+  }
+
+  .folio-picker-foot > button {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--ink3);
+    cursor: pointer;
+  }
+
+  /*
+   * A pill: a segment of a finished heading, cue or transition - INT., the
+   * set, the time, the cue's name, the cut - drawn on an accent ground so it
+   * reads as a thing that can be clicked, which it can: a click reopens that
+   * segment's selector (`_script/editor/extensions/pickers.ts`). A decoration on the text, so it
+   * is the text; the caret moves through it and typing edits it.
+   */
+  .folio-pill {
+    background: var(--accent-bg);
+    border-bottom: 1px solid var(--accent-line);
+    cursor: pointer;
+  }
+
+  /* No ring and no radius: a line end or a page gap splits a pill into two spans, which must tile without a seam. */
+  .folio-pill:hover {
+    border-bottom-color: var(--accent);
+  }
+
+  .folio-block[data-type='transition'] .folio-pill {
+    color: var(--sheet-ink);
+  }
+
+  /*
+   * The slash menu, under the `/` that opened it: sections with a title,
+   * rows of a glyph box, a label with its detail, and the ⌘N the row also
+   * answers to; a foot that closes it. The search line is the placeholder
+   * after the slash while nothing has been typed - the Suggestion plugin's
+   * empty-query decoration, drawn as text after the slash. Same chrome as
+   * the block selector, wider and taller, and the editable keeps focus
+   * throughout. The menu itself is drawn in the floating layer on
+   * `document.body` (`_script/editor/floating/floating-layer.tsx`), outside
+   * the zoomed desk, at `position: fixed`.
+   */
+  .folio-slash-query-empty::after {
+    content: 'Type to search';
+    color: var(--ink3);
+    text-transform: none;
+    white-space: pre;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .folio-slash {
+    position: fixed;
+    z-index: 30;
+    width: 312px;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-toggle);
+    font-family: var(--font-sans);
+    font-size: var(--text-12);
+    color: var(--ink);
+    text-transform: none;
+    white-space: normal;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  .folio-slash-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 296px;
+    overflow-y: auto;
+    padding: 6px;
+  }
+
+  .folio-slash-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .folio-slash-section + .folio-slash-section {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line2);
+  }
+
+  .folio-slash-title {
+    padding: 4px 8px 5px;
+    font-size: var(--text-10-5);
+    font-weight: 500;
+    color: var(--ink3);
+  }
+
+  .folio-slash-empty {
+    padding: 8px;
+    font-size: var(--text-11);
+    color: var(--ink3);
+  }
+
+  .folio-slash-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 8px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-chrome);
+    cursor: pointer;
+    color: var(--ink);
+    text-align: left;
+  }
+
+  .folio-slash-row[aria-selected='true'] {
+    background: var(--sel);
+  }
+
+  .folio-slash-glyph {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--hover);
+    font-family: var(--font-glyph);
+    font-size: var(--text-12-5);
+    color: var(--ink2);
+  }
+
+  .folio-slash-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .folio-slash-detail {
+    font-weight: 400;
+    color: var(--ink3);
+  }
+
+  .folio-slash-row > kbd {
+    flex: none;
+    font-family: var(--font-sans);
+    font-size: var(--text-10-5);
+    color: var(--ink3);
+  }
+
+  .folio-slash-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-top: 1px solid var(--line2);
+    font-size: var(--text-12);
+    color: var(--ink);
+  }
+
+  .folio-slash-foot > button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .folio-slash-foot > span {
+    font-size: var(--text-10-5);
+    color: var(--ink3);
+  }
+
+  /*
    * A page gap inside a split block: the rest of the page, the desk between
    * sheets, and the next page's top margin, with (MORE) at its head and the
    * continued cue at its foot. A block box inside the inline flow, so the
@@ -477,8 +790,9 @@
 /*
  * The prose sheet - the Outline. `Route - Outline.dc.html`, transcribed: the
  * same 816px sheet as the script, a 14px ruler above it, `56px 0 88px`
- * inside, Courier Prime 16px at 1.95 for prose and Newsreader for the title
- * and headings. Not paginated - the panel says so - so blocks wrap on their
+ * inside, Courier Prime 16px at 1.95 for prose and Inter (`--font-serif`,
+ * the prose/heading role) for the title and headings. Not paginated - the
+ * panel says so - so blocks wrap on their
  * own (`pre-wrap`) and there is no line engine here.
  *
  * Each block carries a 7px ring in the left margin at `left:74px` on the

@@ -27,7 +27,7 @@ import type { WalkOptions } from '../playwright.config'
  *      the outside.
  *   4. **A decision clears a conflict.** `Rule is right · flag scene`
  *      decides it; the badge goes; "N other rules hold" is arithmetic.
- *   5. **The glossary's use count is derived.** `Tanker` is said three
+ *   5. **The glossary's use count is derived.** `Tanker` is said four
  *      times, first in `E1 Sc 1`; `monsoon` is never said and reads `—`,
  *      `0`, in amber. A duplicate spelling is refused.
  *   6. **The entry view, both themes.**
@@ -100,12 +100,15 @@ const saved = async (page: Page): Promise<void> => {
   await expect(page.locator('[data-save-state]')).toHaveAttribute('data-save-state', 'saved', { timeout: 120_000 })
 }
 
-/** Edit an in-place field: click its button, type, Enter. */
-const edit = async (page: Page, label: string, value: string): Promise<void> => {
+/**
+ * Edit an in-place field: click its button, type, commit. A multiline
+ * field (a textarea) commits on Ctrl+Enter; Enter alone is a newline.
+ */
+const edit = async (page: Page, label: string, value: string, multiline = false): Promise<void> => {
   await page.getByRole('button', { name: label, exact: true }).click()
   const input = page.getByLabel(label, { exact: true })
   await input.fill(value)
-  await input.press('Enter')
+  await input.press(multiline ? 'Control+Enter' : 'Enter')
 }
 
 let scriptUrl = ''
@@ -172,7 +175,7 @@ test('Start with sections creates the Pitch, and a field survives a reload', asy
   await expect(page.locator('[data-bible-row-status="draft"]')).toHaveCount(1)
   await expect(page.locator('[data-entry-count]')).toHaveText('1')
 
-  await edit(page, 'Logline', 'When a chawl loses its water for nine days, a laundress learns who controls the tanker.')
+  await edit(page, 'Logline', 'When a chawl loses its water for nine days, a laundress learns who controls the tanker.', true)
   await saved(page)
   await page.reload()
   await ready(page)

@@ -3,7 +3,7 @@ import { lineCount, resolveSheet, wrapText } from '@folio/script'
 import { describe, expect, it } from 'vitest'
 
 import { lineCountOf, lineEndsOf } from '../lib/script/lines'
-import type { ScriptInline } from '../lib/script/slate-model'
+import type { ScriptInline } from '../lib/script/inline'
 
 /**
  * The sheet draws the engine's lines, not the browser's.
@@ -78,7 +78,7 @@ describe('lineEndsOf agrees with wrapText', () => {
   it('renders a mention by its label and counts it into the measure', () => {
     const children: readonly ScriptInline[] = [
       { text: 'Wet washing hangs the length of the corridor. ' },
-      { type: 'mention', entity: 'character', id: 'c1', children: [{ text: '' }] },
+      { type: 'mention', entity: 'character', id: 'c1' },
       { text: ', 34, moves through it sideways, a steel tiffin held flat above her head.' },
     ]
     const labelFor = (): string => 'MEERA'
@@ -93,7 +93,7 @@ describe('lineEndsOf agrees with wrapText', () => {
   it('measures an unresolved mention as the engine does: one character', () => {
     const children: readonly ScriptInline[] = [
       { text: 'aaaa ' },
-      { type: 'mention', entity: 'location', id: 'l1', children: [{ text: '' }] },
+      { type: 'mention', entity: 'location', id: 'l1' },
       { text: ' bbbb' },
     ]
     expect(lineCountOf(lineEndsOf(children, NO_LABELS, 6))).toBe(lineCount('aaaa x bbbb', 6))

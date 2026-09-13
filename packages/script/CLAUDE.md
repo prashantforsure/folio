@@ -34,10 +34,10 @@ invariants no header states alone:
 - **Screenplay and outline are separate closed unions sharing no member.** `*_TYPE_COVERAGE`
   records stop compiling if a union and its runtime tag set drift.
 - **`dependencies` is empty and stays empty.** `importFinalDraft` takes an already-parsed XML tree
-  for that reason; [fdx.ts](src/fdx.ts) names the `fast-xml-parser` options it expects, and that
-  package is unapproved and in no `package.json` — so FDX import cannot be called yet. Tests read
-  `.fdx` through [testing/fdx-reader.ts](src/testing/fdx-reader.ts), which must never become a
-  general XML parser.
+  for that reason; [fdx.ts](src/fdx.ts) names the `fast-xml-parser` options it expects, and
+  `apps/web` (where the package is approved and installed) does the parsing. Tests read `.fdx`
+  through [testing/fdx-reader.ts](src/testing/fdx-reader.ts), which must never become a general
+  XML parser.
 
 ## Pagination
 
@@ -49,9 +49,9 @@ holds locked pages and the colours.
 
 - **`resolveSheet('asian')` refuses** — open decision 8 (A4 width) is unruled; it returns both
   candidate widths as evidence. Do not give it a default.
-- **`LINES_PER_INCH = 12` is one constant, and disputed** — AGENTS.md says 12, the design bundle
-  draws 6. Re-ruling is a one-line change plus a golden regeneration, and moves page counts by
-  roughly 2×. It needs a human.
+- **`LINES_PER_INCH = 6` is one constant, ruled 2026-09-11** — AGENTS.md still says 12; the
+  ruling is in `docs/build-decisions.md`, "Script route phase". Re-ruling is a one-line change
+  plus a golden regeneration and moves page counts by roughly 2×. It needs a human.
 - **Golden page maps are a contract; there is no `-u`.** On a mismatch
   [golden-page-map.test.ts](src/golden-page-map.test.ts) prints the full replacement JSON and
   fails. Paste it into [testing/golden/](src/testing/golden/) and commit it as its own change.

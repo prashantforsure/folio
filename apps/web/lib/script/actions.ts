@@ -35,6 +35,7 @@ import {
   countFountainNodes,
   importFinalDraft,
   parseFountain,
+  serialiseFinalDraft,
   text,
   typed,
 } from '@folio/script'
@@ -43,10 +44,11 @@ import { z } from 'zod'
 
 import { isPaginationControl, paginationFromControl } from '../state/project-preferences'
 import { digestOf } from './digest'
-import { readFdx } from './fdx-adapter'
+import { readFdx, writeFdx } from './fdx-adapter'
 import { cachedRows, forgetRows, rememberRows, rowsAfterWrite } from './row-cache'
 import { isRefusal, openEpisode, openEpisodeWith } from './gate'
 import type {
+  ExportScriptResult,
   ImportScriptResult,
   MentionTargetResult,
   SaveScriptResult,
@@ -421,6 +423,49 @@ export const setFormat = async (
   if (isRefusal(gate)) return gate
   await setProjectFormat(gate.scope, parsed.data)
   return { status: 'done' }
+}
+
+// ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
+
+/**
+ * The script as `.fdx` text: the stored rows, read strictly, through the pure
+ * `serialiseFinalDraft` and the adapter's `XMLBuilder`. Comments never enter
+ * it (AGENTS.md, Export); what the mapping changed is counted back so the
+ * panel can say so. Nothing is written, nothing is stored - the file goes
+ * straight to the browser's download, so the built-in-SMTP-only constraint
+ * on "your export is ready" never comes up. Not an agent-writable surface.
+ */
+export const exportScriptFdx = async (projectId: string, episode: string): Promise<ExportScriptResult> => {
+  const gate = await openEpisode(projectId, episode)
+  if (isRefusal(gate)) return gate
+  const { scope, episode: current } = gate
+  const document = await readDocumentByKind(scope, current.id, 'screenplay')
+  if (document === null) return { status: 'error', message: 'There is no script to export yet.' }
+  const [read, labels] = await Promise.all([readScreenplayNodes(scope, document.id), readMentionLabels(scope)])
+  if (!read.ok) {
+    return { status: 'error', message: `The stored script would not read (${read.error.at || 'node'}: ${read.error.reason.kind}).` }
+  }
+  const exported = serialiseFinalDraft(
+    read.value.map((entry) => entry.node),
+    { mentionLabels: labels },
+  )
+  const count = (reason: 'subtitle-as-general' | 'unresolved-mention' | 'empty-block'): number =>
+    exported.unrepresentable.filter((entry) => entry.reason === reason).length
+  const stem = current.title
+    .trim()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-|-$/gu, '')
+  return {
+    status: 'exported',
+    filename: `${stem === '' ? current.slug : stem}.fdx`,
+    xml: writeFdx(exported.root),
+    omitted: exported.omitted.length,
+    subtitlesAsGeneral: count('subtitle-as-general'),
+    unresolvedMentions: count('unresolved-mention'),
+    emptyBlocks: count('empty-block'),
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -17,7 +17,13 @@ import {
 } from '@folio/script'
 
 /**
- * Where Slate's node shape meets `@folio/script`'s union - and the only place.
+ * **Outline only.** The Slate-side shape of the screenplay union, kept for
+ * the Outline editor's mention element until the Outline is ported to Tiptap.
+ * The Script route's boundary is `lib/script/pm-model.ts`; nothing under
+ * `_script/` or `lib/script/` imports this. Retire with `_outline/editor/`.
+ *
+ * Where Slate's node shape met `@folio/script`'s union, when the Script
+ * route was on Plate.
  *
  * Plate edits a tree of `{ type, children }` objects. `@folio/script` owns a
  * closed union of eight typed nodes with inline runs. The two must never be

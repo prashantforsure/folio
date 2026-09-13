@@ -1,6 +1,6 @@
 import type { FdxNode } from '@folio/script'
 import { fdxNode } from '@folio/script'
-import { XMLParser } from 'fast-xml-parser'
+import { XMLBuilder, XMLParser } from 'fast-xml-parser'
 
 /**
  * The adapter `fdx.ts` says the caller owes: `fast-xml-parser`'s tree to the
@@ -79,4 +79,40 @@ export const readFdx = (xml: string): FdxNode => {
     }
   }
   return fdxNode('#document', { children })
+}
+
+// ---------------------------------------------------------------------------
+// The other direction
+// ---------------------------------------------------------------------------
+
+const builder = new XMLBuilder({
+  ignoreAttributes: false,
+  attributeNamePrefix: '',
+  preserveOrder: true,
+  textNodeName: '#text',
+  suppressEmptyNode: false,
+  format: true,
+  indentBy: '  ',
+})
+
+/** An `FdxNode` to the one-key-object shape `XMLBuilder` takes with `preserveOrder`. */
+const toEntry = (node: FdxNode): Record<string, unknown> => {
+  const children: Record<string, unknown>[] = []
+  if (node.text !== '') children.push({ [TEXT_KEY]: node.text })
+  for (const child of node.children) children.push(toEntry(child))
+  const entry: Record<string, unknown> = { [node.name]: children }
+  if (Object.keys(node.attributes).length > 0) entry[ATTRIBUTES_KEY] = { ...node.attributes }
+  return entry
+}
+
+const XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n'
+
+/**
+ * Write the tree `serialiseFinalDraft` produced as `.fdx` text. The mirror
+ * of `readFdx`: the same options, so what this writes, that reads back
+ * into the same tree.
+ */
+export const writeFdx = (root: FdxNode): string => {
+  const body: unknown = builder.build([toEntry(root)])
+  return `${XML_DECLARATION}${typeof body === 'string' ? body : String(body)}`
 }

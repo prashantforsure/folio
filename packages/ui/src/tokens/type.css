@@ -6,17 +6,24 @@
  * This package is presentational and has no idea where it is mounted, so it
  * cannot know a URL. `@font-face` therefore lives in `apps/web/app/fonts.css`,
  * next to the `.woff2` files it points at, and this file only names the stacks.
- * AGENTS.md, Tech stack: "Self-hosted Instrument Sans, Newsreader, Courier
- * Prime. Courier Prime version-pinned" - the pin, and the reason for it, are in
- * that file's header.
+ * AGENTS.md, Tech stack: "Self-hosted Inter, Courier Prime. Courier Prime
+ * version-pinned" - the pin, and the reason for it, are in that file's header.
  *
- * ## --font-glyph is not one of the three, and that is a finding
+ * ## One family, two roles
+ *
+ * Instrument Sans and Newsreader were retired 2026-09-13: Inter now covers
+ * both the UI role (`--font-sans`) and the prose/heading role that Newsreader
+ * used to own (`--font-serif`, kept as an alias so call sites naming it don't
+ * need to change). There is no serif face left in the stack - naming it
+ * `--font-serif` records where it is used, not what it looks like.
+ *
+ * ## --font-glyph is not one of the two, and that is a finding
  *
  * AGENTS.md, UI fidelity: "Every glyph is a Unicode character rendered as
- * text", and lists eighteen. **None of the eighteen exist in Instrument Sans,
- * Newsreader or Courier Prime.** All three ship Latin only - Google's subset
- * ranges for the exact files we self-host stop at U+2000-206F plus a handful of
- * strays, and every glyph in the set is U+21C4 or above.
+ * text", and lists eighteen. **None of the eighteen exist in Inter or Courier
+ * Prime.** Both ship Latin only - Google's subset ranges for the exact files we
+ * self-host stop at U+2000-206F plus a handful of strays, and every glyph in
+ * the set is U+21C4 or above.
  *
  * So the glyphs render out of a system font whatever we do. The honest response
  * is to say which one rather than to let each OS pick: this stack names the
@@ -42,10 +49,9 @@
  */
 
 :root {
-  --font-sans: 'Instrument Sans', system-ui, sans-serif;
-  --serif: 'Newsreader', Georgia, serif;
-  --font-serif: var(--serif);
-  --font-mono: 'Courier Prime', ui-monospace, monospace;
+  --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: var(--font-sans);
+  --font-mono: 'Courier Prime', 'Courier Screenplay', monospace;
 
   /*
    * Symbol faces, in the order they should be tried. No emoji face is named:

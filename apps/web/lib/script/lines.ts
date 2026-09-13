@@ -1,7 +1,7 @@
 import type { MentionEntity } from '@folio/script'
 
-import type { ScriptInline } from './slate-model'
-import { isMentionElement } from './slate-model'
+import type { ScriptInline } from './inline'
+import { isMentionElement } from './inline'
 
 /**
  * Where the engine breaks a block's lines, expressed in the editor's own
@@ -142,23 +142,25 @@ type Wrapped = {
 const wrapped = new WeakMap<object, Wrapped>()
 
 /**
- * `lineEndsOf` for a block, remembered on the block object.
+ * `lineEndsOf` for a block, remembered on `key` - the editor's own block
+ * object.
  *
- * Slate keeps every block it did not touch as the same object across a
- * change, and both the layout (`script-workspace.tsx`) and the decorations
- * (`plate-editor.tsx`) wrap every block on every change. With this, a
+ * ProseMirror keeps every block a change did not touch as the same object
+ * across a transaction, and both the layout and the decorations
+ * (`sheet-decorations.ts`) wrap every block on every change. With this, a
  * keystroke wraps the one block it touched and looks the rest up. The label
  * book and the measure are part of the key, so a renamed character or a
  * format switch wraps everything again, as it must.
  */
 export const lineEndsOfBlock = (
-  block: { readonly children: readonly ScriptInline[] },
+  key: object,
+  children: readonly ScriptInline[],
   labelFor: (entity: MentionEntity, id: string) => string | undefined,
   charsPerLine: number,
 ): readonly LineEnd[] => {
-  const hit = wrapped.get(block)
+  const hit = wrapped.get(key)
   if (hit !== undefined && hit.labelFor === labelFor && hit.charsPerLine === charsPerLine) return hit.ends
-  const ends = lineEndsOf(block.children, labelFor, charsPerLine)
-  wrapped.set(block, { labelFor, charsPerLine, ends })
+  const ends = lineEndsOf(children, labelFor, charsPerLine)
+  wrapped.set(key, { labelFor, charsPerLine, ends })
   return ends
 }

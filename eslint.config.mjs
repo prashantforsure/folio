@@ -195,6 +195,35 @@ export default tseslint.config(
     },
   },
 
+  // The Script route is Tiptap (ruled 2026-09-13, docs/build-decisions.md,
+  // "Script route, fifth pass"). The Outline route stays on Plate until it is
+  // ported, so `platejs` is still installed - and nothing under the Script
+  // route or its lib may reach for it again. Two editor frameworks in one
+  // route is the failure this block exists to make loud.
+  {
+    files: ['apps/web/app/(app)/app/project/[[]projectId[]]/_script/**/*.{ts,tsx}', 'apps/web/lib/script/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            { group: ICON_LIBRARIES, message: 'No icon library.' },
+            { group: COMPONENT_LIBRARIES, message: 'No opinionated component library.' },
+            {
+              group: ['@supabase/supabase-js', '@supabase/ssr', '@supabase/auth-*'],
+              message: 'The Supabase JS client is for auth and storage only.',
+            },
+            {
+              group: ['platejs', 'platejs/*', '@platejs/*', 'slate', 'slate-*', '@udecode/*'],
+              message:
+                'The Script route is Tiptap; Plate stays only for the Outline until it is ported. See docs/build-decisions.md, "Script route, fifth pass".',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // ---------------------------------------------------------------------------
   // The purity boundary. The most important block in this file.
   // ---------------------------------------------------------------------------

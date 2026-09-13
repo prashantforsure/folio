@@ -8,10 +8,10 @@
  *
  * ## Two findings about this set, both verified rather than assumed
  *
- * **1. None of the eighteen exist in the three self-hosted families.** Every
+ * **1. None of the eighteen exist in the two self-hosted families.** Every
  * character here is U+21C4 or above; the `latin` and `latin-ext` subsets we
- * serve for Instrument Sans, Newsreader and Courier Prime stop at U+2000-206F
- * with a handful of strays above it. So every one of these falls through to a
+ * serve for Inter and Courier Prime stop at U+2000-206F with a handful of
+ * strays above it. So every one of these falls through to a
  * system symbol font. That is not fixable without adding a fourth family, which
  * is a dependency and a decision - so it is named here and in `type.css`
  * instead, where `--font-glyph` picks the fallback deliberately rather than

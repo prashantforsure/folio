@@ -18,9 +18,11 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **The migrations are applied to the dev Supabase project** (shell-routes phase), and `0000` was
-  reordered once, before it had ever run anywhere — see "Shell routes phase" in
-  `docs/build-decisions.md`. Migrations are forward-only.
+- **Migrations `0000`–`0012` are applied to the dev Supabase project** and are forward-only.
+  `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
+  `docs/build-decisions.md`); `0010` is the sanctioned `DROP TABLE beats`, alone in its file.
+- **The ledger's `settled` excludes `reserve` / `release`.** A reservation is closed by a `spend`
+  or a `release`; `0007` corrected the `credit_balances` view that double-counted a held one.
 
 ## Commands
 
@@ -33,6 +35,10 @@ pnpm --filter @folio/db db:migrate    # the only one that needs a reachable data
 All three need the env vars **present** — `drizzle.config.ts` is evaluated whole. On a bare
 checkout `.env` is empty, so `db:check` exits 1 with `env.ts`'s three-problem report. That is a
 config failure, not a schema failure; the journal is clean.
+
+**`db:generate` needs a TTY** when one diff drops a table and creates another — it prompts for
+rename-or-drop and exits under a non-interactive runner. `0010`/`0011` were produced through
+`drizzle-kit/api` from a one-off script ("Timeline route phase" in `docs/build-decisions.md`).
 
 AGENTS.md's `pnpm --filter @folio/db drizzle-kit check` does not run at all
 (`ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT` — not a script name). Use `db:check`.

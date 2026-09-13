@@ -53,7 +53,7 @@ days.
 | PDF | `pdf-lib` or `pdfkit` on our own layout engine | |
 | FDX | `fast-xml-parser` + custom mapping | |
 | Fountain | Custom, in `packages/script` | |
-| Fonts | Self-hosted Instrument Sans, Newsreader, Courier Prime | Courier Prime version-pinned |
+| Fonts | Self-hosted Inter, Courier Prime | Courier Prime version-pinned; Inter covers both the UI and prose/heading roles (ruled 2026-09-13, replacing Instrument Sans + Newsreader) |
 | Tests | Vitest · fast-check · Testing Library · Playwright | |
 | Errors / analytics / logs | Sentry · PostHog · pino | |
 | Deploy | Railway — `web`, `worker`, `redis` | Private networking between services |

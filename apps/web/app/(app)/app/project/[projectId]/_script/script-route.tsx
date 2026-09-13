@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation'
 
 import type { RevisionRow, ThreadCard } from '../../../../../../lib/script/panel'
 import { loadScript } from '../../../../../../lib/script/server'
-import { toSlateValue } from '../../../../../../lib/script/slate-model'
 import type { EpisodeContext } from '../../../../../../lib/workspace/context'
 import type { RawSearchParams } from '../../../../../../lib/workspace/params'
 import { parseSubViews } from '../../../../../../lib/workspace/params'
@@ -100,7 +99,6 @@ export const ScriptRoute = async ({
       documentId: load.document.id,
       updatedAt: load.document.updatedAt,
       nodes: load.nodes,
-      value: toSlateValue(load.nodes),
       measurement: load.measurement,
       stats: load.stats,
       labels: load.labels,

@@ -20,8 +20,9 @@ import {
 import type { OutlineElement, OutlineValue } from '../../../../../../../lib/outline/slate-model'
 import { isOutlineElement } from '../../../../../../../lib/outline/slate-model'
 import type { IdentityLog } from '../../../../../../../lib/script/identity'
-import { mintNodeId, withScriptIdentity } from '../../../../../../../lib/script/identity'
-import { MENTION_TYPE } from '../../../../../../../lib/script/slate-model'
+import { mintNodeId } from '../../../../../../../lib/script/identity'
+import { withScriptIdentity } from '../../../../../../../lib/outline/slate-identity'
+import { MENTION_TYPE } from '../../../../../../../lib/outline/script-slate-model'
 import type { OutlineContextValue, OutlineDecoration } from './outline-elements'
 import { OutlineBlock, OutlineContext, OutlineLeaf, OutlineMention } from './outline-elements'
 

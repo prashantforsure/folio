@@ -5,7 +5,7 @@ import { memo } from 'react'
 import type { ScreenplayNodeType } from '@folio/script'
 
 import { digitForType } from '../../../../../../lib/script/keyboard'
-import { TYPE_LABEL } from './editor/elements'
+import { TYPE_LABEL } from './editor/extensions/sheet-decorations'
 
 /**
  * The 27px status bar. `Route - Script.dc.html`'s footer, left to right:

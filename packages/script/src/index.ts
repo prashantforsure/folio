@@ -41,7 +41,7 @@
  * lines are compared at the sheet's measure, and the result is what the
  * Revisions route draws and what a revision row's line counts are cut from.
  *
- * Not here, and not blocked on anything, just later: FDX *export*.
+ * FDX export is `fdx-export.ts`, the importer's mirror, since 2026-09-13.
  *
  * Constraints this package is under (AGENTS.md):
  *   - No React, no database, no fetch, no process.env, no Date.now(),
@@ -214,6 +214,8 @@ export {
   fdxNode,
   importFinalDraft,
 } from './fdx'
+export type { FdxExport, FdxExportOptions, FdxUnrepresentable } from './fdx-export'
+export { serialiseFinalDraft } from './fdx-export'
 
 export type {
   AuthoredNotes,
@@ -253,7 +255,7 @@ export {
 } from './entities'
 
 export type { SluglineRejection } from './slugline'
-export { readSlugline } from './slugline'
+export { TIMES_OF_DAY, readSlugline } from './slugline'
 
 export { canonicalKey } from './alias'
 

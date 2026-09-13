@@ -4,7 +4,7 @@ import type { MeasurementRecord, NodeMeasurement, PageArtefact, SheetSpec } from
  * From a measurement record to pixels - the only arithmetic between the
  * engine and the sheet.
  *
- * The sheet is one contiguous editable column (Slate needs one), so a page
+ * The sheet is one contiguous editable column (one ProseMirror document, one editable), so a page
  * cannot be a DOM box that blocks live inside. Instead the blocks flow, and
  * three things are computed from the record so that the flow lands every
  * block exactly where the engine put it:

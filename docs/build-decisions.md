@@ -1570,3 +1570,440 @@ with `E2 Sc 3` before `E2 Sc 2` in the Day 2 column, both themes. Five tests, 6.
 Also fixed on the way: `workspace.spec.ts` still asserted eight episode routes after the Beats cut;
 it is seven, and the thirteen-route walk now runs again (with the Timeline empty-state text added to
 its contract row).
+
+## Bible route phase: five authored tables, and the first context gate as a column
+
+The brief: "What is true in this world, and what the draft is contradicting. Authored entries
+whose facts cite derived scenes." Everything on the route is typed by a writer; the two numbers
+the brief calls derived - a glossary term's use count and where it is first said - are computed at
+render from the node list and stored nowhere, and the one permission it names - entry status - is
+a column the repository filters on, not a label the UI hides.
+
+### What was built, table by table
+
+Migration **`0012_bible_route`** (`packages/db/src/schema/bible.ts`, applied to the dev Supabase
+project; RLS on, the member-all policy, `anon` revoked on all five):
+
+- **`bible_entries`** - `section` is the brief's four as an enum in its order (`premise`,
+  `how_things_work`, `history`, `themes`); `kind` is `rules | pitch`, and a partial unique index
+  allows **one Pitch per project**; `status` is `draft | canon | retired`, **defaulting to `draft`**
+  - "nothing is canon until you mark it". Title, lede, notes, position within the section.
+- **`bible_facts`** - the numbered rules. `cites uuid[]` holds scene **heading node ids with no
+  foreign key** (the `characters.key_lines` rule: a heading brought back by undo finds its cite, a
+  scene the script has lost is dropped on read, never shown from a copy). A **recorded conflict** is
+  `conflict_scene_node_id` and `conflict_note` together, checked to be both or neither.
+- **`bible_questions`** - open questions, each with an `author_id` (a `users` row; the initials
+  the bundle prints are the display name's) and a `resolved` flag.
+- **`bible_pitch_fields`** - the Pitch's ordered key/value fields, "deliberately kept apart from
+  the rules" by being another table. A new Pitch opens with the bundle's seven keys, empty.
+- **`bible_terms`** - glossary terms, unique by spelling **case-folded** (`lower(term)`). Use count
+  and first-use scene are not columns.
+
+The pure core (`packages/script/src/bible.ts`, 16 tests) owns the vocabularies, the gate as two
+predicates - `isReadableByLenses`, `isCheckedAgainstDraft`, both `=== 'canon'`, two functions because
+the brief names two permissions - `openConflicts` (a conflict counts only on a canon entry and only
+while its scene is in the draft), `liveCites`, `sceneOpenings` (the opening line the check quotes)
+and `termUsage` (whole-word, case-insensitive, bounded by any script's letters so a Devanagari term
+is a whole word too; comments never count, the pagination rule).
+
+### The status gate is a WHERE clause, and the badge is a query
+
+"Enforce this server-side in the context builder, not in the UI." There is no context builder
+yet, so what was built is the read it must use: `listCanonFacts` in `repositories/bible.ts` returns
+facts of `canon` entries and no other, `status = 'canon'` in SQL, documented as the one bible read
+a lens may be given. The route's check view reads the same function and then drops conflicts whose
+scene has left the draft. The rail badge - "Bible = open canon conflicts" - is
+`countOpenCanonConflicts`, the same three conditions in SQL, run **in parallel** with the resolve
+counts in `readRailBadges`; the constant `0` that stood in for it ("the count of an empty set,
+written out as one") is gone, and the badge changed without the chrome knowing, as that note
+promised.
+
+### A conflict is recorded, not found
+
+"Facts can carry a recorded conflict with the current draft." There is no model in the repository
+and a report never calls one, so a conflict is not detected here: it is **recorded** - the writer
+names the scene and says what it says that the rule forbids - and the check view is where it is
+decided. The bundle draws conflicts as fixture data and no way to make one, so the row carries a
+small `conflict…` affordance (a scene picker and a note); flagged as an addition. Deciding one is
+the bundle's three buttons: **Rule is right · flag scene** opens a comment thread on the
+contradicting scene's heading node (`openThread`, the Notes inbox's row - a comment, never a node,
+so derivation stays one-way) and clears the conflict; **Scene is right · update rule** rewrites the
+rule and clears it in one statement; **Both fine** clears it. Later, the agent's canon pre-flight
+records conflicts through the same column.
+
+### `/bible/:entryId`, as the spec writes it
+
+The entry's UUID, for the reason the Characters phase gave: an entry is retitled freely and its
+children point at it by id, so there is no slug to mint or to go stale. `/bible` shows the first
+entry in nav order; `check` and `glossary` are project-wide and name none. A non-UUID segment is a
+404 before any lookup; a UUID naming nothing here is a 404 inside the route. `?view=entry | check
+| glossary` is the sub-view param as every route's is.
+
+### Judgement calls in this phase, each reversible
+
+- **"Start with sections" creates the Pitch and nothing else.** The sections are the brief's, not
+  the writer's, so seeding a titled draft into each would have invented four titles; the Pitch is
+  the one entry every bible has, and once it exists the four sections and the Glossary row are in
+  the nav for `＋ Entry` to fill. The bundle's empty nav lists nothing until then, and so does this
+  one.
+- **`✦ Draft from the script` is not drawn.** It "reads 3 episodes and proposes premise, rules,
+  history and a glossary" - a model call, and there is no model and no agent. Of the card's closing
+  line only the half that is true of what is drawn is kept: "Nothing is canon until you mark it."
+- **`Export bible · PDF`, `Export pitch · PDF` and `History` are not drawn.** Export is a queued
+  job that does not exist (the Scenes precedent); entries keep no versions. The Pitch's `One page ·
+  reads as a document when exported` sub-copy stays: it describes what the Pitch is for, not a
+  button. The nav row's status for the Pitch reads `Pitch` where the bundle wrote `Export`, and the
+  footer's `Pitch · N fields` drops the bundle's `· exportable`.
+- **The nav's `Readable by Insights` row is the gate's consequence, not a switch**: `on` while a
+  canon entry exists, `—` otherwise (things that either exist or don't show `—`). The README's
+  per-entry `readableByLensIds` is a lens allowlist and lenses have no table; unbuilt.
+- **Linked characters and locations are read off the cited scenes** (`linkedFromCites`: the cast
+  and location of each cited scene, most first, six and four), and "Scenes that touch this" and the
+  per-episode bars are those scenes. The bundle's chips are fixture; an entry with no cite has none.
+  `Also see` is the two other entries of the same section, `Show mentions in Script →` the script
+  of the first cited scene's episode.
+- **The nav's amber dot, the nav footer's count, the tab badge, the rail badge and the check view
+  all count the same set** - open conflicts on canon entries with a present scene - so a draft
+  entry's recorded conflict is visible on its own page and nowhere else. Consistent with "draft is
+  not checked".
+- **Glossary `Uses` turns amber under four** (`FEW_USES`), the bundle's own cut; a term never said
+  reads `—` and `0`. A term said in a mention run is not counted: a mention carries no text.
+- **The check's "N other rules hold across all K episodes" is arithmetic** - canon facts less open
+  conflicts - and says `across the episode` for one; with no canon fact at all it says so instead of
+  reporting that zero rules hold.
+- **The glossary and the check read the project's nodes once each, on their own view only**
+  (`readProjectScreenplayNodes`); the entry view and the nav never do.
+- **Adding a fact, a question or a field reads its entry first, through the scope**: the foreign
+  key would accept another project's entry id, and that read is what refuses it. Two statements on
+  a click path.
+- **Membership, not role**, as everywhere.
+
+### Verified end to end
+
+`apps/web/e2e/bible-route.spec.ts` against the dev Supabase project through the running dev
+server on port 3000, with a **second E2E account, `e2e-bible@example.com`** - the Scenes phase's
+account was in use by a concurrent session and its password is not recorded in the repo, so
+resetting it would have broken that session's walk mid-run; flagged, consolidate when convenient.
+The walk: the empty state in both themes with no badge and the column at 252px, the empty check and
+glossary, `?view=grid`, `/bible/not-a-uuid` and an unknown UUID all 404; Start with sections
+creates the Pitch with seven fields and the four sections appear, a Logline survives a reload; a
+three-scene import, an entry created in How things work, a rule added uncited then citing
+`E1 Sc 1` (Meera appears under Linked), a conflict recorded against `E1 Sc 3`; as a draft nothing
+counts it; promoted to canon it is the badge, the dot, the tab and the one card quoting both
+scenes' opening lines; retired it is ignored again; a second rule, `Rule is right · flag scene`
+clears the conflict and `2 other rules hold across the episode`, surviving a reload; the glossary
+counts `Tanker` four times with first use `E1 Sc 1`, `monsoon` at `0` and `—` in amber, and refuses
+`TANKER`; the entry view in both themes.
+Six tests, 6.4 minutes. Read back from the database afterwards: the walk's project holds exactly
+one `comment_threads` row anchored to a script node - the flag `Rule is right` left. The check,
+glossary, conflict box and Pitch were also screenshotted in both themes from a scratch script
+against the same project (`test-results/bible-*.png`).
+
+### Flagged
+
+- **A second E2E account exists** (`e2e-bible@example.com`). The first account's password is not
+  in the repo and a concurrent session was walking with it; the credential was printed to the
+  user's session and is in no file. Consolidate to one account when both walks are idle.
+- **The context builder does not exist**, so the gate is built as the read it must call
+  (`listCanonFacts`) and the predicates it must agree with, not as an enforcement anyone can run
+  yet. When the agent lands, its bible read goes through that function or the gate is not enforced.
+- **The bundle's `sc-for` over `entry.notes` draws paragraphs; here `notes` is one text column**
+  edited in place, shown `whitespace-pre-wrap`. A paragraph model would be a table for nothing.
+- **Sub-copy changed for honesty, twice**: the empty card's closing line and the footer's
+  `· exportable` (above). The nav's `Export` status label for the Pitch reads `Pitch`.
+
+## Script route, third pass: the block selectors, and a heading typed in three stages
+
+Asked for on 2026-09-13 with screenshots of another editor: a Scene block that opens as
+`INT/EXT · LOCATION · DAY/NIGHT` and is filled through three pickers, a Character block that
+searches the cast, a Transition block that lists the cuts, a Parenthetical that opens as `()`,
+and a keycap hint row. Built without a node change and without a dependency.
+
+### What was built, and what it is not
+
+**A selector is a way of typing, not a second model.** `lib/script/pickers.ts` derives a
+selector from the caret block - its type, its text, whether the caret is at its end - and
+returns choices and a plan; the plan is plain text replaced into the block from the segment's
+start (`_script/editor/transforms.ts`, `applyPlan`). A heading composed through the stages is
+the same `INT. ROOFTOP COURT - NIGHT` Scene node `parseFountain` would make; a cue picked from
+the list is the same cue typed by hand. Nothing is stored, no wire field was added, the strict
+reader is unchanged. `script-pickers.test.ts` composes every prefix with every time and asserts
+`readSlugline` reads each one.
+
+| Block | Opens when | Offers | Enter / Tab |
+| --- | --- | --- | --- |
+| Scene, prefix stage | caret at the end of a Scene whose text is not yet `PREFIX ` | `INT.` `EXT.` `INT./EXT.` `I/E.` `EST.` | inserts `PREFIX ` and moves to the location stage |
+| Scene, location stage | after the prefix, before the first ` - ` | locations already in the script (nearest first), then location records, then *New location* from the typed text | inserts `SET - ` and moves to the time stage |
+| Scene, time stage | after the last ` - `, until the time is one the engine knows | `@folio/script`'s own `TIMES_OF_DAY`, everyday ones first | inserts the time and opens the Action below (`ENTER_TRANSITION.scene`) |
+| Character | caret at the end of a cue that is not yet a known name | cues already in the script (nearest first), then character records, then *New character* | replaces the cue, uppercased, and opens the Dialogue below |
+| Transition | caret at the end of a Transition that is not yet a listed cut | thirteen cuts, `CUT TO:` first | replaces the text and opens the Scene below |
+
+- **The vocabularies come from the engine where the engine has one.** The prefixes are the
+  four `fountain-syntax.ts`'s `SCENE_PREFIX` accepts plus `EST.`; **`EXT./INT.` from the
+  screenshot is not offered** because the parser reads it as `EXT.` with the set `/INT. …`. The
+  times are a new export, `TIMES_OF_DAY`, built from the same three arrays `readSlugline`'s
+  lookup is built from - one list, so the selector can never offer a time the reading leaves on
+  the set. The transitions are the conventions, and `FADE IN:` / `FADE OUT.` are included by
+  name: a Transition node is one by type, and the serialiser already forces the ones that do
+  not end in `TO:`.
+- **A selector with nothing highlighted passes every key through.** The one stage that opens
+  unhighlighted is the empty cue, so Enter on it is still "nothing to say, make it Action"; the
+  Script walk's Enter-then-`⌘7` sequence is unchanged. Typing highlights the first match.
+- **Tab in a scene stage advances with the writer's own text** when nothing matches (`INT. the
+  well` + Tab → `INT. THE WELL - `), because Tab from a Scene otherwise enters the type cycle
+  at Action and would turn the heading into prose. Outside the scene stages Tab commits only a
+  highlighted choice and is otherwise the cycle it always was - **the bundle's Tab order is
+  kept**; the selector's Tab hint is computed from `nextInTabCycle`, so it reads *Switch to
+  dialogue* on a cue, not the screenshot's *Switch to action*.
+- **Escape hides the selector for that block and that stage** until the caret leaves the block.
+- **A Parenthetical made from an empty block opens as `()`** with the caret between the parens,
+  from the type bar, `⌘4`, Tab and `(` typed on an empty Dialogue line alike (`setBlockType` is
+  now the one transform all four call). Enter on an unfilled `()` makes the block Dialogue - the
+  empty-cue rule applied to the parenthetical.
+- **The caret block now draws its chip and a ghost.** `caretBlockId` in `SheetContext` was
+  always `null` since the first pass (a context value changing on every caret move would wake
+  every block); the caret now rides on the block layout store, which notifies exactly the block
+  left and the block entered, so the bundle's chip is live at no cost. The ghost is what an
+  unfinished block promises - `INT./EXT. LOCATION - DAY/NIGHT` segment by segment, `CHARACTER`,
+  `CUT TO:`, the parenthetical's cue - inline after the text where there is text, placed at the
+  block's inset where there is none (an empty Slate block ends in a `<br>`).
+- **The type bar is unchanged** *(superseded 2026-09-13: retired, see the fourth pass below)*. The screenshots draw icons above the labels with a green
+  underline; the bar is transcribed from `Route - Script.dc.html`, which wins on chrome, and
+  the known glyph set has no icons for the eight types. The hint row below the sheet keeps the
+  bundle's three lines and adds two.
+
+### Found on the way
+
+- **Slate's `delete` on a collapsed range deletes one character forward.** At the end of a block
+  that is the start of the next block: a merge. The first draft of `applyPlan` deleted the
+  segment range unconditionally, and with an empty segment (`INT. ROOFTOP - ` + pick `NIGHT`)
+  would have pulled the Action below into the heading. Probed headless, guarded, tested
+  (`script-transforms.test.ts`).
+
+### Not verified in a browser
+
+No dev server was running and neither E2E account's password is in the repo, so this pass was
+verified by `pnpm typecheck`, `pnpm lint`, the `@folio/script` suite (482) and the three
+headless web tests (`script-pickers`, `script-transforms`, `script-identity`: 33). The parts
+only a browser shows - the popover's position under the segment, the ghost's inline flow after
+`INT. `, the chip's return - are the next walk's first three checks.
+
+## Script route, fourth pass: the slash menu, the pills, and the type bar retired
+
+Asked for on 2026-09-13 with three screenshots: another editor's `/` menu (a search line, sections,
+glyph rows, a *Close menu · esc* foot), and the two selectors of the third pass **reopened on a
+finished block** - a location picker over `ROOFTOP COURT` in a written heading, a transition
+picker over a written `CUT TO:`. The brief: replace the static type bar with a keyboard-driven,
+contextual workflow, and make what the selectors insert remain clickable. Built without a node
+change and without a dependency.
+
+### Ruled: the type bar is retired
+
+The bundle's element bar (`Route - Script.dc.html`, transcribed as `type-bar.tsx`) is removed on
+the client's instruction. `⌘1`..`⌘8` are unchanged and remain the only direct way to a type; the
+hint row under the sheet names the slash and the shortcuts. `DIGIT_TYPES` is still the order, and
+the slash menu is built from it. The third pass's "the type bar is unchanged" is superseded here.
+
+### What was built, and what it is not
+
+- **The slash menu is a way of asking, not text.** `lib/script/slash.ts` derives the menu from
+  the query after the slash and the caret block's type; `applySlash` deletes the `/` and the
+  query and then either retypes the block (when that was all it held) or opens a block of the
+  type below (when the slash came after prose). Nothing of the slash is stored. It is built from
+  `DIGIT_TYPES`, so it can never offer more or fewer than the eight, and `script-slash.test.ts`
+  holds it to the union.
+- **A slash is a command only at the start of a block or after a space.** `INT./EXT.`, `I/E.`
+  and `24/7` are punctuation; `slashOpensAt` reads the text before the caret. The menu closes on
+  a space that leads nowhere (`/and then`) and stays open through a space inside a match
+  (`/scene h`).
+- **Suggested is what the keyboard would do next.** With no query the menu leads with Enter's
+  transition and Tab's next type for the caret block (from Dialogue: Character, Parenthetical),
+  then lists all eight under *Blocks*; once the writer types, the match order is the only order.
+  The row shows the `⌘N` the type also answers to.
+- **The pills are decorations, never nodes.** `pillsFor` names the spans of a finished heading
+  (prefix, set, time), a cue (its name, a written `(V.O.)` left plain) and a transition; the
+  editor's `decorate` puts a `pill` on those ranges, the leaf draws them on the accent ground
+  with `data-pill`, and a click on one sets the editor's one piece of selector state - `edit`,
+  the block and the segment. Nothing about a pill is stored; the strict reader is unchanged.
+- **A reopened selector is the same selector in `edit` mode.** `pickerFor` takes an optional
+  `reopen`; the model then carries `segmentEnd` and replaces that segment alone - `applyPlan`
+  now takes the range's end - and its plan is always `stay`, never `next-block`. When the segment
+  already is one of the choices the whole list is shown with it lit (the screenshot's `CUT TO:`),
+  otherwise the list narrows as the segment is retyped, and the writer's own text is offered as
+  *New location* / *New character* as it is while composing. Escape or a click elsewhere closes
+  it; the caret leaving the block closes it.
+- **Tab while editing a heading moves the edit to the next segment.** Prefix → location → time,
+  through the model's `next`; from a location on a heading with no time yet, the plan writes the
+  ` - ` on its way (`join`), so the time selector opens over an empty segment. On the time, a cue
+  or a cut Tab has nowhere to go and the hint is not drawn (`hints.tab` is now nullable).
+
+### Found on the way
+
+- **A whole-line `lineEnd` decoration cannot coexist with an overlapping one.** Slate splits
+  leaves at every range boundary and each piece inherits the line's `lineEnd`, so a pill inside a
+  line would have rendered a newline after each piece. The line-end decoration is now the line's
+  **last character** only; `.folio-line-end::after` is unchanged. This is why the pill has no
+  ring and no radius: the line end (and a page gap) still splits a pill into two spans, which
+  must tile without a seam, and a background with a bottom rule does.
+- **`/tr` reaches Subtitle too** (its `translation` keyword), ranked after Transition. Left as is:
+  a keyword prefix is the second rank by design and the first row is the one Enter takes.
+
+### Not verified in a browser
+
+A dev server was up on :3000 but neither E2E account's password is in the repo, so this pass was
+verified by `pnpm typecheck`, `pnpm lint`, and the four headless web tests (`script-pickers`,
+`script-transforms`, `script-slash`, `script-identity`: 50). A new Script walk, *the slash menu
+retypes a block, and a pill reopens its selector*, is the first thing to run with credentials;
+after it, the things only a browser shows: the search-line placeholder sitting after the slash,
+the menu's position under it, and the pill's seam at a line end.
+
+## Script route, fifth pass: the editor rebuilt on Tiptap
+
+Asked for on 2026-09-13 as a blueprint - "scrap the legacy foundation and adopt a headless editor
+framework" for zero-jank typing, a floating slash menu and clickable pills - then ruled and built
+in the same session. Four rulings were put back as questions before anything was chosen, and
+answered by the client:
+
+| Question | Ruling | Consequence |
+| --- | --- | --- |
+| Which framework | **Tiptap 3 on ProseMirror.** Supersedes AGENTS.md's `Editor \| Plate (on Slate)` row the way six lines per inch supersedes twelve: recorded here and in the root `CLAUDE.md`, AGENTS.md left as written | `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/suggestion` at 3.31.3 and `@floating-ui/dom` 1.8.0, in `apps/web` only. `packages/script` still has zero dependencies |
+| The Outline route, also on Plate | **Script first; the Outline is ported last** | `platejs` stays installed until then. An eslint block bans it under `_script/` and `lib/script/`; the two Slate-only pieces the Outline still needs moved under `lib/outline/` (`script-slate-model.ts`, `slate-identity.ts`), headed *Outline only* |
+| FDX export | **In scope**, as the last part of the rebuild | Built: `packages/script/src/fdx-export.ts` (`serialiseFinalDraft`, pure, zero deps), `writeFdx` in `apps/web/lib/script/fdx-adapter.ts`, the `exportScriptFdx` action, and the `⤒` button's two-row menu |
+| A block handle with drag-to-reorder | **No.** Notion-ness is the slash menu, the pills and the shortcuts | The sheet stays the bundle's: nothing to the left of a block |
+
+### Where the lag was, and why the framework alone would not have fixed it
+
+The second pass measured ~46ms of main-thread work per keystroke in production on the 220-scene
+corpus. Reading the Plate editor for this pass, the cost was in the layer around Slate, not in it:
+the workspace held the whole Slate value in `useState` and set it on every `onValueChange`; the
+pills, line ends and page gaps were `decorate` ranges re-run per block with a forced redecorate
+that walked every row; `layoutSheet` ran in a `useMemo` over every block per keystroke; live
+repagination ran `fromSlateValue` and `paginate` twice on the main thread. Any framework wired
+that way would lag.
+
+So the rebuild's rule is **the document lives in the editor and React holds none of it.** The
+Tiptap editor is created with `shouldRerenderOnTransaction: false`; a keystroke is a ProseMirror
+transaction and a DOM patch, and no component renders for it. What the chrome needs - the caret
+block, the block ids, the page frames, the three floating views - goes through
+`_script/editor/editor-store.ts`, one `useSyncExternalStore` slice each, and a set that does not
+change the value is not a notification. The workspace's `useMemo(value)`, `blocksOf`, `Redecorate`
+and `layout-context.tsx` are gone; the status bar re-renders when the caret *changes block*, the
+page frames when a frame moves, the page map when the id order changes.
+
+What Tiptap did add, and Slate could not: a schema (`doc { block+ }`, eight textblocks holding
+`inline*` with `marks: ''`, one inline atom) so the closed set is enforced by construction and the
+`normalizeNode` override that forced strays to Action is gone; step-mapped positions, so
+decorations are *mapped* through a transaction and rebuilt for the blocks it touched rather than
+re-derived for all three thousand; and the Suggestion plugin, which owns the `/` and `@` range,
+the query, Escape's dismissal and the caret rectangle, with the keys consumed inside
+`handleKeyDown` before any keymap or the browser.
+
+### What was built
+
+- **`lib/script/pm-model.ts`** replaces `slate-model.ts`: `toDoc` on load, `fromDoc` on save
+  and measure, both through `readScreenplayNode`. The wire shape is the node list; ProseMirror
+  JSON is never persisted. `inlineChildrenOf` gives `lines.ts` its neutral inline shape
+  (`lib/script/inline.ts`, editor-agnostic now) cached on the ProseMirror block object, which
+  ProseMirror keeps identical across a transaction that did not touch it - the same trick the
+  Slate wrap cache used, keyed the same way.
+- **`_script/editor/extensions/`**: `schema.ts` (doc, text), `blocks.ts` (the eight, from one
+  factory, plain `toDOM` - no NodeView, three thousand divs ProseMirror patches in place; Action
+  registered first so a stray paragraph is an Action), `mention.ts` (a vanilla node view that
+  draws the label as text), `identity.ts` (ADR 0001 in `appendTransaction`), `clipboard.ts`
+  (`data-doc` on every block, `transformPasted` keeps an absent same-document id and nulls the
+  rest; plain multi-line text is Fountain), `keymap.ts` (`⌘1`-`⌘8`, Tab, Enter's transitions,
+  `INT.` and `(` as input rules, history from `@tiptap/pm/history`), `slash.ts` and
+  `mention-suggestion.ts` (two Suggestion instances with custom `findSuggestionMatch` over
+  `slashOpensAt` / `slashQueryClosed`), `pickers.ts` (the selectors as derived plugin state, keys
+  in `handleKeyDown`), `sheet-decorations.ts` (line ends, pills, page gaps, margins, the caret
+  chip and ghost, the comment label and the mention labels - four decoration sets, each rebuilt
+  for the blocks whose input changed, presented through four stateless plugins so no set is
+  merged by hand per keystroke).
+- **`_script/editor/floating/`**: one portal on `document.body`, *outside the zoomed desk*, placed
+  with floating-ui from the rectangle the plugin supplies. A menu inside the zoomed subtree would
+  be scaled twice. The React menus have no key listeners at all.
+- **`sheet/static-sheet.tsx`**: `immediatelyRender: false` means the server renders no editor, so
+  the workspace draws the node list as the same `div.folio-block` DOM at the same geometry until
+  the editor mounts; a hundred-page draft paints on the first byte. Its blocks carry
+  `data-static-id`, not `data-node-id`, so the browser walk waits for the real editor.
+- The save path, the delta, the baseline, `⌘S`, the visibility flush, the conflict banner, the
+  `[data-page-map]` golden diff and the pagination preferences are unchanged in contract; the
+  save reads `editor.state.doc` and serialises the blocks that changed.
+
+### Identity, in ProseMirror's terms
+
+`keepOnSplit: false` on every block attribute gives the tail of a Tiptap split a `null` id; a raw
+ProseMirror split copies the head's. `identity.ts` treats a `null` id and a second occurrence of
+an id as the same case - minted, `typed` - and the first occurrence is untouched: head wins. A
+join keeps the first block's attributes; the loser is logged as merged into the block that now
+holds its text. An id may never be rewritten on a block that has one: an `AttrStep` on `id`, or
+a `setNodeMarkup` with a different id, has the old id put back - unless the old id is present
+twice, which is a redo replaying this plugin's own minting and is let through (a finding: the
+first cut restored the head's id onto the tail on redo and minted a third). The appended
+transaction joins the history event, so undo removes the tail and its id together and redo brings
+the same id back. A keystroke inside a block is not walked: `isStructural` reads the steps.
+
+### Live measurement, and the worker that is not one
+
+The plan was to run `paginate` in a Web Worker between keystrokes - the package is pure, so the
+worker entry would be ten lines. `lib/script/measure.ts` (`measureNodes`: the two passes and the
+digest, one request in, one reply out, keyed by serial) is written for that. It is not on a
+worker: **Turbopack in Next 16.3 emits `new Worker(new URL('./x.ts', import.meta.url))` as a raw
+static asset** (`/_next/static/media/paginate.worker.….ts`), not a bundled worker, so it would
+fail to load on every session and fall back with a console error each time. `measure-client.ts`
+runs `measureNodes` in `requestIdleCallback` with a one-second deadline instead - a newer request
+supersedes a queued one, and a reply for a document that has moved on is dropped by serial - and
+is shaped as a `Measurer` so the worker-backed one is a drop-in when the bundler can build it.
+The save path's synchronous digest uses the same `measureNodes`.
+
+### FDX export
+
+`serialiseFinalDraft(nodes, { mentionLabels })` returns an `FdxNode` tree - the contract the
+importer already owns - plus `omitted` (comment ids; comments never enter an export) and
+`unrepresentable` (`subtitle-as-general`, `empty-block`, `unresolved-mention`). The mapping
+mirrors `fdx.ts` and keeps its round trip: `importFinalDraft(serialiseFinalDraft(nodes))` is the
+identity on type, content and modifiers for every node not reported, asserted on the feature
+corpus (`fdx-export.test.ts`, 7). A speech is one Dialogue paragraph per line, which the importer
+rejoins; a cue is `writeCue`'s, which `readCue` reads; a subtitle is centred General. **No
+`SceneProperties`, no `Number`, no `(MORE)`, no `(CONT'D)`** - Final Draft paginates for itself.
+`writeFdx` in the web adapter is `XMLBuilder` with the parser's options mirrored
+(`script-fdx-adapter.test.ts`, 2: the tree reads back, XML is escaped). The action reads the rows,
+serialises, and returns the text; the workspace flushes a pending save first and hands the browser
+the file - nothing is stored, so "your export is ready" never needs a message. The `⤒` button the
+bundle titles "Import / export" now opens a two-row menu, Import and Export as .fdx, with the last
+export's report under it.
+
+### Deferred: the Outline
+
+Ruled a final phase of its own, and not begun here: `_outline/editor/` is ~1,400 lines of Plate
+with its own keyboard model (`⌘0`-`⌘3`, `⌘⇧Q/R/B`, `⌥↑/↓` moves, beat lists, a void rule), and
+the same rebuild - `lib/outline/pm-model.ts`, extensions, a Suggestion slash menu in place of
+`block-bar.tsx` - is a second pass, after which `platejs` is removed. Until then it stays
+installed; the lint block keeps it out of the Script route.
+
+### Findings
+
+- **A whole-line line-end decoration still cannot coexist with a pill.** ProseMirror splits text
+  at every inline decoration boundary as Slate split leaves, so the fourth pass's compromise - the
+  line end on the last character only, the pill without a ring or radius - stands. The blueprint
+  had assumed otherwise; the CSS comment is unchanged.
+- **`ReplaceAroundStep.structure` is not exposed.** `setNodeMarkup` is recognised by its shape
+  instead: `insert === 1`, the gap one token in from each end, a closed one-node slice.
+- **The picker's `view` must publish on creation**, not only in `update`; a selector that should
+  be open on the first render otherwise waits for a transaction.
+- **jsdom does not load on the local Node**, as `apps/web/CLAUDE.md` records, so the editor tests
+  are ProseMirror *state* tests in the `node` environment: `tests/helpers/screenplay-state.ts`
+  builds the schema from the extensions and applies transactions with the identity plugin and
+  history, no view. `script-identity` (15) and `script-commands` (17) replace `script-identity`
+  and `script-transforms`; `script-lines`, `script-layout`, `script-pickers`, `script-slash`,
+  `script-digest` are unchanged and green (144 across the eight files).
+
+### Not verified in a browser
+
+A dev server was up on :3000, but creating an E2E account through the Admin API was refused by
+the session's permission mode and no account's password is in the repo. This pass was verified
+by `pnpm typecheck`, `pnpm lint`, the eight headless web tests and `next build`. The Script walk
+(`apps/web/e2e/script-route.spec.ts`) is the first thing to run with credentials; after it, the
+things only a browser shows: the keystroke latency in `test-results/script-latency.json` against
+the second pass's ~46ms, the slash menu's position under the caret at zoom 0.75, the static sheet
+handing over to the editor without a shift, and `(MORE)` / `(CONT'D)` inside a split speech.

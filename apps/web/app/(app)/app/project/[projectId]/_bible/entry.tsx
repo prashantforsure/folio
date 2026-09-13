@@ -399,81 +399,86 @@ const Rule = ({
         ) : null}
       </div>
 
-      <div className="flex max-w-[190px] flex-wrap items-start justify-end gap-[4px] pr-[4px]">
-        {fact.cites.map((ref) => (
-          <span
-            key={ref.sceneNodeId}
-            data-cite={ref.sceneNodeId}
-            title={ref.heading}
-            className="inline-flex items-center gap-[4px] whitespace-nowrap rounded-chrome border border-line2 bg-sheet px-[6px] py-[1px] text-10 text-ink2"
-          >
-            {formatSceneRef(ref)}
+      <div className="flex max-w-[170px] flex-col items-end gap-[5px] pr-[4px]">
+        <div className="flex flex-wrap justify-end gap-[4px]">
+          {fact.cites.map((ref) => (
+            <span
+              key={ref.sceneNodeId}
+              data-cite={ref.sceneNodeId}
+              title={ref.heading}
+              className="inline-flex items-center gap-[4px] whitespace-nowrap rounded-chrome border border-line2 bg-sheet px-[6px] py-[1px] text-10 text-ink2"
+            >
+              {formatSceneRef(ref)}
+              <button
+                type="button"
+                onClick={() => {
+                  saveCites(fact.cites.filter((entry) => entry.sceneNodeId !== ref.sceneNodeId).map((entry) => entry.sceneNodeId))
+                }}
+                aria-label={`Remove the cite ${formatSceneRef(ref)}`}
+                className="border-none bg-transparent p-0 text-10 text-ink3 hover:text-del"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {fact.cites.length === 0 ? (
+            <span
+              data-uncited
+              className="whitespace-nowrap rounded-chrome border border-dashed border-line px-[6px] py-[1px] text-10 text-ink3"
+            >
+              not yet on the page
+            </span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-[2px]">
+          {citable.length > 0 ? (
+            <select
+              value=""
+              onChange={(event) => {
+                if (event.target.value === '') return
+                saveCites([...fact.cites.map((entry) => entry.sceneNodeId), event.target.value])
+              }}
+              aria-label={`Cite a scene for rule ${String(number)}`}
+              title="Cite the scene that establishes this"
+              data-add-cite
+              className="tabular w-[46px] cursor-pointer appearance-none rounded-chrome border border-transparent bg-transparent px-[4px] py-[1px] text-10 text-ink3 outline-none hover:border-line2 hover:text-ink"
+            >
+              <option value="">＋ cite</option>
+              {citable.map((ref) => (
+                <option key={ref.sceneNodeId} value={ref.sceneNodeId}>
+                  {formatSceneRef(ref)} · {ref.heading}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {fact.conflict === null && !recording && sceneRefs.length > 0 ? (
             <button
               type="button"
               onClick={() => {
-                saveCites(fact.cites.filter((entry) => entry.sceneNodeId !== ref.sceneNodeId).map((entry) => entry.sceneNodeId))
+                setRecording(true)
               }}
-              aria-label={`Remove the cite ${formatSceneRef(ref)}`}
-              className="border-none bg-transparent p-0 text-10 text-ink3 hover:text-del"
+              title="Record a conflict with the current draft"
+              data-record-conflict
+              className="whitespace-nowrap rounded-chrome border border-transparent bg-transparent px-[4px] py-[1px] text-10 text-ink3 hover:border-line2 hover:text-note"
             >
-              ×
+              conflict…
             </button>
-          </span>
-        ))}
-        {fact.cites.length === 0 ? (
-          <span
-            data-uncited
-            className="whitespace-nowrap rounded-chrome border border-dashed border-line px-[6px] py-[1px] text-10 text-ink3"
-          >
-            not yet on the page
-          </span>
-        ) : null}
-        {citable.length > 0 ? (
-          <select
-            value=""
-            onChange={(event) => {
-              if (event.target.value === '') return
-              saveCites([...fact.cites.map((entry) => entry.sceneNodeId), event.target.value])
-            }}
-            aria-label={`Cite a scene for rule ${String(number)}`}
-            data-add-cite
-            className="tabular max-w-[64px] rounded-chrome border border-transparent bg-transparent px-[2px] py-[1px] text-10 text-ink3 outline-none hover:border-line2"
-          >
-            <option value="">＋ cite</option>
-            {citable.map((ref) => (
-              <option key={ref.sceneNodeId} value={ref.sceneNodeId}>
-                {formatSceneRef(ref)} · {ref.heading}
-              </option>
-            ))}
-          </select>
-        ) : null}
-        {fact.conflict === null && !recording && sceneRefs.length > 0 ? (
+          ) : null}
           <button
             type="button"
             onClick={() => {
-              setRecording(true)
+              run(async () => {
+                const result = await removeFact(projectId, fact.id)
+                return result.status === 'saved' ? null : result.message
+              })
             }}
-            title="Record a conflict with the current draft"
-            data-record-conflict
-            className="whitespace-nowrap rounded-chrome border border-transparent bg-transparent px-[4px] py-[1px] text-10 text-ink3 hover:border-line2 hover:text-note"
+            aria-label={`Remove rule ${String(number)}`}
+            title="Remove this rule"
+            className="rounded-chrome border-none bg-transparent px-[4px] py-[1px] text-11 leading-none text-ink3 hover:bg-hover hover:text-del"
           >
-            conflict…
+            ×
           </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => {
-            run(async () => {
-              const result = await removeFact(projectId, fact.id)
-              return result.status === 'saved' ? null : result.message
-            })
-          }}
-          aria-label={`Remove rule ${String(number)}`}
-          title="Remove this rule"
-          className="rounded-chrome border-none bg-transparent px-[4px] text-11 text-ink3 hover:bg-hover hover:text-del"
-        >
-          ×
-        </button>
+        </div>
       </div>
     </div>
   )

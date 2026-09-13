@@ -10,8 +10,8 @@ import type {
 } from '@folio/script'
 import { MENTION_ENTITIES, OUTLINE_NODE_TYPES, isOutlineNodeType, readOutlineNode } from '@folio/script'
 
-import type { ScriptMentionElement, ScriptText } from '../script/slate-model'
-import { MENTION_TYPE, isMentionElement } from '../script/slate-model'
+import type { ScriptMentionElement, ScriptText } from './script-slate-model'
+import { MENTION_TYPE, isMentionElement } from './script-slate-model'
 
 /**
  * Where Slate's node shape meets `@folio/script`'s **outline** union - and the

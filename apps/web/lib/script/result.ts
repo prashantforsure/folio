@@ -63,6 +63,21 @@ export type ImportScriptResult =
 
 export const IMPORT_IDLE: ImportScriptResult = { status: 'idle' }
 
+/** A Final Draft export: the file text, and what the mapping left out or changed (`serialiseFinalDraft`). */
+export type ExportScriptResult =
+  | {
+      readonly status: 'exported'
+      readonly filename: string
+      readonly xml: string
+      /** Comment nodes, which never enter an export. */
+      readonly omitted: number
+      readonly subtitlesAsGeneral: number
+      readonly unresolvedMentions: number
+      readonly emptyBlocks: number
+    }
+  | { readonly status: 'error'; readonly message: string }
+  | { readonly status: 'refused'; readonly message: string }
+
 export type SimpleResult =
   | { readonly status: 'done' }
   | { readonly status: 'refused'; readonly message: string }

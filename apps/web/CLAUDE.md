@@ -15,13 +15,25 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   the frame; [app/(app)/app/(home)/layout.tsx](app/(app)/app/(home)/layout.tsx) draws the
   four-item sidebar for the six list routes (three views over one query in `_projects/`, plus
   `new`, `trash`, `settings`); [app/(app)/app/project/[projectId]/layout.tsx](app/(app)/app/project/[projectId]/layout.tsx)
-  draws the 66px rail for the workspace. The thirteen workspace routes are empty shells.
+  draws the 66px rail for the workspace. Nine of the thirteen workspace routes have bodies
+  (root `CLAUDE.md`, Repository map); each route's phase in `docs/build-decisions.md` records
+  what it reads and writes, table by table.
 - **The workspace, in one directory:** [lib/workspace/](lib/workspace/). `routes.ts` is the route
   tree and both orders (rail, episode nav); `params.ts` the sub-view params; `hrefs.ts` every
   workspace URL and the film/series shape; `context.ts` the membership gate and the `cache()`d
   loaders; `format.ts` the `104pp` / `—` / `empty` / `0` convention. The film shape is a
   second static tree under `project/[projectId]/(film)/` — Next has no optional segment — and
   each page canonicalises the URL for the project's type.
+- **The Script autosave is a delta and every write it runs is one statement.** Over the
+  transaction pooler a parameterised statement costs two round trips and cannot be pipelined
+  (`packages/db/src/client.ts`), so on the request path the cost is statement count, not row
+  count. Add to an existing statement or defer with `deferAfterSave`; never add a sequential
+  query to a save.
+- **The Script editor is Tiptap and the document is not React state.** `_script/editor/` holds the
+  extensions; `lib/script/pm-model.ts` is the one boundary to the node list; the chrome reads
+  `_script/editor/editor-store.ts` slices, never the editor value. The Outline is still Plate
+  (`lib/outline/script-slate-model.ts`, `slate-identity.ts`) until it is ported. Details:
+  `docs/build-decisions.md`, "Script route, fifth pass".
 - **Every episode segment goes through `parseEpisodeSegment`** (`@folio/contracts`) in
   `[episodeId]/layout.tsx` before any lookup. Do not add a route that reads `params.episodeId`
   without it.
@@ -41,8 +53,8 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
 pnpm --filter web test                              # fails locally — see trap 1
 pnpm --filter web check:secrets                     # bundle scan alone; needs a prior `next build`
 pnpm test:e2e                                       # needs `pnpm --filter web exec playwright install chromium` once
-E2E_EMAIL=… E2E_PASSWORD=… pnpm test:e2e            # also runs the two signed-in walks against the .env project
-E2E_EMAIL=… E2E_PASSWORD=… pnpm test:e2e            # also runs the two signed-in walks against the .env project
+E2E_EMAIL=… E2E_PASSWORD=… pnpm test:e2e            # also runs the signed-in walks (e2e/*-route.spec.ts) against the .env project
+E2E_PORT=3000 …                                     # point the walks at a running dev server
 pnpm --filter web exec playwright test -g "glyph"   # one e2e
 ```
 
@@ -56,6 +68,8 @@ Traps:
    every Client Component is inert, every `useEffect` silently never runs.
    [playwright.config.ts](playwright.config.ts) uses `localhost` for this reason; `smoke.spec.ts`
    has one test that fails if hydration stops.
-3. **`typecheck` runs `next typegen` first, and must.** `typedRoutes: true` types `href` and
+3. **The Script walk imports the golden corpus and diffs the rendered page map against it** —
+   a pagination change that moves pages fails there, not only in `@folio/script`.
+4. **`typecheck` runs `next typegen` first, and must.** `typedRoutes: true` types `href` and
    `redirect()` against a generated union that does not exist on a never-built checkout — `tsc`
    alone reports every route as invalid.

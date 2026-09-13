@@ -380,6 +380,63 @@ test('inserting a Comment node changes no page number', async ({ page, account, 
   expect(reloaded.totals).toEqual(beforeMap.totals)
 })
 
+test('the slash menu retypes a block, and a pill reopens its selector', async ({ page, account, scriptProjectUrl }) => {
+  await signIn(page, account)
+  projectUrl = projectUrl === '' && scriptProjectUrl !== null ? scriptProjectUrl : projectUrl
+  await page.goto(projectUrl)
+  await expect(page.locator('[data-sheet] [data-node-id]').first()).toBeVisible()
+  const before = await idsOf(page)
+
+  // A fresh line after the third block; `/` opens the menu, `tr` narrows it, Enter retypes the block.
+  const third = page.locator('[data-sheet] [data-node-id]').nth(2)
+  await third.click()
+  await page.keyboard.press('End')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('/')
+  await expect(page.locator('[data-slash-menu]')).toBeVisible()
+  // Every type under Blocks, plus whatever the caret block suggests above them.
+  expect(await page.locator('[data-slash-menu] [data-slash-choice]').count()).toBeGreaterThanOrEqual(8)
+  await page.keyboard.type('tr')
+  await expect(page.locator('[data-slash-menu] [data-slash-choice="transition"]').first()).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('[data-slash-menu]')).toHaveCount(0)
+  const fresh = page.locator('[data-sheet] [data-node-id]').nth(3)
+  await expect(fresh).toHaveAttribute('data-type', 'transition')
+  await expect(fresh).toHaveText('')
+  expect((await idsOf(page)).length).toBe(before.length + 1)
+
+  // The empty Transition opens its own selector; the first cut is CUT TO:.
+  await expect(page.locator('[data-picker="transition"]')).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(fresh).toHaveText('CUT TO:')
+  // ...and the text is now a pill. Clicking it reopens the list with CUT TO: lit, in edit mode.
+  await fresh.locator('[data-pill="transition"]').first().click()
+  const reopened = page.locator('[data-picker="transition"][data-mode="edit"]')
+  await expect(reopened).toBeVisible()
+  await expect(reopened.locator('[role="option"][aria-selected="true"]')).toHaveText(/CUT TO:/u)
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(fresh).toHaveText('FADE TO:')
+  await expect(page.locator('[data-picker]')).toHaveCount(0)
+  // A pick while editing opens no block below.
+  expect((await idsOf(page)).length).toBe(before.length + 2)
+  await waitSaved(page)
+
+  // A heading's segments are pills too, and the location's list is the script's own sets.
+  const heading = page.locator('[data-sheet] [data-type="scene"]').first()
+  await heading.locator('[data-pill="scene-location"]').first().click()
+  await expect(page.locator('[data-picker="scene-location"][data-mode="edit"]')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-picker]')).toHaveCount(0)
+
+  // A slash inside a heading is punctuation, not a command.
+  await heading.click()
+  await page.keyboard.press('End')
+  await page.keyboard.type('/')
+  await expect(page.locator('[data-slash-menu]')).toHaveCount(0)
+  await page.keyboard.press('Backspace')
+})
+
 test('draft state, both themes; the cover and the collaboration tab', async ({ page, account, scriptProjectUrl }) => {
   await signIn(page, account)
   projectUrl = projectUrl === '' && scriptProjectUrl !== null ? scriptProjectUrl : projectUrl

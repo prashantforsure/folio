@@ -2,7 +2,7 @@
 
 import type { Project } from '@folio/contracts'
 import type { ScriptFormat } from '@folio/script'
-import { memo, useState, useTransition } from 'react'
+import { memo, useEffect, useRef, useState, useTransition } from 'react'
 
 import { replyThread, resolveThread } from '../../../../../../../lib/script/actions'
 import type { RevisionRow, ThreadCard } from '../../../../../../../lib/script/panel'
@@ -66,6 +66,10 @@ export type RightPanelProps = {
   readonly threads: readonly ThreadCard[]
   readonly revisions: readonly RevisionRow[]
   readonly onImport: () => void
+  /** Export the script as .fdx; the download and its notice are the workspace's. */
+  readonly onExport: () => void
+  readonly exporting: boolean
+  readonly exportNotice: string | null
 }
 
 const FORMATS: readonly { readonly id: ScriptFormat; readonly label: string; readonly page: string }[] = [
@@ -94,6 +98,9 @@ const RightPanelBody = ({
   threads,
   revisions,
   onImport,
+  onExport,
+  exporting,
+  exportNotice,
 }: RightPanelProps) => {
   return (
     <aside
@@ -103,14 +110,7 @@ const RightPanelBody = ({
     >
       <div className="flex h-[46px] flex-none items-center gap-[8px] border-b border-line2 px-[12px]">
         <span className="flex-1 font-serif text-15 font-medium tracking-title">Writing</span>
-        <button
-          type="button"
-          title="Import / export"
-          onClick={onImport}
-          className="folio-focus grid h-[24px] w-[24px] place-items-center rounded-chrome font-glyph text-12 text-ink3 hover:bg-hover"
-        >
-          ⤒
-        </button>
+        <ImportExportMenu onImport={onImport} onExport={onExport} exporting={exporting} notice={exportNotice} />
         <button
           type="button"
           title="Report — not built this phase"
@@ -375,6 +375,91 @@ export const ThreadCardView = ({
           Resolve
         </button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * The `⤒` button of the bundle, titled "Import / export": one glyph, two
+ * actions. A click opens a two-row menu under it - Import (the file input
+ * on the sheet) and Export as .fdx - and a click elsewhere or Escape closes
+ * it. The notice under the rows is the last export's report: what the
+ * mapping left out or changed, from `serialiseFinalDraft`.
+ */
+const ImportExportMenu = ({
+  onImport,
+  onExport,
+  exporting,
+  notice,
+}: {
+  readonly onImport: () => void
+  readonly onExport: () => void
+  readonly exporting: boolean
+  readonly notice: string | null
+}) => {
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const onDown = (event: MouseEvent): void => {
+      if (root.current !== null && event.target instanceof Node && !root.current.contains(event.target)) setOpen(false)
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  return (
+    <div ref={root} className="relative">
+      <button
+        type="button"
+        title="Import / export"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((current) => !current)
+        }}
+        className="folio-focus grid h-[24px] w-[24px] place-items-center rounded-chrome font-glyph text-12 text-ink3 hover:bg-hover"
+      >
+        ⤒
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          data-import-export-menu
+          className="absolute right-0 top-[28px] z-30 w-[220px] rounded-chrome border border-line bg-panel p-[3px] font-sans text-11-5 text-ink"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-[8px] rounded-chrome px-[8px] py-[5px] text-left hover:bg-hover"
+            onClick={() => {
+              setOpen(false)
+              onImport()
+            }}
+          >
+            <span className="min-w-0 flex-1">Import .fdx or .fountain</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={exporting}
+            className="flex w-full items-center gap-[8px] rounded-chrome px-[8px] py-[5px] text-left hover:bg-hover disabled:opacity-60"
+            onClick={() => {
+              setOpen(false)
+              onExport()
+            }}
+          >
+            <span className="min-w-0 flex-1">{exporting ? 'Exporting…' : 'Export as .fdx'}</span>
+          </button>
+          {notice === null ? null : <p className="m-0 px-[8px] pb-[4px] pt-[6px] text-10-5 text-ink3">{notice}</p>}
+        </div>
+      ) : null}
     </div>
   )
 }

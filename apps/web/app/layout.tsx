@@ -25,14 +25,16 @@ import './globals.css'
  * between the server render and hydration, on purpose, and React would
  * otherwise report the difference it was asked to allow.
  *
- * ## Fonts are preloaded, and only the two that paint chrome
+ * ## Fonts are preloaded, and only the face that paints chrome
  *
  * `font-display: swap` means text is visible immediately in a fallback face and
- * reflows when the real one arrives. Preloading the two faces that draw the
- * shell removes that reflow for the frame most likely to be seen. Courier Prime
- * is deliberately not preloaded: nothing on a sign-in page or the shell is set
- * in it, and preloading a face nothing uses is a wasted request that the
- * browser also warns about.
+ * reflows when the real one arrives. Preloading Inter's latin file removes that
+ * reflow for the frame most likely to be seen - it now carries both the UI role
+ * and the prose/heading role Newsreader used to own (`--font-sans` and
+ * `--font-serif` both resolve to it; see `packages/ui/src/tokens/type.css`).
+ * Courier Prime is deliberately not preloaded: nothing on a sign-in page or the
+ * shell is set in it, and preloading a face nothing uses is a wasted request
+ * that the browser also warns about.
  */
 
 export const metadata = {
@@ -45,14 +47,7 @@ const RootLayout = ({ children }: { readonly children: ReactNode }) => (
     <head>
       <link
         rel="preload"
-        href="/fonts/instrument-sans-400-700-latin.woff2"
-        as="font"
-        type="font/woff2"
-        crossOrigin="anonymous"
-      />
-      <link
-        rel="preload"
-        href="/fonts/newsreader-400-600-latin.woff2"
+        href="/fonts/inter-400-700-latin.woff2"
         as="font"
         type="font/woff2"
         crossOrigin="anonymous"

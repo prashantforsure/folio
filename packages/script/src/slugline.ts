@@ -83,11 +83,21 @@ const UNSPECIFIED_TIMES: readonly string[] = [
   'MAGIC HOUR',
 ]
 
-const TIME_LIGHT: ReadonlyMap<string, Light> = new Map([
-  ...DAY_TIMES.map((time): readonly [string, Light] => [time, 'day']),
-  ...NIGHT_TIMES.map((time): readonly [string, Light] => [time, 'night']),
-  ...UNSPECIFIED_TIMES.map((time): readonly [string, Light] => [time, 'unspecified']),
-])
+/**
+ * Every time of day this module knows, with the light it reads from it. The
+ * one list: `readSlugline` looks times up in it, and the Script editor's
+ * time-of-day selector offers it - so a time the selector offers is always
+ * one the reading takes off the set, and never one more.
+ */
+export const TIMES_OF_DAY: readonly { readonly time: string; readonly light: Light }[] = [
+  ...DAY_TIMES.map((time) => ({ time, light: 'day' as const })),
+  ...NIGHT_TIMES.map((time) => ({ time, light: 'night' as const })),
+  ...UNSPECIFIED_TIMES.map((time) => ({ time, light: 'unspecified' as const })),
+]
+
+const TIME_LIGHT: ReadonlyMap<string, Light> = new Map(
+  TIMES_OF_DAY.map((entry): readonly [string, Light] => [entry.time, entry.light]),
+)
 
 /**
  * `INT.`, `INT`, `I/E.`, `INT./EXT` all reduce to four values.

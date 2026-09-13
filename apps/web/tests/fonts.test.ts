@@ -11,11 +11,11 @@ import { describe, expect, it } from 'vitest'
  * on trust:
  *
  * **1. Nothing is fetched from a CDN.** AGENTS.md, Tech stack: "Self-hosted
- * Instrument Sans, Newsreader, Courier Prime." The design bundles link
- * `fonts.googleapis.com` in their `<helmet>` and it would be easy for that to
- * survive a copy-paste. Every `src` here must be a path on this origin.
+ * Inter, Courier Prime." The design bundles link `fonts.googleapis.com` in
+ * their `<helmet>` and it would be easy for that to survive a copy-paste.
+ * Every `src` here must be a path on this origin.
  *
- * **2. None of AGENTS.md's eighteen glyphs is in any of the three families.**
+ * **2. None of AGENTS.md's eighteen glyphs is in either family.**
  * That claim is why `--font-glyph` exists, why `glyph.tsx` forces text
  * presentation, and why the phase report says all eighteen render from a system
  * font. It is checked here from the `unicode-range` descriptors, which is a
@@ -61,12 +61,8 @@ const faces: Face[] = [...rules.matchAll(/@font-face\s*\{([\s\S]*?)\}/g)].map((m
 })
 
 describe('the font declarations', () => {
-  it('declares the three families AGENTS.md names, and no others', () => {
-    expect([...new Set(faces.map((face) => face.family))].sort()).toEqual([
-      'Courier Prime',
-      'Instrument Sans',
-      'Newsreader',
-    ])
+  it('declares the two families AGENTS.md names, and no others', () => {
+    expect([...new Set(faces.map((face) => face.family))].sort()).toEqual(['Courier Prime', 'Inter'])
   })
 
   it('serves every face from this origin', () => {

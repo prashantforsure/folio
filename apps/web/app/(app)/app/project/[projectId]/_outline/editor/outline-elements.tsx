@@ -7,7 +7,7 @@ import { PlateElement, useSelected } from 'platejs/react'
 import { createContext, useContext } from 'react'
 
 import { isOutlineElement } from '../../../../../../../lib/outline/slate-model'
-import { isMentionElement } from '../../../../../../../lib/script/slate-model'
+import { isMentionElement } from '../../../../../../../lib/outline/script-slate-model'
 
 /**
  * How each of the seven outline blocks is drawn, and the two inline things.
