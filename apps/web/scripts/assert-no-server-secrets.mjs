@@ -70,6 +70,8 @@ const SECRET_VARIABLES = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'DATABASE_URL_SESSION',
   'DATABASE_URL_TRANSACTION',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
 ]
 
 /** From `refuseBrowser()` in packages/db/src/env.ts. Its presence means that module was bundled. */

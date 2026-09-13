@@ -24,7 +24,6 @@
  *   characters                   name, bio, notes, and the profile the Characters route authors
  *   character_bound_cues         the alias table's authored half
  *   character_relationships
- *   character_arc_turns          one turn of an arc, pointing at a heading node or at nothing
  *   locations                    name, parent, scheduled days, description, the merge tombstone
  *   location_bound_sluglines
  *   location_arc_notes           one note per location per episode - "how this place changes"

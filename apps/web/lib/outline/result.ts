@@ -1,5 +1,5 @@
 import type { Timestamp } from '@folio/contracts'
-import type { NodeId } from '@folio/script'
+import type { DocumentId, NodeId } from '@folio/script'
 
 import type { SaveConflict } from '../script/result'
 
@@ -13,6 +13,9 @@ import type { SaveConflict } from '../script/result'
 export type SaveOutlineResult =
   | {
       readonly status: 'saved'
+      /** The document written - created by this save when the client sent `documentId: null`. */
+      readonly documentId: DocumentId
+      readonly createdAt: Timestamp
       readonly updatedAt: Timestamp
       readonly conflict: SaveConflict | null
       readonly snapshotTaken: boolean

@@ -10,23 +10,23 @@ import { ContextColumn } from './context-column'
  * anchors, later), and Insights has no column at all in this phase.
  */
 const FIND: Partial<Record<ProjectRoute, string>> = {
-  characters: 'Find a character',
   locations: 'Find a location or slugline',
   bible: 'Search the bible',
   research: 'Search sources and clips',
 }
 
 /**
- * A project route's column beside its page. Characters, Locations, Bible and
- * Research get a record list column; Timeline gets its filter column. Each
- * route's `layout.tsx` is one line naming itself here.
+ * A project route's column beside its page. Locations, Bible and Research
+ * get a record list column; Timeline gets its filter column; Characters
+ * has none since its second pass. Each route's `layout.tsx` is one line
+ * naming itself here.
  */
 export const ProjectColumnLayout = async ({
   route,
   projectId,
   children,
 }: {
-  readonly route: Exclude<ProjectRoute, 'insights'>
+  readonly route: Exclude<ProjectRoute, 'insights' | 'characters'>
   readonly projectId: string
   readonly children: ReactNode
 }) => {

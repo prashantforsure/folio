@@ -132,6 +132,32 @@ const ServerEnvSchema = z.object({
 export type ServerEnv = z.infer<typeof ServerEnvSchema>
 
 /**
+ * Object storage - Cloudflare R2, over its S3 API. Server only.
+ *
+ * Optional as a block: with none of the five set the app boots as it did
+ * before storage existed, and `storageEnv` is `null` - the Characters
+ * route draws Upload disabled and says why. With any set, all five must
+ * be, and each is checked, so a half-configured bucket is a boot failure
+ * with a name rather than a 500 on the first upload.
+ *
+ * `R2_PUBLIC_URL` is the origin the bucket is served from (a custom domain
+ * or the `r2.dev` one); the app composes `${R2_PUBLIC_URL}/${key}` at
+ * read and never stores a URL.
+ */
+const StorageEnvSchema = z.object({
+  R2_ACCOUNT_ID: z.string().min(1),
+  R2_ACCESS_KEY_ID: z.string().min(1),
+  R2_SECRET_ACCESS_KEY: z.string().min(1),
+  R2_BUCKET: z.string().min(1),
+  R2_PUBLIC_URL: z
+    .string()
+    .url()
+    .transform((value) => value.replace(/\/+$/, '')),
+})
+
+export type StorageEnv = z.infer<typeof StorageEnvSchema>
+
+/**
  * What each variable is and where it comes from.
  *
  * Carried here rather than only in `.env.example` so the failure message can
@@ -145,6 +171,11 @@ const PROVENANCE: Readonly<Record<string, string>> = {
     'Supabase dashboard, Project Settings, Database, Connection string, "Transaction pooler" (port 6543). Used by web requests.',
   SUPABASE_SERVICE_ROLE_KEY:
     'Supabase dashboard, Project Settings, API Keys, service_role. Server only - it bypasses RLS.',
+  R2_ACCOUNT_ID: 'Cloudflare dashboard, R2, the account id on the overview page. Set all five R2_* or none.',
+  R2_ACCESS_KEY_ID: 'Cloudflare dashboard, R2, Manage R2 API Tokens, an Object Read & Write token for the bucket.',
+  R2_SECRET_ACCESS_KEY: 'The same token. Shown once at creation. Server only.',
+  R2_BUCKET: 'The bucket name, as created in the Cloudflare dashboard.',
+  R2_PUBLIC_URL: 'The origin the bucket is served from - its custom domain, or the r2.dev public URL - with no trailing slash.',
 }
 
 // ---------------------------------------------------------------------------
@@ -221,3 +252,25 @@ export const serverEnv: ServerEnv = parseOrThrow(
   },
   'server',
 )
+
+const STORAGE_NAMES = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET', 'R2_PUBLIC_URL'] as const
+
+const rawStorage = {
+  R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
+  R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+  R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+  R2_BUCKET: process.env.R2_BUCKET,
+  R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
+}
+
+/**
+ * Server-only. `null` when no `R2_*` variable is set at all - storage is
+ * not configured, and every reader treats that as "no portraits yet".
+ * Throws, with the same report as `serverEnv`, when some are set and some
+ * are not.
+ */
+export const storageEnv: StorageEnv | null = STORAGE_NAMES.every(
+  (name) => rawStorage[name] === undefined || rawStorage[name] === '',
+)
+  ? null
+  : parseOrThrow(StorageEnvSchema, rawStorage, 'storage')

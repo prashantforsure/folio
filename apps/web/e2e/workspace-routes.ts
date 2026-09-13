@@ -110,8 +110,9 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     scope: 'project',
     rail: 'characters',
     title: 'Characters',
-    defaults: { view: 'profile' },
-    column: { kind: 'context', width: 256 },
+    defaults: { view: 'overview' },
+    /** No column since the second pass: the card grid is the list. */
+    column: { kind: 'none', width: 0 },
   },
   {
     route: 'locations',

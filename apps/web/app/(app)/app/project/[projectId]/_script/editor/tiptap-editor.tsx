@@ -129,7 +129,23 @@ export const ScriptEditor = ({
       extensions,
       content,
       autofocus: autoFocus ? 'start' : false,
-      editorProps: { attributes: { class: 'folio-editable', spellcheck: 'false' } },
+      editorProps: {
+        attributes: {
+          // Tiptap's core Tabindex extension puts `tabindex="0"` on the
+          // editable, which makes `@folio/ui`'s global `[tabindex]:focus-visible`
+          // ring (2px `--focus`) fire on it. The sheet is not a control: no
+          // ring, no outline, no border, in any focus state.
+          class: 'folio-editable border-none outline-none focus:border-transparent focus:outline-none focus:ring-0',
+          spellcheck: 'false',
+          autocorrect: 'off',
+          autocapitalize: 'off',
+          // Grammarly (and similar extensions) draw their own box around a
+          // contenteditable region unless told not to; nothing here does.
+          'data-gramm': 'false',
+          'data-gramm_editor': 'false',
+          'data-enable-grammarly': 'false',
+        },
+      },
       onUpdate: () => {
         store.version.set(store.version.get() + 1)
       },
@@ -157,7 +173,11 @@ export const ScriptEditor = ({
   return (
     <>
       {editor === null ? fallback : null}
-      <EditorContent editor={editor} className="folio-editor-host" data-editor-ready={editor === null ? 'false' : 'true'} />
+      <EditorContent
+        editor={editor}
+        className="folio-editor-host border-none outline-none focus:border-transparent focus:outline-none focus:ring-0"
+        data-editor-ready={editor === null ? 'false' : 'true'}
+      />
       {editor === null ? null : <FloatingSurfaces editor={editor} store={store} />}
     </>
   )

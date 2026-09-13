@@ -1,25 +1,21 @@
 'use server'
 
 import { OutlineNodeSchema } from '@folio/contracts'
+import type { DocumentRecord } from '@folio/contracts'
 import {
   commitNodePlan,
   createDocument,
-  mintNodeIds,
   parseOutlineRows,
   planNodeWrite,
   readDocumentById,
   readDocumentByKind,
   readNodeRows,
-  replaceNodes,
   snapshotVersion,
 } from '@folio/db'
 import type { DocumentId, NodeId, OutlineNode } from '@folio/script'
-import { text, typed } from '@folio/script'
-import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
-import { isRefusal, openEpisode, openEpisodeWith } from '../script/gate'
-import type { SimpleResult } from '../script/result'
+import { isRefusal, openEpisodeWith } from '../script/gate'
 import type { SaveOutlineResult } from './result'
 
 /**
@@ -40,6 +36,18 @@ import type { SaveOutlineResult } from './result'
  * the `documents.updated_at` it last saw and the write still lands when the
  * row has moved on; the result names both stamps.
  *
+ * ## The first save creates the document
+ *
+ * There is no "Start the outline" button (removed 2026-09-13 on the user's
+ * instruction): the empty state is the editor over one blank Body block,
+ * and the writer just types. So the first save arrives with
+ * `documentId: null`, and this creates the `kind = 'outline'` document row
+ * before planning the write against no rows - or finds one another tab
+ * created in the meantime and plans against its rows. The result carries
+ * the document's id and stamps so the workspace saves into it from then on.
+ * No `revalidatePath`: the workspace writes the nav's row itself, and a
+ * layout refresh mid-typing would hand the editor back its own document.
+ *
  * ## What a save reports back
  *
  * The nav's `Outline` row prints `N acts` (the H1 count), read from this
@@ -56,7 +64,8 @@ const RetirementSchema = z.object({
 const SaveOutlineInputSchema = z.object({
   projectId: z.string(),
   episode: z.string(),
-  documentId: z.string().uuid(),
+  /** `null` on the first save of an outline that does not exist yet. */
+  documentId: z.string().uuid().nullable(),
   baseUpdatedAt: z.string(),
   nodes: z.array(OutlineNodeSchema).max(5_000),
   retirements: z.array(RetirementSchema),
@@ -70,8 +79,6 @@ const invalid = (message: string): SaveOutlineResult => ({
   message: `The outline did not read as a block list (${message}).`,
 })
 
-const workspacePath = (projectId: string): string => `/app/project/${projectId}`
-
 export const saveOutline = async (raw: SaveOutlineInput): Promise<SaveOutlineResult> => {
   const parsed = SaveOutlineInputSchema.safeParse(raw)
   if (!parsed.success) {
@@ -79,15 +86,28 @@ export const saveOutline = async (raw: SaveOutlineInput): Promise<SaveOutlineRes
     return invalid(issue === undefined ? 'shape' : `${issue.path.join('.')}: ${issue.message}`)
   }
   const input = parsed.data
-  const documentId = input.documentId as DocumentId
+  const documentId = input.documentId === null ? null : (input.documentId as DocumentId)
 
   const gate = await openEpisodeWith(input.projectId, input.episode, async (scope) => {
+    if (documentId === null) return { document: null, rows: [] }
     const [document, rows] = await Promise.all([readDocumentById(scope, documentId), readNodeRows(scope, documentId)])
     return { document, rows }
   })
   if (isRefusal(gate)) return gate
   const { scope, episode } = gate
-  const { document, rows } = gate.extra
+  let { document, rows } = gate.extra
+
+  if (documentId === null) {
+    // The first save: the document another tab may have started, or a new one.
+    const existing = await readDocumentByKind(scope, episode.id, 'outline')
+    if (existing !== null) {
+      document = existing
+      rows = await readNodeRows(scope, existing.id)
+    } else {
+      document = await createDocument(scope, episode.id, 'outline', episode.title)
+      rows = []
+    }
+  }
 
   if (document === null || document.episodeId !== episode.id || document.kind !== 'outline') {
     return { status: 'refused', message: 'That outline no longer exists. Reload to continue.' }
@@ -95,6 +115,7 @@ export const saveOutline = async (raw: SaveOutlineInput): Promise<SaveOutlineRes
   if (!parseOutlineRows(rows).ok) {
     return { status: 'refused', message: 'The stored outline would not read. Reload to continue.' }
   }
+  const target: DocumentRecord = document
 
   const next: readonly OutlineNode[] = input.nodes
   const seen = new Set<string>()
@@ -103,8 +124,11 @@ export const saveOutline = async (raw: SaveOutlineInput): Promise<SaveOutlineRes
     seen.add(node.id)
   }
 
+  // A first save has no base stamp to disagree with.
   const conflict =
-    document.updatedAt === input.baseUpdatedAt ? null : { expected: input.baseUpdatedAt, found: document.updatedAt }
+    documentId === null || target.updatedAt === input.baseUpdatedAt
+      ? null
+      : { expected: input.baseUpdatedAt, found: target.updatedAt }
 
   const plan = planNodeWrite(rows, next)
   const mergedInto = new Map(input.retirements.map((entry) => [entry.nodeId, entry.mergedInto]))
@@ -114,39 +138,20 @@ export const saveOutline = async (raw: SaveOutlineInput): Promise<SaveOutlineRes
   })
 
   const [written, snapshot] = await Promise.all([
-    commitNodePlan(scope, document.id, 'outline', plan, tombstones),
+    commitNodePlan(scope, target.id, 'outline', plan, tombstones),
     input.snapshot
-      ? snapshotVersion(scope, document.id, 'manual', next, next.length).then(() => true)
+      ? snapshotVersion(scope, target.id, 'manual', next, next.length).then(() => true)
       : Promise.resolve(false),
   ])
   if ('unusable' in written) return { status: 'ids-unusable', ids: written.unusable }
 
   return {
     status: 'saved',
+    documentId: target.id,
+    createdAt: target.createdAt,
     updatedAt: written.updatedAt,
     conflict,
     snapshotTaken: snapshot,
     acts: next.filter((node) => node.type === 'h1').length,
   }
-}
-
-/**
- * Start a blank outline: the document row and one empty body block, so the
- * writer lands on the caret line the empty state promised.
- */
-export const createBlankOutline = async (projectId: string, episode: string): Promise<SimpleResult> => {
-  const gate = await openEpisode(projectId, episode)
-  if (isRefusal(gate)) return gate
-  const { scope, project } = gate
-
-  const already = await readDocumentByKind(scope, gate.episode.id, 'outline')
-  if (already !== null) return { status: 'done' }
-
-  const document = await createDocument(scope, gate.episode.id, 'outline', gate.episode.title)
-  const [id] = await mintNodeIds(scope, 1)
-  if (id === undefined) return { status: 'error', message: 'No id could be minted.' }
-  const nodes: readonly OutlineNode[] = [{ type: 'body', id, provenance: typed(), content: [text('')] }]
-  await replaceNodes(scope, document.id, 'outline', nodes)
-  revalidatePath(workspacePath(project.id), 'layout')
-  return { status: 'done' }
 }

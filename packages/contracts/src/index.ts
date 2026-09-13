@@ -56,7 +56,6 @@ export type { Equals, Extends } from './equality'
 export { assertExact } from './equality'
 
 export type {
-  ArcTurnId,
   BibleEntryId,
   BibleFactId,
   BiblePitchFieldId,
@@ -81,7 +80,6 @@ export type {
   VersionId,
 } from './ids'
 export {
-  ArcTurnIdSchema,
   BibleEntryIdSchema,
   BibleFactIdSchema,
   BiblePitchFieldIdSchema,
@@ -109,7 +107,6 @@ export {
   ThreadIdSchema,
   UserIdSchema,
   VersionIdSchema,
-  arcTurnId,
   bibleEntryId,
   bibleFactId,
   biblePitchFieldId,
@@ -274,34 +271,34 @@ export {
 } from './history'
 
 export type {
-  ArcTurnEdit,
-  ArcTurnRow,
   CastRow,
-  CharacterGroup,
+  CharacterColor,
+  CharacterGender,
   CharacterMap,
   CharacterProfile,
   CharacterProfileEdit,
   CueVariantRow,
   EpisodeBar,
-  KeyLineRow,
   MapColumn,
-  PlaceRow,
-  PresenceGap,
-  RelationshipEdit,
-  RelationshipRow,
+  NewCharacter,
+  PortraitType,
   ResolveItem,
   ResolveProposal,
   SceneRef,
-  WalkOnRow,
 } from './characters'
 export {
-  ArcTurnEditSchema,
-  CHARACTER_GROUPS,
-  CHARACTER_HUES,
-  CharacterGroupSchema,
+  CHARACTER_COLORS,
+  CHARACTER_COLOR_IDS,
+  CHARACTER_GENDERS,
+  CHARACTER_GENDER_LABELS,
+  CharacterColorSchema,
+  CharacterGenderSchema,
   CharacterProfileEditSchema,
-  KeyLinesEditSchema,
-  RelationshipEditSchema,
+  DEFAULT_CHARACTER_COLOR,
+  NewCharacterSchema,
+  PORTRAIT_MAX_BYTES,
+  PORTRAIT_TYPES,
+  hueOfColor,
 } from './characters'
 
 export type {

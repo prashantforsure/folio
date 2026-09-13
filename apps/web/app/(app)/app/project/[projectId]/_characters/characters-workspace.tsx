@@ -1,69 +1,46 @@
 'use client'
 
-import type {
-  CastRow,
-  CharacterMap,
-  CharacterProfile,
-  ProjectId,
-  ResolveItem,
-  SceneRef,
-} from '@folio/contracts'
-import type { CharacterId } from '@folio/script'
+import type { CastRow, CharacterMap, CharacterProfile, ProjectId, ResolveItem } from '@folio/contracts'
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useSession } from '../../../../../../lib/state/session'
-import { characterHref } from '../../../../../../lib/workspace/hrefs'
-import type { EpisodeRoutePath, ProjectRoutePath } from '../../../../../../lib/workspace/hrefs'
-import { NewCharacterButton } from './cast-nav'
+import type { ProjectRoutePath } from '../../../../../../lib/workspace/hrefs'
+import { CastingTable } from './casting-table'
+import { CharacterDrawer } from './character-drawer'
 import { EmptyCharacters } from './empty-characters'
-import { Profile } from './profile'
-import { ResolveQueue } from './resolve-queue'
-import { WhoMeetsWhom } from './who-meets-whom'
+import { NewCharacterModal } from './new-character-modal'
+import { OverviewGrid } from './overview-grid'
+import { Relationships } from './relationships'
 
 /**
- * The Characters route's main column: the 46px header (title, live count,
- * the header note, the `Profile / Who meets whom / Resolve` segment with
- * the pending badge, `＋ New character`), the view, and the 28px footer
- * (`N characters · M cues · K episodes`, the view's note, `Hide nav`, the
- * save indicator, the route id). `Route - Characters.dc.html`, with the
- * tokens in place of its hexes.
+ * The Characters route: the 46px header (title, live count, the find box,
+ * the `Overview · Relationships · Casting` segment, `＋ New Character`),
+ * the view, and the 28px footer (`N characters · M cues · K episodes`,
+ * `Hide nav`, the save indicator, the route id). Built to the client's
+ * reference in the route's second pass (2026-09-14) - the repo's
+ * Characters bundle is not this route's design any more
+ * (`docs/build-decisions.md`, "Characters route, second pass").
  *
  * ## `?view=` and `:characterId` are the URL; everything else is state
  *
- * The three views are the sub-view param, so the tabs are links, and the
- * profile's record is the path. The find filter, an open picker, a pending
- * rename's confirmation: component state, none of it worth a link.
+ * The three views are the sub-view param, so the tabs are links. A
+ * selected record is the path, and the drawer is what the path renders
+ * over the grid. The find filter, an open modal, a graph's mode, a table's
+ * sort: component state, none of it worth a link.
  *
  * ## Every write returns a result, and the page re-reads
  *
  * The actions revalidate the workspace path, so the router refreshes the
  * server-rendered read after each write; the save indicator here is the
  * only client-held state a write touches. Nothing here computes a count.
- *
- * ## Not drawn
- *
- * `Cast report · PDF`: export is a queued job that does not exist yet, and
- * a button that does nothing is a placeholder (the Scenes precedent). The
- * portrait's "Drop a reference" is drawn as the bundle's dashed box with
- * the chip, and says so in its title: there is no file storage to drop
- * into. Both flagged in the phase report.
  */
 
-export type CharactersView = 'profile' | 'map' | 'resolve'
-
-export type ElsewhereLinks = {
-  readonly locations: ProjectRoutePath
-  readonly bible: ProjectRoutePath
-  readonly timeline: ProjectRoutePath
-  readonly insights: ProjectRoutePath
-  readonly production: EpisodeRoutePath | null
-}
+export type CharactersView = 'overview' | 'relationships' | 'casting'
 
 export type CharactersWorkspaceProps = {
   readonly projectId: ProjectId
   readonly view: CharactersView
-  readonly selected: CharacterId | null
   readonly baseHref: ProjectRoutePath
   readonly cast: readonly CastRow[]
   readonly resolve: readonly ResolveItem[]
@@ -71,9 +48,9 @@ export type CharactersWorkspaceProps = {
   readonly cueCount: number
   readonly episodes: number
   readonly derivable: number | null
+  readonly storage: boolean
+  /** The record the drawer shows, when the path names one. */
   readonly profile: CharacterProfile | null
-  readonly sceneRefs: readonly SceneRef[]
-  readonly links: ElsewhereLinks
 }
 
 export type SaveState =
@@ -86,15 +63,14 @@ export type SaveState =
 export type Run = (job: () => Promise<string | null>) => void
 
 const TABS: readonly { readonly id: CharactersView; readonly label: string; readonly glyph: string }[] = [
-  { id: 'profile', label: 'Profile', glyph: '▤' },
-  { id: 'map', label: 'Who meets whom', glyph: '▦' },
-  { id: 'resolve', label: 'Resolve', glyph: '⇄' },
+  { id: 'overview', label: 'Overview', glyph: '◍' },
+  { id: 'relationships', label: 'Relationships', glyph: '◎' },
+  { id: 'casting', label: 'Casting', glyph: '▤' },
 ]
 
 export const CharactersWorkspace = ({
   projectId,
   view,
-  selected,
   baseHref,
   cast,
   resolve,
@@ -102,9 +78,8 @@ export const CharactersWorkspace = ({
   cueCount,
   episodes,
   derivable,
+  storage,
   profile,
-  sceneRefs,
-  links,
 }: CharactersWorkspaceProps) => {
   const session = useSession()
   const [mounted, setMounted] = useState(false)
@@ -148,37 +123,15 @@ export const CharactersWorkspace = ({
     })()
   }, [])
 
-  const unresolved = resolve.filter((row) => row.proposal !== null).length
-  const empty = cast.length === 0
+  const [query, setQuery] = useState('')
+  const [creating, setCreating] = useState(false)
+  const closeModal = useCallback(() => {
+    setCreating(false)
+  }, [])
+
+  const empty = cast.length === 0 && resolve.length === 0
   const shown: CharactersView | 'empty' = empty ? 'empty' : view
-
-  const headerNote =
-    shown === 'profile'
-      ? 'project-wide · counts come from character cues in the script'
-      : shown === 'map'
-        ? `shared scenes across ${String(episodes)} ${episodes === 1 ? 'episode' : 'episodes'}`
-        : shown === 'resolve'
-          ? `${String(unresolved)} ${unresolved === 1 ? 'cue' : 'cues'} to match`
-          : ''
-  const footerNote =
-    shown === 'profile' && profile !== null
-      ? `${profile.name} · ${String(profile.appearances)} scenes · ${String(profile.lines)} lines`
-      : shown === 'map'
-        ? 'Who meets whom'
-        : shown === 'resolve'
-          ? 'Resolve'
-          : shown === 'empty'
-            ? 'Empty'
-            : ''
-  const routeId =
-    shown === 'profile' && profile !== null ? `/characters/${profile.id}` : '/characters'
-
-  const tabHref = (tab: CharactersView) =>
-    tab === 'profile'
-      ? selected === null
-        ? baseHref
-        : characterHref(projectId, selected)
-      : (`${baseHref}?view=${tab}` as const)
+  const routeId = profile === null ? '/characters' : `/characters/${profile.id}`
 
   return (
     <main
@@ -196,17 +149,36 @@ export const CharactersWorkspace = ({
         <span className="tabular flex-none rounded-chrome bg-sel px-[6px] py-[1px] text-10 font-semibold text-ink2" data-cast-count>
           {cast.length}
         </span>
-        <span className="min-w-0 flex-1 truncate text-11 text-ink3">{headerNote}</span>
+        {empty ? (
+          <div className="flex-1" />
+        ) : (
+          <label className="ml-[6px] flex min-w-0 max-w-[240px] flex-1 items-center gap-[7px] rounded-chrome border border-line2 bg-sheet px-[9px] py-[4px]">
+            <span aria-hidden="true" className="text-11 text-ink3" style={{ fontFamily: 'var(--font-glyph)' }}>
+              ⌕
+            </span>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value)
+              }}
+              placeholder="Find a character"
+              aria-label="Find a character"
+              className="min-w-0 flex-1 border-none bg-transparent text-11-5 text-ink outline-none placeholder:text-ink3"
+            />
+          </label>
+        )}
+        <div className="min-w-0 flex-1" />
         <nav aria-label="Character views" className="flex flex-none gap-[2px] rounded-chrome border border-line2 p-[2px]">
           {TABS.map((tab) => {
             const active = tab.id === view
             return (
               <Link
                 key={tab.id}
-                href={tabHref(tab.id)}
+                href={tab.id === 'overview' ? baseHref : (`${baseHref}?view=${tab.id}` as const)}
                 aria-current={active ? 'page' : undefined}
                 data-view-tab={tab.id}
-                className={`flex items-center gap-[6px] whitespace-nowrap rounded-chrome px-[10px] py-[4px] text-11-5 no-underline hover:text-ink hover:no-underline ${
+                className={`flex items-center gap-[6px] whitespace-nowrap rounded-chrome px-[12px] py-[4px] text-11-5 no-underline hover:text-ink hover:no-underline ${
                   active ? 'bg-accent-bg text-accent' : 'text-ink2'
                 }`}
               >
@@ -214,43 +186,42 @@ export const CharactersWorkspace = ({
                   {tab.glyph}
                 </span>
                 {tab.label}
-                {tab.id === 'resolve' && unresolved > 0 ? (
-                  <span
-                    data-resolve-badge
-                    className="tabular grid h-[14px] min-w-[14px] place-items-center rounded-chrome bg-note px-[4px] text-9 font-bold text-rail"
-                  >
-                    {unresolved}
-                  </span>
-                ) : null}
               </Link>
             )
           })}
         </nav>
-        <NewCharacterButton projectId={projectId} variant="accent" />
+        <div className="min-w-0 flex-1" />
+        <button
+          type="button"
+          data-new-character
+          onClick={() => {
+            setCreating(true)
+          }}
+          className="flex flex-none items-center gap-[6px] whitespace-nowrap rounded-chrome border-none bg-accent px-[12px] py-[6px] text-11-5 font-semibold text-accent-ink hover:opacity-90"
+        >
+          <span aria-hidden="true" className="text-11 opacity-75" style={{ fontFamily: 'var(--font-glyph)' }}>
+            ＋
+          </span>
+          New Character
+        </button>
       </header>
 
       <div className="flex min-h-0 flex-1">
         {shown === 'empty' ? (
-          <EmptyCharacters projectId={projectId} derivable={derivable ?? 0} run={run} />
-        ) : shown === 'profile' ? (
-          profile === null ? (
-            <div className="flex flex-1 items-center justify-center text-12 text-ink3">Pick a character from the list.</div>
-          ) : (
-            <Profile
-              key={profile.id}
-              projectId={projectId}
-              profile={profile}
-              cast={cast}
-              sceneRefs={sceneRefs}
-              baseHref={baseHref}
-              links={links}
-              run={run}
-            />
-          )
-        ) : shown === 'map' ? (
-          <WhoMeetsWhom projectId={projectId} map={map} episodes={episodes} timelineHref={links.timeline} />
+          <EmptyCharacters
+            projectId={projectId}
+            derivable={derivable ?? 0}
+            onCreate={() => {
+              setCreating(true)
+            }}
+            run={run}
+          />
+        ) : shown === 'relationships' ? (
+          <Relationships projectId={projectId} map={map} />
+        ) : shown === 'casting' ? (
+          <CastingTable projectId={projectId} cast={cast} query={query} />
         ) : (
-          <ResolveQueue projectId={projectId} rows={resolve} cast={cast} run={run} />
+          <OverviewGrid projectId={projectId} cast={cast} resolve={resolve} query={query} storage={storage} run={run} />
         )}
       </div>
 
@@ -259,8 +230,14 @@ export const CharactersWorkspace = ({
           <b className="font-semibold text-ink">{cast.length}</b> characters · {cueCount} cues · {episodes}{' '}
           {episodes === 1 ? 'episode' : 'episodes'}
         </span>
-        <span className="flex-none text-ink3">·</span>
-        <span className="min-w-0 truncate">{footerNote}</span>
+        {resolve.length > 0 ? (
+          <>
+            <span className="flex-none text-ink3">·</span>
+            <span className="flex-none whitespace-nowrap text-note" data-unmatched-count>
+              {resolve.length} unmatched {resolve.length === 1 ? 'name' : 'names'} in the script
+            </span>
+          </>
+        ) : null}
         <div className="min-w-0 flex-1" />
         <button
           type="button"
@@ -287,6 +264,21 @@ export const CharactersWorkspace = ({
         </span>
         <span className="flex-none whitespace-nowrap font-mono text-9-5 text-ink3">{routeId}</span>
       </footer>
+
+      {creating ? (
+        <NewCharacterModal projectId={projectId} usedColors={cast.map((row) => row.color)} onClose={closeModal} />
+      ) : null}
+      {profile === null ? null : (
+        <CharacterDrawer
+          key={profile.id}
+          projectId={projectId}
+          profile={profile}
+          cast={cast}
+          storage={storage}
+          baseHref={baseHref}
+          run={run}
+        />
+      )}
     </main>
   )
 }

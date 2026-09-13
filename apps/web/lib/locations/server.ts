@@ -1,3 +1,4 @@
+import { hueOfColor } from '@folio/contracts'
 import type {
   BreakdownRow,
   LocationArcNoteRow,
@@ -27,7 +28,7 @@ import type { CharacterId, LocationId, NodeId, ProposalTarget, ResolveSubject } 
 import { canonicalKey } from '@folio/script'
 import { cache } from 'react'
 
-import { hueOf, sceneRefOf } from '../characters/figures'
+import { sceneRefOf } from '../characters/figures'
 import { deriveSpeculatively, readDerivationReads } from '../script/server'
 import type { ProjectContext } from '../workspace/context'
 import { loadProject } from '../workspace/context'
@@ -308,7 +309,7 @@ export const loadLocationRecord = cache(
     const sceneOrder = new Map<NodeId, number>(load.index.map((entry, at) => [entry.sceneNodeId, at]))
     const refByScene = new Map<NodeId, SceneRef>(load.index.map((entry) => [entry.sceneNodeId, sceneRefOf(entry)]))
     const people = new Map<CharacterId, { readonly name: string; readonly hue: number }>(
-      characters.map((character) => [character.id, { name: character.name, hue: hueOf(character.id) }]),
+      characters.map((character) => [character.id, { name: character.name, hue: hueOfColor(character.color) }]),
     )
     const nameOf = new Map(load.rows.map((entry) => [entry.id, entry.name]))
 

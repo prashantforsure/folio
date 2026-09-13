@@ -58,14 +58,28 @@ export const freshBlock = (schema: Schema, type: ScreenplayNodeType): ProseMirro
 /**
  * Change a block's type in place. The id survives (ADR 0001); a Character
  * keeps its delivery modifiers and anything else has none. A Parenthetical
- * made from an empty block opens as `()` with the caret between the parens.
+ * made from an empty block opens as `()` with the caret between the parens;
+ * a Parenthetical leaving for any other type sheds the wrapping parens they
+ * were opened with - they framed the cue, they are not the writer's text.
  */
 export const setBlockTypeAt = (tr: Transaction, pos: number, type: ScreenplayNodeType): boolean => {
   const node = tr.doc.nodeAt(pos)
   const nodeType = tr.doc.type.schema.nodes[type]
   if (node === null || nodeType === undefined || blockTypeOf(node) === null) return false
   const modifiers = type === 'character' ? node.attrs['modifiers'] : []
+  const text = node.textContent
+  const leavingParen =
+    blockTypeOf(node) === 'paren' &&
+    type !== 'paren' &&
+    node.content.size === text.length &&
+    text.startsWith('(') &&
+    text.endsWith(')')
   tr.setNodeMarkup(pos, nodeType, { ...node.attrs, modifiers })
+  if (leavingParen) {
+    tr.delete(pos + 1, pos + 1 + node.content.size)
+    const inner = text.slice(1, -1)
+    if (inner.length > 0) tr.insertText(inner, pos + 1)
+  }
   if (type === 'paren' && node.content.size === 0) {
     tr.insertText(EMPTY_PAREN, pos + 1)
     tr.setSelection(TextSelection.create(tr.doc, pos + 2))

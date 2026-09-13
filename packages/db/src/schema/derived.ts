@@ -1,4 +1,4 @@
-import { CHARACTER_GROUPS } from '@folio/contracts'
+import { CHARACTER_COLOR_IDS, CHARACTER_GENDERS } from '@folio/contracts'
 import { CONFIDENCES, INTERIOR_EXTERIOR, LIGHT_STATES, PRESENCE_STATES, RESOLVE_ROW_STATES } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import {
@@ -41,8 +41,7 @@ import { episodes, projects, users } from './tenancy'
  *
  *   characters                  AUTHORED       name, bio, notes, the profile
  *   character_bound_cues        AUTHORED       the alias table's authored half
- *   character_relationships     AUTHORED
- *   character_arc_turns         AUTHORED
+ *   character_relationships     AUTHORED       kept as a derivation read; no screen writes it since 0013
  *   character_derivations       DERIVED CACHE  counts, presence, scenes
  *   character_cue_tallies       DERIVED CACHE  the counted spellings
  *
@@ -73,7 +72,7 @@ export const resolveSubjectKindEnum = pgEnum('resolve_subject_kind', [
 export const resolveVerdictEnum = pgEnum('resolve_verdict', ['accepted', 'rejected'])
 export const interiorExteriorEnum = pgEnum('interior_exterior', INTERIOR_EXTERIOR)
 export const lightEnum = pgEnum('light', LIGHT_STATES)
-export const characterGroupEnum = pgEnum('character_group', CHARACTER_GROUPS)
+export const characterGenderEnum = pgEnum('character_gender', CHARACTER_GENDERS)
 
 // ---------------------------------------------------------------------------
 // Characters
@@ -98,12 +97,16 @@ export const characterGroupEnum = pgEnum('character_group', CHARACTER_GROUPS)
  * anything still pointing at the loser resolves, which is the same reasoning as
  * a node tombstone.
  *
- * The profile columns (Characters route phase) are the "profile, arc and
- * relationships authored on top" of the spec: group, role, age, the three
- * drives each with a source line, voice rules, and the writer's key lines as
- * dialogue node ids. `@folio/contracts`'s `characters.ts` says what each is
- * for. All authored; a re-derive touches none of them, which the table split
- * guarantees rather than a comment.
+ * The profile columns are what a card shows and the drawer edits (Characters
+ * route, second pass, migration `0013`): `color` - the name of a `--chip-N`
+ * token, checked against the list; `gender`; `age` as text, because "40s"
+ * is an age; `role`; `bio`; `appearance` - the notes a look-sheet job will
+ * read; `portrait_key` - the storage object's key, never a URL, so the
+ * bucket can move without a data change. `@folio/contracts`'s
+ * `characters.ts` says what each is for. All authored; a re-derive touches
+ * none of them, which the table split guarantees rather than a comment.
+ * The first pass's drives, voice rules, key lines and arc turns were
+ * dropped in `0013` on the client's ruling.
  */
 export const characters = pgTable(
   'characters',
@@ -115,18 +118,15 @@ export const characters = pgTable(
     notes: jsonb('notes').notNull().default(sql`'{}'::jsonb`),
     /** Set when the writer merged this record into another. Never derived. */
     mergedInto: uuid('merged_into'),
-    group: characterGroupEnum('group').notNull().default('supporting'),
-    role: text('role'),
+    /** A `--chip-N` token name from `CHARACTER_COLOR_IDS`. Checked below. */
+    color: text('color').notNull().default('chip-1'),
+    gender: characterGenderEnum('gender'),
     age: text('age'),
-    wants: text('wants'),
-    wantsSource: text('wants_source'),
-    needs: text('needs'),
-    needsSource: text('needs_source'),
-    flaw: text('flaw'),
-    flawSource: text('flaw_source'),
-    voiceRules: text('voice_rules').array().notNull().default(sql`ARRAY[]::text[]`),
-    /** Dialogue node ids. Not a foreign key: a line that leaves the script is dropped on read. */
-    keyLines: uuid('key_lines').array().notNull().default(sql`ARRAY[]::uuid[]`),
+    role: text('role'),
+    /** Notes for the look sheet a later job draws. Free text. */
+    appearance: text('appearance'),
+    /** The portrait's object key in storage. Null with no portrait. */
+    portraitKey: text('portrait_key'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
@@ -134,6 +134,7 @@ export const characters = pgTable(
     index('characters_project_idx').on(table.projectId),
     check('characters_name_not_empty', sql`length(btrim(${table.name})) > 0`),
     check('characters_not_merged_into_self', sql`${table.mergedInto} IS DISTINCT FROM ${table.id}`),
+    check('characters_color_known', sql`${table.color} = any(${sql.raw(`ARRAY[${CHARACTER_COLOR_IDS.map((id) => `'${id}'`).join(', ')}]::text[]`)})`),
   ],
 )
 
@@ -196,43 +197,6 @@ export const characterRelationships = pgTable(
     primaryKey({ columns: [table.characterId, table.otherId] }),
     index('character_relationships_project_idx').on(table.projectId),
     check('character_relationships_not_self', sql`${table.characterId} <> ${table.otherId}`),
-  ],
-)
-
-/**
- * One turn of a character's arc. AUTHORED.
- *
- * "Arc beats with an **unwritten** flag." A turn is a line of the writer's
- * and, when it names one, a scene: `scene_node_id` is the heading node's id
- * on the pattern of `scenes.scene_node_id` - **no foreign key to `nodes`**,
- * so a heading that leaves the script and comes back by undo finds its turn
- * still pointing at it. The route prints the scene's current episode and
- * number, so a turn survives a renumbering; a turn with no scene, or whose
- * scene is absent, is what the profile flags as "not on the page". The flag
- * is read from the join, not stored, so it cannot disagree with the script.
- *
- * `position` orders the turns within a record; the route keeps it dense.
- */
-export const characterArcTurns = pgTable(
-  'character_arc_turns',
-  {
-    id: idColumn(),
-    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
-    characterId: uuid('character_id')
-      .notNull()
-      .references(() => characters.id, { onDelete: 'cascade' }),
-    position: integer('position').notNull(),
-    /** The heading node's id, or null for a turn not on the page. Not a foreign key. */
-    sceneNodeId: uuid('scene_node_id'),
-    text: text('text').notNull(),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
-  },
-  (table) => [
-    index('character_arc_turns_character_idx').on(table.characterId, table.position),
-    index('character_arc_turns_project_idx').on(table.projectId),
-    check('character_arc_turns_position_not_negative', sql`${table.position} >= 0`),
-    check('character_arc_turns_text_not_empty', sql`length(btrim(${table.text})) > 0`),
   ],
 )
 

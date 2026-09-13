@@ -10,10 +10,12 @@ import type { WalkOptions } from '../playwright.config'
  *
  *   1. **The empty state, both themes.** No outline; the nav's Outline row
  *      prints `—`.
- *   2. **The outline is a document.** Starting one writes a `kind = 'outline'`
- *      document; typing a heading (`⌘1`), prose and a numbered beat through
- *      the slash menu autosaves; a reload reads it back block for block; the
- *      nav's Outline row prints `1 act` and the panel counts the beat.
+ *   2. **The outline is a document, created by the first save.** There is
+ *      no Start button: the caret line is the editor over one blank block.
+ *      Typing a heading (`⌘1`), prose and a numbered beat through the slash
+ *      menu autosaves - the first save creates the `kind = 'outline'`
+ *      document - and a reload reads it back block for block; the nav's
+ *      Outline row prints `1 act` and the panel counts the beat.
  *
  * The Beats route this walk once continued into was removed
  * (`docs/build-decisions.md`, "Beats route removed"); a beat is still one of
@@ -85,7 +87,8 @@ test('the empty state, both themes', async ({ page, account }) => {
   await page.goto(outlineUrl)
   await expect(page.locator('main[data-route="outline"]')).toHaveAttribute('data-outline-state', 'empty')
   await expect(page.locator('[data-empty-state]')).toBeVisible()
-  await expect(page.locator('[data-start-outline]')).toBeVisible()
+  await expect(page.locator('[data-empty-note]')).toBeVisible()
+  await expect(page.locator('[data-start-outline]')).toHaveCount(0)
   await expect(page.locator('[data-nav-meta="outline"]')).toHaveText('—')
   await expect(page.locator('[data-nav-meta="beats"]')).toHaveCount(0)
   for (const theme of ['dark', 'light'] as const) {
@@ -98,11 +101,10 @@ test('starting the outline and typing blocks saves them, and a reload reads them
   await signIn(page, account)
   await page.goto(outlineUrl)
   await waitMounted(page, 'outline')
-  await page.locator('[data-start-outline]').click()
-  await expect(page.locator('main[data-route="outline"]')).toHaveAttribute('data-outline-state', 'draft', { timeout: 60_000 })
-  await waitMounted(page, 'outline')
-  await expect(page.locator('[data-nav-meta="outline"]')).toHaveText('0 acts')
+  await expect(page.locator('main[data-route="outline"]')).toHaveAttribute('data-outline-state', 'empty')
+  await expect(page.locator('[data-nav-meta="outline"]')).toHaveText('—')
 
+  // The editor over the blank block, once it has mounted.
   const blocks = page.locator('[data-sheet] [data-node-id]')
   await expect(blocks).toHaveCount(1)
   await blocks.first().click()
@@ -131,6 +133,9 @@ test('starting the outline and typing blocks saves them, and a reload reads them
   await expect(blocks.nth(2).locator('.folio-outline-lead')).toHaveText('Opening Image:')
   await waitSaved(page)
 
+  // The first save created the document: the route is a draft now and the note is gone.
+  await expect(page.locator('main[data-route="outline"]')).toHaveAttribute('data-outline-state', 'draft')
+  await expect(page.locator('[data-empty-note]')).toHaveCount(0)
   await expect(page.locator('[data-nav-meta="outline"]')).toHaveText('1 act')
   await expect(page.locator('[data-block-count]')).toHaveText('3')
   await expect(page.locator('[data-outline-blocks]')).toHaveText('3')

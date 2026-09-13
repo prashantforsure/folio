@@ -1,5 +1,4 @@
-import type { ArcTurnId, SceneRef } from '@folio/contracts'
-import type { CharacterId, NodeId } from '@folio/script'
+import type { CharacterId } from '@folio/script'
 
 /**
  * What the Characters route's server actions hand back. Kept out of
@@ -23,16 +22,8 @@ export type RenameResult =
 
 export type BindResult = { readonly status: 'bound' } | Failure
 
-export type ArcTurnResult = { readonly status: 'saved'; readonly id: ArcTurnId } | Failure
-
-/** One of the character's dialogue lines, for the key-line picker. */
-export type DialogueLine = {
-  readonly nodeId: NodeId
-  readonly text: string
-  readonly scene: SceneRef | null
-}
-
-export type DialogueResult = { readonly status: 'ok'; readonly lines: readonly DialogueLine[] } | Failure
+/** After an upload: the portrait's public URL, so the card can show it before the page re-reads. */
+export type PortraitResult = { readonly status: 'saved'; readonly url: string | null } | Failure
 
 export type MergeResult = { readonly status: 'merged'; readonly into: CharacterId } | Failure
 

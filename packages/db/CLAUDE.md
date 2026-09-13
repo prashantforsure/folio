@@ -18,9 +18,13 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0012` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0013` are applied to the dev Supabase project** and are forward-only.
   `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
-  `docs/build-decisions.md`); `0010` is the sanctioned `DROP TABLE beats`, alone in its file.
+  `docs/build-decisions.md`); `0010` is the sanctioned `DROP TABLE beats`, alone in its file;
+  `0013` is the sanctioned drop of the first Characters profile (nine columns, one table), on
+  the client's explicit ruling.
+- **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`
+  when none is set. The only reader is `apps/web/lib/storage/r2.ts`.
 - **The ledger's `settled` excludes `reserve` / `release`.** A reservation is closed by a `spend`
   or a `release`; `0007` corrected the `credit_balances` view that double-counted a held one.
 

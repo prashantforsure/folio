@@ -29,7 +29,8 @@ export type Slice<T> = {
   readonly subscribe: (listener: () => void) => () => void
 }
 
-const slice = <T>(initial: T, same: (a: T, b: T) => boolean = Object.is): Slice<T> => {
+/** One slice. Exported so the Outline editor's store (`_outline/editor/outline-store.ts`) is built from the same cell. */
+export const slice = <T>(initial: T, same: (a: T, b: T) => boolean = Object.is): Slice<T> => {
   let value = initial
   const listeners = new Set<() => void>()
   return {

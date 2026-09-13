@@ -3,13 +3,13 @@ import type { ReactNode } from 'react'
 import { CONTEXT_PANEL_WIDTH } from '../../../../../../lib/workspace/routes'
 import type { EpisodeNavRoute, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
 
-type ColumnRoute = Exclude<WorkspaceRoute, EpisodeNavRoute>
+type ColumnRoute = Exclude<WorkspaceRoute, EpisodeNavRoute | 'characters'>
 
 /**
  * The record-list / filter column a project route owns. The episode nav's
  * sibling, at the route's own width from the README's table: 256px for
- * Characters and Locations, 252px for Bible, 250px for Timeline, Research
- * and Production.
+ * Locations, 252px for Bible, 250px for Timeline, Research and Production.
+ * Characters has none since its second pass - the card grid is the list.
  *
  * Header row as in every bundle: the project title in Newsreader 15px/500.
  * Entity routes carry the find input on a `--sheet` ground with a `⌕` glyph
@@ -21,7 +21,7 @@ type ColumnRoute = Exclude<WorkspaceRoute, EpisodeNavRoute>
  *
  * The `＋` the bundles draw in this header ("New character", "＋ thread") is
  * rendered only where a route supplies it as `action` - Characters was the
- * first, with a record to create. `footer` is the strip under the list the
+ * first, with a record to create, before its column was retired. `footer` is the strip under the list the
  * entity bundles draw (the derivation legend); the same rule.
  *
  * `html[data-nav-open='false']` hides the column, as it hides the episode

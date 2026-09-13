@@ -92,6 +92,13 @@
       "when": 1789201664560,
       "tag": "0012_bible_route",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789202264560,
+      "tag": "0013_characters_second_pass",
+      "breakpoints": true
     }
   ]
 }

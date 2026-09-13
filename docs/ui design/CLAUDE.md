@@ -20,3 +20,8 @@ and the bundles total ~740KB — open the one route you are building, not the se
 - Density is deliberate: 11–13px chrome type is correct. Copy is final — do not paraphrase.
 - `original-spec/`, referenced by the README's file map, is not in this repo.
 - A route is not done without both states (populated and empty) and both themes.
+- **`Route - Characters.dc.html` and `screenshots/characters.png` are retired** (client ruling,
+  2026-09-14). The Characters route is built to the client's own reference - a card grid, a
+  relationships graph, a casting table, a modal and a drawer - recorded in `docs/build-decisions.md`,
+  "Characters route, second pass". Do not reopen the bundle for that route; the density and copy
+  rules above do not apply to it. The shared chrome (header, footer, tokens, glyphs) still does.

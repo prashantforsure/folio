@@ -195,13 +195,18 @@ export default tseslint.config(
     },
   },
 
-  // The Script route is Tiptap (ruled 2026-09-13, docs/build-decisions.md,
-  // "Script route, fifth pass"). The Outline route stays on Plate until it is
-  // ported, so `platejs` is still installed - and nothing under the Script
-  // route or its lib may reach for it again. Two editor frameworks in one
-  // route is the failure this block exists to make loud.
+  // Both editors are Tiptap (ruled 2026-09-13, docs/build-decisions.md,
+  // "Script route, fifth pass" and "Outline route, second pass"). `platejs`
+  // is uninstalled; this block keeps the reason loud if it is ever reached
+  // for again under either editor or its lib. Two editor frameworks in one
+  // app is the failure this block exists to make loud.
   {
-    files: ['apps/web/app/(app)/app/project/[[]projectId[]]/_script/**/*.{ts,tsx}', 'apps/web/lib/script/**/*.{ts,tsx}'],
+    files: [
+      'apps/web/app/(app)/app/project/[[]projectId[]]/_script/**/*.{ts,tsx}',
+      'apps/web/app/(app)/app/project/[[]projectId[]]/_outline/**/*.{ts,tsx}',
+      'apps/web/lib/script/**/*.{ts,tsx}',
+      'apps/web/lib/outline/**/*.{ts,tsx}',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -216,7 +221,7 @@ export default tseslint.config(
             {
               group: ['platejs', 'platejs/*', '@platejs/*', 'slate', 'slate-*', '@udecode/*'],
               message:
-                'The Script route is Tiptap; Plate stays only for the Outline until it is ported. See docs/build-decisions.md, "Script route, fifth pass".',
+                'Both editors are Tiptap; Plate was removed with the Outline rebuild. See docs/build-decisions.md, "Outline route, second pass".',
             },
           ],
         },

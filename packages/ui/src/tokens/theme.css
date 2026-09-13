@@ -149,5 +149,12 @@
   --radius-sheet: 2px;
   --radius-chrome: 3px;
   --radius-toggle: 7px;
+  /*
+   * The Characters route's second pass (2026-09-14) draws cards, a modal and
+   * a drawer to the client's reference, which is rounder than the shell: one
+   * radius for all three, so the route has one shape and the rest of the
+   * chrome keeps its 3px.
+   */
+  --radius-card: 10px;
   --radius-full: 9999px;
 }

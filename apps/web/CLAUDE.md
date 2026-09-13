@@ -29,11 +29,13 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   (`packages/db/src/client.ts`), so on the request path the cost is statement count, not row
   count. Add to an existing statement or defer with `deferAfterSave`; never add a sequential
   query to a save.
-- **The Script editor is Tiptap and the document is not React state.** `_script/editor/` holds the
-  extensions; `lib/script/pm-model.ts` is the one boundary to the node list; the chrome reads
-  `_script/editor/editor-store.ts` slices, never the editor value. The Outline is still Plate
-  (`lib/outline/script-slate-model.ts`, `slate-identity.ts`) until it is ported. Details:
-  `docs/build-decisions.md`, "Script route, fifth pass".
+- **Both editors are Tiptap and the document is not React state.** `_script/editor/` and
+  `_outline/editor/` hold the extensions; `lib/script/pm-model.ts` and `lib/outline/pm-model.ts` are
+  the one boundary each to its node list; the chrome reads store slices (`editor-store.ts`,
+  `outline-store.ts`), never the editor value. The Outline reuses the Script's framework pieces -
+  the `@mention` atom, the identity plugin, the floating layer, the slice cell - and shares no
+  block node with it. Details: `docs/build-decisions.md`, "Script route, fifth pass" and "Outline
+  route, second pass".
 - **Every episode segment goes through `parseEpisodeSegment`** (`@folio/contracts`) in
   `[episodeId]/layout.tsx` before any lookup. Do not add a route that reads `params.episodeId`
   without it.

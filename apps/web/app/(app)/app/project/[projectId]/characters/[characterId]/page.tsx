@@ -5,8 +5,8 @@ import { CharactersRoute } from '../../_characters/characters-route'
 import { loadProject } from '../../../../../../../lib/workspace/context'
 
 /**
- * `/characters/:characterId` - the record's UUID, as the route spec writes
- * it beside `/characters`. A segment that is not a UUID is a 404 before any
+ * `/characters/:characterId` - the record's UUID, opening that record's
+ * drawer over the grid. A segment that is not a UUID is a 404 before any
  * lookup; a UUID that names no record here is a 404 inside the route.
  */
 const Page = async ({ params, searchParams }: PageProps<'/app/project/[projectId]/characters/[characterId]'>) => {

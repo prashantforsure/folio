@@ -2007,3 +2007,245 @@ by `pnpm typecheck`, `pnpm lint`, the eight headless web tests and `next build`.
 things only a browser shows: the keystroke latency in `test-results/script-latency.json` against
 the second pass's ~46ms, the slash menu's position under the caret at zoom 0.75, the static sheet
 handing over to the editor without a shift, and `(MORE)` / `(CONT'D)` inside a split speech.
+
+## Outline route, second pass: the editor rebuilt on Tiptap, and Plate removed
+
+The final phase the fifth Script pass deferred, asked for on 2026-09-13 as "rebuild the Outline
+page to match the new Tiptap-based architecture... completely remove the legacy plate.js
+dependency." Nothing open was resolved and no new ruling was needed: the framework ruling
+(Tiptap 3, above) already covered both editors, and the block set is the seven AGENTS.md names.
+`platejs` is uninstalled from `apps/web`; the lockfile no longer carries it, `@udecode/*` or
+`slate*`; the eslint ban now covers `_outline/` and `lib/outline/` beside the Script's two
+directories, so the reason stays loud.
+
+### What was built, and what was reused rather than twinned
+
+The rule from the Script pass holds unchanged: **the document lives in the editor and React holds
+none of it.** `outline-workspace.tsx` held the whole Slate value in `useState` and set it on every
+`onValueChange`, computed the beat ordinals, the word count and the last-block ghost in `useMemo`
+over every block per keystroke, and drew a slash menu from component state. All of that is gone.
+
+- **`lib/outline/pm-model.ts`** replaces `slate-model.ts`: `toDoc` on load, `fromDoc` on save,
+  through `readOutlineNode`. The wire shape is the node list; ProseMirror JSON is never persisted.
+  A `rule` is a **leaf** (`atom`, no content expression) and `fromBlock` writes no `content` key
+  for it. `shapeOf` counts blocks / acts / beats / words with a per-block word cache keyed on the
+  ProseMirror node, which is identical across a transaction that did not touch it.
+- **`_outline/editor/extensions/`**: `schema.ts` and `blocks.ts` (the seven from one factory, Body
+  first, plain `toDOM`, the same `div.folio-outline-block[data-type]` DOM); `commands.ts` (the rule
+  both ways, Enter's transitions, demote-at-start, `⌥↑↓` as a two-block replace); `keymap.ts`;
+  `clipboard.ts` (the same-document move rule; plain multi-line text is Body per line);
+  `slash.ts` on the Suggestion plugin over **`lib/outline/slash.ts`**; `decorations.ts` (beat
+  numbers as widgets inside the block's inset and the bold lead as an inline decoration, rebuilt
+  whole on a structural transaction and per touched beat otherwise; the ghost; the mention
+  labels; the counts published to React only when one moved).
+- **Reused from `_script/editor/`, not copied**: the `@mention` atom (`mention.ts`), the identity
+  plugin (`identityPlugin`, wrapped as `OutlineIdentity`), `isStructural`, the floating layer
+  (`Floating`, `FloatingLayer`) and the slice cell (`slice`, now exported from `editor-store.ts`).
+  Each reads nothing block-specific: ADR 0001 is a rule about `id` / `provenance` / `origin` on the
+  top-level blocks, the mention is an edge on either document, the floating layer places a
+  rectangle. **No block node is shared** - `blocks.ts` builds the seven, the Script's `blocks.ts`
+  builds the eight, and `pm-model.ts` asserts `mention` is in neither union. `_outline/` already
+  imported from `_script/` (`outline-panel.tsx` draws `ThreadCardView` and `ViewTab`), so this is
+  the existing pattern, not a new one; a shared `_editor/` directory beside `_chrome/` would be
+  the tidier home and is a rename for a quiet moment on the Script route, not this pass.
+- **`static-outline.tsx`**: the server's first paint, the same DOM at the same geometry, until the
+  editor mounts (`immediatelyRender: false`), as the Script's `static-sheet.tsx`.
+
+### The block toolbar is gone, and so is the left margin
+
+The Script route retired its element type bar on 2026-09-13; the Outline's `block-bar.tsx` (seven
+two-line buttons, sticky above the sheet) goes the same way for the same reason: `/` opens the
+menu, the shortcuts stay, the status bar still prints the caret block and its shortcut. The
+brief for this pass was explicit that the canvas carries **no left-margin markers, block handles
+or floating labels**, as the Script's sheet does not. So the 7px gutter ring the first Outline
+phase drew per block (`.folio-prose-dot`, `left: 74px`, lit on the caret block), the ring beside
+the sheet title, and the two on the empty state are removed, with their CSS. What remains inside
+a block is the beat's number - its content, not chrome - and the caret line's ghost ("Type, or
+press / for a block") inside an empty last Body, which is the bundle's own caret-line copy and a
+placeholder for text, not a label. Both are drawn at the text position, never in a margin. If
+the ghost is read as a floating label, it is one widget in `decorations.ts`.
+
+### The slash menu's rows
+
+The brief asked for outline-specific rows - Act Heading, Sequence, Scene Beat, Research Note -
+as "mock options". They are **not mock and not new block types**: adding a block type is a
+node-schema change (AGENTS.md, When to ask first) and the `nodes` check constraint would refuse
+the row. Each row is one of the seven, named for what a writer reaches for: *Act heading* is
+`h1` (the nav's `N acts` counts `h1` blocks, so they agree by construction), *Sequence* `h2`,
+*Scene heading* `h3`, *Scene beat* the numbered `beat`, *Research note* the `quote`, plus *Body*
+and *Rule*. The detail line prints the block's own name (`Heading 1 · counts as an act`), so the
+menu and the status bar (`Heading 1 ⌘1`) never disagree. Two sections for a bare slash,
+*Structure* and *Prose*; one ranked list once the writer types (label prefix, keyword prefix,
+then contains). The trigger is the Script's rule now - at a block start or after a space, not
+only on an empty block - and a pick mid-sentence opens the block below rather than retyping.
+
+### Judgement calls, each reversible
+
+- **A rule takes the caret below it.** Becoming a rule via `⌘⇧R` or `/rule` drops the block's
+  text (a rule holds none), keeps the id, and puts the caret at the start of the next block,
+  opening an empty Body when there is none. Enter on a selected rule opens Body below. Typing
+  while a rule is node-selected lets ProseMirror replace it with Body (the group's first member);
+  the rule's id retires, a new one is minted. No gap cursor: a rule as the very first block can
+  be selected with the arrow keys and Enter pressed under it, not clicked above. Flagged.
+- **The caret is reported on every transaction**, not only on `selectionUpdate`: Tiptap emits
+  `selectionUpdate` only when the selection's positions moved, and `⌘1` retypes the block under
+  a caret that did not. The slice is equality-checked so it costs nothing. *Finding for the
+  Script route*: `tiptap-editor.tsx` reports the caret in `onSelectionUpdate` only, so its status
+  bar's element label can lag a `⌘N` until the caret moves. Not changed here - that file had
+  another session's uncommitted edits in it.
+- **Backspace at the start of a heading, quote or beat demotes to Body** before merging, as the
+  Plate version did; on Body it declines and ProseMirror's join applies.
+- **`⌥↑↓` is a two-block `replaceWith`**, ids travelling with their blocks; the identity plugin
+  sees both present once and mints nothing (asserted).
+- **Words are counted in the editor, per block, cached on the node**, and published with the
+  other counts only when a count moved. The status bar and the panel subscribe to that one slice.
+- **The hint row keeps the bundle's copy** ("/ insert a heading, quote or rule · ⌥↑↓ move a
+  block") - copy is final.
+- **No `@` combobox on the outline** still; stored mentions draw and the label book is a
+  creation-time input (`updateLabelBook` exists for when it is not).
+
+### Verified
+
+`pnpm typecheck` (6 packages), `pnpm lint` (7 tasks; `eslint .` in `apps/web` run directly, clean),
+`next build` with the secrets check, and the headless web tests: `outline-pm-model` (12) and
+`outline-commands` (15) new, `script-commands` and `script-identity` still green; 16 node-env
+files, 211 tests. The ten jsdom files fail to start a worker on local Node 22.5.1 as
+`apps/web/CLAUDE.md` trap 1 records - unchanged by this pass. **Not verified in a browser**: no
+E2E credentials in this session. `apps/web/e2e/outline-route.spec.ts` was kept to the same
+contract on purpose (`[data-sheet] [data-node-id]`, `data-type`, `[data-slash-menu]`,
+`[data-slash-choice="beat"]` selected on `be`, the `1` marker and `.folio-outline-lead` on a
+beat, `[data-caret-block]` reading `Heading 1` after `⌘1`) and is the first thing to run with
+`E2E_EMAIL` / `E2E_PASSWORD`; after it, the things only a browser shows - the static sheet
+handing over without a shift, the slash menu under the caret at zoom 0.75, the rule's
+node-selection ring, both themes.
+
+### Addendum, 2026-09-14: the Start button is gone
+
+Asked for after the pass shipped: "remove the 'Start the outline' button, make it start without
+it." The empty state is now the editor over one blank Body block, minted on the client after
+mount (`empty-outline.tsx` draws the same caret line as static text until then, so nothing
+shifts). **The document is created by the first save, not by the visit**: `saveOutline` accepts
+`documentId: null`, creates the `kind = 'outline'` row (or finds one another tab started) and
+returns its id and stamps; `createBlankOutline` is deleted. An untouched visit therefore leaves
+no row behind and the nav's Outline row still reads `—` on a brand-new episode, which is what
+the workspace smoke walk asserts on every route (`EMPTY_NAV_META`). Creating on visit would have
+broken that and made the empty state unreachable. No `revalidatePath` on the first save: a
+layout refresh mid-typing would re-render the page with the server's draft and hand the editor
+back its own document. `data-outline-state` flips to `draft` client-side once the first save
+returns; `outline-route.spec.ts` follows this (`[data-start-outline]` has count 0, the note under
+the caret line is `[data-empty-note]` and goes with the first save). Still not run in a browser.
+
+## Characters route, second pass: the card grid, and what the client cut
+
+### The ruling, and what it retires
+
+On 2026-09-14 the client ruled the Characters route "very complex and cluttered with info people
+really don't need" and pointed at laper.ai's Characters page as the target: a card grid with a
+portrait, four facts and a bio; a Relationships graph in three renderings; a Casting table; one
+modal to create and one drawer to edit. The route was rebuilt to that shape. **`Route -
+Characters.dc.html` and `screenshots/characters.png` are the old design and are not this route's
+reference any more**; the design bundle's "copy is final" and "density is deliberate" rules do not
+apply to it (`docs/ui design/CLAUDE.md` says so). What the route still takes from the repo is the
+chrome every route shares - the 46px header, the 28px footer, the tokens, Unicode glyphs, both
+themes, both states.
+
+Each of these was an "ask first" item in AGENTS.md; each was asked and answered by the client
+in the same session:
+
+- **The cast column is removed.** `CONTEXT_PANEL_WIDTH` and `ContextColumn`'s route type exclude
+  `characters`; `characters/layout.tsx` is the page. The grid is the list; a find box in the header
+  filters it.
+- **`?view=` accepts `overview | relationships | casting`**, `overview` first. `profile | map |
+  resolve` are gone; the smoke walk's 404 on an unknown value still holds.
+- **The first pass's profile is dropped with a migration.** Asked as "hide, collapse, or drop";
+  the answer was drop. `0013` removes `characters.group` (and its enum), `wants`/`wants_source`,
+  `needs`/`needs_source`, `flaw`/`flaw_source`, `voice_rules`, `key_lines`, and the
+  `character_arc_turns` table. It adds `color` (a `--chip-N` token name, checked against the ten),
+  `gender` (`character_gender`, nullable - "Not set" is not printed), `appearance` (the notes a
+  look-sheet job will read) and `portrait_key`. `bio`, `age` and `role` stay. `ArcTurnId` and the
+  three edit schemas left `@folio/contracts` with it; nothing outside `lib/characters` and the db
+  repositories consumed them.
+- **`character_relationships` is kept** - it is a derivation read (`repositories/derivation.ts`)
+  and an entity count - and nothing writes it since the what/shift prose was cut. Dropping it would
+  have widened the change into the derivation reads for no screen. Flagged as a later cleanup.
+- **A dependency: `aws4fetch`** (MIT, one module, no transitive dependencies), for SigV4 over
+  `fetch` against Cloudflare R2's S3 API. Named in the plan, approved with it.
+
+### The screens, and what each is made of
+
+- **Overview** - a responsive grid of cards. A card is the portrait tile (3:4, the record's colour
+  with the `◍` glyph until a portrait is set; the name and `Female · 17 y/o · student` over its
+  foot, the facts line skipping what is unset), `N scenes` · `N lines` chips from
+  `character_derivations`, three lines of bio, and `✎ Edit` · `⇧ Upload` · `✦ Generate`. Grid order
+  is scenes, then lines, then name; a record kept at zero carries a `record kept` chip.
+- **The resolve queue is ghost cards, never a screen.** Every open cue row with a proposal is a
+  dashed card at the end of the grid - the cue in Courier, where it occurs, and `This is <name> ✓`
+  (Match), `Someone else…` (a select over the cast plus `New character`), `Not a character`
+  (Walk-on). Same `resolveCue`, same `resolve_decisions`, same re-derive. A walk-on - an open row
+  with no proposal - is drawn nowhere; the rail badge is still the pending count. The footer
+  says `N unmatched names in the script` while any exist.
+- **`/characters/:characterId` is the edit drawer** over the grid: portrait (upload, remove), the
+  shared fields, the alias table as one row (`Also appears in the script as`, with `×` to unbind and
+  `＋ add spelling`), and a footer with `Delete`, `Merge into…` and `Save`. The path is the drawer;
+  Escape, `×` and the scrim go back to `/characters`. Merged id redirects, unknown UUID 404s,
+  non-UUID 404s before any lookup - unchanged.
+- **Save is one write, and a changed name is a rename first.** The fields are a draft until Save,
+  written in one `saveProfile`. A changed name is the sanctioned write-back, so the drawer asks in
+  place - "Rename everywhere? N cues will be rewritten" - and `Keep the old name` saves the rest
+  without it. `renameCharacter` is unchanged: `renameCharacterCues`, a `before_rename` version per
+  document, one `rewriteCueNodes`, the count as the diff.
+- **`＋ New Character` is a modal** with the same fields; `createCharacter` takes the whole form,
+  binds the name as the first cue, re-derives, and lands on the new record's drawer. The colour
+  defaults to the least-used of the ten.
+- **Relationships** is a dotted canvas with a `Force · Dialogue · Chord` pill (component state - a
+  rendering is not a sub-view), all three pure SVG over `buildMap`'s matrix, no library:
+  `lib/characters/graphs.ts` is a ring layout, a greedy circle packing and a chord layout, tested.
+  Force is a deterministic ring, not a simulation - the picture is the same on every load, and a
+  library that makes it wobble was not worth a dependency. Every shape opens the drawer.
+- **Casting** is a table - Name, Gender, Age, Role/Identity, Scenes, Lines - every column sortable,
+  `⚙ Display` toggling columns, both component state. `—` for a fact not set, `0` for a count.
+- **Delete keeps its rule**: refused while the record is present in the script, with the reason
+  as the button's title. A record deleted under a live cue is minted again on the next pass.
+
+### Portraits: Cloudflare R2, through the action
+
+`apps/web/lib/storage/r2.ts` is the one place the app talks to a bucket - `putObject`,
+`deleteObject`, `publicUrl`, `storageAvailable` - in the directory `eslint.config.mjs` pre-declared
+for storage clients. The five `R2_*` variables live in `@folio/db/env` as `storageEnv`,
+**optional as a block**: none set and the app boots as before, with Upload drawn disabled and its
+title saying why; some set and not others is a boot failure with a name. The client is
+provisioning the bucket; the code shipped first.
+
+`uploadPortrait` takes the file as `FormData`, caps it at 5 MB, **sniffs the first bytes** (PNG,
+JPEG, WebP - the declared MIME is not trusted), PUTs under
+`projects/<projectId>/characters/<characterId>/portrait-<uuid>.<ext>` (the project id in the key
+is the tenancy boundary inside the bucket), then points the row at the key and deletes the object
+it replaced - after the row says so, never before. The row stores the **key, never a URL**; the URL
+is composed at read from `R2_PUBLIC_URL`, so the bucket can move without a data change. No
+presigned PUT from the browser: it would need bucket CORS and put a signing surface in the client.
+`next.config.ts` raises `serverActions.bodySizeLimit` to 6 MB for this one path.
+`assert-no-server-secrets.mjs` now scans the bundle for the `R2_*` key names and values. The
+tile is a plain `<img>`, not `next/image`: the host is per-deploy.
+
+### Not built, and why
+
+- **Generate** (laper's `Generate Look Sheet` with the Costume & Makeup prompt). It is a job on
+  the Storyboard pattern - a `portrait_generations` table with a job id and a refund entry, a cost
+  named on the button, reserve then enqueue - and it touches credits, which is its own "ask
+  first". `apps/worker` is empty, so a queued portrait would sit at `queued` as Storyboard frames
+  do. The `appearance` column shipped now so the prompt has somewhere to live; the button is drawn
+  disabled with *"Generation needs a worker - not yet"* as its title.
+- **The canvas toolbar** (comment, fullscreen, zoom, help) laper draws over its graph. Nothing is
+  behind any of them here.
+
+### Verified
+
+`pnpm typecheck` across the six packages; `pnpm lint`; `@folio/script` 489 tests untouched;
+`tests/characters-figures.test.ts` (colours, the facts line, the map, the ring, the packing, the
+chord - 15 tests) and `workspace-routes.test.ts` under `--environment node` (the jsdom
+environment still fails on local Node 22.5). Migration `0013` generated through `drizzle-kit/api`
+in two prompt-free stages (the drops, then the adds - the CLI wanted a TTY to ask whether
+`character_gender` was `character_group` renamed), `db:check` clean, applied to the dev project
+and the columns confirmed by query. `characters-route.spec.ts` is rewritten to the new walk and
+**not yet run** - it needs the E2E account and a dev server; the upload leg additionally needs the
+bucket.

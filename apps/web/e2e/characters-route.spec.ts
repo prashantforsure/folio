@@ -6,31 +6,30 @@ import { join } from 'node:path'
 import type { WalkOptions } from '../playwright.config'
 
 /**
- * The Characters route, walked in a browser against the real backend.
+ * The Characters route, walked in a browser against the real backend -
+ * the second pass: the card grid, the drawer, the graphs, the table.
  *
  * What this proves, in order:
  *
- *   1. **The empty state, both themes.** No record; `?view=` outside
- *      `profile | map | resolve` is a 404.
+ *   1. **The empty state, both themes.** No record, no column; `?view=`
+ *      outside `overview | relationships | casting` is a 404.
  *   2. **Records come from cues through the alias table, and near-misses
- *      go to the queue, not to a record.** A script with `MEERA`, `MEERA
+ *      are ghost cards, not records.** A script with `MEERA`, `MEERA
  *      (V.O.)`, `MEERA PAWAR`, `SURESH KADAM`, `SURESH`, `YOUNG MEERA` and
- *      `CLERK` derives three records - never a second Meera - and three
- *      queue rows with a proposal and a confidence each. The rail badge
- *      and the column's "Unmatched names" row are that count.
- *   3. **The queue is rows, and a decision persists.** Match binds a
- *      spelling; Walk-on rejects every candidate and the row leaves the
- *      badge for good, listed under Walk-ons; Other… mints a record.
- *   4. **The profile is authored on the record and survives a reload**:
- *      role, an arc turn with its unwritten flag and its scene, an alias
- *      bound by hand.
+ *      `CLERK` derives three cards - never a second Meera - and three ghost
+ *      cards with a proposal each. The rail badge is that count.
+ *   3. **The queue is rows, and a decision persists.** `This is …` binds a
+ *      spelling; `Not a character` rejects every candidate and the ghost
+ *      leaves for good; `Someone else… → New character` mints.
+ *   4. **The drawer authors the card and survives a reload**: gender, age,
+ *      role, colour, bio, appearance, and an alias bound by hand.
  *   5. **A record-level rename rewrites every cue and keeps the profile.**
  *      The Script route shows the new spelling on every cue that was the
- *      name; the modifier survives; the alias does not move; the role and
- *      the turn are still there.
+ *      name; the modifier survives; the alias does not move.
  *   6. **Merge folds one record into another**, and the loser's spelling
  *      resolves to the winner. Delete refuses a record still in the script.
- *   7. **The map**, both themes.
+ *   7. **The three graphs and the table**, both themes. Upload is disabled
+ *      with its reason when storage is not configured.
  *
  * Needs a real account; skips without one. Leaves one project behind per
  * run.
@@ -111,13 +110,9 @@ const saved = async (page: Page): Promise<void> => {
   await expect(page.locator('[data-save-state]')).toHaveAttribute('data-save-state', 'saved', { timeout: 120_000 })
 }
 
-/** Edit an in-place field: click its button, type, Enter. */
-const edit = async (page: Page, label: string, value: string): Promise<void> => {
-  await page.getByRole('button', { name: label, exact: true }).click()
-  const input = page.getByLabel(label, { exact: true })
-  await input.fill(value)
-  await input.press('Enter')
-}
+/** The card whose tile carries this name. */
+const card = (page: Page, name: string) =>
+  page.locator('[data-character-card]').filter({ has: page.getByText(name, { exact: true }) })
 
 let scriptUrl = ''
 let charactersUrl = ''
@@ -136,22 +131,22 @@ test('empty state, both themes; a bad view is a 404', async ({ page, account }) 
 
   await page.goto(charactersUrl)
   const main = page.locator('main[data-route="characters"]')
-  await expect(main).toHaveAttribute('data-sub-view', 'profile')
+  await expect(main).toHaveAttribute('data-sub-view', 'overview')
   await expect(main).toHaveAttribute('data-characters-state', 'empty')
   await expect(main.getByText('No characters yet')).toBeVisible()
   await expect(page.locator('[data-rail-badge="characters"]')).toHaveCount(0)
-  await expect(page.locator('aside[data-context-column="characters"]')).toBeVisible()
+  await expect(page.locator('aside[data-context-column]')).toHaveCount(0)
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
     await page.screenshot({ path: `test-results/characters-empty-${theme}.png`, fullPage: false })
   }
-  const bogus = await page.goto(`${charactersUrl}?view=grid`)
+  const bogus = await page.goto(`${charactersUrl}?view=profile`)
   expect(bogus?.status()).toBe(404)
   const notARecord = await page.goto(`${charactersUrl}/not-a-uuid`)
   expect(notARecord?.status()).toBe(404)
 })
 
-test('records come from cues; near-misses are queue rows, never a second Meera', async ({ page, account }) => {
+test('records come from cues; near-misses are ghost cards, never a second Meera', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(scriptUrl)
   mkdirSync(test.info().outputDir, { recursive: true })
@@ -162,142 +157,126 @@ test('records come from cues; near-misses are queue rows, never a second Meera',
   await expect(page.locator('[data-nav-meta="scenes"]')).toHaveText('3', { timeout: 60_000 })
 
   await page.goto(charactersUrl)
-  await expect(page.locator('main[data-route="characters"]')).toHaveAttribute('data-characters-state', 'profile')
+  await expect(page.locator('main[data-route="characters"]')).toHaveAttribute('data-characters-state', 'overview')
   await expect(page.locator('[data-cast-count]')).toHaveText('3')
-  const rows = page.locator('[data-cast-row]')
-  await expect(rows).toHaveCount(3)
-  await expect(page.locator('[data-cast-group="supporting"]')).toContainText('MEERA')
-  await expect(page.locator('[data-cast-group="supporting"]')).toContainText('SURESH KADAM')
-  await expect(page.locator('[data-cast-group="supporting"]')).toContainText('CLERK')
-  // Three cues with nowhere to point: the badge, the column row, the tab.
+  await expect(page.locator('[data-character-card]')).toHaveCount(3)
+  await expect(card(page, 'MEERA')).toBeVisible()
+  await expect(card(page, 'SURESH KADAM')).toBeVisible()
+  await expect(card(page, 'CLERK')).toBeVisible()
+  // Meera has two spellings in two scenes - the courtyard's `MEERA PAWAR`
+  // is still a ghost, so it is not hers yet.
+  await expect(card(page, 'MEERA')).toContainText('2 scenes')
+  // Three cues with nowhere to point: the badge, the footer, the ghosts.
   await expect(page.locator('[data-rail-badge="characters"]')).toHaveText('3')
-  await expect(page.locator('[data-unmatched-row]')).toContainText('3')
-  await expect(page.locator('[data-resolve-badge]')).toHaveText('3')
-
-  // The first profile in nav order is Meera's: two spellings, two scenes -
-  // the courtyard's `MEERA PAWAR` is still in the queue, so it is not hers yet.
-  const profile = page.locator('[data-profile]')
-  await expect(profile.getByRole('button', { name: 'Name', exact: true })).toHaveText('MEERA')
-  await expect(profile.locator('[data-cue-chip="MEERA"]')).toContainText('× 2')
-  await expect(profile.locator('[data-cue-chip="MEERA (V.O.)"]')).toContainText('× 1')
-  await expect(page.locator('[data-fact="Scenes"]')).toContainText('2')
-  await expect(page.locator('[data-fact="First seen"]')).toContainText('E1 Sc 1')
-  await expect(page.locator('[data-fact="Last seen"]')).toContainText('E1 Sc 3')
-  await expect(page.locator('[data-relationship]')).toHaveCount(2)
+  await expect(page.locator('[data-unmatched-count]')).toContainText('3 unmatched names')
+  await expect(page.locator('[data-unmatched-card]')).toHaveCount(3)
 })
 
-test('the queue is rows: Match binds, Walk-on is never asked again, Other… mints', async ({ page, account }) => {
-  await signIn(page, account)
-  await page.goto(`${charactersUrl}?view=resolve`)
-  await ready(page)
-  await expect(page.locator('main[data-route="characters"]')).toHaveAttribute('data-sub-view', 'resolve')
-  await expect(page.locator('[data-resolve-count]')).toHaveAttribute('data-resolve-count', '3')
-
-  const meeraPawar = page.locator('[data-resolve-row="MEERA PAWAR"]')
-  await expect(meeraPawar).toContainText('MEERA')
-  await expect(meeraPawar.locator('[data-confidence]')).toHaveText('likely')
-  const youngMeera = page.locator('[data-resolve-row="YOUNG MEERA"]')
-  await expect(youngMeera.locator('[data-confidence]')).toHaveText('possible')
-  const suresh = page.locator('[data-resolve-row="SURESH"]')
-  await expect(suresh).toContainText('SURESH KADAM')
-  await expect(suresh.locator('[data-confidence]')).toHaveText('likely')
-
-  // Match: MEERA PAWAR is Meera. The spelling binds; the row settles.
-  await meeraPawar.locator('[data-resolve-match]').click()
-  await saved(page)
-  await expect(meeraPawar).toHaveCount(0, { timeout: 60_000 })
-  await expect(page.locator('[data-resolve-count]')).toHaveAttribute('data-resolve-count', '2')
-  await expect(page.locator('[data-rail-badge="characters"]')).toHaveText('2')
-
-  // Walk-on: YOUNG MEERA is nobody. The row leaves the badge and is listed as a walk-on.
-  await youngMeera.locator('[data-resolve-walk-on]').click()
-  await saved(page)
-  await expect(youngMeera).toHaveCount(0, { timeout: 60_000 })
-  await expect(page.locator('[data-rail-badge="characters"]')).toHaveText('1')
-  await expect(page.locator('[data-cast-group="walk-ons"]')).toContainText('1 unnamed')
-  await expect(page.locator('[data-cast-group="walk-ons"]')).toContainText('YOUNG MEERA')
-
-  // Other…: SURESH is a new character, not Suresh Kadam.
-  await suresh.locator('[data-resolve-other]').click()
-  await suresh.getByLabel('Who SURESH is').selectOption('new-record')
-  await suresh.locator('[data-resolve-other-confirm]').click()
-  await saved(page)
-  await expect(suresh).toHaveCount(0, { timeout: 60_000 })
-  await expect(page.locator('[data-rail-badge="characters"]')).toHaveCount(0)
-  await expect(page.locator('[data-cast-row]')).toHaveCount(4)
-  await expect(page.locator('[data-cast-group="supporting"]')).toContainText('SURESH')
-
-  // The decisions persist: a reload shows the same queue.
-  await page.reload()
-  await expect(page.locator('[data-resolve-count]')).toHaveAttribute('data-resolve-count', '0')
-  await expect(page.locator('[data-cast-group="walk-ons"]')).toContainText('YOUNG MEERA')
-})
-
-test('the profile is authored on the record and survives a reload', async ({ page, account }) => {
+test('the queue is rows: This is… binds, Not a character is never asked again, Someone else… mints', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(charactersUrl)
   await ready(page)
-  const profile = page.locator('[data-profile]')
-  await expect(profile.getByRole('button', { name: 'Name', exact: true })).toHaveText('MEERA')
-  await expect(profile.locator('[data-cue-chip="MEERA PAWAR"]')).toContainText('× 1')
-  // Matched in the queue, the courtyard scene is hers now.
-  await expect(page.locator('[data-fact="Scenes"]')).toContainText('3')
 
-  await edit(page, 'Role', 'Laundress, second floor')
-  await saved(page)
-  await edit(page, 'Wants', 'Water at six, like before.')
-  await saved(page)
+  const meeraPawar = page.locator('[data-unmatched-card="MEERA PAWAR"]')
+  await expect(meeraPawar.locator('[data-unmatched-match]')).toContainText('This is')
+  await expect(meeraPawar.locator('[data-unmatched-match]')).toContainText('MEERA')
+  await expect(meeraPawar.locator('[data-unmatched-match]')).toContainText('likely')
+  const youngMeera = page.locator('[data-unmatched-card="YOUNG MEERA"]')
+  await expect(youngMeera.locator('[data-unmatched-match]')).toContainText('possible')
+  const suresh = page.locator('[data-unmatched-card="SURESH"]')
+  await expect(suresh.locator('[data-unmatched-match]')).toContainText('SURESH KADAM')
 
-  // An arc turn: unwritten until it points at a scene.
-  await page.locator('[data-add-turn]').fill('Opens the tank herself.')
-  await page.locator('[data-add-turn]').press('Enter')
+  // This is Meera: the spelling binds; the ghost settles into her card.
+  await meeraPawar.locator('[data-unmatched-match]').click()
   await saved(page)
-  const turn = page.locator('[data-arc-turn]')
-  await expect(turn).toHaveCount(1, { timeout: 60_000 })
-  await expect(turn.locator('[data-unwritten]')).toHaveText('not on the page')
-  await turn.getByLabel('Scene').selectOption({ label: 'E1 Sc 2' })
+  await expect(meeraPawar).toHaveCount(0, { timeout: 60_000 })
+  await expect(page.locator('[data-rail-badge="characters"]')).toHaveText('2')
+  await expect(card(page, 'MEERA')).toContainText('3 scenes', { timeout: 60_000 })
+
+  // Not a character: YOUNG MEERA is nobody. The ghost leaves the badge and the grid.
+  await youngMeera.locator('[data-unmatched-walk-on]').click()
   await saved(page)
-  await expect(turn.locator('[data-unwritten]')).toHaveCount(0, { timeout: 60_000 })
+  await expect(youngMeera).toHaveCount(0, { timeout: 60_000 })
+  await expect(page.locator('[data-rail-badge="characters"]')).toHaveText('1')
+
+  // Someone else… → New character: SURESH is not Suresh Kadam.
+  await suresh.locator('[data-unmatched-other]').click()
+  await suresh.locator('[data-unmatched-pick]').selectOption('new-record')
+  await saved(page)
+  await expect(suresh).toHaveCount(0, { timeout: 60_000 })
+  await expect(page.locator('[data-rail-badge="characters"]')).toHaveCount(0)
+  await expect(page.locator('[data-character-card]')).toHaveCount(4)
+  await expect(card(page, 'SURESH')).toBeVisible()
+
+  // The decisions persist: a reload shows no ghost.
+  await page.reload()
+  await expect(page.locator('[data-unmatched-card]')).toHaveCount(0)
+  await expect(page.locator('[data-character-card]')).toHaveCount(4)
+})
+
+test('the drawer authors the card and survives a reload', async ({ page, account }) => {
+  await signIn(page, account)
+  await page.goto(charactersUrl)
+  await ready(page)
+  await card(page, 'MEERA').locator('[data-card-edit]').click()
+  await page.waitForURL(/\/characters\/[0-9a-f-]{36}$/)
+  const drawer = page.locator('[data-character-drawer]')
+  await expect(drawer).toBeVisible()
+  await expect(drawer.locator('[data-field="name"]')).toHaveValue('MEERA')
+  await expect(drawer.locator('[data-cue-chip="MEERA PAWAR"]')).toContainText('× 1')
+
+  await drawer.locator('[data-field="gender"]').selectOption('female')
+  await drawer.locator('[data-field="age"]').fill('38')
+  await drawer.locator('[data-field="role"]').fill('Laundress, second floor')
+  await drawer.locator('[data-field="bio"]').fill('Does other people’s washing and knows exactly how much water every family on the floor uses.')
+  await drawer.locator('[data-field="appearance"]').fill('wiry, forearms like rope, a faded blue sari')
+  await drawer.locator('[data-color-picker]').click()
+  await drawer.locator('[data-color-option="chip-7"]').click()
+  await drawer.locator('[data-save-character]').click()
+  await saved(page)
 
   // An alias bound by hand: the Devanagari spelling is Meera, at × 0 until written.
-  await page.locator('[data-add-alias]').click()
-  await page.locator('[data-alias-input]').fill('मीरा')
-  await page.locator('[data-alias-input]').press('Enter')
+  await drawer.locator('[data-add-alias]').click()
+  await drawer.locator('[data-alias-input]').fill('मीरा')
+  await drawer.locator('[data-alias-input]').press('Enter')
   await saved(page)
-  await expect(profile.locator('[data-cue-chip="मीरा"]')).toContainText('× 0', { timeout: 60_000 })
+  await expect(drawer.locator('[data-cue-chip="मीरा"]')).toContainText('× 0', { timeout: 60_000 })
 
   await page.reload()
-  await expect(page.locator('[data-cast-row]').first()).toContainText('Laundress, second floor')
-  await expect(page.getByRole('button', { name: 'Wants', exact: true })).toHaveText('Water at six, like before.')
-  await expect(page.locator('[data-arc-turn]')).toContainText('Opens the tank herself.')
-  await expect(page.locator('[data-arc-turn]').getByLabel('Scene')).toHaveValue(/./)
-  await expect(page.locator('[data-cue-chip="मीरा"]')).toBeVisible()
+  await ready(page)
+  await expect(page.locator('[data-character-drawer]').locator('[data-field="role"]')).toHaveValue('Laundress, second floor')
+  await expect(page.locator('[data-character-drawer]').locator('[data-field="gender"]')).toHaveValue('female')
+  await expect(page.locator('[data-character-drawer]').locator('[data-cue-chip="मीरा"]')).toBeVisible()
+  await page.locator('[data-drawer-close]').click()
+  await page.waitForURL(/\/characters$/)
+  await expect(card(page, 'MEERA')).toContainText('Female · 38 y/o · Laundress, second floor')
+  await expect(card(page, 'MEERA')).toContainText('Does other people’s washing')
 })
 
 test('a record-level rename rewrites every cue in the script and keeps the profile', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(charactersUrl)
   await ready(page)
-  await expect(page.locator('[data-profile]').getByRole('button', { name: 'Name', exact: true })).toHaveText('MEERA')
+  await card(page, 'MEERA').locator('[data-card-edit]').click()
+  await page.waitForURL(/\/characters\/[0-9a-f-]{36}$/)
+  const drawer = page.locator('[data-character-drawer]')
 
-  await edit(page, 'Name', 'Meera Pawar')
-  const confirm = page.locator('[data-rename-confirm]')
+  await drawer.locator('[data-field="name"]').fill('Meera Pawar')
+  await drawer.locator('[data-save-character]').click()
+  const confirm = drawer.locator('[data-rename-confirm]')
   await expect(confirm).toContainText('3 cues will be rewritten')
   await confirm.locator('[data-rename-everywhere]').click()
   await saved(page)
-  await expect(page.locator('[data-renamed]')).toContainText('3 cues rewritten across 1 episode', { timeout: 120_000 })
-  // The action's revalidation streams the re-read tree in after the result; give it the pooler's time.
-  await expect(page.locator('[data-cast-row]').first()).toContainText('Meera Pawar', { timeout: 60_000 })
+  await expect(drawer.locator('[data-renamed]')).toContainText('3 cues rewritten across 1 episode', { timeout: 120_000 })
   // The profile came along; the alias the writer bound did not move.
-  await expect(page.locator('[data-cast-row]').first()).toContainText('Laundress, second floor')
-  await expect(page.locator('[data-cue-chip="MEERA PAWAR"]')).toContainText('× 3')
-  await expect(page.locator('[data-cue-chip="MEERA PAWAR (V.O.)"]')).toContainText('× 1')
-  await expect(page.locator('[data-cue-chip="मीरा"]')).toBeVisible()
-  await expect(page.locator('[data-arc-turn]')).toContainText('Opens the tank herself.')
+  await expect(drawer.locator('[data-cue-chip="MEERA PAWAR"]')).toContainText('× 3', { timeout: 60_000 })
+  await expect(drawer.locator('[data-cue-chip="MEERA PAWAR (V.O.)"]')).toContainText('× 1')
+  await expect(drawer.locator('[data-cue-chip="मीरा"]')).toBeVisible()
+  await expect(drawer.locator('[data-field="role"]')).toHaveValue('Laundress, second floor')
 
   // The script says so too: every cue that was the name, in document order,
   // and nothing else. The `(V.O.)` is a node attribute the sheet does not
-  // print in the cue's text; the profile's `MEERA PAWAR (V.O.) × 1` above is
+  // print in the cue's text; the drawer's `MEERA PAWAR (V.O.) × 1` above is
   // where it shows.
   await page.goto(scriptUrl)
   await expect(page.locator('main[data-route="script"]')).toHaveAttribute('data-script-state', 'draft', { timeout: 120_000 })
@@ -319,44 +298,67 @@ test('merge folds a record into another; delete refuses a record still in the sc
   await signIn(page, account)
   await page.goto(charactersUrl)
   await ready(page)
-  await page.locator('[data-cast-row]').filter({ has: page.getByText('SURESH', { exact: true }) }).click()
+  await card(page, 'SURESH').locator('[data-card-edit]').click()
   await page.waitForURL(/\/characters\/[0-9a-f-]{36}$/)
-  await ready(page)
-  await expect(page.locator('[data-profile]').getByRole('button', { name: 'Name', exact: true })).toHaveText('SURESH')
-  await expect(page.locator('[data-delete-button]')).toBeDisabled()
+  const drawer = page.locator('[data-character-drawer]')
+  await expect(drawer.locator('[data-field="name"]')).toHaveValue('SURESH')
+  await expect(drawer.locator('[data-delete-button]')).toBeDisabled()
 
   const loserUrl = page.url()
-  await page.locator('[data-merge-button]').click()
-  await page.locator('[data-merge-into]').selectOption({ label: 'SURESH KADAM' })
-  await page.getByRole('button', { name: 'Merge', exact: true }).click()
-  // The merge awaits a re-derive, then lands on the survivor's profile.
+  await drawer.locator('[data-merge-button]').click()
+  await drawer.locator('[data-merge-into]').selectOption({ label: 'SURESH KADAM' })
+  await drawer.getByRole('button', { name: 'Merge', exact: true }).click()
+  // The merge awaits a re-derive, then lands on the survivor's drawer.
   await page.waitForURL((url) => url.toString() !== loserUrl && /\/characters\/[0-9a-f-]{36}$/.test(url.toString()), {
     timeout: 120_000,
   })
   await ready(page)
-  await expect(page.locator('[data-profile]').getByRole('button', { name: 'Name', exact: true })).toHaveText('SURESH KADAM', {
+  await expect(page.locator('[data-character-drawer]').locator('[data-field="name"]')).toHaveValue('SURESH KADAM', {
     timeout: 60_000,
   })
-  await expect(page.locator('[data-cue-chip="SURESH"]')).toContainText('× 1', { timeout: 60_000 })
-  await expect(page.locator('[data-cast-row]')).toHaveCount(3)
+  await expect(page.locator('[data-character-drawer]').locator('[data-cue-chip="SURESH"]')).toContainText('× 1', {
+    timeout: 60_000,
+  })
+  await page.locator('[data-drawer-close]').click()
+  await page.waitForURL(/\/characters$/)
+  await expect(page.locator('[data-character-card]')).toHaveCount(3)
   await expect(page.locator('[data-cast-count]')).toHaveText('3')
 })
 
-test('who meets whom, both themes', async ({ page, account }) => {
+test('the graphs and the table, both themes; upload is gated on storage', async ({ page, account }) => {
   await signIn(page, account)
-  await page.goto(`${charactersUrl}?view=map`)
-  await expect(page.locator('main[data-route="characters"]')).toHaveAttribute('data-sub-view', 'map')
-  await expect(page.locator('[data-map-row]')).toHaveCount(3)
-  // Meera and Suresh Kadam share scene 1 and scene 2; Meera and the clerk share scene 3.
-  const meera = page.locator('[data-map-row]', { hasText: 'Meera Pawar' })
-  await expect(meera.locator('[data-map-cell]')).toHaveCount(2)
-  for (const theme of ['dark', 'light'] as const) {
-    await setTheme(page, theme)
-    await page.screenshot({ path: `test-results/characters-map-${theme}.png`, fullPage: false })
+  await page.goto(`${charactersUrl}?view=relationships`)
+  await expect(page.locator('main[data-route="characters"]')).toHaveAttribute('data-sub-view', 'relationships')
+  await ready(page)
+  for (const mode of ['force', 'dialogue', 'chord'] as const) {
+    await page.locator(`[data-graph-mode="${mode}"]`).click()
+    await expect(page.locator('[data-relationships]')).toHaveAttribute('data-graph', mode)
+    await expect(page.locator('[data-graph-node]')).toHaveCount(3)
   }
-  await page.goto(charactersUrl)
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
-    await page.screenshot({ path: `test-results/characters-profile-${theme}.png`, fullPage: false })
+    await page.screenshot({ path: `test-results/characters-relationships-${theme}.png`, fullPage: false })
+  }
+
+  await page.goto(`${charactersUrl}?view=casting`)
+  await expect(page.locator('main[data-route="characters"]')).toHaveAttribute('data-sub-view', 'casting')
+  await expect(page.locator('[data-casting-row]')).toHaveCount(3)
+  await expect(page.locator('[data-casting-row]').first()).toContainText('Meera Pawar')
+  await page.locator('[data-sort="name"]').click()
+  await expect(page.locator('[data-casting-row]').first()).toContainText('CLERK')
+  for (const theme of ['dark', 'light'] as const) {
+    await setTheme(page, theme)
+    await page.screenshot({ path: `test-results/characters-casting-${theme}.png`, fullPage: false })
+  }
+
+  await page.goto(charactersUrl)
+  await ready(page)
+  const upload = card(page, 'Meera Pawar').locator('[data-card-upload]')
+  const storage = await upload.isEnabled()
+  if (!storage) await expect(upload).toHaveAttribute('title', /not set up/)
+  await expect(card(page, 'Meera Pawar').locator('[data-card-generate]')).toBeDisabled()
+  for (const theme of ['dark', 'light'] as const) {
+    await setTheme(page, theme)
+    await page.screenshot({ path: `test-results/characters-overview-${theme}.png`, fullPage: false })
   }
 })

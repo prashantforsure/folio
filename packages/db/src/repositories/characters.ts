@@ -1,12 +1,11 @@
 import type {
-  ArcTurnEdit,
-  ArcTurnId,
-  CharacterGroup,
+  CharacterColor,
+  CharacterGender,
   CharacterProfileEdit,
   EpisodeSlug,
   Timestamp,
 } from '@folio/contracts'
-import { arcTurnId as brandArcTurnId, episodeSlug as brandEpisodeSlug } from '@folio/contracts'
+import { episodeSlug as brandEpisodeSlug } from '@folio/contracts'
 import type {
   CharacterId,
   InteriorExterior,
@@ -20,13 +19,11 @@ import {
   INTERIOR_EXTERIOR,
   LIGHT_STATES,
   characterId as brandCharacterId,
-  isErr,
   locationId as brandLocationId,
 } from '@folio/script'
 import { asc, eq, sql } from 'drizzle-orm'
 
 import {
-  characterArcTurns,
   characterBoundCues,
   characterCueTallies,
   characterDerivations,
@@ -42,16 +39,16 @@ import {
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { jsonb } from '../sql-json'
-import { screenplayNodeFromRow, stamp } from './mapping'
+import { stamp } from './mapping'
 
 /**
  * The Characters route's reads, and every authored write it makes.
  *
  * ## The split, from this side
  *
- * `characters`, `character_bound_cues`, `character_relationships` and
- * `character_arc_turns` are AUTHORED (`schema/derived.ts`); the route reads
- * them beside the DERIVED CACHE rows - `character_derivations`,
+ * `characters` and `character_bound_cues` are AUTHORED (`schema/derived.ts`;
+ * `character_relationships` is too, and since `0013` nothing on the route
+ * writes it); the route reads them beside the DERIVED CACHE rows - `character_derivations`,
  * `character_cue_tallies`, `scene_derivations`, `resolve_rows` - and joins
  * by id in `apps/web`. Nothing here recombines the halves into one row, and
  * nothing here writes a derived table: a re-derive owns those, and the one
@@ -87,18 +84,13 @@ import { screenplayNodeFromRow, stamp } from './mapping'
 export type CharacterRecordRow = {
   readonly id: CharacterId
   readonly name: string
-  readonly group: CharacterGroup
-  readonly role: string | null
+  readonly color: CharacterColor
+  readonly gender: CharacterGender | null
   readonly age: string | null
+  readonly role: string | null
   readonly bio: string | null
-  readonly wants: string | null
-  readonly wantsSource: string | null
-  readonly needs: string | null
-  readonly needsSource: string | null
-  readonly flaw: string | null
-  readonly flawSource: string | null
-  readonly voiceRules: readonly string[]
-  readonly keyLines: readonly NodeId[]
+  readonly appearance: string | null
+  readonly portraitKey: string | null
   readonly createdAt: Timestamp
   /** Null until the first derivation pass after the record was made by hand. */
   readonly derived: {
@@ -128,18 +120,13 @@ export const listCharacterRecords = async (
   return rows.map(({ record, derived }) => ({
     id: brandCharacterId(record.id),
     name: record.name,
-    group: record.group,
-    role: record.role,
+    color: record.color as CharacterColor,
+    gender: record.gender,
     age: record.age,
+    role: record.role,
     bio: record.bio,
-    wants: record.wants,
-    wantsSource: record.wantsSource,
-    needs: record.needs,
-    needsSource: record.needsSource,
-    flaw: record.flaw,
-    flawSource: record.flawSource,
-    voiceRules: record.voiceRules,
-    keyLines: record.keyLines as NodeId[],
+    appearance: record.appearance,
+    portraitKey: record.portraitKey,
     createdAt: stamp(record.createdAt),
     derived:
       derived === null
@@ -204,52 +191,6 @@ export const listBoundCues = async (scope: ProjectScope): Promise<readonly Bound
     .where(scoped(scope, characterBoundCues))
     .orderBy(asc(characterBoundCues.boundAt))
   return rows.map((row) => ({ characterId: brandCharacterId(row.characterId), cue: row.cue }))
-}
-
-export type RelationshipRecordRow = {
-  readonly characterId: CharacterId
-  readonly otherId: CharacterId
-  readonly what: string
-  readonly shift: string | null
-}
-
-export const listRelationshipRows = async (
-  scope: ProjectScope,
-): Promise<readonly RelationshipRecordRow[]> => {
-  const rows = await dbOf(scope)
-    .select()
-    .from(characterRelationships)
-    .where(scoped(scope, characterRelationships))
-  return rows.map((row) => ({
-    characterId: brandCharacterId(row.characterId),
-    otherId: brandCharacterId(row.otherId),
-    what: row.what,
-    shift: row.shift,
-  }))
-}
-
-export type ArcTurnRecordRow = {
-  readonly id: ArcTurnId
-  readonly position: number
-  readonly sceneNodeId: NodeId | null
-  readonly text: string
-}
-
-export const listArcTurns = async (
-  scope: ProjectScope,
-  characterId: CharacterId,
-): Promise<readonly ArcTurnRecordRow[]> => {
-  const rows = await dbOf(scope)
-    .select()
-    .from(characterArcTurns)
-    .where(scoped(scope, characterArcTurns, eq(characterArcTurns.characterId, characterId)))
-    .orderBy(asc(characterArcTurns.position), asc(characterArcTurns.createdAt))
-  return rows.map((row) => ({
-    id: brandArcTurnId(row.id),
-    position: row.position,
-    sceneNodeId: row.sceneNodeId === null ? null : (row.sceneNodeId as NodeId),
-    text: row.text,
-  }))
 }
 
 /**
@@ -342,6 +283,7 @@ export const listSceneIndex = async (scope: ProjectScope): Promise<readonly Scen
   })
 }
 
+/** Location names by id. Read by the Bible route beside its own tables. */
 export const listLocationNames = async (
   scope: ProjectScope,
 ): Promise<ReadonlyMap<LocationId, string>> => {
@@ -385,82 +327,37 @@ export const listOpenCueRows = async (scope: ProjectScope): Promise<readonly Ope
   }))
 }
 
-export type NodeInScene = {
-  readonly node: ScreenplayNode
-  /** The heading node the line sits under, or null above the first heading. */
-  readonly sceneNodeId: NodeId | null
-}
-
-/**
- * Some nodes by id, as models, each with the scene it sits in. For the key
- * lines: the profile shows the text on the page, read from the node, never
- * a copy, and the ref beside it is the heading that precedes the node in
- * its document - found by order key, under `COLLATE "C"` as every read of
- * that column is (`order.ts`). Ids the script no longer holds simply do
- * not come back.
- */
-export const readNodesInScene = async (
-  scope: ProjectScope,
-  ids: readonly NodeId[],
-): Promise<ReadonlyMap<NodeId, NodeInScene>> => {
-  if (ids.length === 0) return new Map()
-  const rows = await dbOf(scope).execute(sql`
-    select n.id, n.document_kind, n.type, n.content, n.modifiers, n.provenance_source, n.provenance_run_id,
-      (select s.id from ${nodes} s
-        where s.project_id = ${scope.projectId} and s.document_id = n.document_id and s.type = 'scene'
-          and s.order_key collate "C" <= n.order_key collate "C"
-        order by s.order_key collate "C" desc limit 1) as scene_node_id
-    from ${nodes} n
-    where n.project_id = ${scope.projectId} and n.document_kind = 'screenplay'
-      and n.id = any(${sql.param([...ids])}::uuid[])
-  `)
-  const out = new Map<NodeId, NodeInScene>()
-  for (const raw of rows) {
-    const row = raw as {
-      readonly id: string
-      readonly document_kind: string
-      readonly type: string
-      readonly content: unknown
-      readonly modifiers: readonly string[]
-      readonly provenance_source: string
-      readonly provenance_run_id: string | null
-      readonly scene_node_id: string | null
-    }
-    const node = screenplayNodeFromRow({
-      id: row.id,
-      documentKind: row.document_kind,
-      type: row.type,
-      content: row.content,
-      modifiers: row.modifiers,
-      provenanceSource: row.provenance_source,
-      provenanceRunId: row.provenance_run_id,
-    })
-    if (isErr(node)) continue
-    out.set(node.value.id, {
-      node: node.value,
-      sceneNodeId: row.scene_node_id === null ? null : (row.scene_node_id as NodeId),
-    })
-  }
-  return out
-}
-
 // ---------------------------------------------------------------------------
 // Writes - the record
 // ---------------------------------------------------------------------------
 
+/** Insert a record by hand, with whatever profile the modal filled in. */
 export const createCharacterRecord = async (
   scope: ProjectScope,
   name: string,
-  group: CharacterGroup,
+  edit: CharacterProfileEdit,
 ): Promise<CharacterId> => {
   const rows = await dbOf(scope)
     .insert(characters)
-    .values({ ...tenant(scope), name, group })
+    .values({ ...tenant(scope), name, ...profileColumns(edit) })
     .returning({ id: characters.id })
   const row = rows[0]
   if (row === undefined) throw new Error('Folio: inserting a character returned no row.')
   return brandCharacterId(row.id)
 }
+
+const blank = (value: string | null | undefined): string | null =>
+  value === undefined || value === '' ? null : value
+
+/** The columns an edit sets - each present field written whole, an empty string stored as null. */
+const profileColumns = (edit: CharacterProfileEdit) => ({
+  ...(edit.color === undefined ? {} : { color: edit.color }),
+  ...(edit.gender === undefined ? {} : { gender: edit.gender }),
+  ...(edit.age === undefined ? {} : { age: blank(edit.age) }),
+  ...(edit.role === undefined ? {} : { role: blank(edit.role) }),
+  ...(edit.bio === undefined ? {} : { bio: blank(edit.bio) }),
+  ...(edit.appearance === undefined ? {} : { appearance: blank(edit.appearance) }),
+})
 
 /** Write the fields present in `edit`, whole. `false` when the record is not here. */
 export const updateCharacterProfile = async (
@@ -468,40 +365,38 @@ export const updateCharacterProfile = async (
   id: CharacterId,
   edit: CharacterProfileEdit,
 ): Promise<boolean> => {
-  const blank = (value: string | null | undefined): string | null | undefined =>
-    value === undefined ? undefined : value === '' ? null : value
   const rows = await dbOf(scope)
     .update(characters)
-    .set({
-      ...(edit.group === undefined ? {} : { group: edit.group }),
-      ...(edit.role === undefined ? {} : { role: blank(edit.role) ?? null }),
-      ...(edit.age === undefined ? {} : { age: blank(edit.age) ?? null }),
-      ...(edit.bio === undefined ? {} : { bio: blank(edit.bio) ?? null }),
-      ...(edit.wants === undefined ? {} : { wants: blank(edit.wants) ?? null }),
-      ...(edit.wantsSource === undefined ? {} : { wantsSource: blank(edit.wantsSource) ?? null }),
-      ...(edit.needs === undefined ? {} : { needs: blank(edit.needs) ?? null }),
-      ...(edit.needsSource === undefined ? {} : { needsSource: blank(edit.needsSource) ?? null }),
-      ...(edit.flaw === undefined ? {} : { flaw: blank(edit.flaw) ?? null }),
-      ...(edit.flawSource === undefined ? {} : { flawSource: blank(edit.flawSource) ?? null }),
-      ...(edit.voiceRules === undefined ? {} : { voiceRules: [...edit.voiceRules] }),
-      updatedAt: new Date(),
-    })
+    .set({ ...profileColumns(edit), updatedAt: new Date() })
     .where(scoped(scope, characters, eq(characters.id, id), sql`${characters.mergedInto} IS NULL`))
     .returning({ id: characters.id })
   return rows.length > 0
 }
 
-export const setKeyLines = async (
+/**
+ * Point the record at a new portrait object, or at none. Returns the key
+ * it replaced, so the caller can delete the old object after the row says
+ * the new one is the portrait - never before.
+ */
+export const setPortraitKey = async (
   scope: ProjectScope,
   id: CharacterId,
-  nodeIds: readonly NodeId[],
-): Promise<boolean> => {
-  const rows = await dbOf(scope)
-    .update(characters)
-    .set({ keyLines: [...nodeIds], updatedAt: new Date() })
-    .where(scoped(scope, characters, eq(characters.id, id), sql`${characters.mergedInto} IS NULL`))
-    .returning({ id: characters.id })
-  return rows.length > 0
+  key: string | null,
+): Promise<{ readonly found: boolean; readonly previous: string | null }> => {
+  const rows = await dbOf(scope).execute(sql`
+    with before as (
+      select ${characters.portraitKey} as previous from ${characters}
+      where ${scoped(scope, characters, eq(characters.id, id))} and ${characters.mergedInto} is null
+    ),
+    written as (
+      update ${characters} set portrait_key = ${key}, updated_at = now()
+      where ${scoped(scope, characters, eq(characters.id, id))} and ${characters.mergedInto} is null
+      returning id
+    )
+    select (select count(*)::int from written) as found, (select previous from before limit 1) as previous
+  `)
+  const row = rows[0] as { readonly found: number; readonly previous: string | null } | undefined
+  return { found: (row?.found ?? 0) > 0, previous: row?.previous ?? null }
 }
 
 export type RenameOutcome =
@@ -699,105 +594,15 @@ export const unbindCue = async (
 }
 
 // ---------------------------------------------------------------------------
-// Writes - relationships, arc, merge, delete
+// Writes - merge, delete
 // ---------------------------------------------------------------------------
-
-export const upsertRelationship = async (
-  scope: ProjectScope,
-  id: CharacterId,
-  otherId: CharacterId,
-  what: string,
-  shift: string | null,
-): Promise<void> => {
-  await dbOf(scope)
-    .insert(characterRelationships)
-    .values({ ...tenant(scope), characterId: id, otherId, what, shift })
-    .onConflictDoUpdate({
-      target: [characterRelationships.characterId, characterRelationships.otherId],
-      set: { what, shift },
-    })
-}
-
-export const removeRelationship = async (
-  scope: ProjectScope,
-  id: CharacterId,
-  otherId: CharacterId,
-): Promise<void> => {
-  await dbOf(scope)
-    .delete(characterRelationships)
-    .where(
-      scoped(
-        scope,
-        characterRelationships,
-        eq(characterRelationships.characterId, id),
-        eq(characterRelationships.otherId, otherId),
-      ),
-    )
-}
-
-/** Append a turn. Its position is one past the record's last, in the same statement. */
-export const addArcTurn = async (
-  scope: ProjectScope,
-  id: CharacterId,
-  edit: ArcTurnEdit,
-): Promise<ArcTurnId | null> => {
-  const rows = await dbOf(scope).execute(sql`
-    insert into ${characterArcTurns} (project_id, character_id, position, scene_node_id, text)
-    select ${scope.projectId}, ${id},
-      coalesce((select max(${characterArcTurns.position}) from ${characterArcTurns}
-        where ${scoped(scope, characterArcTurns, eq(characterArcTurns.characterId, id))}), -1) + 1,
-      ${edit.sceneNodeId}::uuid, ${edit.text}
-    where exists (select 1 from ${characters}
-      where ${scoped(scope, characters, eq(characters.id, id))} and ${characters.mergedInto} is null)
-    returning id
-  `)
-  const row = rows[0] as { readonly id: string } | undefined
-  return row === undefined ? null : brandArcTurnId(row.id)
-}
-
-export const updateArcTurn = async (
-  scope: ProjectScope,
-  turnId: ArcTurnId,
-  edit: ArcTurnEdit,
-): Promise<boolean> => {
-  const rows = await dbOf(scope)
-    .update(characterArcTurns)
-    .set({ text: edit.text, sceneNodeId: edit.sceneNodeId, updatedAt: new Date() })
-    .where(scoped(scope, characterArcTurns, eq(characterArcTurns.id, turnId)))
-    .returning({ id: characterArcTurns.id })
-  return rows.length > 0
-}
-
-export const deleteArcTurn = async (scope: ProjectScope, turnId: ArcTurnId): Promise<boolean> => {
-  const rows = await dbOf(scope)
-    .delete(characterArcTurns)
-    .where(scoped(scope, characterArcTurns, eq(characterArcTurns.id, turnId)))
-    .returning({ id: characterArcTurns.id })
-  return rows.length > 0
-}
-
-/** Write every turn's position at once. The caller has reordered the list. */
-export const reorderArcTurns = async (
-  scope: ProjectScope,
-  id: CharacterId,
-  order: readonly ArcTurnId[],
-): Promise<void> => {
-  if (order.length === 0) return
-  await dbOf(scope).execute(sql`
-    update ${characterArcTurns} set position = r.position, updated_at = now()
-    from jsonb_to_recordset(${jsonb(order.map((turnId, position) => ({ id: turnId, position })))})
-      as r(id uuid, position int)
-    where ${scoped(scope, characterArcTurns, eq(characterArcTurns.characterId, id))}
-      and ${characterArcTurns.id} = r.id
-  `)
-}
 
 /**
  * Merge `loser` into `winner`: the writer's decision that two records were
  * one person. One statement. The loser's row is kept with `merged_into` set
- * (a tombstone, so anything pointing at it can be followed); its bound cues,
- * relationships, arc turns and key lines move to the winner. The winner's
- * profile stays the winner's. `false` when either record is not live here.
+ * (a tombstone, so anything pointing at it can be followed); its bound cues
+ * and relationships move to the winner. The winner's profile stays the
+ * winner's, portrait included. `false` when either record is not live here.
  */
 export const mergeCharacterRecords = async (
   scope: ProjectScope,
@@ -844,21 +649,6 @@ export const mergeCharacterRecords = async (
         and (select ok from ok)
       returning character_id
     ),
-    turns as (
-      update ${characterArcTurns} set character_id = ${winner},
-        position = position + 1 + coalesce((select max(t.position) from ${characterArcTurns} t
-          where t.project_id = ${scope.projectId} and t.character_id = ${winner}), -1)
-      where ${scoped(scope, characterArcTurns, eq(characterArcTurns.characterId, loser))}
-        and (select ok from ok)
-      returning id
-    ),
-    lines as (
-      update ${characters} set key_lines = ${characters.keyLines} || (
-        select l.key_lines from ${characters} l where l.project_id = ${scope.projectId} and l.id = ${loser}
-      ), updated_at = now()
-      where ${scoped(scope, characters, eq(characters.id, winner))} and (select ok from ok)
-      returning id
-    ),
     merged as (
       update ${characters} set merged_into = ${winner}, updated_at = now()
       where ${scoped(scope, characters, eq(characters.id, loser))} and (select ok from ok)
@@ -874,7 +664,8 @@ export const mergeCharacterRecords = async (
  * Delete a record the script no longer holds. Refused - `false` - while it is
  * present: a record deleted under a live cue would be minted again on the
  * next pass, which is not what anyone pressing Delete meant. The cascades
- * take the bound cues, relationships, turns and derived rows with it.
+ * take the bound cues, relationships and derived rows with it; the portrait
+ * object, if any, is the caller's to delete.
  */
 export const deleteAbsentCharacter = async (
   scope: ProjectScope,

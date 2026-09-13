@@ -34,6 +34,26 @@ describe('setBlockTypeAt', () => {
     expect(fromDoc(h.state.doc).ok).toBe(true)
   })
 
+  it('sheds the wrapping parens when a filled Parenthetical becomes another type', () => {
+    const h = harness([block('a', 'paren', '(softly)')], counterMint())
+    h.run((tr) => {
+      setBlockTypeAt(tr, h.before(0), 'action')
+    })
+    expect(h.state.doc.child(0).type.name).toBe('action')
+    expect(h.state.doc.child(0).textContent).toBe('softly')
+    expect(h.ids()).toEqual(['a'])
+    expect(fromDoc(h.state.doc).ok).toBe(true)
+  })
+
+  it('empties out an unfilled () Parenthetical becoming another type', () => {
+    const h = harness([block('a', 'paren', '()')], counterMint())
+    h.run((tr) => {
+      setBlockTypeAt(tr, h.before(0), 'dialogue')
+    })
+    expect(h.state.doc.child(0).type.name).toBe('dialogue')
+    expect(h.state.doc.child(0).textContent).toBe('')
+  })
+
   it('keeps modifiers on a Character and drops them leaving one', () => {
     const h = harness([block('a', 'action', 'MEERA')], counterMint())
     h.run((tr) => {

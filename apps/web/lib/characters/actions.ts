@@ -1,67 +1,49 @@
 'use server'
 
-import type { SceneRef } from '@folio/contracts'
 import {
-  ArcTurnEditSchema,
-  ArcTurnIdSchema,
   CharacterIdSchema,
   CharacterProfileEditSchema,
-  KeyLinesEditSchema,
-  RelationshipEditSchema,
-  TitleSchema,
+  NewCharacterSchema,
+  PORTRAIT_MAX_BYTES,
+  PORTRAIT_TYPES,
 } from '@folio/contracts'
+import type { PortraitType } from '@folio/contracts'
 import {
-  addArcTurn,
   bindCue,
   createCharacterRecord,
   deleteAbsentCharacter,
-  deleteArcTurn,
   listBoundCues,
   listCharacterRecords,
   listEpisodes,
   listOpenCueRows,
-  listSceneIndex,
   mergeCharacterRecords,
   readDerivationInput,
   readDocumentByKind,
-  readProjectScreenplayNodes,
   readScreenplayNodes,
   recordResolveDecisions,
-  removeRelationship,
   renameCharacterRecord,
-  reorderArcTurns,
   rewriteCueNodes,
-  setKeyLines,
+  setPortraitKey,
   snapshotVersion,
   unbindCue,
-  updateArcTurn,
   updateCharacterProfile,
-  upsertRelationship,
 } from '@folio/db'
 import type { CueNodeRewrite, ProjectScope } from '@folio/db'
-import type { CharacterId, NodeId, ProposalTarget, ResolveSubject } from '@folio/script'
-import {
-  boundCueMap,
-  canonicalKey,
-  cueSpelling,
-  matchCharacters,
-  readCue,
-  renameCharacterCues,
-} from '@folio/script'
+import type { CharacterId, ProposalTarget, ResolveSubject } from '@folio/script'
+import { canonicalKey, cueSpelling, matchCharacters, readCue, renameCharacterCues } from '@folio/script'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { isRefusal, openProject } from '../script/gate'
 import { rederiveProject } from '../script/server'
-import { sceneRefOf } from './figures'
+import { deleteObject, publicUrl, putObject, storageAvailable } from '../storage/r2'
 import type {
-  ArcTurnResult,
   BindResult,
   CreateResult,
   DeleteResult,
   DeriveResult,
-  DialogueResult,
   MergeResult,
+  PortraitResult,
   RenameResult,
   ResolveResult,
   SavedResult,
@@ -77,15 +59,15 @@ import type {
  *
  * ## Which writes re-derive, and which do not
  *
- * A profile field, a relationship, an arc turn, a key line: authored data
- * on the record, and nothing about the script changed, so nothing is
- * re-derived - a pass that runs later leaves these rows alone because
- * `commitDerivation` never touches an authored table.
+ * A profile field, a portrait: authored data on the record, and nothing
+ * about the script changed, so nothing is re-derived - a pass that runs
+ * later leaves these rows alone because `commitDerivation` never touches
+ * an authored table.
  *
  * Binding a cue, a queue decision, a merge, a rename: each changes what the
  * alias table says, and so what the next pass resolves. Each **awaits** a
  * project-wide re-derive before answering, because what the writer sees
- * next - the queue, the counts, the cast - is that pass's output.
+ * next - the ghost cards, the counts, the grid - is that pass's output.
  *
  * ## The rename is the sanctioned write-back
  *
@@ -98,11 +80,21 @@ import type {
  *
  * ## Walk-on is one act
  *
- * "This cue is nobody." The pure core keeps a row open with no proposal
- * once every candidate and `new-record` have been rejected, and never asks
- * again. So Walk-on records exactly those rejections - `matchCharacters`
- * lists the candidates by the same scoring the queue uses - in one insert,
- * then re-derives. The row stays open, un-proposed, and leaves the badge.
+ * "Not a character." The pure core keeps a row open with no proposal once
+ * every candidate and `new-record` have been rejected, and never asks
+ * again. So the decision records exactly those rejections -
+ * `matchCharacters` lists the candidates by the same scoring the queue
+ * uses - in one insert, then re-derives. The row stays open, un-proposed,
+ * leaves the badge, and is drawn nowhere.
+ *
+ * ## A portrait goes through the action, not past it
+ *
+ * The file arrives as `FormData`, is capped at `PORTRAIT_MAX_BYTES`, has
+ * its first bytes sniffed (the declared MIME is not trusted), is PUT to
+ * storage under `projects/<projectId>/characters/<characterId>/`, and only
+ * then does the row point at it; the object it replaced is deleted after
+ * the row says so, never before. No browser ever holds a storage
+ * credential, and `next.config.ts` raises the action body limit for it.
  */
 
 const workspacePath = (projectId: string): string => `/app/project/${projectId}`
@@ -118,17 +110,18 @@ const parseId = (raw: unknown): CharacterId | null => {
 // The record
 // ---------------------------------------------------------------------------
 
-export const createCharacter = async (projectId: string, rawName: string): Promise<CreateResult> => {
-  const name = TitleSchema.safeParse(rawName)
-  if (!name.success) return { status: 'error', message: 'A character needs a name, up to 200 characters.' }
+export const createCharacter = async (projectId: string, rawInput: unknown): Promise<CreateResult> => {
+  const input = NewCharacterSchema.safeParse(rawInput)
+  if (!input.success) return { status: 'error', message: 'A character needs a name, up to 200 characters.' }
   const gate = await openProject(projectId)
   if (isRefusal(gate)) return gate
 
-  const id = await createCharacterRecord(gate.scope, name.data, 'supporting')
+  const { name, ...profile } = input.data
+  const id = await createCharacterRecord(gate.scope, name, profile)
   // The name's spelling binds to the new record, so a cue typed later
   // resolves to it rather than proposing. A spelling somebody else already
-  // holds is left with them; the writer sees it in the queue.
-  await bindCue(gate.scope, id, cueSpelling(name.data))
+  // holds is left with them; the writer sees it as a ghost card.
+  await bindCue(gate.scope, id, cueSpelling(name))
   await rederiveProject(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'created', id }
@@ -165,7 +158,7 @@ export const renameCharacter = async (
   rawName: string,
 ): Promise<RenameResult> => {
   const id = parseId(rawId)
-  const name = TitleSchema.safeParse(rawName)
+  const name = z.string().trim().min(1).max(200).safeParse(rawName)
   if (id === null || !name.success) return { status: 'error', message: 'A character needs a name, up to 200 characters.' }
   const gate = await openProject(projectId)
   if (isRefusal(gate)) return gate
@@ -226,8 +219,14 @@ export const mergeCharacters = async (
   const gate = await openProject(projectId)
   if (isRefusal(gate)) return gate
 
+  const before = (await listCharacterRecords(gate.scope)).find((entry) => entry.id === loser)
   const merged = await mergeCharacterRecords(gate.scope, loser, winner)
   if (!merged) return { status: 'error', message: REFUSED_CHARACTER }
+  // The loser's portrait has no card to sit on any more. Best effort: a
+  // failed delete leaves an orphan object, never a broken row.
+  if (before?.portraitKey !== undefined && before.portraitKey !== null && storageAvailable()) {
+    await deleteObject(before.portraitKey)
+  }
   await rederiveProject(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'merged', into: winner }
@@ -239,6 +238,7 @@ export const deleteCharacter = async (projectId: string, rawId: string): Promise
   const gate = await openProject(projectId)
   if (isRefusal(gate)) return gate
 
+  const before = (await listCharacterRecords(gate.scope)).find((entry) => entry.id === id)
   const outcome = await deleteAbsentCharacter(gate.scope, id)
   if (outcome === 'missing') return { status: 'error', message: REFUSED_CHARACTER }
   if (outcome === 'present') {
@@ -247,9 +247,90 @@ export const deleteCharacter = async (projectId: string, rawId: string): Promise
       message: 'This character is still in the script. Remove their cues first, or merge the record into another.',
     }
   }
+  if (before?.portraitKey !== undefined && before.portraitKey !== null && storageAvailable()) {
+    await deleteObject(before.portraitKey)
+  }
   await rederiveProject(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'deleted' }
+}
+
+// ---------------------------------------------------------------------------
+// The portrait
+// ---------------------------------------------------------------------------
+
+/** The first bytes of the three formats accepted. The declared type is checked against these, not trusted. */
+const sniff = (bytes: Uint8Array): PortraitType | null => {
+  const at = (index: number): number => bytes[index] ?? -1
+  if (at(0) === 0x89 && at(1) === 0x50 && at(2) === 0x4e && at(3) === 0x47) return 'image/png'
+  if (at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return 'image/jpeg'
+  if (
+    at(0) === 0x52 &&
+    at(1) === 0x49 &&
+    at(2) === 0x46 &&
+    at(3) === 0x46 &&
+    at(8) === 0x57 &&
+    at(9) === 0x45 &&
+    at(10) === 0x42 &&
+    at(11) === 0x50
+  ) {
+    return 'image/webp'
+  }
+  return null
+}
+
+const EXTENSION: Readonly<Record<PortraitType, string>> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+}
+
+/**
+ * Store a portrait for a record. The file is the `portrait` entry of the
+ * form data. See the header for the order of operations.
+ */
+export const uploadPortrait = async (projectId: string, rawId: string, form: FormData): Promise<PortraitResult> => {
+  const id = parseId(rawId)
+  if (id === null) return { status: 'error', message: REFUSED_CHARACTER }
+  if (!storageAvailable()) return { status: 'refused', message: 'Portrait storage is not set up on this server yet.' }
+  const entry = form.get('portrait')
+  if (!(entry instanceof File)) return { status: 'error', message: 'Pick an image to upload.' }
+  if (entry.size === 0) return { status: 'error', message: 'That file is empty.' }
+  if (entry.size > PORTRAIT_MAX_BYTES) {
+    return { status: 'refused', message: `A portrait is at most ${String(PORTRAIT_MAX_BYTES / (1024 * 1024))} MB.` }
+  }
+  const bytes = new Uint8Array(await entry.arrayBuffer())
+  const type = sniff(bytes)
+  if (type === null || !(PORTRAIT_TYPES as readonly string[]).includes(type)) {
+    return { status: 'refused', message: 'A portrait is a PNG, JPEG or WebP image.' }
+  }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+
+  const key = `projects/${gate.project.id}/characters/${id}/portrait-${crypto.randomUUID()}.${EXTENSION[type]}`
+  const put = await putObject(key, bytes, type)
+  if (!put.ok) return { status: 'error', message: put.message }
+  const pointed = await setPortraitKey(gate.scope, id, key)
+  if (!pointed.found) {
+    await deleteObject(key)
+    return { status: 'error', message: REFUSED_CHARACTER }
+  }
+  if (pointed.previous !== null && pointed.previous !== key) await deleteObject(pointed.previous)
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return { status: 'saved', url: publicUrl(key) }
+}
+
+export const removePortrait = async (projectId: string, rawId: string): Promise<PortraitResult> => {
+  const id = parseId(rawId)
+  if (id === null) return { status: 'error', message: REFUSED_CHARACTER }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+
+  const pointed = await setPortraitKey(gate.scope, id, null)
+  if (!pointed.found) return { status: 'error', message: REFUSED_CHARACTER }
+  if (pointed.previous !== null && storageAvailable()) await deleteObject(pointed.previous)
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return { status: 'saved', url: null }
 }
 
 // ---------------------------------------------------------------------------
@@ -300,156 +381,16 @@ export const unbindAlias = async (projectId: string, rawId: string, rawCue: stri
 }
 
 // ---------------------------------------------------------------------------
-// Relationships, arc, key lines
-// ---------------------------------------------------------------------------
-
-export const saveRelationship = async (
-  projectId: string,
-  rawId: string,
-  rawEdit: unknown,
-): Promise<SavedResult> => {
-  const id = parseId(rawId)
-  const edit = RelationshipEditSchema.safeParse(rawEdit)
-  if (id === null || !edit.success) return { status: 'error', message: 'That relationship could not be read.' }
-  if (edit.data.otherId === id) return { status: 'error', message: 'A character cannot relate to themselves.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  const what = edit.data.what.trim()
-  const shift = edit.data.shift === null || edit.data.shift === '' ? null : edit.data.shift
-  if (what === '' && shift === null) await removeRelationship(gate.scope, id, edit.data.otherId)
-  else await upsertRelationship(gate.scope, id, edit.data.otherId, what === '' ? '—' : what, shift)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
-}
-
-export const addTurn = async (projectId: string, rawId: string, rawEdit: unknown): Promise<ArcTurnResult> => {
-  const id = parseId(rawId)
-  const edit = ArcTurnEditSchema.safeParse(rawEdit)
-  if (id === null || !edit.success) return { status: 'error', message: 'A turn is a line of text, up to 2000 characters.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  const turnId = await addArcTurn(gate.scope, id, edit.data)
-  if (turnId === null) return { status: 'error', message: REFUSED_CHARACTER }
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved', id: turnId }
-}
-
-export const saveTurn = async (projectId: string, rawTurnId: string, rawEdit: unknown): Promise<SavedResult> => {
-  const turnId = ArcTurnIdSchema.safeParse(rawTurnId)
-  const edit = ArcTurnEditSchema.safeParse(rawEdit)
-  if (!turnId.success || !edit.success) return { status: 'error', message: 'A turn is a line of text, up to 2000 characters.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  const written = await updateArcTurn(gate.scope, turnId.data, edit.data)
-  if (!written) return { status: 'error', message: 'That turn is no longer on the record.' }
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
-}
-
-export const removeTurn = async (projectId: string, rawTurnId: string): Promise<SavedResult> => {
-  const turnId = ArcTurnIdSchema.safeParse(rawTurnId)
-  if (!turnId.success) return { status: 'error', message: 'That turn is no longer on the record.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  await deleteArcTurn(gate.scope, turnId.data)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
-}
-
-export const reorderTurns = async (projectId: string, rawId: string, rawOrder: unknown): Promise<SavedResult> => {
-  const id = parseId(rawId)
-  const order = z.array(ArcTurnIdSchema).max(200).safeParse(rawOrder)
-  if (id === null || !order.success) return { status: 'error', message: 'That order could not be read.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  await reorderArcTurns(gate.scope, id, order.data)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
-}
-
-export const saveKeyLines = async (projectId: string, rawId: string, rawLines: unknown): Promise<SavedResult> => {
-  const id = parseId(rawId)
-  const lines = KeyLinesEditSchema.safeParse(rawLines)
-  if (id === null || !lines.success) return { status: 'error', message: 'Up to fifty key lines.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  const written = await setKeyLines(gate.scope, id, lines.data)
-  if (!written) return { status: 'error', message: REFUSED_CHARACTER }
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
-}
-
-/** How many lines the picker offers. A principal in a series can have a thousand. */
-const DIALOGUE_LIMIT = 400
-
-/**
- * The character's own dialogue, for picking key lines. A read-shaped
- * action: it walks every screenplay node in the project, which the profile
- * does not do on render, and hands back the lines spoken under any spelling
- * bound to the record, each with the scene it sits in.
- */
-export const listDialogue = async (projectId: string, rawId: string): Promise<DialogueResult> => {
-  const id = parseId(rawId)
-  if (id === null) return { status: 'error', message: REFUSED_CHARACTER }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-  const { scope } = gate
-
-  const [bound, index] = await Promise.all([listBoundCues(scope), listSceneIndex(scope)])
-  const mine = new Set(
-    [...boundCueMap(bound.filter((entry) => entry.characterId === id)).keys()],
-  )
-  if (mine.size === 0) return { status: 'ok', lines: [] }
-  const refs = new Map<NodeId, SceneRef>(index.map((row) => [row.sceneNodeId, sceneRefOf(row)]))
-
-  const all = await readProjectScreenplayNodes(scope)
-  if (!all.ok) return { status: 'error', message: 'The script could not be read.' }
-
-  const lines: { nodeId: NodeId; text: string; scene: SceneRef | null }[] = []
-  let scene: NodeId | null = null
-  let speaking = false
-  for (const node of all.value) {
-    if (node.type === 'comment') continue
-    if (node.type === 'scene') {
-      scene = node.id
-      speaking = false
-      continue
-    }
-    if (node.type === 'character') {
-      const raw = node.content.map((run) => (run.kind === 'text' ? run.text : '')).join('')
-      speaking = mine.has(canonicalKey(readCue(raw).name))
-      continue
-    }
-    if (node.type === 'dialogue') {
-      if (!speaking) continue
-      const text = node.content.map((run) => (run.kind === 'text' ? run.text : '')).join('').trim()
-      if (text === '') continue
-      lines.push({ nodeId: node.id, text, scene: scene === null ? null : (refs.get(scene) ?? null) })
-      if (lines.length >= DIALOGUE_LIMIT) break
-      continue
-    }
-    if (node.type !== 'paren') speaking = false
-  }
-  return { status: 'ok', lines }
-}
-
-// ---------------------------------------------------------------------------
 // The resolve queue
 // ---------------------------------------------------------------------------
 
 const ChoiceSchema = z.discriminatedUnion('kind', [
   /** Take the row's own proposal, whatever it points at. */
   z.object({ kind: z.literal('proposal') }),
-  /** "Other…": bind to this record instead. */
+  /** "Someone else…": bind to this record instead. */
   z.object({ kind: z.literal('character'), id: CharacterIdSchema }),
   z.object({ kind: z.literal('new-record') }),
-  /** "Walk-on": this cue is nobody. Never ask again. */
+  /** "Not a character": this cue is nobody. Never ask again. */
   z.object({ kind: z.literal('walk-on') }),
 ])
 
@@ -472,7 +413,7 @@ export const resolveCue = async (projectId: string, rawKey: string, rawChoice: u
 
   const row = (await listOpenCueRows(scope)).find((entry) => entry.key === key.data)
   if (row === undefined || !isCueSubject(row.subject)) {
-    return { status: 'error', message: 'That cue is no longer in the queue. It may have been matched already.' }
+    return { status: 'error', message: 'That name is no longer waiting. It may have been matched already.' }
   }
   const subject = row.subject
   const target: ProposalTarget | null = isTarget(row.proposalTarget) ? row.proposalTarget : null
@@ -494,15 +435,15 @@ export const resolveCue = async (projectId: string, rawKey: string, rawChoice: u
         : choice.data.kind === 'character'
           ? { kind: 'character', id: choice.data.id }
           : { kind: 'new-record' }
-    if (chosen === null) return { status: 'error', message: 'That cue has no proposal to take. Pick a character, or mark it a walk-on.' }
+    if (chosen === null) return { status: 'error', message: 'That name has no suggestion to take. Pick a character, or mark it as not one.' }
     if (chosen.kind === 'character') {
       const outcome = await bindCue(scope, chosen.id, cueSpelling(subject.cue))
       if (outcome.status === 'taken') {
-        return { status: 'refused', message: 'That spelling already resolves to another character. Reload the queue.' }
+        return { status: 'refused', message: 'That spelling already resolves to another character. Reload the page.' }
       }
       if (outcome.status === 'missing') return { status: 'error', message: REFUSED_CHARACTER }
     } else if (chosen.kind !== 'new-record') {
-      return { status: 'error', message: 'A cue can only be matched to a character or made a new one.' }
+      return { status: 'error', message: 'A name can only be matched to a character or made a new one.' }
     }
     await recordResolveDecisions(scope, subject, [{ verdict: 'accepted', target: chosen }])
   }

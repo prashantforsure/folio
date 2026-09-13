@@ -1,14 +1,6 @@
-import type {
-  CharacterMap,
-  EpisodeBar,
-  MapColumn,
-  PlaceRow,
-  PresenceGap,
-  SceneRef,
-} from '@folio/contracts'
-import { CHARACTER_HUES } from '@folio/contracts'
+import type { CharacterMap, EpisodeBar, MapColumn, SceneRef } from '@folio/contracts'
 import type { SceneIndexRow } from '@folio/db'
-import type { CharacterId, LocationId, NodeId } from '@folio/script'
+import type { CharacterId, NodeId } from '@folio/script'
 
 /**
  * The figures the Characters route prints, each a pure function over the
@@ -16,33 +8,24 @@ import type { CharacterId, LocationId, NodeId } from '@folio/script'
  *
  * AGENTS.md, UI fidelity: every number on the route is "computed from the
  * script"; nothing here estimates, and nothing here calls a model - a
- * presence gap and a co-occurrence cell are arithmetic over
- * `scene_derivations`, which is what the Insights bundle means by "a
- * report never calls a model".
+ * co-occurrence cell is arithmetic over `scene_derivations`.
  */
-
-// ---------------------------------------------------------------------------
-// Identity marks
-// ---------------------------------------------------------------------------
-
-/**
- * Which of the six chip hues a record gets: a stable function of its id, so
- * the same person is the same colour in the nav, the profile, the map and
- * every relationship row - across reloads and across records being added.
- * The hues themselves are `--chip-1` .. `--chip-6` in `packages/ui`,
- * transcribed from the bundle; this only picks an index.
- */
-export const hueOf = (id: string): number => {
-  let hash = 0
-  for (const char of id) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0
-  return (hash % CHARACTER_HUES) + 1
-}
 
 /** The chip's letter: the first character of the name. `Meera Pawar` is `M`. */
 export const initialOf = (name: string): string => {
   const first = name.trim()[0]
   return first === undefined ? '·' : first.toUpperCase()
 }
+
+/** `Female · 17 y/o · student` - the facts line under a name, skipping what is unset. */
+export const factsLine = (facts: {
+  readonly gender: string | null
+  readonly age: string | null
+  readonly role: string | null
+}): string =>
+  [facts.gender, facts.age === null ? null : /^\d+$/.test(facts.age) ? `${facts.age} y/o` : facts.age, facts.role]
+    .filter((part): part is string => part !== null && part !== '')
+    .join(' · ')
 
 // ---------------------------------------------------------------------------
 // Scenes
@@ -56,7 +39,7 @@ export const sceneRefOf = (row: SceneIndexRow): SceneRef => ({
   heading: row.heading,
 })
 
-/** `E1 Sc 4`, as the bundle writes every scene reference. */
+/** `E1 Sc 4`, as every scene reference on the route reads. */
 export const formatSceneRef = (ref: SceneRef): string =>
   `E${String(ref.episodeOrdinal)} Sc ${String(ref.number)}`
 
@@ -69,9 +52,9 @@ export const sharedScenes = (a: readonly NodeId[], b: readonly NodeId[]): number
 }
 
 /**
- * Scenes per episode, in running order, for the "Scenes by episode" bars.
- * Every episode gets a bar, zero included: an episode the character is not
- * in is a fact about the arc, and the bundle draws it at 2%.
+ * Scenes per episode, in running order. Every episode gets a bar, zero
+ * included. Read by the Bible route's cited-by-episode bars; the Characters
+ * route no longer draws it.
  */
 export const perEpisodeBars = (
   episodes: readonly { readonly slug: SceneRef['episode']; readonly ordinal: number }[],
@@ -84,89 +67,21 @@ export const perEpisodeBars = (
     scenes: index.filter((row) => row.episodeOrdinal === episode.ordinal && scenes.has(row.sceneNodeId)).length,
   }))
 
-/**
- * The longest run of scenes a character is absent for, inside one episode,
- * between their first and last appearance there - the Insights bundle's
- * "gap Sc 6–19". Reported only from `GAP_SCENES` scenes up: a character
- * missing one scene is not a gap, it is a scene. The threshold is a
- * judgement, named here and flagged in the phase report.
- */
-export const GAP_SCENES = 5
-
-export const presenceGap = (
-  index: readonly SceneIndexRow[],
-  scenes: ReadonlySet<NodeId>,
-): PresenceGap | null => {
-  let best: PresenceGap | null = null
-  const byEpisode = new Map<number, SceneIndexRow[]>()
-  for (const row of index) {
-    const list = byEpisode.get(row.episodeOrdinal) ?? []
-    list.push(row)
-    byEpisode.set(row.episodeOrdinal, list)
-  }
-  for (const [episodeOrdinal, rows] of byEpisode) {
-    let last: number | null = null
-    for (const row of rows) {
-      if (!scenes.has(row.sceneNodeId)) continue
-      if (last !== null) {
-        const absent = row.ordinalInEpisode - last - 1
-        if (absent >= GAP_SCENES && (best === null || absent > best.to - best.from + 1)) {
-          best = { episodeOrdinal, from: last + 1, to: row.ordinalInEpisode - 1 }
-        }
-      }
-      last = row.ordinalInEpisode
-    }
-  }
-  return best
-}
-
-/** `gap · E1 Sc 6–19`, or `no gaps`. */
-export const formatGap = (gap: PresenceGap | null): string =>
-  gap === null ? 'no gaps' : `gap · E${String(gap.episodeOrdinal)} Sc ${String(gap.from)}–${String(gap.to)}`
-
-/** Where a character is most: their scenes' locations, most first, top three. */
-export const placesOf = (
-  index: readonly SceneIndexRow[],
-  scenes: ReadonlySet<NodeId>,
-  names: ReadonlyMap<LocationId, string>,
-  limit = 3,
-): readonly PlaceRow[] => {
-  const counts = new Map<LocationId, number>()
-  for (const row of index) {
-    if (row.locationId === null || !scenes.has(row.sceneNodeId)) continue
-    counts.set(row.locationId, (counts.get(row.locationId) ?? 0) + 1)
-  }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || (names.get(a[0]) ?? '').localeCompare(names.get(b[0]) ?? ''))
-    .slice(0, limit)
-    .map(([locationId, count]) => ({ locationId, name: names.get(locationId) ?? '(record missing)', scenes: count }))
-}
-
 // ---------------------------------------------------------------------------
 // The map
 // ---------------------------------------------------------------------------
 
 /**
  * Who shares scenes with whom. `cells[row][column]` is the count of scenes
- * both are in; the diagonal is the character's own count. `standouts` are
- * the pairs of principals with nothing shared - "Empty cells between
- * principals are worth a look", so the route lists them rather than leaving
- * the reader to scan.
+ * both are in; the diagonal is the character's own count. The three
+ * relationship graphs are drawings of this one matrix.
  */
 export const buildMap = (
   columns: readonly MapColumn[],
   scenesOf: ReadonlyMap<CharacterId, readonly NodeId[]>,
-): CharacterMap => {
-  const cells = columns.map((row) =>
+): CharacterMap => ({
+  columns,
+  cells: columns.map((row) =>
     columns.map((column) => sharedScenes(scenesOf.get(row.id) ?? [], scenesOf.get(column.id) ?? [])),
-  )
-  const standouts: { readonly a: MapColumn; readonly b: MapColumn }[] = []
-  columns.forEach((a, i) => {
-    if (a.group !== 'principal') return
-    columns.forEach((b, j) => {
-      if (j <= i || b.group !== 'principal') return
-      if ((cells[i]?.[j] ?? 0) === 0) standouts.push({ a, b })
-    })
-  })
-  return { columns, cells, standouts }
-}
+  ),
+})

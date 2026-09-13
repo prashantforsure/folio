@@ -159,17 +159,17 @@ export const EPISODE_NAV: readonly EpisodeNavItem[] = [
  * Production 250px. Bible 252px. Characters, Locations 256px."
  *
  * Insights has no context column of its own in this phase - the README lists
- * its width, but the brief gives a column only to characters, locations,
- * bible, research and timeline. Recorded here so the number is not lost.
+ * its width, but the brief gives a column only to locations, bible, research
+ * and timeline. Characters lost its column in the route's second pass
+ * (2026-09-14, `docs/build-decisions.md`): the card grid is the list.
  */
 export const EPISODE_NAV_WIDTH = 238
 
 export const CONTEXT_PANEL_WIDTH: Record<
-  Exclude<WorkspaceRoute, EpisodeNavRoute>,
+  Exclude<WorkspaceRoute, EpisodeNavRoute | 'characters'>,
   number
 > = {
   production: 250,
-  characters: 256,
   locations: 256,
   timeline: 250,
   bible: 252,

@@ -29,8 +29,8 @@ import { projects, users } from './tenancy'
  * ## Cites and conflicts point at heading nodes with no foreign key
  *
  * `bible_facts.cites` and `bible_facts.conflict_scene_node_id` hold scene
- * heading node ids, on the pattern of `characters.key_lines`, `shots` and
- * `character_arc_turns`: no foreign key, so a heading brought back by undo
+ * heading node ids, on the pattern of `scenes` and `shots`: no foreign key,
+ * so a heading brought back by undo
  * finds its cite, and a scene the script has lost is dropped on read rather
  * than cascading a fact away. A conflict is a scene and a note together -
  * the check constraint says one without the other is not a conflict.

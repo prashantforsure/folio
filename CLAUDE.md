@@ -44,7 +44,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   ways, FDX import, derivation, pagination, the draft diff, and one read module per derived route
   (`beats.ts`, `shots.ts`, `timeline.ts`, `bible.ts`, `rename.ts`).
 - `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, migrations
-  `0000`–`0012` (forward-only, all applied to the dev Supabase project), project-scoped
+  `0000`–`0013` (forward-only, all applied to the dev Supabase project), project-scoped
   repositories. `packages/ui` — tokens as CSS custom properties plus five small components.
 - `apps/web` — auth, the home shell, the workspace chrome, and the built route bodies: Script,
   Scenes, Revisions, Outline, Storyboard, Characters, Locations, Timeline, Bible. Each has an
@@ -62,11 +62,21 @@ Rulings that supersede AGENTS.md (details in `docs/build-decisions.md`):
 - **The Script route has no element type bar** (retired 2026-09-13 on the client's instruction; the
   bundle still draws one). `/` opens a slash menu over the eight types and `⌘1`–`⌘8` stay; do not
   restore the bar.
-- **The Script editor is Tiptap 3 on ProseMirror** (ruled 2026-09-13; AGENTS.md still says Plate).
-  `@tiptap/{core,pm,react,suggestion}` and `@floating-ui/dom` are approved in `apps/web`. The Outline
-  route is still on `platejs` until it is ported; nothing under `_script/` or `lib/script/` may
-  import Plate (lint enforces it). The boundary is `lib/script/pm-model.ts`; the document lives in
-  the editor, never in React state. FDX export is in scope for the rebuild.
+- **Both editors are Tiptap 3 on ProseMirror** (Script ruled 2026-09-13; the Outline ported the
+  same day; AGENTS.md still says Plate). `@tiptap/{core,pm,react,suggestion}` and `@floating-ui/dom`
+  are approved in `apps/web`; **`platejs` is uninstalled** and lint bans it under both editors. The
+  boundaries are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`; the document lives in the
+  editor, never in React state. The Outline has no block toolbar and nothing in its left margin:
+  `/` opens its slash menu, `⌘0`–`⌘3` / `⌘⇧Q/R/B` stay. FDX export is built.
+- **The Characters route is the client's laper.ai shape, not the repo's bundle** (ruled
+  2026-09-14; "Characters route, second pass" in `docs/build-decisions.md`). `Route -
+  Characters.dc.html` and `screenshots/characters.png` are the old design and are not this
+  route's reference. No cast column; `?view=overview | relationships | casting`;
+  `/characters/:uuid` is the edit drawer over the grid; unmatched cues are ghost cards, never a
+  screen. Migration `0013` dropped the first pass's drives, arc turns, voice rules and key lines
+  (client ruling). Portraits are on Cloudflare R2 through `apps/web/lib/storage/r2.ts`
+  (`aws4fetch` approved), gated on the optional `R2_*` env block. `character_relationships` is
+  kept as a derivation read and nothing writes it. Generate (the look-sheet job) is not built.
 
 **Nothing needs a live database** to typecheck, lint, build or unit-test. The signed-in E2E
 walks (`apps/web/e2e/*-route.spec.ts`) need `E2E_EMAIL`/`E2E_PASSWORD` and skip without them;

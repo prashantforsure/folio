@@ -94,7 +94,6 @@ describe('the episode nav', () => {
   it('keeps the README widths for the other columns', () => {
     expect(CONTEXT_PANEL_WIDTH).toEqual({
       production: 250,
-      characters: 256,
       locations: 256,
       timeline: 250,
       bible: 252,
@@ -115,7 +114,7 @@ describe('sub-view params', () => {
     expect(parseSubViews('revisions', {})).toEqual({ ok: true, params: { view: 'diff' } })
     expect(parseSubViews('notes', {})).toEqual({ ok: true, params: { filter: 'open' } })
     expect(parseSubViews('production', {})).toEqual({ ok: true, params: { view: 'scene' } })
-    expect(parseSubViews('characters', {})).toEqual({ ok: true, params: { view: 'profile' } })
+    expect(parseSubViews('characters', {})).toEqual({ ok: true, params: { view: 'overview' } })
     expect(parseSubViews('locations', {})).toEqual({ ok: true, params: { view: 'record' } })
     expect(parseSubViews('timeline', {})).toEqual({ ok: true, params: { view: 'story' } })
     expect(parseSubViews('bible', {})).toEqual({ ok: true, params: { view: 'entry' } })

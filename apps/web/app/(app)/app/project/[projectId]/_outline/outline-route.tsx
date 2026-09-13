@@ -2,7 +2,6 @@ import { listComments, listMemberProfiles } from '@folio/db'
 import { notFound } from 'next/navigation'
 
 import { loadOutline } from '../../../../../../lib/outline/server'
-import { toSlateValue } from '../../../../../../lib/outline/slate-model'
 import type { RevisionRow, ThreadCard } from '../../../../../../lib/script/panel'
 import type { EpisodeContext } from '../../../../../../lib/workspace/context'
 import type { RawSearchParams } from '../../../../../../lib/workspace/params'
@@ -76,7 +75,6 @@ export const OutlineRoute = async ({
       updatedAt: load.document.updatedAt,
       createdAt: load.document.createdAt,
       nodes: load.nodes,
-      value: toSlateValue(load.nodes),
       labels: load.labels,
       stats: load.stats,
       threads,

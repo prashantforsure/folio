@@ -215,11 +215,36 @@
   .folio-editable {
     position: relative;
     outline: none;
+    box-shadow: none;
+    border: none;
     font-family: var(--font-mono);
     font-size: 16px;
     line-height: 16px;
     color: var(--sheet-ink);
     caret-color: var(--accent);
+  }
+
+  /*
+   * The sheet never wears a focus ring. Tiptap's core Tabindex extension sets
+   * `tabindex="0"` on the editable, so `@folio/ui`'s base-layer
+   * `:where([tabindex]):focus-visible` ring (2px `--focus`, coral) would frame
+   * the whole page the moment it is clicked. These sit in `components`, above
+   * `base`, so they win without `!important`; the ProseMirror class names are
+   * covered too in case the `folio-editable` attribute ever stops being set.
+   */
+  .folio-editable:focus,
+  .folio-editable:focus-visible,
+  .folio-editable:focus-within,
+  .folio-editor-host,
+  .folio-editor-host:focus,
+  .folio-editor-host:focus-within,
+  .ProseMirror,
+  .ProseMirror:focus,
+  .ProseMirror:focus-visible,
+  .ProseMirror-focused {
+    outline: none;
+    box-shadow: none;
+    border: none;
   }
 
   .folio-editable ::selection {
@@ -795,9 +820,11 @@
  * panel says so - so blocks wrap on their
  * own (`pre-wrap`) and there is no line engine here.
  *
- * Each block carries a 7px ring in the left margin at `left:74px` on the
- * sheet, which is 22px left of the 96px text inset. The inset is on the
- * block and the ring is inside it, so the ring's `left` is `-22px`.
+ * Nothing is drawn in the left margin: no ring, no handle, no label. The
+ * first Outline phase carried a 7px ring per block at `left: 74px`; it went
+ * with the Plate editor (docs/build-decisions.md, "Outline route, second
+ * pass"), as the Script route's sheet has nothing beside a block either. A
+ * beat's number sits inside the block's own 30px inset.
  */
 @layer components {
   .folio-prose-ruler {
@@ -830,24 +857,11 @@
     color: var(--sheet-ink);
   }
 
-  .folio-prose-dot {
-    position: absolute;
-    left: -22px;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    border: 1px solid var(--sheet-line);
-    pointer-events: none;
-    user-select: none;
-  }
-
-  .folio-prose-dot[data-caret='true'] {
-    border-color: var(--accent-line);
-    background: var(--accent-bg);
-  }
-
   .folio-outline-editable {
+    position: relative;
     outline: none;
+    box-shadow: none;
+    border: none;
     caret-color: var(--accent);
   }
 
@@ -868,14 +882,6 @@
 
   .folio-outline-block:first-child {
     padding-top: 0;
-  }
-
-  .folio-outline-block > .folio-prose-dot {
-    top: calc(12px + 12px);
-  }
-
-  .folio-outline-block:first-child > .folio-prose-dot {
-    top: 12px;
   }
 
   .folio-outline-block[data-type='h1'],
@@ -902,31 +908,10 @@
     font-size: var(--text-16);
   }
 
-  .folio-outline-block[data-type='h1'] > .folio-prose-dot {
-    top: calc(30px + 6px);
-  }
-
-  .folio-outline-block[data-type='h2'] > .folio-prose-dot {
-    top: calc(24px + 5px);
-  }
-
-  .folio-outline-block[data-type='h3'] > .folio-prose-dot {
-    top: calc(18px + 4px);
-  }
-
   .folio-outline-block[data-type='h1']:first-child,
   .folio-outline-block[data-type='h2']:first-child,
   .folio-outline-block[data-type='h3']:first-child {
     padding-top: 0;
-  }
-
-  .folio-outline-block[data-type='h1']:first-child > .folio-prose-dot {
-    top: 6px;
-  }
-
-  .folio-outline-block[data-type='h2']:first-child > .folio-prose-dot,
-  .folio-outline-block[data-type='h3']:first-child > .folio-prose-dot {
-    top: 5px;
   }
 
   /* Prose straight after a heading sits closer to it, as the bundle's `10px` pad. */
@@ -934,12 +919,6 @@
   .folio-outline-block[data-type='h2'] + .folio-outline-block,
   .folio-outline-block[data-type='h3'] + .folio-outline-block {
     padding-top: 10px;
-  }
-
-  .folio-outline-block[data-type='h1'] + .folio-outline-block > .folio-prose-dot,
-  .folio-outline-block[data-type='h2'] + .folio-outline-block > .folio-prose-dot,
-  .folio-outline-block[data-type='h3'] + .folio-outline-block > .folio-prose-dot {
-    top: calc(10px + 12px);
   }
 
   .folio-outline-block[data-type='quote'] > .folio-outline-quote {
@@ -953,35 +932,23 @@
     padding-top: 26px;
   }
 
-  .folio-outline-block[data-type='rule'] > .folio-prose-dot {
-    top: calc(26px - 4px);
-  }
-
   .folio-outline-rule {
     display: block;
     height: 1px;
     background: var(--sheet-line);
   }
 
-  .folio-outline-block[data-type='rule'][data-selected='true'] > .folio-outline-rule {
+  .folio-outline-block[data-type='rule'].ProseMirror-selectednode > .folio-outline-rule {
     box-shadow: 0 0 0 2px var(--focus);
   }
 
-  /* A numbered beat: marker in the gutter, consecutive beats 4px apart. */
+  /* A numbered beat: the number inside the block's own inset, consecutive beats 4px apart. */
   .folio-outline-block[data-type='beat'] {
     padding-left: 30px;
   }
 
-  .folio-outline-block[data-type='beat'] > .folio-prose-dot {
-    left: -52px;
-  }
-
   .folio-outline-block[data-type='beat'] + .folio-outline-block[data-type='beat'] {
     padding-top: 4px;
-  }
-
-  .folio-outline-block[data-type='beat'] + .folio-outline-block[data-type='beat'] > .folio-prose-dot {
-    top: calc(4px + 12px);
   }
 
   .folio-outline-marker {
@@ -1002,7 +969,6 @@
   .folio-outline-ghost {
     position: absolute;
     left: 0;
-    top: inherit;
     color: var(--ink3);
     pointer-events: none;
     user-select: none;
@@ -1016,69 +982,6 @@
   .folio-outline-ghost i {
     font-style: normal;
     color: var(--accent);
-  }
-
-  /* The slash menu and the block toolbar's two-line buttons. */
-  .folio-slash-menu {
-    position: absolute;
-    z-index: 30;
-    min-width: 200px;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    padding: 4px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-chrome);
-    font-family: var(--font-sans);
-    font-size: var(--text-11-5);
-    color: var(--ink);
-  }
-
-  .folio-slash-menu > button {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 5px 8px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-chrome);
-    cursor: pointer;
-    color: var(--ink2);
-    text-align: left;
-  }
-
-  .folio-slash-menu > button[aria-selected='true'] {
-    background: var(--sel);
-    color: var(--ink);
-  }
-
-  .folio-block-tool {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1px;
-    min-width: 52px;
-    padding: 5px 9px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-chrome);
-    cursor: pointer;
-    color: var(--ink2);
-  }
-
-  .folio-block-tool:hover {
-    background: var(--hover);
-  }
-
-  .folio-block-tool[aria-pressed='true'] {
-    background: var(--sel);
-    color: var(--ink);
-  }
-
-  .folio-block-tool:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--focus);
   }
 }
 

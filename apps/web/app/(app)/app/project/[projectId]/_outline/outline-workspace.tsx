@@ -1,25 +1,25 @@
 'use client'
 
 import type { Project } from '@folio/contracts'
-import type { MentionEntity, MentionLabel, NodeId, OutlineNode, OutlineNodeType } from '@folio/script'
-import type { TElement } from 'platejs'
-import type { PlateEditor } from 'platejs/react'
+import type { DocumentId, MentionEntity, MentionLabel, NodeId, OutlineNode } from '@folio/script'
+import { typed } from '@folio/script'
+import type { Editor } from '@tiptap/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { saveOutline } from '../../../../../../lib/outline/actions'
+import { fromDoc } from '../../../../../../lib/outline/pm-model'
 import type { OutlineStats } from '../../../../../../lib/outline/server'
-import type { OutlineValue } from '../../../../../../lib/outline/slate-model'
-import { elementText, fromSlateValue, isOutlineElement } from '../../../../../../lib/outline/slate-model'
 import type { IdentityLog } from '../../../../../../lib/script/identity'
-import { newIdentityLog, retirementsSince } from '../../../../../../lib/script/identity'
+import { mintNodeId, newIdentityLog, retirementsSince } from '../../../../../../lib/script/identity'
 import type { RevisionRow, ThreadCard } from '../../../../../../lib/script/panel'
 import type { SaveConflict } from '../../../../../../lib/script/result'
 import type { SideTab } from '../../../../../../lib/state/session'
 import { useSession } from '../../../../../../lib/state/session'
-import { BlockBar } from './block-bar'
-import type { OutlineCaret, OutlineCommands } from './editor/outline-editor'
-import { OutlineEditor } from './editor/outline-editor'
-import { EmptyOutline } from './empty-outline'
+import type { OutlineStore } from './editor/outline-store'
+import { createOutlineStore, initialShape, useSlice } from './editor/outline-store'
+import { StaticOutline } from './editor/static-outline'
+import { OutlineEditor } from './editor/tiptap-outline-editor'
+import { EmptyCaretLine, EmptyOutlineNote } from './empty-outline'
 import { OutlinePanel } from './outline-panel'
 import { OutlineStatusBar } from './outline-status-bar'
 
@@ -27,14 +27,28 @@ import { OutlineStatusBar } from './outline-status-bar'
  * The Outline route's main column, from the 46px header to the 27px status
  * bar, with the editor column and the right panel between them.
  *
- * ## One document, its own
+ * ## One document, its own - and not in React
  *
  * On the server the outline is `nodes` rows under a `kind = 'outline'`
- * document. Here it is the Slate value the writer is typing into, and it
- * becomes authoritative again only through `fromSlateValue` - the strict
- * reader over the seven-block union - and `saveOutline`. The outline is
- * not paginated, so there is no measurement, no layout engine, no page
- * frames: blocks wrap in CSS and the sheet grows.
+ * document. Here it lives in the Tiptap editor and nowhere else: this
+ * component holds no value, and a keystroke renders nothing of it. It
+ * becomes authoritative again only through `fromDoc` - the strict reader
+ * over the seven-block union, run on `editor.state.doc` when the save is
+ * built - and `saveOutline`. What the chrome draws - the caret block, the
+ * counts, the block ids - comes through `editor/outline-store.ts` slices,
+ * each notifying only when its value moved. The outline is not paginated,
+ * so there is no measurement, no layout engine, no page frames: blocks
+ * wrap in CSS and the sheet grows.
+ *
+ * ## The empty state is the editor
+ *
+ * No outline document yet (`draft === null`) draws the same sheet over one
+ * blank Body block minted here after mount - there is no "Start the outline"
+ * button. The first save goes up with `documentId: null` and the server
+ * creates the document; from then on the workspace saves into the id it was
+ * handed back. Until that save the header reads `No outline`, the nav's row
+ * `—`, and the sheet carries the empty state's note, so an untouched visit
+ * leaves no row behind.
  *
  * ## Saving
  *
@@ -42,7 +56,7 @@ import { OutlineStatusBar } from './outline-status-bar'
  * and on `⌘S` with a snapshot. The whole list goes up - an outline is tens
  * of blocks - and the server plans the fewest rows. Last-write-wins with a
  * conflict banner, as the Script. One save in flight at a time; a change
- * that lands during one queues another against the value *then*.
+ * that lands during one queues another against the document *then*.
  *
  * ## What the panel and the nav read from a save
  *
@@ -64,7 +78,6 @@ export type OutlineDraft = {
   readonly updatedAt: string
   readonly createdAt: string
   readonly nodes: readonly OutlineNode[]
-  readonly value: OutlineValue
   readonly labels: readonly MentionLabel[]
   readonly stats: OutlineStats
   readonly threads: readonly ThreadCard[]
@@ -106,27 +119,6 @@ const agoLabel = (state: SaveState, now: number): string => {
       return `saved ${String(Math.round(seconds / 60))}m ago`
     }
   }
-}
-
-const wordCountOf = (value: readonly TElement[], labelFor: (entity: MentionEntity, id: string) => string | undefined): number =>
-  value.reduce((total, element) => {
-    if (!isOutlineElement(element)) return total
-    const text = elementText(element, labelFor).trim()
-    return total + (text === '' ? 0 : text.split(/\s+/u).length)
-  }, 0)
-
-/** Beat id -> ordinal, and the last block's id, from the value. */
-const readValue = (value: readonly TElement[]): { readonly beatOrdinal: ReadonlyMap<string, number>; readonly lastBlockId: string | null; readonly beats: number; readonly acts: number } => {
-  const beatOrdinal = new Map<string, number>()
-  let acts = 0
-  let last: string | null = null
-  for (const element of value) {
-    if (!isOutlineElement(element)) continue
-    last = element.id
-    if (element.type === 'beat') beatOrdinal.set(element.id, beatOrdinal.size + 1)
-    if (element.type === 'h1') acts += 1
-  }
-  return { beatOrdinal, lastBlockId: last, beats: beatOrdinal.size, acts }
 }
 
 /** The nav's row this document feeds, updated in place after a save. */
@@ -184,14 +176,30 @@ export const OutlineWorkspace = ({
   const panel: SideTab = mounted ? session.sideTab : 'info'
 
   // ---------------------------------------------------------------------------
-  // Document state
+  // The editor, and what React is told about it
   // ---------------------------------------------------------------------------
 
-  const [value, setValue] = useState<readonly TElement[]>(() => (draft?.value ?? []).map((block) => ({ ...block })))
+  const [store] = useState<OutlineStore>(() =>
+    createOutlineStore(draft?.nodes ?? [], initialShape(draft?.nodes ?? [], draft?.stats.words ?? 0)),
+  )
+  const caret = useSlice(store.caret)
+  const shape = useSlice(store.shape)
+
+  // No document yet: one blank Body, minted on the client after mount so the
+  // server's markup (the static caret line) carries no id to disagree with.
+  const editable = unreadable === null
+  const [blank, setBlank] = useState<readonly OutlineNode[] | null>(null)
+  useEffect(() => {
+    if (draft === null && editable) setBlank([{ type: 'body', id: mintNodeId(), provenance: typed(), content: [] }])
+  }, [draft, editable])
+  const nodes = draft?.nodes ?? blank
+  /** The document being saved into; `null` until the first save of a new outline creates it. */
+  const documentIdRef = useRef<DocumentId | null>(draft === null ? null : (draft.documentId as DocumentId))
+  const [createdAt, setCreatedAt] = useState<string | null>(draft?.createdAt ?? null)
+
   const [saveState, setSaveState] = useState<SaveState>(draft === null ? { kind: 'new' } : { kind: 'saved', at: 0 })
   const [conflict, setConflict] = useState<SaveConflict | null>(null)
   const [defect, setDefect] = useState<string | null>(null)
-  const [caret, setCaret] = useState<OutlineCaret>({ blockId: null, type: null })
   const [now, setNow] = useState(0)
   useEffect(() => {
     setNow(Date.now())
@@ -205,14 +213,12 @@ export const OutlineWorkspace = ({
   }, [])
 
   const log = useMemo<IdentityLog>(() => newIdentityLog(), [])
-  const editorRef = useRef<PlateEditor | null>(null)
+  const editorRef = useRef<Editor | null>(null)
   const baseUpdatedAt = useRef(draft?.updatedAt ?? '')
   const baselineIds = useRef<readonly NodeId[]>((draft?.nodes ?? []).map((node) => node.id))
   const saveTimer = useRef<number | null>(null)
   const inFlight = useRef(false)
   const queued = useRef(false)
-  const valueRef = useRef(value)
-  valueRef.current = value
 
   const labels = draft?.labels ?? []
   const labelFor = useCallback(
@@ -221,22 +227,19 @@ export const OutlineWorkspace = ({
     [labels],
   )
 
-  const shape = useMemo(() => readValue(value), [value])
-  const words = useMemo(() => wordCountOf(value, labelFor), [labelFor, value])
-
   // ---------------------------------------------------------------------------
   // Saving
   // ---------------------------------------------------------------------------
 
   const save = useCallback(
     async (snapshot: boolean): Promise<void> => {
-      if (draft === null) return
+      const editor = editorRef.current
+      if (editor === null || !editable) return
       if (inFlight.current) {
         queued.current = true
         return
       }
-      const current = valueRef.current
-      const read = fromSlateValue(current)
+      const read = fromDoc(editor.state.doc)
       if (!read.ok) {
         const where = `block ${String(read.error.index + 1)}`
         const what =
@@ -255,13 +258,15 @@ export const OutlineWorkspace = ({
         const result = await saveOutline({
           projectId,
           episode,
-          documentId: draft.documentId,
+          documentId: documentIdRef.current,
           baseUpdatedAt: baseUpdatedAt.current,
           nodes: [...nodes],
           retirements: [...retirements],
           snapshot,
         })
         if (result.status === 'saved') {
+          documentIdRef.current = result.documentId
+          setCreatedAt((current) => current ?? result.createdAt)
           baseUpdatedAt.current = result.updatedAt
           baselineIds.current = ids
           setConflict(result.conflict)
@@ -282,7 +287,7 @@ export const OutlineWorkspace = ({
         void saveRef.current(false)
       }
     },
-    [draft, episode, log, projectId],
+    [editable, episode, log, projectId],
   )
   const saveRef = useRef(save)
   saveRef.current = save
@@ -295,13 +300,14 @@ export const OutlineWorkspace = ({
     }, AUTOSAVE_MS)
   }, [])
 
-  const onValueChange = useCallback(
-    (next: readonly TElement[]) => {
-      setValue(next)
-      setSaveState((state) => (state.kind === 'saving' ? state : { kind: 'dirty' }))
-      scheduleSave()
-    },
-    [scheduleSave],
+  // A change in the editor: mark dirty (without a render when already dirty) and schedule the save.
+  useEffect(
+    () =>
+      store.version.subscribe(() => {
+        setSaveState((state) => (state.kind === 'saving' || state.kind === 'dirty' ? state : { kind: 'dirty' }))
+        scheduleSave()
+      }),
+    [scheduleSave, store],
   )
 
   useEffect(() => {
@@ -344,34 +350,35 @@ export const OutlineWorkspace = ({
   const onCycleZoom = useCallback(() => {
     session.setZoom(session.zoom === 'fit' ? 1 : session.zoom === 1 ? 0.75 : 'fit')
   }, [session])
-  const commandRef = useRef<OutlineCommands | null>(null)
-  const setCaretType = useCallback((type: OutlineNodeType) => {
-    commandRef.current?.setCaretType(type)
+  const onEditor = useCallback((editor: Editor | null) => {
+    editorRef.current = editor
   }, [])
 
   const editorArea = useMemo(() => {
-    if (draft === null) return null
+    if (nodes === null) return editable ? <EmptyCaretLine /> : null
     return (
       <OutlineEditor
-        documentId={draft.documentId}
-        initialValue={draft.value}
-        labels={labels}
+        // `data-doc` names the document a copied block came from; a new outline has none yet, and
+        // the clipboard treats an unknown origin as foreign, which is the safe reading.
+        documentId={draft?.documentId ?? 'new'}
+        nodes={nodes}
+        store={store}
         log={log}
-        beatOrdinal={shape.beatOrdinal}
-        lastBlockId={shape.lastBlockId}
-        onValueChange={onValueChange}
-        onCaret={setCaret}
-        editorRef={editorRef}
-        commandRef={commandRef}
+        labelFor={labelFor}
+        onEditor={onEditor}
         autoFocus
+        fallback={<StaticOutline nodes={nodes} labelFor={labelFor} />}
       />
     )
-  }, [draft, labels, log, onValueChange, shape.beatOrdinal, shape.lastBlockId])
+    // The label book is a creation-time input; the outline offers no `@` combobox, so it never changes here.
+  }, [draft, editable, log, nodes, onEditor, store, labelFor])
+
+  const started = createdAt !== null
 
   const savedLabel = agoLabel(saveState, now)
 
   return (
-    <main data-route="outline" data-outline-state={outlineState} className="flex min-w-0 flex-1 flex-col overflow-hidden">
+    <main data-route="outline" data-outline-state={outlineState === 'empty' && started ? 'draft' : outlineState} className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <header data-outline-header data-mounted={mounted ? 'true' : 'false'} className="flex h-[46px] flex-none items-center gap-[12px] border-b border-line px-[14px]">
         <div className="flex min-w-0 items-baseline gap-[7px]">
           <h1 className="m-0 font-serif text-21 font-medium leading-none tracking-title">Outline</h1>
@@ -424,26 +431,21 @@ export const OutlineWorkspace = ({
 
       <div className="flex min-h-0 min-w-0 flex-1">
         <div data-editor-column className="relative flex min-w-0 flex-1 flex-col items-center overflow-auto px-0 pb-[48px] pt-[14px]">
-          {draft === null ? null : <BlockBar current={caret.type} onPick={setCaretType} disabled={false} />}
           <div style={{ zoom }} className="flex w-[816px] flex-none flex-col items-center">
             <div className="folio-prose-ruler">
               <div />
             </div>
-            {draft === null ? (
-              <EmptyOutline projectId={projectId} episode={episode} title={episodeTitle} />
-            ) : (
-              <div className="folio-prose-sheet" data-sheet>
-                <div className="relative flex flex-col gap-[6px] px-[96px]">
-                  <span className="folio-prose-dot" style={{ left: 74, top: 9 }} />
-                  <span className="font-serif text-34 leading-[1.1] tracking-[-.015em]" data-outline-title>
-                    {episodeTitle}
-                  </span>
-                  <span className="text-14 text-ink3">{dateLabel(draft.createdAt)}</span>
-                </div>
-                <div className="h-[34px]" />
-                {editorArea}
+            <div className="folio-prose-sheet" data-sheet {...(started ? {} : { 'data-empty-state': '' })}>
+              <div className="flex flex-col gap-[6px] px-[96px]">
+                <span className="font-serif text-34 leading-[1.1] tracking-[-.015em]" data-outline-title>
+                  {episodeTitle}
+                </span>
+                <span className="text-14 text-ink3">{createdAt === null ? 'no outline yet' : dateLabel(createdAt)}</span>
               </div>
-            )}
+              <div className="h-[34px]" />
+              {editorArea}
+              {started || !editable ? null : <EmptyOutlineNote />}
+            </div>
             <div className="flex w-[816px] flex-wrap gap-[16px] px-[2px] pt-[12px] font-sans text-10-5 text-ink3">
               <span>
                 <b className="font-mono font-bold text-ink2">/</b> insert a heading, quote or rule
@@ -463,8 +465,12 @@ export const OutlineWorkspace = ({
             project={project}
             tab={panel}
             onPickTab={session.setSideTab}
-            blockCount={value.length}
-            stats={draft === null ? { scenes: 0, words: 0, characters: 0, locations: 0, beats: 0, shots: 0, relations: 0 } : { ...draft.stats, words, beats: shape.beats }}
+            blockCount={shape.blockCount}
+            stats={
+              draft === null
+                ? { scenes: 0, words: shape.words, characters: 0, locations: 0, beats: shape.beats, shots: 0, relations: 0 }
+                : { ...draft.stats, words: shape.words, beats: shape.beats }
+            }
             threads={draft?.threads ?? []}
             history={draft?.history ?? []}
           />
@@ -472,9 +478,9 @@ export const OutlineWorkspace = ({
       </div>
 
       <OutlineStatusBar
-        blockCount={value.length}
+        blockCount={shape.blockCount}
         caretType={caret.type}
-        words={words}
+        words={shape.words}
         navOpen={navOpen}
         onToggleNav={onToggleNav}
         zoomLabel={zoomLabel}

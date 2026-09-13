@@ -87,8 +87,6 @@ export type JobId = Branded<'JobId'>
 export type ShotId = Branded<'ShotId'>
 /** One attempt at drawing a shot's frame. Links a shot to its job, and on failure to its refund. */
 export type GenerationId = Branded<'GenerationId'>
-/** An arc turn on a character record. Authored; see `characters.ts`. */
-export type ArcTurnId = Branded<'ArcTurnId'>
 /** A story thread on the Timeline. Authored; never a comment `ThreadId`. See `timeline.ts`. */
 export type StoryThreadId = Branded<'StoryThreadId'>
 /** A bible entry. Authored; `/bible/:entryId` is this UUID. See `bible.ts`. */
@@ -115,7 +113,6 @@ export const ledgerEntryId = (raw: string): LedgerEntryId => raw as LedgerEntryI
 export const jobId = (raw: string): JobId => raw as JobId
 export const shotId = (raw: string): ShotId => raw as ShotId
 export const generationId = (raw: string): GenerationId => raw as GenerationId
-export const arcTurnId = (raw: string): ArcTurnId => raw as ArcTurnId
 export const storyThreadId = (raw: string): StoryThreadId => raw as StoryThreadId
 export const bibleEntryId = (raw: string): BibleEntryId => raw as BibleEntryId
 export const bibleFactId = (raw: string): BibleFactId => raw as BibleFactId
@@ -158,7 +155,6 @@ export const LedgerEntryIdSchema = brandedUuid(ledgerEntryId)
 export const JobIdSchema = brandedUuid(jobId)
 export const ShotIdSchema = brandedUuid(shotId)
 export const GenerationIdSchema = brandedUuid(generationId)
-export const ArcTurnIdSchema = brandedUuid(arcTurnId)
 export const StoryThreadIdSchema = brandedUuid(storyThreadId)
 export const BibleEntryIdSchema = brandedUuid(bibleEntryId)
 export const BibleFactIdSchema = brandedUuid(bibleFactId)

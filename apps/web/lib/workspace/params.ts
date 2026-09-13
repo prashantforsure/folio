@@ -93,7 +93,7 @@ export const SUB_VIEW_SCHEMAS = {
   revisions: z.object({ view: first(['diff', 'history']) }),
   notes: z.object({ filter: first(['open', 'mine', 'resolved', 'all']) }),
   production: z.object({ view: first(['scene', 'episode']) }),
-  characters: z.object({ view: first(['profile', 'map', 'resolve']) }),
+  characters: z.object({ view: first(['overview', 'relationships', 'casting']) }),
   locations: z.object({ view: first(['record', 'breakdown', 'resolve']) }),
   timeline: z.object({ view: first(['story', 'chrono', 'continuity']) }),
   bible: z.object({ view: first(['entry', 'check', 'glossary']) }),

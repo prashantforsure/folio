@@ -7,7 +7,7 @@ import type {
 } from '@folio/script'
 import { z } from 'zod'
 
-import { CharacterGroupSchema } from './characters'
+import { CharacterColorSchema, CharacterGenderSchema } from './characters'
 import {
   ConfidenceSchema,
   InteriorExteriorSchema,
@@ -74,18 +74,13 @@ export const CharacterAuthoredSchema = z.object({
   bio: z.string().max(20_000).nullable(),
   notes: AuthoredNotesSchema,
   /** The profile the Characters route authors on top. `characters.ts` says what each is. */
-  group: CharacterGroupSchema,
-  role: z.string().max(200).nullable(),
+  color: CharacterColorSchema,
+  gender: CharacterGenderSchema.nullable(),
   age: z.string().max(40).nullable(),
-  wants: z.string().max(2_000).nullable(),
-  wantsSource: z.string().max(200).nullable(),
-  needs: z.string().max(2_000).nullable(),
-  needsSource: z.string().max(200).nullable(),
-  flaw: z.string().max(2_000).nullable(),
-  flawSource: z.string().max(200).nullable(),
-  voiceRules: z.array(z.string().min(1).max(500)),
-  /** Dialogue node ids the writer picked as key lines. Read back from the node. */
-  keyLines: z.array(NodeIdSchema),
+  role: z.string().max(200).nullable(),
+  appearance: z.string().max(4_000).nullable(),
+  /** The storage object key of the portrait. Never a URL: the URL is composed at read. */
+  portraitKey: z.string().max(500).nullable(),
   /** Set when the writer merged this record into another. The row is kept. */
   mergedInto: CharacterIdSchema.nullable(),
   createdAt: TimestampSchema,
