@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-import { supabaseForProxy } from './lib/auth/edge'
+import { isAuthUnreachable, supabaseForProxy } from './lib/auth/edge'
 
 /**
  * Token refresh, and the first of two route guards.
@@ -66,7 +66,12 @@ export const proxy = async (request: NextRequest): Promise<NextResponse> => {
   const supabase = supabaseForProxy(request, response)
 
   // getUser, not getSession: getSession trusts the cookie without verifying it.
-  const { data } = await supabase.auth.getUser()
+  const { data, error } = await supabase.auth.getUser()
+  // Could not reach the Auth server to check - not the same as checking and
+  // finding no session. Guessing "signed out" here turns a network blip into
+  // a redirect loop (see `isAuthUnreachable`), so this request is let through
+  // unjudged; `requireUser()` makes the real call from the Server Component.
+  if (isAuthUnreachable(error)) return response
   const signedIn = data.user !== null
   const path = request.nextUrl.pathname
 

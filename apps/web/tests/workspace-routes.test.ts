@@ -30,15 +30,13 @@ import {
  */
 
 describe('the route tree', () => {
-  it('is thirteen routes under the rulings on decisions 5, 6 and assets', () => {
+  it('is eleven routes under the rulings on decisions 5, 6 and assets', () => {
     expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
     expect(WORKSPACE_ROUTES).toEqual([
       'script',
       'outline',
       'storyboard',
       'scenes',
-      'revisions',
-      'notes',
       'production',
       'characters',
       'locations',
@@ -71,7 +69,7 @@ describe('the rail', () => {
     ])
   })
 
-  it('lights Writing for all six episode nav routes and itself for the rest', () => {
+  it('lights Writing for all four episode nav routes and itself for the rest', () => {
     for (const item of EPISODE_NAV) expect(railSectionOf(item.route)).toBe('writing')
     expect(railSectionOf('production')).toBe('production')
     expect(railSectionOf('bible')).toBe('bible')
@@ -79,14 +77,12 @@ describe('the rail', () => {
 })
 
 describe('the episode nav', () => {
-  it('is six rows with Storyboard above Scenes, and 238px', () => {
+  it('is four rows with Storyboard above Scenes, and 238px', () => {
     expect(EPISODE_NAV.map((item) => `${item.label} ${GLYPHS[item.glyph]}`)).toEqual([
       'Script ▤',
       'Outline ⋮',
       'Storyboard ▥',
       'Scenes ▢',
-      'Revisions ⇄',
-      'Notes ❝',
     ])
     expect(EPISODE_NAV_WIDTH).toBe(238)
   })
@@ -104,15 +100,13 @@ describe('the episode nav', () => {
 })
 
 describe('sub-view params', () => {
-  it('has a schema for every one of the thirteen', () => {
+  it('has a schema for every one of the eleven', () => {
     expect(Object.keys(SUB_VIEW_SCHEMAS).sort()).toEqual([...WORKSPACE_ROUTES].sort())
   })
 
   it('defaults each param to its first value', () => {
     expect(parseSubViews('storyboard', {})).toEqual({ ok: true, params: { view: 'board' } })
     expect(parseSubViews('scenes', {})).toEqual({ ok: true, params: { view: 'cards' } })
-    expect(parseSubViews('revisions', {})).toEqual({ ok: true, params: { view: 'diff' } })
-    expect(parseSubViews('notes', {})).toEqual({ ok: true, params: { filter: 'open' } })
     expect(parseSubViews('production', {})).toEqual({ ok: true, params: { view: 'scene' } })
     expect(parseSubViews('characters', {})).toEqual({ ok: true, params: { view: 'overview' } })
     expect(parseSubViews('locations', {})).toEqual({ ok: true, params: { view: 'record' } })
@@ -189,11 +183,11 @@ describe('hrefs', () => {
   const ep = episodeSlug('ep_002')
 
   it('writes the episode into an episodic URL and hides it in a collapsed one', () => {
-    expect(episodeRouteHref({ projectId: id, shape: 'episodic', episode: ep }, 'notes')).toBe(
-      `/app/project/${id}/ep_002/notes`,
+    expect(episodeRouteHref({ projectId: id, shape: 'episodic', episode: ep }, 'scenes')).toBe(
+      `/app/project/${id}/ep_002/scenes`,
     )
-    expect(episodeRouteHref({ projectId: id, shape: 'collapsed', episode: ep }, 'notes')).toBe(
-      `/app/project/${id}/notes`,
+    expect(episodeRouteHref({ projectId: id, shape: 'collapsed', episode: ep }, 'scenes')).toBe(
+      `/app/project/${id}/scenes`,
     )
     expect(episodeRouteHref({ projectId: id, shape: 'collapsed', episode: ep }, 'production')).toBe(
       `/app/project/${id}/production`,
@@ -209,19 +203,10 @@ describe('the meta convention', () => {
     acts: null,
     shots: null,
     scenes: 0,
-    draft: null,
-    openNotes: 0,
   }
 
   it('prints a new project as the brief specifies', () => {
-    expect(EPISODE_NAV.map((item) => navMeta(item.route, empty))).toEqual([
-      'empty',
-      '—',
-      '—',
-      '0',
-      '—',
-      '0',
-    ])
+    expect(EPISODE_NAV.map((item) => navMeta(item.route, empty))).toEqual(['empty', '—', '—', '0'])
   })
 
   it('prints a populated episode as the bundle does', () => {
@@ -230,16 +215,12 @@ describe('the meta convention', () => {
       acts: 3,
       shots: 38,
       scenes: 34,
-      draft: 5,
-      openNotes: 4,
     }
     expect(EPISODE_NAV.map((item) => navMeta(item.route, populated))).toEqual([
       '104pp',
       '3 acts',
       '38 shots',
       '34',
-      'Draft 5',
-      '4 open',
     ])
   })
 

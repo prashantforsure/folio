@@ -27,24 +27,26 @@ import { SearchTrigger } from './search-trigger'
  * ## Every value on this panel is read, none is written
  *
  *   episode board   `readEpisodeBoard`  - `episodes`, and `measurements.total_pages`
- *   the six metas `readEpisodeNavMeta` - see `@folio/contracts` `EpisodeNavMeta`
+ *   the four metas `readEpisodeNavMeta` - see `@folio/contracts` `EpisodeNavMeta`
  *                    for the table each field comes from
  *   scenes          `listEpisodeScenes` - `scene_derivations` with
  *                    `measurement_scenes.eighths`
  *
  * and each is printed through `lib/workspace/format.ts`, which owns the
  * `104pp` / `—` / `empty` / `0` convention. A new project is entirely empty
- * states, and that is what this renders for one: `empty`, `—`, `—`, `—`,
- * `0`, `—`, `0`, and the scenes group's copy.
+ * states, and that is what this renders for one: `empty`, `—`, `—`, `0`, and
+ * the scenes group's copy.
  *
- * ## Six rows, Storyboard above Scenes
+ * ## Four rows, Storyboard above Scenes
  *
  * `EPISODE_NAV` is the order and it deliberately differs from the rail. The
  * Script bundle draws six rows with no Beats row; the other episode bundles
  * drew a seventh, Beats, which was built and then removed
- * (`docs/build-decisions.md`, "Beats route removed"), so six it is. Where
- * bundles disagree on glyphs the brief and AGENTS.md's set are followed:
- * `⋮` Outline, `▥` Storyboard.
+ * (`docs/build-decisions.md`, "Beats route removed"). Revisions and Notes
+ * were built after that and cut in their turn (`docs/build-decisions.md`,
+ * "Notes and Revisions routes removed"), so four it is. Where bundles
+ * disagree on glyphs the brief and AGENTS.md's set are followed: `⋮` Outline,
+ * `▥` Storyboard.
  *
  * ## Film
  *

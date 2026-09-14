@@ -17,12 +17,12 @@ export type EpisodeNavRow = {
 }
 
 /**
- * The six rows. A Client Component only so it can read which route is
+ * The four rows. A Client Component only so it can read which route is
  * rendering below the `(writing)` layout; everything it prints - the label,
  * the glyph, the formatted meta, the href - arrives from the server as data.
  *
  * `useSelectedLayoutSegment()` from inside `(writing)/layout.tsx` is the
- * route name itself: `script`, `notes`, and so on. The selected row gets
+ * route name itself: `script`, `scenes`, and so on. The selected row gets
  * `aria-current="page"` and `globals.css` draws `--sel` behind it.
  */
 export const EpisodeNavRows = ({ rows }: { readonly rows: readonly EpisodeNavRow[] }) => {

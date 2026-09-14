@@ -22,10 +22,10 @@ import {
  *
  *   - the rail is eight items, in order, and its active state is both the
  *     2px bar at `left:-5px` and the `--sel` background;
- *   - Writing stays lit across all six episode routes, Notes and Revisions
- *     included, and Production lights its own item;
+ *   - Writing stays lit across all four episode routes, and Production
+ *     lights its own item;
  *   - the episode nav measures exactly 238px, in the order Script · Outline
- *     · Storyboard · Scenes · Revisions · Notes;
+ *     · Storyboard · Scenes;
  *   - every nav meta on a new episode prints the empty convention;
  *   - every sub-view param resolves to its first value, and a value that is
  *     not a view is a 404;
@@ -170,9 +170,9 @@ let seriesId = ''
 let filmId = ''
 const RUN = Date.now().toString(36)
 
-test('the contract is thirteen routes', () => {
+test('the contract is eleven routes', () => {
   expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
-  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'episode')).toHaveLength(7)
+  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'episode')).toHaveLength(5)
   expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'project')).toHaveLength(6)
 })
 
@@ -202,7 +202,7 @@ test('＋ adds a second episode to the series and the board lists both', async (
 })
 
 for (const theme of THEMES) {
-  test(`walks all thirteen routes of a series, ${theme} theme`, async ({ page, account }) => {
+  test(`walks all eleven routes of a series, ${theme} theme`, async ({ page, account }) => {
     await signIn(page, account)
     await page.goto(`/app/project/${seriesId}/ep_001/script`)
     await setTheme(page, theme)
@@ -245,7 +245,7 @@ for (const theme of THEMES) {
   })
 }
 
-test('Writing stays lit on all seven episode routes - Notes and Revisions included', async ({ page, account }) => {
+test('Writing stays lit on all five episode routes', async ({ page, account }) => {
   await signIn(page, account)
   for (const route of EPISODE_NAV_ORDER) {
     await page.goto(`/app/project/${seriesId}/ep_002/${route}`)
@@ -271,8 +271,8 @@ test('a film routes without an episode segment while still having one episode', 
   }
 
   // The episode-shaped URL for a film is redirected to the collapsed one.
-  await page.goto(`/app/project/${filmId}/ep_001/notes`)
-  await expect(page).toHaveURL(new RegExp(`/app/project/${filmId}/notes$`))
+  await page.goto(`/app/project/${filmId}/ep_001/scenes`)
+  await expect(page).toHaveURL(new RegExp(`/app/project/${filmId}/scenes$`))
   await page.goto(`/app/project/${filmId}/ep_001`)
   await expect(page).toHaveURL(new RegExp(`/app/project/${filmId}/script$`))
   await page.goto(`/app/project/${filmId}/production`)
@@ -281,8 +281,8 @@ test('a film routes without an episode segment while still having one episode', 
   await expectRail(page, 'production')
 
   // And the reverse: a collapsed URL on a series goes to its episode.
-  await page.goto(`/app/project/${seriesId}/notes`)
-  await expect(page).toHaveURL(new RegExp(`/app/project/${seriesId}/ep_00[12]/notes$`))
+  await page.goto(`/app/project/${seriesId}/scenes`)
+  await expect(page).toHaveURL(new RegExp(`/app/project/${seriesId}/ep_00[12]/scenes$`))
 })
 
 test('an episode id of `characters` is rejected, and so are the other bad segments', async ({ page, account }) => {
@@ -314,8 +314,8 @@ test('a sub-view that does not exist is a 404; one that does is read', async ({ 
 
 test('/app/project/:id lands on the last opened episode, else the first', async ({ page, account }) => {
   await signIn(page, account)
-  await page.goto(`/app/project/${seriesId}/ep_002/notes`)
-  await expect(page.locator('main[data-route="notes"]')).toBeVisible()
+  await page.goto(`/app/project/${seriesId}/ep_002/scenes`)
+  await expect(page.locator('main[data-route="scenes"]')).toBeVisible()
   // The cookie is written by a client effect after hydration, which on a cold
   // dev server lands well after `load`. Wait for the write, not for time.
   await expect

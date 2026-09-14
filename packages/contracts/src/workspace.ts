@@ -93,18 +93,17 @@ export type EpisodeBoardRow = z.infer<typeof EpisodeBoardRowSchema>
  *   `scenes`      `scene_derivations` where `presence = 'present'`, joined
  *                 through `nodes` to this episode's screenplay document.
  *                 Legitimately zero.
- *   `draft`       the highest `revisions.ordinal` for this episode, or `null`
- *                 when no revision has been cut.
- *   `openNotes`   `comment_threads` where `state = 'open'`, joined through the
- *                 anchor node to this episode's documents. Legitimately zero.
+ *
+ * `draft` and `openNotes` backed the Revisions and Notes nav rows and are
+ * gone with them (`docs/build-decisions.md`, "Notes and Revisions routes
+ * removed"). The `revisions` and `comment_threads` tables themselves are
+ * untouched - the Script route's right panel still reads both.
  */
 export const EpisodeNavMetaSchema = z.object({
   script: z.union([z.literal('absent'), z.object({ pages: z.int().min(0).nullable() })]),
   acts: z.int().min(0).nullable(),
   shots: z.int().min(0).nullable(),
   scenes: z.int().min(0),
-  draft: z.int().min(1).nullable(),
-  openNotes: z.int().min(0),
 })
 
 export type EpisodeNavMeta = z.infer<typeof EpisodeNavMetaSchema>

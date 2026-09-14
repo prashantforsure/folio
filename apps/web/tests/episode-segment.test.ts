@@ -88,9 +88,9 @@ describe('assertCreatableEpisodeSlug - the repository', () => {
 })
 
 describe('railSectionFromSegments', () => {
-  const WRITING = ['script', 'outline', 'storyboard', 'scenes', 'revisions', 'notes'] as const
+  const WRITING = ['script', 'outline', 'storyboard', 'scenes'] as const
 
-  it('lights Writing on all six episode routes - Notes and Revisions included', () => {
+  it('lights Writing on all four episode routes', () => {
     for (const route of WRITING) {
       expect(railSectionFromSegments(['ep_001', '(writing)', route])).toBe('writing')
       expect(railSectionFromSegments(['(film)', '(writing)', route])).toBe('writing')
@@ -118,8 +118,8 @@ describe('railSectionFromSegments', () => {
 
 describe('episodeSegmentFromSegments', () => {
   it('finds the episode in an episodic URL and nothing in a collapsed or project one', () => {
-    expect(episodeSegmentFromSegments(['ep_003', '(writing)', 'notes'])).toBe('ep_003')
-    expect(episodeSegmentFromSegments(['(film)', '(writing)', 'notes'])).toBeNull()
+    expect(episodeSegmentFromSegments(['ep_003', '(writing)', 'scenes'])).toBe('ep_003')
+    expect(episodeSegmentFromSegments(['(film)', '(writing)', 'scenes'])).toBeNull()
     expect(episodeSegmentFromSegments(['characters'])).toBeNull()
     expect(episodeSegmentFromSegments([])).toBeNull()
   })

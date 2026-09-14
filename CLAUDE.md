@@ -47,7 +47,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   `0000`–`0013` (forward-only, all applied to the dev Supabase project), project-scoped
   repositories. `packages/ui` — tokens as CSS custom properties plus five small components.
 - `apps/web` — auth, the home shell, the workspace chrome, and the built route bodies: Script,
-  Scenes, Revisions, Outline, Storyboard, Characters, Locations, Timeline, Bible. Each has an
+  Scenes, Outline, Storyboard, Characters, Locations, Timeline, Bible. Each has an
   `app/(app)/app/project/[projectId]/_<route>/` directory and a `lib/<route>/` with its actions.
   `lib/workspace/routes.ts` is the route tree. Other route bodies are unbuilt on purpose.
 - `apps/worker` — empty on purpose. Do not create `apps/sync/`.
@@ -58,6 +58,10 @@ Rulings that supersede AGENTS.md (details in `docs/build-decisions.md`):
 - Pagination is **six lines per inch** (ruled 2026-09-11; AGENTS.md still says twelve).
 - **There is no Beats route** — built, then cut 2026-09-12; do not rebuild it. A beat is still an
   outline `beat` block. The `beats` table was dropped in `0010`; `scenes.beats` stays, opaque.
+- **There is no Revisions or Notes route** — both built (Notes as an empty shell only), then cut
+  2026-09-14; do not rebuild either. The workspace is **eleven routes**, the episode nav **four
+  rows** (AGENTS.md still says thirteen and six). The `revisions` and `comment_threads` tables and
+  their `@folio/db` reads stay — the Script route's right panel reads both independently.
 - `fast-xml-parser` is approved and used in `apps/web` for FDX import.
 - **The Script route has no element type bar** (retired 2026-09-13 on the client's instruction; the
   bundle still draws one). `/` opens a slash menu over the eight types and `⌘1`–`⌘8` stay; do not

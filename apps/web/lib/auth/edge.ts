@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { AuthError, SupabaseClient } from '@supabase/supabase-js'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import type { NextRequest, NextResponse } from 'next/server'
 
 import { publicEnv } from '../env/public'
@@ -54,3 +55,19 @@ export const supabaseForProxy = (request: NextRequest, response: NextResponse): 
     },
   })
 }
+
+/**
+ * Whether `getUser()` failed to reach the Auth server, as opposed to reaching
+ * it and learning there is no session.
+ *
+ * `proxy.ts` is a redirect, not the security boundary (see its header), so on
+ * this kind of failure it must not guess "signed out": `getUser()` is called
+ * on every `/app/**` request, and a transient network blip would otherwise
+ * flip the verdict request to request - `/app` to `/sign-in` and back,
+ * forever, since the next hop's check can succeed while this one's didn't.
+ * That is exactly `ERR_TOO_MANY_REDIRECTS`, not a code path any project's
+ * data can trigger. `requireUser()` runs the same check again from the
+ * Server Component and is the real boundary either way.
+ */
+export const isAuthUnreachable = (error: AuthError | null): boolean =>
+  error !== null && isAuthRetryableFetchError(error)

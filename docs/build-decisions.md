@@ -2249,3 +2249,46 @@ in two prompt-free stages (the drops, then the adds - the CLI wanted a TTY to as
 and the columns confirmed by query. `characters-route.spec.ts` is rewritten to the new walk and
 **not yet run** - it needs the E2E account and a dev server; the upload leg additionally needs the
 bucket.
+
+## Notes and Revisions routes removed: two more cut, not deferred
+
+Asked directly, 2026-09-14: the `/revisions` and `/notes` routes are not needed right now. Cut, the
+same treatment "Beats route removed" got - not redesigned, not deferred, removed. The workspace is
+**eleven routes** now; the episode nav is **four rows**, Storyboard still above Scenes. AGENTS.md
+still says thirteen and six.
+
+### What went
+
+- Both routes in both shapes - `[episodeId]/(writing)/{revisions,notes}` and
+  `(film)/(writing)/{revisions,notes}` - `_revisions/`, `lib/revisions/`, the `revisions` and
+  `notes` rows of `SUB_VIEW_SCHEMAS`, `EPISODE_NAV_ROUTES`, `EPISODE_NAV` and `ROUTE_TITLE`, and
+  `EpisodeNavMeta.draft` / `.openNotes` with the queries in `readEpisodeNavMeta` that filled them.
+  `e2e/revisions-route.spec.ts`. Every count in `routes.ts`, `e2e/workspace-routes.ts`, the unit
+  tests and the E2E walk moved from thirteen/six to eleven/four.
+- Notes was an empty shell the whole time it existed - no backend, nothing lost. Revisions was
+  fully built (the "Revisions route phase" and "Script route, second pass" entries above): the
+  diff, lock and restore actions, the compare bar, the drafts list. All of it -
+  `lib/revisions/actions.ts`, `lib/revisions/server.ts`, `lib/revisions/result.ts`,
+  `_revisions/*` - is deleted with the route.
+
+### What stays
+
+- The `revisions` and `comment_threads` tables, their migrations, and every `@folio/db`
+  repository function over them (`listRevisions`, `cutRevision`, `lockRevision`, `readRevision`,
+  `previewNextRevision`, `listLockedPages`, `listOpenThreads`, ...) are untouched. The Script
+  route's right panel reads both independently of the deleted route - `lib/script/server.ts`'s own
+  `listRevisions`/`listOpenThreads` calls feed `panel/right-panel.tsx`'s Revision and Threads
+  sections - so cutting the routes did not touch that surface.
+- No migration drops `revisions` or `comment_threads`: migrations are forward-only and both tables
+  have a live reader. A later cleanup that wants the tables gone needs its own ruling and its own
+  migration.
+
+### Verified
+
+`pnpm typecheck` clean across the six packages; `pnpm lint` clean. `@folio/script` unaffected (489
+tests). `workspace-routes.test.ts` and `episode-segment.test.ts` under `--environment node` (34
+tests, the jsdom trap above still holds on local Node 22.5); the rest of `apps/web`'s suite run the
+same way to confirm nothing else regressed - the seven failures it shows (`project-card.test.tsx`,
+`shell-and-state.test.ts`, `workspace.test.tsx`) are the jsdom-only tests breaking under a
+node-forced environment, unrelated to this change and present before it. The E2E walk
+(`workspace.spec.ts`) is updated but **not run** - it needs the E2E account and a dev server.

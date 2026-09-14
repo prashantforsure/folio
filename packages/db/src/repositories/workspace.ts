@@ -6,17 +6,15 @@ import type {
   RailBadges,
 } from '@folio/contracts'
 import type { NodeId, ScriptFormat } from '@folio/script'
-import { and, asc, count, eq, isNotNull, max } from 'drizzle-orm'
+import { and, asc, count, eq, isNotNull } from 'drizzle-orm'
 
 import {
-  commentThreads,
   documents,
   episodes,
   measurementScenes,
   measurements,
   nodes,
   resolveRows,
-  revisions,
   sceneDerivations,
 } from '../schema'
 import { dbOf, scoped } from '../scope'
@@ -27,7 +25,7 @@ import { countAcceptedShots } from './storyboard'
 
 /**
  * What the workspace chrome reads: the rail's badges, the episode board, the
- * six nav metas and the scenes group.
+ * four nav metas and the scenes group.
  *
  * AGENTS.md, UI fidelity: badges are "live counts, never placeholders" and the
  * nav meta convention is "things that legitimately count to zero show `0`;
@@ -45,13 +43,13 @@ import { countAcceptedShots } from './storyboard'
  * so the episode board, the Script row and the scenes group cannot disagree
  * about which measurement they are reading.
  *
- * ## Scenes and notes are reached through the node, never stored per episode
+ * ## Scenes are reached through the node, never stored per episode
  *
- * `scene_derivations` and `comment_threads` carry no `episode_id`. They hang
- * off a node, the node belongs to a document, and the document belongs to an
- * episode. Every per-episode count here walks that chain rather than
- * denormalising an episode id onto the derived row, because the day a scene
- * moves between episodes is the day a copied column would be wrong.
+ * `scene_derivations` carries no `episode_id`. It hangs off a node, the node
+ * belongs to a document, and the document belongs to an episode. The scenes
+ * count here walks that chain rather than denormalising an episode id onto
+ * the derived row, because the day a scene moves between episodes is the day
+ * a copied column would be wrong.
  */
 
 const PAGE_MODE_FOR_COUNTS = 'paged' as const
@@ -160,13 +158,13 @@ export const readEpisodeBoard = async (
 }
 
 // ---------------------------------------------------------------------------
-// The six nav metas
+// The four nav metas
 // ---------------------------------------------------------------------------
 
 /**
- * The facts behind the episode nav's six rows.
+ * The facts behind the episode nav's four rows.
  *
- * Six small reads, issued together. Each is a plain builder query against
+ * Four small reads, issued together. Each is a plain builder query against
  * the table that owns the fact; the documents are read first because every
  * other count hangs off a document id.
  *
@@ -174,6 +172,10 @@ export const readEpisodeBoard = async (
  * screenplay, and `null` when it does not - there is no script to board, so
  * the row renders `—`; a script with no accepted shot yet is `0`. Proposals
  * the writer has not taken are not shots and are not counted.
+ *
+ * Used to be six: `draft` (`revisions.ordinal`) and `openNotes`
+ * (`comment_threads`) were dropped when the Revisions and Notes routes were
+ * cut (`docs/build-decisions.md`, "Notes and Revisions routes removed").
  */
 export const readEpisodeNavMeta = async (
   scope: ProjectScope,
@@ -197,7 +199,7 @@ export const readEpisodeNavMeta = async (
     return rows[0]?.n ?? 0
   }
 
-  const [pages, acts, scenes, draft, openNotes, shots] = await Promise.all([
+  const [pages, acts, scenes, shots] = await Promise.all([
     screenplay === null
       ? Promise.resolve(null)
       : db
@@ -230,25 +232,6 @@ export const readEpisodeNavMeta = async (
             ),
           )
           .then((rows) => rows[0]?.n ?? 0),
-    db
-      .select({ draft: max(revisions.ordinal) })
-      .from(revisions)
-      .where(scoped(scope, revisions, eq(revisions.episodeId, episodeId)))
-      .then((rows) => rows[0]?.draft ?? null),
-    db
-      .select({ n: count() })
-      .from(commentThreads)
-      .innerJoin(nodes, eq(nodes.id, commentThreads.anchorNodeId))
-      .innerJoin(documents, eq(documents.id, nodes.documentId))
-      .where(
-        scoped(
-          scope,
-          commentThreads,
-          eq(documents.episodeId, episodeId),
-          eq(commentThreads.state, 'open'),
-        ),
-      )
-      .then((rows) => rows[0]?.n ?? 0),
     screenplay === null ? Promise.resolve(null) : countAcceptedShots(scope, screenplay.id),
   ])
 
@@ -257,8 +240,6 @@ export const readEpisodeNavMeta = async (
     acts,
     shots,
     scenes,
-    draft,
-    openNotes,
   }
 }
 

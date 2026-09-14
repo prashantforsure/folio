@@ -23,20 +23,21 @@ export const countOrAbsent = (value: number | null, suffix = ''): string =>
   value === null ? ABSENT : `${String(value)}${suffix}`
 
 /**
- * The six episode nav metas, from the brief's table:
+ * The four episode nav metas, from the brief's table:
  *
  *   Script      `104pp` / `empty`     the script says `empty`
  *   Outline     `3 acts` / `—`        exists or not
  *   Storyboard  `38 shots` / `—`      exists or not
  *   Scenes      `34` / `0`            counts to zero
- *   Revisions   `Draft 5` / `—`       exists or not
- *   Notes       `4 open` / `0`        counts to zero
  *
  * One state the table does not name: a script that exists but has never been
  * measured. It is not `empty` - there is a script - and it has no page count,
  * which is a thing that either exists or does not, so it prints `—`. Flagged
  * in the phase report; the row is `countOrAbsent`, so the one that changes is
  * this comment.
+ *
+ * Revisions and Notes had rows here too, until both routes were cut
+ * (`docs/build-decisions.md`, "Notes and Revisions routes removed").
  */
 export const navMeta = (route: EpisodeNavRoute, meta: EpisodeNavMeta): string => {
   switch (route) {
@@ -50,10 +51,6 @@ export const navMeta = (route: EpisodeNavRoute, meta: EpisodeNavMeta): string =>
         : `${String(meta.shots)} ${meta.shots === 1 ? 'shot' : 'shots'}`
     case 'scenes':
       return count(meta.scenes)
-    case 'revisions':
-      return meta.draft === null ? ABSENT : `Draft ${String(meta.draft)}`
-    case 'notes':
-      return `${String(meta.openNotes)}${meta.openNotes === 0 ? '' : ' open'}`
   }
 }
 

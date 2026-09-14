@@ -4,7 +4,9 @@
  *
  * AGENTS.md, Validation: "The E2E smoke test walks all thirteen routes in
  * both themes and both states. It is not optional coverage - it is the thing
- * that catches a route shipped without its empty state."
+ * that catches a route shipped without its empty state." Eleven now - Notes
+ * and Revisions were built, then cut (`docs/build-decisions.md`, "Notes and
+ * Revisions routes removed").
  *
  * One row per route. `workspace.spec.ts` walks the rows; a later phase adds
  * to a row what its route must show - the empty-state copy, the populated
@@ -67,14 +69,7 @@ export const RAIL_LABELS: readonly string[] = [
   'Production',
 ]
 
-export const EPISODE_NAV_ORDER: readonly string[] = [
-  'script',
-  'outline',
-  'storyboard',
-  'scenes',
-  'revisions',
-  'notes',
-]
+export const EPISODE_NAV_ORDER: readonly string[] = ['script', 'outline', 'storyboard', 'scenes']
 
 export const EPISODE_NAV_WIDTH = 238
 
@@ -84,8 +79,6 @@ export const EMPTY_NAV_META: Readonly<Record<string, string>> = {
   outline: '—',
   storyboard: '—',
   scenes: '0',
-  revisions: '—',
-  notes: '0',
 }
 
 const nav = { kind: 'episode-nav', width: EPISODE_NAV_WIDTH } as const
@@ -95,8 +88,6 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
   { route: 'outline', scope: 'episode', rail: 'writing', title: 'Outline', defaults: {}, column: nav },
   { route: 'storyboard', scope: 'episode', rail: 'writing', title: 'Storyboard', defaults: { view: 'board' }, column: nav },
   { route: 'scenes', scope: 'episode', rail: 'writing', title: 'Scenes', defaults: { view: 'cards' }, column: nav },
-  { route: 'revisions', scope: 'episode', rail: 'writing', title: 'Revisions', defaults: { view: 'diff' }, column: nav },
-  { route: 'notes', scope: 'episode', rail: 'writing', title: 'Notes', defaults: { filter: 'open' }, column: nav },
   {
     route: 'production',
     scope: 'episode',
@@ -159,7 +150,10 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
   },
 ]
 
-/** Thirteen. Decision 5 episode-scoped production, decision 6 cut, assets reserved; Beats cut 2026-09-12. */
-export const WORKSPACE_ROUTE_COUNT = 13
+/**
+ * Eleven. Decision 5 episode-scoped production, decision 6 cut, assets
+ * reserved; Beats cut 2026-09-12; Revisions and Notes cut 2026-09-14.
+ */
+export const WORKSPACE_ROUTE_COUNT = 11
 
 export const THEMES = ['dark', 'light'] as const
