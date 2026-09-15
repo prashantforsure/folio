@@ -95,7 +95,6 @@ export const Rail = ({
   const badgeFor = (section: RailSection): number => {
     if (section === 'characters') return badges.characters
     if (section === 'locations') return badges.locations
-    if (section === 'bible') return badges.bible
     return 0
   }
 

@@ -8,8 +8,8 @@ type ColumnRoute = Exclude<WorkspaceRoute, EpisodeNavRoute | 'characters'>
 /**
  * The record-list / filter column a project route owns. The episode nav's
  * sibling, at the route's own width from the README's table: 256px for
- * Locations, 252px for Bible, 250px for Timeline, Research and Production.
- * Characters has none since its second pass - the card grid is the list.
+ * Locations, 250px for Timeline, Research and Production. Characters has
+ * none since its second pass - the card grid is the list.
  *
  * Header row as in every bundle: the project title in Newsreader 15px/500.
  * Entity routes carry the find input on a `--sheet` ground with a `⌕` glyph

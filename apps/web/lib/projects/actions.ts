@@ -20,8 +20,8 @@ import { workspaceHref } from './workspace'
  * The three mutations the shell routes make, and the gate each one enforces.
  *
  * AGENTS.md, Feature workflow 7: "Server action or route handler. Every gate
- * is enforced here - scope, allowlist, cost, bible status, research
- * readability, tenancy." For these three the gates are identity and
+ * is enforced here - scope, allowlist, cost, research readability, tenancy."
+ * For these three the gates are identity and
  * membership: `requireUser()` establishes who is acting, `readMembershipFor()`
  * establishes that they may act on this project, and only then is a
  * `ProjectScope` opened. `repositories/index.ts` is explicit that opening a

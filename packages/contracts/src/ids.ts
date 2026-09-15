@@ -89,16 +89,6 @@ export type ShotId = Branded<'ShotId'>
 export type GenerationId = Branded<'GenerationId'>
 /** A story thread on the Timeline. Authored; never a comment `ThreadId`. See `timeline.ts`. */
 export type StoryThreadId = Branded<'StoryThreadId'>
-/** A bible entry. Authored; `/bible/:entryId` is this UUID. See `bible.ts`. */
-export type BibleEntryId = Branded<'BibleEntryId'>
-/** One numbered fact on a bible entry. Authored. */
-export type BibleFactId = Branded<'BibleFactId'>
-/** An open question on a bible entry, with an author. Authored. */
-export type BibleQuestionId = Branded<'BibleQuestionId'>
-/** One ordered key/value field of the Pitch. Authored. */
-export type BiblePitchFieldId = Branded<'BiblePitchFieldId'>
-/** A glossary term. Authored; its use count is not. */
-export type BibleTermId = Branded<'BibleTermId'>
 /** A reel: a run of a scene's shots that renders as one clip. Authored; keyed to the heading node like a shot. See `production.ts`. */
 export type ReelId = Branded<'ReelId'>
 /** One attempt at rendering a reel's clip. Links a reel to its job, and on failure to its refund. */
@@ -118,11 +108,6 @@ export const jobId = (raw: string): JobId => raw as JobId
 export const shotId = (raw: string): ShotId => raw as ShotId
 export const generationId = (raw: string): GenerationId => raw as GenerationId
 export const storyThreadId = (raw: string): StoryThreadId => raw as StoryThreadId
-export const bibleEntryId = (raw: string): BibleEntryId => raw as BibleEntryId
-export const bibleFactId = (raw: string): BibleFactId => raw as BibleFactId
-export const bibleQuestionId = (raw: string): BibleQuestionId => raw as BibleQuestionId
-export const biblePitchFieldId = (raw: string): BiblePitchFieldId => raw as BiblePitchFieldId
-export const bibleTermId = (raw: string): BibleTermId => raw as BibleTermId
 export const reelId = (raw: string): ReelId => raw as ReelId
 export const reelRenderId = (raw: string): ReelRenderId => raw as ReelRenderId
 
@@ -162,11 +147,6 @@ export const JobIdSchema = brandedUuid(jobId)
 export const ShotIdSchema = brandedUuid(shotId)
 export const GenerationIdSchema = brandedUuid(generationId)
 export const StoryThreadIdSchema = brandedUuid(storyThreadId)
-export const BibleEntryIdSchema = brandedUuid(bibleEntryId)
-export const BibleFactIdSchema = brandedUuid(bibleFactId)
-export const BibleQuestionIdSchema = brandedUuid(bibleQuestionId)
-export const BiblePitchFieldIdSchema = brandedUuid(biblePitchFieldId)
-export const BibleTermIdSchema = brandedUuid(bibleTermId)
 export const ReelIdSchema = brandedUuid(reelId)
 export const ReelRenderIdSchema = brandedUuid(reelRenderId)
 
@@ -218,8 +198,11 @@ export const formatEpisodeSlug = (ordinal: number): EpisodeSlug =>
  *
  * AGENTS.md, Routing: "`:episodeId` shares a path position with the
  * project-scoped names. Validate every episode id against `characters`,
- * `locations`, `timeline`, `bible`, `research`, `insights`, `production`,
- * `settings`, `assets`" - quoted verbatim, in its order.
+ * `locations`, `timeline`, `research`, `insights`, `production`,
+ * `settings`, `assets`" - quoted verbatim, in its order. `bible` was in this
+ * list while the route existed; the Bible route was cut 2026-09-15
+ * (`docs/build-decisions.md`, "Bible route removed"), same treatment as
+ * `build`/`search` - not reserved once cut.
  *
  * `ep_NNN` cannot collide with any of them, which is the point of the shape.
  * The list is here rather than in the router because "do not rely on
@@ -229,7 +212,6 @@ export const RESERVED_PROJECT_SEGMENTS = [
   'characters',
   'locations',
   'timeline',
-  'bible',
   'research',
   'insights',
   'production',
@@ -260,7 +242,7 @@ export type EpisodeSegmentResult =
  * The one validator for a segment that claims to be an episode.
  *
  * AGENTS.md, Routing: "Validate every episode id against `characters`,
- * `locations`, `timeline`, `bible`, `research`, `insights`, `production`,
+ * `locations`, `timeline`, `research`, `insights`, `production`,
  * `settings`, `assets`, and keep ids to the `ep_NNN` shape. Static-first
  * precedence saves this tree by accident; do not rely on it."
  *

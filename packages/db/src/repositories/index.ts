@@ -23,8 +23,8 @@ import type { ProjectScope } from '../scope'
  * **They do not check whether the actor may see the project.** That is a
  * server-side gate and it belongs in the server action - AGENTS.md, Development
  * philosophy 5: "The server enforces; the client discloses", and Feature
- * workflow step 7: "Every gate is enforced here - scope, allowlist, cost, bible
- * status, research readability, tenancy."
+ * workflow step 7: "Every gate is enforced here - scope, allowlist, cost,
+ * research readability, tenancy."
  *
  * That is a deliberate and slightly uncomfortable line, so it is written down:
  * this layer guarantees that a query **cannot cross projects**, not that the
@@ -63,7 +63,6 @@ export * from './locations'
 export * from './storyboard'
 export * from './production'
 export * from './timeline'
-export * from './bible'
 export * from './entity-counts'
 export * from './credits'
 export * from './users'

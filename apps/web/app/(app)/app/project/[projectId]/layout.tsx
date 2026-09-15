@@ -18,10 +18,9 @@ import { Rail } from './_chrome/rail'
  *
  * `loadProject` is the membership gate and the project row, `cache()`d so the
  * layouts and page below share one read. The badges come from
- * `readRailBadges` - `resolve_rows` in state `open`, split by subject kind,
- * and the bible's honest zero - and are read on every render of the layout,
- * which is every navigation inside the project, so they are never staler
- * than the page beside them.
+ * `readRailBadges` - `resolve_rows` in state `open`, split by subject kind -
+ * and are read on every render of the layout, which is every navigation
+ * inside the project, so they are never staler than the page beside them.
  *
  * The rail needs an episode to link Writing and Production to when the URL
  * has none (a project route). That is the same "last opened, else first"

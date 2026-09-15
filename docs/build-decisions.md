@@ -2432,3 +2432,103 @@ ran`; unlock then `set`; the reel deleted with its shots detached, the shots del
 count back to zero; the balance ended at `48 + 60 - 12 = 96`. The `storyboard-route.spec.ts` walk
 was **not run** - no `E2E_EMAIL`/`E2E_PASSWORD` in the environment - so the Storyboard's frame
 read and lock are verified by the probe's `listSceneShotRows` call, not through the browser.
+
+## Bible route removed: the canon source nothing read, cut before the agent existed
+
+Asked directly, 2026-09-15: does the project need the Bible route. Ruled **cut entirely** - the
+same treatment Beats ("Beats route removed", above) and Notes/Revisions ("Notes and Revisions
+routes removed", above) got: not redesigned, not deferred, removed.
+
+### Why it did not earn its place
+
+Everything on the route was hand-typed: world rules, the Pitch, the glossary, and a conflict
+between a rule and a scene that the writer *recorded* through a picker and a note - there was
+never a model or a detector behind "check this against the bible". Outside its own files, the
+route's only programmatic reader anywhere in the app was the rail badge -
+`readRailBadges` (`packages/db/src/repositories/workspace.ts`) calling
+`countOpenCanonConflicts` (`bible.ts`). No agent, no context builder, no other route ever called
+`listCanonFacts`, `isReadableByLenses` or `isCheckedAgainstDraft`. The route's reason for
+existing in the brief - AGENTS.md's canon pre-flight and the `canon` context gate, both steps in
+a lifecycle the agent runs - has no agent and no context builder behind it, and the whole-app
+redesign the remaining route bodies (Research, Insights, Production) are waiting on has not
+landed either. A route whose authored data nothing reads is the Beats situation again: a second
+place to keep a fact that the app never checks.
+
+Unlike Revisions and Notes, nothing else was left reading the five tables once the badge query
+stopped calling into `bible.ts`, so - unlike those two - the tables are dropped outright here
+rather than kept orphaned.
+
+### What went
+
+- The route in both project-wide positions it had (`bible/page.tsx`, `bible/layout.tsx`,
+  `bible/[entryId]/page.tsx`), `_bible/` (eight components: nav, workspace shell, entry editor,
+  entry panel, canon check, glossary, empty state), `lib/bible/` (`actions.ts`, `server.ts`,
+  `figures.ts`, `result.ts`), `?view=entry | check | glossary` from `SUB_VIEW_SCHEMAS`, the
+  `bible` row of `PROJECT_ROUTES`, `ROUTE_TITLE`, `RAIL_SECTIONS`, `RAIL`, `CONTEXT_PANEL_WIDTH`
+  and `bibleEntryHref`. `packages/script/src/bible.ts` (the vocabularies, the two status
+  predicates, `openConflicts`, `liveCites`, `sceneOpenings`, `termUsage`) and its 16 tests,
+  `packages/contracts/src/bible.ts` (every edit schema and view type) and its five branded ids,
+  `packages/db/src/repositories/bible.ts` (27 functions) and `schema/bible.ts`. The `◈` glyph
+  (AGENTS.md's set is sixteen now), `bible` out of `RESERVED_PROJECT_SEGMENTS` - unreserved, the
+  `build`/`search` precedent, not merely undocumented. `apps/web/tests/bible-figures.test.ts` and
+  `e2e/bible-route.spec.ts` (six serial tests, ~6.4 minutes, the walk "Bible route phase" above
+  describes).
+- Two helpers whose only caller was the route, on the `writeBeatHeadline` precedent: `EpisodeBar`
+  (`packages/contracts/src/characters.ts`) and `perEpisodeBars`
+  (`apps/web/lib/characters/figures.ts`), which built the "cited by episode" bars; `listLocationNames`
+  (`packages/db/src/repositories/characters.ts`), which the entry view used beside its own
+  tables. `sceneRefOf`, `formatSceneRef`, `listSceneIndex`, `readProjectScreenplayNodes` and
+  `openThread` all have other callers and are untouched.
+- The third rail badge. `RailBadgesSchema` (`packages/contracts/src/workspace.ts`) is
+  `{ characters, locations }` now; `readRailBadges` is a single query again, not a
+  `Promise.all` of two.
+
+### What stays
+
+- `Route - Bible.dc.html` and its screenshot, in the design bundle, as the record of what was
+  drawn - the Beats precedent again.
+- AGENTS.md's agent-lifecycle lines naming the canon pre-flight and the bible context gate are
+  struck through, not deleted, with a note that there is no source for them any more: the design
+  intent stays legible for whoever builds the agent, without claiming the route still backs it.
+  The agent now has one context gate, the research `readable` toggle.
+- `e2e-bible@example.com`, the second E2E account the Bible phase minted because the shared
+  `e2e-script@example.com` password wasn't recorded - unused now; flagged below rather than
+  deleted from Supabase Auth in this change.
+
+### Migration `0015`
+
+`0015_drop_bible.sql`, generated through `db:generate` against the schema with `bible.ts` already
+removed - a drop-only diff, so unlike `0010`/`0011`/`0013` it did not need the `drizzle-kit/api`
+one-off script to dodge the rename-prompt TTY trap. Five `DROP TABLE ... CASCADE` (`bible_facts`,
+`bible_pitch_fields`, `bible_questions`, `bible_terms`, `bible_entries` - the three FKs onto
+`bible_entries` are what `CASCADE` catches, reported as three dependent objects when it ran) and
+three `DROP TYPE` (`bible_entry_kind`, `bible_entry_status`, `bible_section`). Nothing else -
+alone in its file, on the `0010_drop_beats` pattern, per AGENTS.md's "a migration that drops a
+column is asked for": the ruling above is the answer.
+
+### Verified
+
+`pnpm typecheck` and `pnpm lint` clean across the six packages, forced (`turbo run ... --force`).
+`@folio/script`: 473 tests (489 minus the bible suite's 16, the Windows EPERM forks-worker stack
+appearing after, as it always does). `workspace-routes.test.ts` and `episode-segment.test.ts`
+under `--environment node`: 34 tests. The rest of `apps/web`'s suite run the same way to confirm
+nothing else regressed: 9 failures across `project-card.test.tsx`, `shell-and-state.test.ts` and
+`workspace.test.tsx` are the jsdom-under-node trap this file has recorded twice before ("Notes
+and Revisions routes removed", above), present before this change and unrelated to it.
+`db:check` clean; `db:generate` reported no schema changes both before this change (confirming
+the concurrent Production session's `0014` base was clean) and after `0015` was applied.
+`0015` applied to the dev Supabase project; a direct query confirmed zero `bible*` tables and
+zero `bible*` types remain. The E2E walk (`workspace.spec.ts`) is updated - ten routes, five
+project rows - but **not run**: no `E2E_EMAIL`/`E2E_PASSWORD` in the environment.
+
+### Flagged
+
+- **`e2e-bible@example.com` is now unused.** Its password was printed to a session, not recorded
+  in any file, and the account itself was not deleted here - the same caution the Bible phase
+  gave for the account it replaced. Delete it from Supabase Auth when convenient.
+- **The agent has one context gate left, not two.** If the agent and its context builder land
+  before a Bible-shaped route returns, "Two context gates" in AGENTS.md needs rewriting properly
+  rather than carrying a struck-through line indefinitely.
+- A second session had `0014` (Production backend) in flight and committed it mid-way through
+  this change (`6ed67e6`, "production backend"). `db:generate` was re-checked for a clean base
+  immediately before and after `0015` to confirm the two changes did not collide; they did not.

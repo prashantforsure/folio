@@ -39,8 +39,10 @@
  *   - **Research sources, props, lenses.** Real entities, sketched in the
  *     design handoff's Appendix A, and out of scope so far - each brief names
  *     its tables and these are not among them. Story threads were on this
- *     list until the Timeline phase and bible entries until the Bible phase;
- *     `timeline.ts` and `bible.ts` are what they are.
+ *     list until the Timeline phase; `timeline.ts` says what they are now.
+ *     Bible entries were on it too, until the Bible phase, then off it again
+ *     when the route was cut (`docs/build-decisions.md`, "Bible route
+ *     removed") - there is no `bible.ts` here any more.
  *   - **Jobs and generations** were on this list until the Storyboard phase,
  *     reels and renders until the Production phase; `storyboard.ts` and
  *     `production.ts` say what each now is. The ledger still carries `jobId`
@@ -58,11 +60,6 @@ export type { Equals, Extends } from './equality'
 export { assertExact } from './equality'
 
 export type {
-  BibleEntryId,
-  BibleFactId,
-  BiblePitchFieldId,
-  BibleQuestionId,
-  BibleTermId,
   EpisodeId,
   EpisodeSegmentResult,
   EpisodeSlug,
@@ -84,11 +81,6 @@ export type {
   VersionId,
 } from './ids'
 export {
-  BibleEntryIdSchema,
-  BibleFactIdSchema,
-  BiblePitchFieldIdSchema,
-  BibleQuestionIdSchema,
-  BibleTermIdSchema,
   CharacterIdSchema,
   DocumentIdSchema,
   EPISODE_SLUG_PATTERN,
@@ -113,11 +105,6 @@ export {
   ThreadIdSchema,
   UserIdSchema,
   VersionIdSchema,
-  bibleEntryId,
-  bibleFactId,
-  biblePitchFieldId,
-  bibleQuestionId,
-  bibleTermId,
   episodeId,
   episodeSlug,
   formatEpisodeSlug,
@@ -295,7 +282,6 @@ export type {
   CharacterProfile,
   CharacterProfileEdit,
   CueVariantRow,
-  EpisodeBar,
   MapColumn,
   NewCharacter,
   PortraitType,
@@ -469,34 +455,3 @@ export type {
   StructureResolveProposal,
 } from './locations'
 export { ArcNoteEditSchema, LocationEditSchema, ParentEditSchema } from './locations'
-
-export type {
-  BibleConflictEdit,
-  BibleCounts,
-  BibleEntryCreate,
-  BibleEntryEdit,
-  BibleEntryLinks,
-  BibleEntryView,
-  BibleFactEdit,
-  BibleFactRow,
-  BibleNavEntry,
-  BiblePitchFieldEdit,
-  BiblePitchFieldRow,
-  BibleQuestionEdit,
-  BibleQuestionRow,
-  BibleTermEdit,
-  CanonConflictRow,
-  GlossaryRow,
-} from './bible'
-export {
-  BibleConflictEditSchema,
-  BibleEntryCreateSchema,
-  BibleEntryEditSchema,
-  BibleEntryKindSchema,
-  BibleEntryStatusSchema,
-  BibleFactEditSchema,
-  BiblePitchFieldEditSchema,
-  BibleQuestionEditSchema,
-  BibleSectionSchema,
-  BibleTermEditSchema,
-} from './bible'

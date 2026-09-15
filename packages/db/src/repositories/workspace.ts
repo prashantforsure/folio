@@ -19,7 +19,6 @@ import {
 } from '../schema'
 import { dbOf, scoped } from '../scope'
 import type { ProjectScope } from '../scope'
-import { countOpenCanonConflicts } from './bible'
 import { toEpisode } from './projects'
 import { countAcceptedShots } from './storyboard'
 
@@ -94,11 +93,10 @@ const screenplayPages = async (
 // ---------------------------------------------------------------------------
 
 /**
- * Characters = unresolved cues · Locations = unmatched sluglines · Bible =
- * open canon conflicts.
+ * Characters = unresolved cues · Locations = unmatched sluglines.
  *
- * The first two are `resolve_rows` in state `open` **with a proposal**, split
- * by subject kind. The queue is rows, not a computed view (AGENTS.md, Entity
+ * Both are `resolve_rows` in state `open` **with a proposal**, split by
+ * subject kind. The queue is rows, not a computed view (AGENTS.md, Entity
  * identity), and an open row is by definition something in the script that
  * points at no record - which is what "unresolved" and "unmatched" mean. An
  * open row *without* a proposal is one the writer has already decided: every
@@ -106,32 +104,20 @@ const screenplayPages = async (
  * draws. The spec makes the badge "its pending count", and a walk-on is not
  * pending - it is answered, and `derive` keeps it answered.
  *
- * **`bible` is the open canon conflicts** - facts of `canon` entries carrying
- * a recorded conflict whose scene is still present in the derived cache
- * (`bible.ts`, `countOpenCanonConflicts`; the same three conditions
- * `@folio/script`'s `openConflicts` applies). Until the Bible phase this was
- * the constant `0`, "the count of an empty set, written out as one" - there
- * was no bible table. Now it is a query like the two above, and the badge
- * changed without the chrome knowing, as that note promised.
- *
- * The two reads run **in parallel**: over the transaction pooler each
- * statement is two round trips (`../client.ts`), and this runs on every
- * workspace render, so the second must not wait on the first.
+ * A third badge, `bible` = open canon conflicts, existed while the Bible
+ * route did (`docs/build-decisions.md`, "Bible route removed") - cut
+ * 2026-09-15 along with `bible.ts`'s `countOpenCanonConflicts`.
  */
 export const readRailBadges = async (scope: ProjectScope): Promise<RailBadges> => {
-  const [rows, bible] = await Promise.all([
-    dbOf(scope)
-      .select({ kind: resolveRows.subjectKind, n: count() })
-      .from(resolveRows)
-      .where(scoped(scope, resolveRows, eq(resolveRows.state, 'open'), isNotNull(resolveRows.proposalTarget)))
-      .groupBy(resolveRows.subjectKind),
-    countOpenCanonConflicts(scope),
-  ])
+  const rows = await dbOf(scope)
+    .select({ kind: resolveRows.subjectKind, n: count() })
+    .from(resolveRows)
+    .where(scoped(scope, resolveRows, eq(resolveRows.state, 'open'), isNotNull(resolveRows.proposalTarget)))
+    .groupBy(resolveRows.subjectKind)
   const open = (kind: 'cue' | 'slugline'): number => rows.find((row) => row.kind === kind)?.n ?? 0
   return {
     characters: open('cue'),
     locations: open('slugline'),
-    bible,
   }
 }
 

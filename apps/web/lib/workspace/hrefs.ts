@@ -41,7 +41,6 @@ type ProjectPath = `/app/project/${string}`
 export type ProjectRoutePath = `${ProjectPath}/${ProjectRoute}`
 export type CharacterPath = `${ProjectPath}/characters/${string}`
 export type LocationPath = `${ProjectPath}/locations/${string}`
-export type BibleEntryPath = `${ProjectPath}/bible/${string}`
 type CollapsedEpisodePath = `${ProjectPath}/${EpisodeRoute}`
 type EpisodicEpisodePath = `${ProjectPath}/${string}/${EpisodeRoute}`
 
@@ -82,12 +81,3 @@ export const episodeRouteHref = (address: EpisodeAddress, route: EpisodeRoute): 
  */
 export const locationHref = (projectId: ProjectId, locationId: string): LocationPath =>
   `/app/project/${projectId}/locations/${locationId}`
-
-/**
- * One bible entry: `/bible/:entryId`, as the spec writes it beside `/bible`.
- * The entry's UUID - an entry is authored, retitled freely, and its cites
- * and conflicts point at it by id - so the URL survives every retitle and
- * there is no slug to mint or to go stale.
- */
-export const bibleEntryHref = (projectId: ProjectId, entryId: string): BibleEntryPath =>
-  `/app/project/${projectId}/bible/${entryId}`

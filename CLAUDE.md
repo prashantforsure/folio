@@ -42,12 +42,12 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 
 - `packages/script` — the pure core, done, no dependencies: node model, operations, Fountain both
   ways, FDX import/export, derivation, pagination, the draft diff, and one read module per
-  derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `bible.ts`, `rename.ts`).
+  derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `rename.ts`).
 - `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, migrations
-  `0000`–`0014` (forward-only, all applied to the dev Supabase project), project-scoped
+  `0000`–`0015` (forward-only, all applied to the dev Supabase project), project-scoped
   repositories. `packages/ui` — tokens as CSS custom properties plus five small components.
 - `apps/web` — auth, the home shell, the workspace chrome, and the built route bodies: Script,
-  Outline, Storyboard, Scenes, Characters, Locations, Timeline, Bible — eight of the eleven
+  Outline, Storyboard, Scenes, Characters, Locations, Timeline — seven of the ten
   routes (AGENTS.md, Architecture). Each has an `app/(app)/app/project/[projectId]/_<route>/`
   directory and a `lib/<route>/` with its actions. `lib/workspace/routes.ts` is the route tree.
   Research, Insights, Production and the `/settings` stub have no route body yet. Production
@@ -75,6 +75,9 @@ Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
 - **`beats`, `revisions` and `comment_threads` are tables with no route above them** (AGENTS.md,
   Constraints — all three routes were built, then cut). `beats` was dropped in migration `0010`;
   `revisions` and `comment_threads` stay, and the Script route's right panel reads both directly.
+  Bible was a fourth cut route, but unlike these its five tables had no other reader once the
+  rail badge query stopped calling into them — `0015` drops them outright rather than orphaning
+  them ("Bible route removed" in `docs/build-decisions.md`).
 
 **Nothing needs a live database** to typecheck, lint, build or unit-test. The signed-in E2E
 walks (`apps/web/e2e/*-route.spec.ts`) need `E2E_EMAIL`/`E2E_PASSWORD` and skip without them;

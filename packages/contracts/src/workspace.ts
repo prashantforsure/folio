@@ -23,28 +23,24 @@ import { EpisodeSchema } from './tenancy'
  */
 
 // ---------------------------------------------------------------------------
-// The rail's three badges
+// The rail's two badges
 // ---------------------------------------------------------------------------
 
 /**
- * Characters = unresolved cues · Locations = unmatched sluglines · Bible =
- * open canon conflicts.
+ * Characters = unresolved cues · Locations = unmatched sluglines.
  *
  *   `characters`  `resolve_rows` where `subject_kind = 'cue'` and
  *                 `state = 'open'`. The resolve queue is rows, and an open row
  *                 is a cue pointing at no record.
  *   `locations`   `resolve_rows` where `subject_kind = 'slugline'` and
  *                 `state = 'open'`.
- *   `bible`       `bible_facts` of `canon` entries carrying a recorded conflict
- *                 whose scene is present - open canon conflicts, the three
- *                 conditions `@folio/script`'s `openConflicts` states. Was
- *                 the constant `0` until the Bible phase, when there was no
- *                 table; the field did not change, the repository did.
+ *
+ * A third badge, Bible = open canon conflicts, existed while the Bible route
+ * did (`docs/build-decisions.md`, "Bible route removed") - cut 2026-09-15.
  */
 export const RailBadgesSchema = z.object({
   characters: z.int().min(0),
   locations: z.int().min(0),
-  bible: z.int().min(0),
 })
 
 export type RailBadges = z.infer<typeof RailBadgesSchema>

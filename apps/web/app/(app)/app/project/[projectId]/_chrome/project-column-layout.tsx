@@ -11,15 +11,14 @@ import { ContextColumn } from './context-column'
  */
 const FIND: Partial<Record<ProjectRoute, string>> = {
   locations: 'Find a location or slugline',
-  bible: 'Search the bible',
   research: 'Search sources and clips',
 }
 
 /**
- * A project route's column beside its page. Locations, Bible and Research
- * get a record list column; Timeline gets its filter column; Characters
- * has none since its second pass. Each route's `layout.tsx` is one line
- * naming itself here.
+ * A project route's column beside its page. Locations and Research get a
+ * record list column; Timeline gets its filter column; Characters has none
+ * since its second pass. Each route's `layout.tsx` is one line naming itself
+ * here.
  */
 export const ProjectColumnLayout = async ({
   route,

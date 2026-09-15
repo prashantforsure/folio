@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sans:"Geist",-apple-system,"Segoe UI",system-ui,sans-serif;
+  --mono:"Geist Mono",ui-monospace,monospace;
+  --bg:#0a0a0c; --sunk:#08080a;
+  --s1:rgba(255,255,255,.035); --s2:rgba(255,255,255,.055); --s3:rgba(255,255,255,.085);
+  --line:rgba(255,255,255,.085); --line2:rgba(255,255,255,.05);
+  --ink:#f3f2ef; --ink2:rgba(243,242,239,.62); --ink3:rgba(243,242,239,.36);
+  --hover:rgba(255,255,255,.06);
+  --accent:oklch(0.72 0.12 245); --accent-bg:oklch(0.72 0.12 245 / .16);
+  --ok:oklch(0.76 0.10 150); --warn:oklch(0.80 0.11 75); --live:oklch(0.72 0.14 40);
+  --glow-cool:oklch(0.55 0.16 250 / .20); --glow-warm:oklch(0.62 0.10 62 / .13);
+  --solid:#f3f2ef; --solid-ink:#0d0d10; --caret:oklch(0.80 0.14 70);
+  --script:rgba(243,242,239,.74);
+  --shade:rgba(0,0,0,.5);
+}
+[data-theme="light"]{
+  --bg:#f7f6f3; --sunk:#f2f0ec;
+  --s1:rgba(20,18,14,.035); --s2:rgba(20,18,14,.055); --s3:rgba(20,18,14,.085);
+  --line:rgba(20,18,14,.11); --line2:rgba(20,18,14,.06);
+  --ink:#16151a; --ink2:rgba(22,21,26,.64); --ink3:rgba(22,21,26,.40);
+  --hover:rgba(20,18,14,.05);
+  --accent:oklch(0.52 0.15 250); --accent-bg:oklch(0.52 0.15 250 / .10);
+  --ok:oklch(0.52 0.12 150); --warn:oklch(0.60 0.12 75); --live:oklch(0.58 0.16 40);
+  --glow-cool:oklch(0.65 0.14 250 / .10); --glow-warm:oklch(0.72 0.10 62 / .10);
+  --solid:#16151a; --solid-ink:#f7f6f3; --caret:oklch(0.62 0.16 60);
+  --script:rgba(22,21,26,.80);
+  --shade:rgba(20,18,14,.18);
+}
+*{box-sizing:border-box;scrollbar-color:var(--s3) transparent;scrollbar-width:thin}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .14s,color .14s,border-color .14s,opacity .14s}
+::selection{background:var(--accent-bg)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--s3);border-radius:10px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:var(--ink3);background-clip:padding-box}
+::-webkit-scrollbar-corner{background:transparent}
+@keyframes orbdrift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(-4px,4px) scale(1.03)}100%{transform:translate(0,0) scale(1)}}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="position:relative;height:100vh;display:flex;background:var(--bg);color:var(--ink);overflow:hidden">
+
+  <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(900px 620px at 88% -8%,var(--glow-cool),transparent 70%),radial-gradient(1100px 700px at 42% 108%,var(--glow-warm),transparent 72%)"></div>
+
+  <!-- ── RAIL ── -->
+  <div style="position:relative;z-index:2;width:56px;flex:none;display:flex;flex-direction:column;align-items:center;padding:10px 0 10px;gap:2px">
+    <button onClick="{{ toggleNav }}" title="Toggle sidebar" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:34px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:10px;cursor:pointer;color:var(--ink2);margin-bottom:8px">
+      <svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 5h12M3 9h12M3 13h12"></path></svg>
+    </button>
+
+    <button title="Writing" style-hover="background:var(--s3)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:var(--s2);border:none;border-radius:11px;cursor:pointer;color:var(--ink)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="2.8" width="11" height="14.4" rx="1.8"></rect><path d="M7.4 7h5.2M7.4 10h5.2M7.4 13h3"></path></svg>
+    </button>
+    <button onClick="{{ openChars }}" title="Characters" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:{{ charsBg }};border:none;border-radius:11px;cursor:pointer;color:{{ charsInk }}">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><circle cx="10" cy="7.4" r="2.9"></circle><path d="M4.4 16.2c.9-2.7 3-4.1 5.6-4.1s4.7 1.4 5.6 4.1"></path></svg>
+    </button>
+    <button title="Locations" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><circle cx="10" cy="8" r="2.4"></circle><path d="M10 17c3.2-3.8 4.8-6.4 4.8-8.4A4.8 4.8 0 0 0 5.2 8.6c0 2 1.6 4.6 4.8 8.4z"></path></svg>
+    </button>
+    <button title="Timeline" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><path d="M3.6 6h12.8M3.6 10h8.4M3.6 14h5.2"></path></svg>
+    </button>
+    <button title="Research" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35"><rect x="3.6" y="3.6" width="5.6" height="5.6" rx="1.3"></rect><rect x="10.8" y="3.6" width="5.6" height="5.6" rx="1.3"></rect><rect x="3.6" y="10.8" width="5.6" height="5.6" rx="1.3"></rect><rect x="10.8" y="10.8" width="5.6" height="5.6" rx="1.3"></rect></svg>
+    </button>
+    <button title="Production" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"><rect x="3.4" y="3.4" width="13.2" height="13.2" rx="2.4"></rect><path d="M8.4 7.6l4.2 2.4-4.2 2.4z"></path></svg>
+    </button>
+
+    <div style="flex:1"></div>
+
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3);font-size:14px">{{ themeIcon }}</button>
+    <button title="Help" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><circle cx="10" cy="10" r="6.6"></circle><path d="M8.2 8.1a1.9 1.9 0 1 1 2.5 1.8c-.5.2-.7.6-.7 1.1v.3"></path><path d="M10 13.6v.2"></path></svg>
+    </button>
+  </div>
+
+  <!-- ── SIDEBAR ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="position:relative;z-index:2;width:236px;flex:none;display:flex;flex-direction:column;padding:10px 10px 10px 0;min-height:0">
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:var(--s1);border:1px solid var(--line2);border-radius:16px;overflow:hidden;backdrop-filter:blur(12px)">
+
+      <div style="flex:none;display:flex;align-items:center;gap:6px;padding:14px 12px 10px">
+        <span style="flex:1;min-width:0;font-size:14px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Not Magic, Just This</span>
+        <button title="New scene" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:24px;height:24px;display:grid;place-items:center;background:transparent;border:none;border-radius:8px;cursor:pointer;color:var(--ink3);font-size:15px;line-height:1">+</button>
+      </div>
+
+      <nav style="flex:1;min-height:0;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:18px">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ epNav }}" as="n" hint-placeholder-count="3">
+            <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;background:{{ n.bg }};border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:{{ n.w }};color:{{ n.ink }};text-align:left">
+              <span style="flex:1;min-width:0">{{ n.name }}</span>
+              <span style="font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ n.meta }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <div style="display:flex;align-items:center;padding:0 10px 6px">
+            <span style="flex:1;font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">Scenes</span>
+            <span style="font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums">3</span>
+          </div>
+          <sc-for list="{{ scenes }}" as="s" hint-placeholder-count="3">
+            <button onClick="{{ s.select }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;background:{{ s.navBg }};border:none;border-radius:10px;cursor:pointer;text-align:left">
+              <span style="flex:none;width:6px;height:6px;border-radius:50%;background:{{ s.dot }}"></span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+                <span style="font-family:var(--mono);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ s.navInk }}">{{ s.heading }}</span>
+                <span style="font-size:10.5px;color:var(--ink3)">pg {{ s.page }} · {{ s.eighths }}</span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+      </nav>
+
+      <div style="flex:none;padding:10px 10px 12px">
+        <div style="display:flex;flex-direction:column;gap:7px;padding:11px 12px;background:var(--s1);border:1px solid var(--line2);border-radius:12px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-size:12px;color:var(--ink2)">Described</span>
+            <span style="font-size:13px;font-weight:500;font-variant-numeric:tabular-nums">{{ describedLabel }}</span>
+          </div>
+          <div style="height:4px;border-radius:3px;background:var(--s3);overflow:hidden"><div style="width:{{ describedPct }};height:100%;border-radius:3px;background:var(--accent)"></div></div>
+          <span style="font-size:11px;color:var(--ink3)">{{ describedNote }}</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="position:relative;z-index:2;flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+
+    <header style="position:relative;height:60px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px 0 4px">
+      <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;font-size:13px;overflow:hidden">
+        <span style="color:var(--ink3);white-space:nowrap">Not Magic, Just This</span>
+        <span style="color:var(--ink3)">/</span>
+        <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:transparent;border:none;border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink);white-space:nowrap">Episode 1
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="opacity:.5"><path d="M3 5l3 3 3-3"></path></svg>
+        </button>
+      </div>
+
+      <div style="flex:none;display:flex;align-items:center;gap:3px;padding:4px;background:var(--s1);border:1px solid var(--line2);border-radius:999px">
+        <button style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:7px;padding:7px 15px;background:var(--s2);border:none;border-radius:999px;cursor:pointer;font-size:13px;font-weight:500;color:var(--ink)">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" style="opacity:.75"><rect x="4" y="2.5" width="10" height="13" rx="1.6"></rect><path d="M6.6 6.5h4.8M6.6 9.5h4.8M6.6 12.5h2.8"></path></svg>Write</button>
+        <button style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:7px;padding:7px 15px;background:transparent;border:none;border-radius:999px;cursor:pointer;font-size:13px;font-weight:500;color:var(--ink2)">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round" style="opacity:.75"><rect x="2.5" y="4" width="13" height="10" rx="1.6"></rect><path d="M9 4v10"></path></svg>Storyboard</button>
+      </div>
+
+      <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:8px">
+        <div style="display:{{ presenceDisplay }};align-items:center">
+          <span title="You · Scene 01" style="width:26px;height:26px;border-radius:50%;background:oklch(0.55 0.13 300);color:#fff;font-size:10px;font-weight:600;display:grid;place-items:center;border:2px solid var(--bg)">PP</span>
+          <span title="Rukmini · idle 12m" style="width:26px;height:26px;border-radius:50%;background:oklch(0.60 0.10 200);color:#fff;font-size:10px;font-weight:600;display:grid;place-items:center;border:2px solid var(--bg);margin-left:-7px">RK</span>
+        </div>
+        <button title="Read-through" style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:34px;display:{{ readDisplay }};align-items:center;gap:8px;padding:0 12px;background:var(--s1);border:1px solid var(--line2);border-radius:999px;cursor:pointer;font-size:13px;color:var(--ink2)">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M3.5 2.4l5.6 3.3a.35.35 0 0 1 0 .6L3.5 9.6A.35.35 0 0 1 3 9.3V2.7a.35.35 0 0 1 .5-.3z"></path></svg>Read</button>
+        <button style-hover="opacity:.88" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:34px;padding:0 16px;background:var(--solid);color:var(--solid-ink);border:none;border-radius:999px;cursor:pointer;font-size:13px;font-weight:500">Share</button>
+        <button onClick="{{ toggleAI }}" title="Assistant" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:34px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:50%;cursor:pointer;padding:0">
+          <span style="width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 33% 28%,#e8f6ff 0%,#8fd4ff 22%,#2a7fd4 58%,#123a72 100%);box-shadow:0 0 14px oklch(0.65 0.16 245 / .55)"></span>
+        </button>
+      </div>
+    </header>
+
+    <div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column;background:var(--s1);border:1px solid var(--line2);border-radius:18px 0 0 0;overflow:hidden;backdrop-filter:blur(10px)">
+
+      <!-- toolbar -->
+      <div style="flex:none;display:flex;align-items:center;gap:10px;padding:12px 20px">
+        <div style="display:flex;align-items:center;gap:2px;padding:4px;background:var(--s1);border:1px solid var(--line2);border-radius:11px">
+          <button onClick="{{ goCards }}" title="Scene cards" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:34px;height:30px;display:grid;place-items:center;background:{{ vCardsBg }};border:none;border-radius:8px;cursor:pointer;color:{{ vCardsInk }}">
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="2.6" y="2.6" width="5.6" height="5.6" rx="1.3"></rect><rect x="9.8" y="2.6" width="5.6" height="5.6" rx="1.3"></rect><rect x="2.6" y="9.8" width="5.6" height="5.6" rx="1.3"></rect><rect x="9.8" y="9.8" width="5.6" height="5.6" rx="1.3"></rect></svg>
+          </button>
+          <button onClick="{{ goIndex }}" title="Index cards" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:34px;height:30px;display:grid;place-items:center;background:{{ vIndexBg }};border:none;border-radius:8px;cursor:pointer;color:{{ vIndexInk }}">
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="2.5" y="3" width="4.4" height="12" rx="1.2"></rect><rect x="8.4" y="3" width="4.4" height="12" rx="1.2"></rect></svg>
+          </button>
+          <button onClick="{{ goList }}" title="Scene list" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:34px;height:30px;display:grid;place-items:center;background:{{ vListBg }};border:none;border-radius:8px;cursor:pointer;color:{{ vListInk }}">
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 5h12M3 9h12M3 13h12"></path></svg>
+          </button>
+        </div>
+
+        <span style="font-size:12.5px;color:var(--ink3);white-space:nowrap">{{ totalLabel }}</span>
+
+        <div style="flex:1"></div>
+
+        <sc-if value="{{ isIndex }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:2px;padding:4px;background:var(--s1);border:1px solid var(--line2);border-radius:999px">
+            <sc-for list="{{ colorTabs }}" as="c" hint-placeholder-count="3">
+              <button onClick="{{ c.go }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="padding:6px 13px;background:{{ c.bg }};border:none;border-radius:999px;cursor:pointer;font-size:12.5px;color:{{ c.ink }};white-space:nowrap">{{ c.name }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:34px;display:flex;align-items:center;gap:7px;padding:0 13px;background:var(--s1);border:1px solid var(--line2);border-radius:10px;cursor:pointer;font-size:13px;color:var(--ink2);white-space:nowrap">All scenes
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="opacity:.6"><path d="M3 5l3 3 3-3"></path></svg>
+        </button>
+        <button title="Display options" style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:34px;height:34px;display:grid;place-items:center;background:var(--s1);border:1px solid var(--line2);border-radius:10px;cursor:pointer;color:var(--ink2)">
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 5.5h12M3 12.5h12"></path><circle cx="7" cy="5.5" r="1.9"></circle><circle cx="11.6" cy="12.5" r="1.9"></circle></svg>
+        </button>
+      </div>
+
+      <!-- ════ CARDS ════ -->
+      <sc-if value="{{ isCards }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;min-height:0;overflow-y:auto;padding:0 20px 24px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px">
+          <sc-for list="{{ scenes }}" as="s" hint-placeholder-count="3">
+            <div onClick="{{ s.select }}" style-hover="border-color:var(--line)" style="display:flex;flex-direction:column;gap:12px;padding:14px;background:var(--s1);border:1px solid {{ s.cardBorder }};border-radius:14px;cursor:pointer">
+
+              <div style="display:flex;align-items:flex-start;gap:10px">
+                <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+                  <span style="display:flex;align-items:center;gap:8px">
+                    <span style="flex:none;width:7px;height:7px;border-radius:50%;background:{{ s.dot }}"></span>
+                    <span style="font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)">Scene {{ s.no }}</span>
+                    <span style="font-size:11px;color:{{ s.statusInk }}">{{ s.status }}</span>
+                  </span>
+                  <span style="font-family:var(--mono);font-size:12.5px;text-transform:uppercase;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.heading }}</span>
+                </span>
+                <span style="flex:none;font-family:var(--mono);font-size:10.5px;color:var(--ink3);white-space:nowrap">pg {{ s.page }} · {{ s.eighths }}</span>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:3px;height:132px;padding:11px 12px;background:var(--sunk);border:1px solid var(--line2);border-radius:11px;overflow:hidden;position:relative">
+                <sc-for list="{{ s.preview }}" as="l" hint-placeholder-count="6">
+                  <span style="flex:none;font-size:11px;line-height:1.5;padding-left:{{ l.pad }};padding-right:{{ l.padR }};text-transform:{{ l.tt }};color:{{ l.ink }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.text }}</span>
+                </sc-for>
+                <span style="position:absolute;left:0;right:0;bottom:0;height:34px;background:linear-gradient(to bottom,transparent,var(--sunk))"></span>
+              </div>
+
+              <p style="margin:0;font-size:13px;line-height:1.5;color:{{ s.descInk }};display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ s.descOrEmpty }}</p>
+
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <sc-for list="{{ s.cast }}" as="c" hint-placeholder-count="2">
+                  <span style="padding:3px 9px;border-radius:999px;background:var(--accent-bg);font-size:11px;color:var(--accent);white-space:nowrap">{{ c }}</span>
+                </sc-for>
+                <span style="flex:1"></span>
+                <span style="font-family:var(--mono);font-size:10.5px;color:var(--ink3);white-space:nowrap">{{ s.metaLine }}</span>
+              </div>
+            </div>
+          </sc-for>
+
+          <button style-hover="background:var(--s1);color:var(--ink2)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="min-height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:transparent;border:1px dashed var(--line);border-radius:14px;cursor:pointer;font-size:13px;color:var(--ink3)">
+            <span style="font-size:18px;line-height:1">+</span>New scene
+          </button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ════ INDEX CARDS ════ -->
+      <sc-if value="{{ isIndex }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;min-width:0">
+        <div style="flex:none;display:flex;align-items:center;gap:14px;padding:0 20px 12px">
+          <sc-for list="{{ colorLegend }}" as="l" hint-placeholder-count="3">
+            <span style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink2);white-space:nowrap">
+              <span style="width:9px;height:9px;border-radius:3px;background:{{ l.color }}"></span>{{ l.name }}
+            </span>
+          </sc-for>
+        </div>
+        <div style="flex:1;min-height:0;overflow:auto;padding:0 20px 24px">
+          <div style="display:flex;gap:14px;min-width:min-content;height:100%;align-items:stretch">
+            <sc-for list="{{ actCols }}" as="a" hint-placeholder-count="3">
+              <div style="width:320px;flex:none;display:flex;flex-direction:column;min-height:0;background:var(--s1);border:1px solid var(--line2);border-radius:16px;overflow:hidden">
+                <div style="flex:none;display:flex;align-items:center;gap:9px;padding:14px 14px 10px">
+                  <span style="flex:1;min-width:0;font-size:14.5px;font-weight:500;letter-spacing:-.01em">{{ a.name }}</span>
+                  <span style="font-size:11.5px;color:var(--ink3);white-space:nowrap">{{ a.count }} · {{ a.eighths }}</span>
+                </div>
+                <div style="flex:1;min-height:0;overflow-y:auto;padding:4px 10px 6px;display:flex;flex-direction:column;gap:9px">
+                  <sc-if value="{{ a.hasCards }}" hint-placeholder-val="{{ true }}">
+                    <sc-for list="{{ a.cards }}" as="c" hint-placeholder-count="1">
+                      <div onClick="{{ c.select }}" style-hover="border-color:var(--line)" style="display:flex;flex-direction:column;background:var(--sunk);border:1px solid var(--line2);border-radius:12px;overflow:hidden;cursor:pointer">
+                        <span style="height:3px;background:{{ c.color }}"></span>
+                        <div style="display:flex;flex-direction:column;gap:8px;padding:12px">
+                          <div style="display:flex;align-items:baseline;gap:8px">
+                            <span style="flex:none;font-family:var(--mono);font-size:11px;color:var(--ink3)">{{ c.no }}</span>
+                            <span style="flex:1;min-width:0;font-family:var(--mono);font-size:12px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)">{{ c.heading }}</span>
+                          </div>
+                          <p style="margin:0;font-size:12.5px;line-height:1.55;color:{{ c.synInk }}">{{ c.synopsis }}</p>
+                          <div style="display:flex;align-items:center;gap:8px">
+                            <span style="font-size:11px;color:var(--ink3)">{{ c.tag }}</span>
+                            <span style="flex:1"></span>
+                            <span style="font-family:var(--mono);font-size:10.5px;color:var(--ink3)">pg {{ c.page }} · {{ c.eighths }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </sc-if>
+                  <sc-if value="{{ a.noCards }}" hint-placeholder-val="{{ false }}">
+                    <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:28px 14px">
+                      <span style="font-size:12.5px;color:var(--ink3)">No scenes in this act yet.</span>
+                    </div>
+                  </sc-if>
+                </div>
+                <div style="flex:none;padding:6px 10px 12px">
+                  <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:100%;display:flex;align-items:center;gap:8px;padding:10px 12px;background:transparent;border:none;border-radius:11px;cursor:pointer;font-size:13px;color:var(--ink3)">
+                    <span style="font-size:15px;line-height:1">+</span>New card
+                  </button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ════ LIST ════ -->
+      <sc-if value="{{ isList }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;overflow:auto;padding:0 20px 20px">
+        <div style="min-width:980px;background:var(--s1);border:1px solid var(--line2);border-radius:14px;overflow:hidden">
+          <div style="position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--sunk);border-bottom:1px solid var(--line2);font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">
+            <span style="width:40px;flex:none">#</span>
+            <span style="width:280px;flex:none">Heading</span>
+            <span style="width:110px;flex:none">Day / Night</span>
+            <span style="width:60px;flex:none">Page</span>
+            <span style="width:64px;flex:none">Length</span>
+            <span style="width:130px;flex:none">Cast</span>
+            <span style="flex:1;min-width:0">Description</span>
+          </div>
+          <sc-for list="{{ scenes }}" as="s" hint-placeholder-count="3">
+            <div onClick="{{ s.select }}" style-hover="background:var(--s1)" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:{{ s.rowBg }};border-bottom:1px solid var(--line2);cursor:pointer">
+              <span style="width:40px;flex:none;display:flex;align-items:center;gap:7px">
+                <span style="width:6px;height:6px;flex:none;border-radius:50%;background:{{ s.dot }}"></span>
+                <span style="font-family:var(--mono);font-size:12px;color:var(--ink2)">{{ s.no }}</span>
+              </span>
+              <span style="width:280px;flex:none;font-family:var(--mono);font-size:12.5px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)">{{ s.heading }}</span>
+              <span style="width:110px;flex:none;font-size:13px;color:var(--ink2)">{{ s.dn }}</span>
+              <span style="width:60px;flex:none;font-family:var(--mono);font-size:12px;color:var(--ink2)">{{ s.page }}</span>
+              <span style="width:64px;flex:none;font-family:var(--mono);font-size:12px;color:var(--ink2)">{{ s.eighths }}</span>
+              <span style="width:130px;flex:none;display:flex;gap:5px;overflow:hidden">
+                <sc-for list="{{ s.cast }}" as="c" hint-placeholder-count="2">
+                  <span style="padding:2px 8px;border-radius:999px;background:var(--accent-bg);font-size:11px;color:var(--accent);white-space:nowrap">{{ c }}</span>
+                </sc-for>
+              </span>
+              <span style="flex:1;min-width:0;font-size:13px;line-height:1.5;color:{{ s.descInk }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.descOrEmpty }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+  </main>
+
+  <!-- ── ASSISTANT ── -->
+  <sc-if value="{{ aiOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="position:relative;z-index:3;width:400px;flex:none;display:flex;flex-direction:column;min-height:0;background:var(--sunk);border-left:1px solid var(--line2)">
+    <div style="flex:none;height:60px;display:flex;align-items:center;gap:8px;padding:0 12px 0 16px">
+      <span style="width:20px;height:20px;flex:none;border-radius:50%;background:radial-gradient(circle at 33% 28%,#e8f6ff 0%,#8fd4ff 22%,#2a7fd4 58%,#123a72 100%)"></span>
+      <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:transparent;border:none;border-radius:8px;cursor:pointer;font-size:13.5px;font-weight:500;color:var(--ink)">New chat
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="opacity:.5"><path d="M3 5l3 3 3-3"></path></svg>
+      </button>
+      <div style="flex:1"></div>
+      <button style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:5px;padding:6px 10px;background:transparent;border:none;border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--ink2)">+ New</button>
+      <button onClick="{{ toggleAI }}" title="Close" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:28px;height:28px;display:grid;place-items:center;background:transparent;border:none;border-radius:8px;cursor:pointer;color:var(--ink3)">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"></path></svg>
+      </button>
+    </div>
+
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px 28px">
+      <span style="width:124px;height:124px;border-radius:50%;background:radial-gradient(circle at 34% 26%,#f2fbff 0%,#a8e0ff 18%,#4b9fe0 48%,#1b4f92 76%,#0c2648 100%);box-shadow:0 0 90px oklch(0.62 0.17 245 / .45),0 0 26px oklch(0.70 0.14 245 / .35);animation:orbdrift 9s ease-in-out infinite"></span>
+      <div style="display:flex;flex-direction:column;gap:7px;text-align:center">
+        <span style="font-size:17px;font-weight:500;letter-spacing:-.01em">How can I help?</span>
+        <span style="font-size:13.5px;line-height:1.55;color:var(--ink2)">Ask about the scenes, or have me write a synopsis from the page.</span>
+      </div>
+    </div>
+
+    <div style="flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:0 20px 14px">
+      <sc-for list="{{ chips }}" as="c" hint-placeholder-count="4">
+        <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:9px;padding:8px 14px;background:var(--s1);border:1px solid var(--line2);border-radius:999px;cursor:pointer;font-size:13px;color:var(--ink2);white-space:nowrap">
+          <span style="width:7px;height:7px;flex:none;border-radius:2px;background:{{ c.dot }}"></span>{{ c.label }}
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="flex:none;padding:0 16px 16px">
+      <div style="display:flex;flex-direction:column;gap:10px;padding:14px 14px 10px;background:var(--s1);border:1px solid var(--line);border-radius:16px">
+        <span style="font-size:13.5px;color:var(--ink3)">Ask, or @ to add context…</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button title="Attach" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:30px;height:30px;display:grid;place-items:center;background:transparent;border:1px solid var(--line2);border-radius:50%;cursor:pointer;color:var(--ink3);font-size:15px;line-height:1">+</button>
+          <div style="flex:1"></div>
+          <button title="Dictate" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:30px;height:30px;display:grid;place-items:center;background:transparent;border:none;border-radius:50%;cursor:pointer;color:var(--ink3)">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="6" y="2" width="4" height="7" rx="2"></rect><path d="M4 8a4 4 0 0 0 8 0M8 12v2"></path></svg>
+          </button>
+          <button title="Send" style-hover="opacity:.88" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:30px;height:30px;display:grid;place-items:center;background:var(--solid);color:var(--solid-ink);border:none;border-radius:50%;cursor:pointer">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3.5M4 7l4-3.5L12 7"></path></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── CONTEXT OVERLAY ── -->
+  <sc-if value="{{ ctxOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;z-index:6;left:56px;top:10px;bottom:10px;width:330px;display:flex;flex-direction:column;background:var(--sunk);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 70px var(--shade);overflow:hidden">
+    <div style="flex:none;display:flex;align-items:center;gap:8px;padding:14px 12px 10px 16px">
+      <span style="flex:1;font-size:14px;font-weight:500">Characters</span>
+      <button onClick="{{ closeCtx }}" title="Close" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:26px;height:26px;display:grid;place-items:center;background:transparent;border:none;border-radius:8px;cursor:pointer;color:var(--ink3)">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"></path></svg>
+      </button>
+    </div>
+    <div style="flex:1;min-height:0;overflow-y:auto;padding:4px 12px 16px;display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ people }}" as="p" hint-placeholder-count="2">
+        <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:11px;width:100%;padding:9px 10px;background:{{ p.bg }};border:none;border-radius:11px;cursor:pointer;text-align:left">
+          <span style="width:30px;height:30px;flex:none;border-radius:9px;background:{{ p.color }};color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center">{{ p.ini }}</span>
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+            <span style="font-size:13px;color:var(--ink)">{{ p.name }}</span>
+            <span style="font-size:11.5px;color:var(--ink3)">{{ p.meta }}</span>
+          </span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cards&quot;,&quot;index&quot;,&quot;list&quot;],&quot;default&quot;:&quot;cards&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;contextPanel&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;none&quot;,&quot;characters&quot;],&quot;default&quot;:&quot;none&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;assistant&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "dark",
+    view: this.props.view || "cards",
+    colorBy: "act",
+    scene: 1,
+    navOverride: null,
+    aiOverride: null,
+    ctx: this.props.contextPanel || "none",
+    w: typeof window === "undefined" ? 1600 : window.innerWidth
+  };
+
+  componentDidMount() {
+    this._r = () => this.setState({ w: window.innerWidth });
+    window.addEventListener("resize", this._r);
+    this._r();
+  }
+  componentWillUnmount() { window.removeEventListener("resize", this._r); }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--s2)", off = "transparent";
+
+    const navOpen = s.navOverride === null ? s.w >= 1040 : s.navOverride;
+    const aiOpen = s.aiOverride === null ? (this.props.assistant !== false && s.w >= 1320) : s.aiOverride;
+    const ctxOpen = s.ctx === "characters";
+
+    const L = (text, kind) => {
+      const k = kind || "action";
+      return {
+        text,
+        pad: k === "char" ? "34%" : k === "paren" ? "27%" : k === "dlg" ? "20%" : "0",
+        padR: k === "dlg" ? "16%" : k === "paren" ? "24%" : "0",
+        tt: k === "char" ? "uppercase" : "none",
+        ink: k === "paren" ? "var(--ink3)" : k === "char" ? "var(--ink)" : "var(--script)"
+      };
+    };
+
+    const raw = [
+      {
+        n: 1, no: "01", ie: "EXT", loc: "COMMUNITY PITCH", dn: "DUSK", page: "1", eighths: "4/8", lines: 3, chars: 2,
+        cast: ["@Ade", "@Old Man"],
+        desc: "Floodlights over an empty pitch. Ade drills free kicks alone and misses each one worse than the last, until he pulls his boots off and walks.",
+        preview: [
+          L("Floodlights buzz on over an empty pitch. Seventeen-year-old ADE lines up a ball."),
+          L("He strikes. The ball curls and sails wide."),
+          L("He jogs, places another ball, strikes again — over the bar."),
+          L("ADE", "char"), L("(to himself, spitting)", "paren"), L("Not good enough. Never was.", "dlg"),
+          L("The fourth ball hits the post and bounces out, dead."),
+          L("Ade stands still. Then he yanks off his boots and hurls them.")
+        ]
+      },
+      {
+        n: 2, no: "02", ie: "EXT", loc: "COMMUNITY PITCH", dn: "MOMENTS LATER", page: "4", eighths: "7/8", lines: 7, chars: 2,
+        cast: ["@Ade", "@Old Man"],
+        desc: "",
+        preview: [
+          L("Ade turns. An OLD MAN sits on the bench at the touchline, a flat ball at his feet."),
+          L("ADE", "char"), L("I said I'm done.", "dlg"),
+          L("OLD MAN", "char"), L("I knew a man. Shorter than you. Slower.", "dlg"),
+          L("ADE", "char"), L("(bitter)", "paren"), L("Then he had talent. I've got nothing.", "dlg")
+        ]
+      },
+      {
+        n: 3, no: "03", ie: "EXT", loc: "COMMUNITY PITCH", dn: "NIGHT", page: "11", eighths: "4/8", lines: 2, chars: 1,
+        cast: ["@Ade"],
+        desc: "One strike, dead corner. Ade picks the old ball back up and returns to his mark.",
+        preview: [
+          L("Ade places the old, half-flat ball on the spot. The floodlights flicker."),
+          L("Run-up. Strike."),
+          L("The ball clips the crossbar and drops, kissing the net inside the post."),
+          L("ADE", "char"), L("…I did that.", "dlg"),
+          L("The old man nods once from the bench, rises, and walks out of the light.")
+        ]
+      }
+    ];
+
+    const acts = { 1: "Act I", 2: "Act II", 3: "Act III" };
+    const story = { 1: "A · Ade alone", 2: "B · The old man", 3: "A · Ade alone" };
+    const lead = { 1: "Ade", 2: "Old Man", 3: "Ade" };
+    const palette = {
+      act: { "Act I": "oklch(0.74 0.11 75)", "Act II": "oklch(0.70 0.11 250)", "Act III": "oklch(0.68 0.13 25)" },
+      char: { "Ade": "oklch(0.70 0.11 250)", "Old Man": "oklch(0.72 0.11 150)" },
+      story: { "A · Ade alone": "oklch(0.70 0.11 250)", "B · The old man": "oklch(0.74 0.11 75)" }
+    };
+    const keyFor = (sc) => s.colorBy === "act" ? acts[sc.n] : s.colorBy === "char" ? lead[sc.n] : story[sc.n];
+
+    const scenes = raw.map((sc) => {
+      const sel = sc.n === s.scene;
+      const hasDesc = sc.desc.length > 0;
+      return {
+        ...sc,
+        heading: sc.ie + ". " + sc.loc + " - " + sc.dn,
+        hasDesc, noDesc: !hasDesc,
+        descOrEmpty: hasDesc ? sc.desc : "No description yet",
+        descInk: hasDesc ? "var(--ink2)" : "var(--ink3)",
+        status: hasDesc ? "Ready" : "Draft",
+        statusInk: hasDesc ? "var(--ok)" : "var(--warn)",
+        dot: hasDesc ? "var(--ok)" : "var(--warn)",
+        metaLine: sc.chars + " cast · " + sc.lines + " lines",
+        navBg: sel ? on : off,
+        navInk: sel ? "var(--ink)" : "var(--ink2)",
+        rowBg: sel ? on : off,
+        cardBorder: sel ? "var(--line)" : "var(--line2)",
+        select: () => this.setState({ scene: sc.n })
+      };
+    });
+
+    const indexCards = scenes.map((sc) => ({
+      ...sc,
+      tag: keyFor(sc), color: palette[s.colorBy][keyFor(sc)], act: acts[sc.n],
+      synopsis: sc.hasDesc ? sc.desc : "No synopsis yet — write one here or pull it from the page.",
+      synInk: sc.hasDesc ? "var(--ink2)" : "var(--ink3)"
+    }));
+
+    const actCols = ["Act I", "Act II", "Act III"].map((a) => {
+      const cards = indexCards.filter((c) => c.act === a);
+      return {
+        name: a, cards, hasCards: cards.length > 0, noCards: cards.length === 0,
+        count: cards.length + (cards.length === 1 ? " scene" : " scenes"),
+        eighths: cards.reduce((x, c) => x + parseInt(c.eighths, 10), 0) + "/8"
+      };
+    });
+
+    const described = scenes.filter((x) => x.hasDesc).length;
+    const eighths = raw.reduce((a, b) => a + parseInt(b.eighths, 10), 0);
+    const whole = Math.floor(eighths / 8), rem = eighths % 8;
+    const frac = { 1: "⅛", 2: "¼", 3: "⅜", 4: "½", 5: "⅝", 6: "¾", 7: "⅞" }[rem] || "";
+    const pages = ((whole ? whole : "") + frac) || "0";
+
+    return {
+      theme: s.theme,
+      themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+
+      navOpen, aiOpen, ctxOpen,
+      toggleNav: () => this.setState({ navOverride: !navOpen }),
+      toggleAI: () => this.setState({ aiOverride: !aiOpen }),
+      openChars: () => this.setState({ ctx: ctxOpen ? "none" : "characters" }),
+      closeCtx: () => this.setState({ ctx: "none" }),
+      charsBg: ctxOpen ? on : off,
+      charsInk: ctxOpen ? "var(--ink)" : "var(--ink3)",
+
+      presenceDisplay: s.w >= 1200 ? "flex" : "none",
+      readDisplay: s.w >= 1120 ? "flex" : "none",
+
+      isCards: s.view === "cards", isIndex: s.view === "index", isList: s.view === "list",
+      goCards: () => this.setState({ view: "cards" }),
+      goIndex: () => this.setState({ view: "index" }),
+      goList: () => this.setState({ view: "list" }),
+      vCardsBg: s.view === "cards" ? on : off, vCardsInk: s.view === "cards" ? "var(--ink)" : "var(--ink3)",
+      vIndexBg: s.view === "index" ? on : off, vIndexInk: s.view === "index" ? "var(--ink)" : "var(--ink3)",
+      vListBg: s.view === "list" ? on : off, vListInk: s.view === "list" ? "var(--ink)" : "var(--ink3)",
+
+      colorTabs: [
+        { id: "act", name: "Act" }, { id: "char", name: "Character" }, { id: "story", name: "Storyline" }
+      ].map((it) => ({
+        ...it,
+        bg: s.colorBy === it.id ? on : off,
+        ink: s.colorBy === it.id ? "var(--ink)" : "var(--ink2)",
+        go: () => this.setState({ colorBy: it.id })
+      })),
+      colorLegend: Object.keys(palette[s.colorBy]).map((k) => ({ name: k, color: palette[s.colorBy][k] })),
+
+      scenes, actCols,
+      totalLabel: scenes.length + " scenes · " + pages + " pages",
+      describedLabel: described + " / " + scenes.length,
+      describedPct: Math.round((described / scenes.length) * 100) + "%",
+      describedNote: (scenes.length - described) + " scene without a description",
+
+      epNav: [
+        { name: "Script", meta: "14pp", bg: off, ink: "var(--ink2)", w: "400" },
+        { name: "Outline", meta: "prose", bg: off, ink: "var(--ink2)", w: "400" },
+        { name: "Scenes", meta: "3", bg: on, ink: "var(--ink)", w: "500" }
+      ],
+
+      chips: [
+        { label: "Write a synopsis for Scene 02", dot: "var(--live)" },
+        { label: "Find scenes without conflict", dot: "var(--warn)" },
+        { label: "Reorder for pacing", dot: "var(--accent)" },
+        { label: "Split Scene 02 in two", dot: "var(--ok)" }
+      ],
+
+      people: [
+        { ini: "AD", name: "Ade", meta: "17 · 3 scenes · lead", color: "oklch(0.55 0.13 300)", bg: on },
+        { ini: "OM", name: "Old man", meta: "unnamed · 2 scenes", color: "oklch(0.58 0.11 30)", bg: off }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

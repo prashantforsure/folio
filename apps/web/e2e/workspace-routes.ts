@@ -4,9 +4,9 @@
  *
  * AGENTS.md, Validation: "The E2E smoke test walks all thirteen routes in
  * both themes and both states. It is not optional coverage - it is the thing
- * that catches a route shipped without its empty state." Eleven now - Notes
- * and Revisions were built, then cut (`docs/build-decisions.md`, "Notes and
- * Revisions routes removed").
+ * that catches a route shipped without its empty state." Ten now - Notes and
+ * Revisions were built, then cut (`docs/build-decisions.md`, "Notes and
+ * Revisions routes removed"), and so was Bible ("Bible route removed").
  *
  * One row per route. `workspace.spec.ts` walks the rows; a later phase adds
  * to a row what its route must show - the empty-state copy, the populated
@@ -22,7 +22,6 @@ export type RailSection =
   | 'characters'
   | 'locations'
   | 'timeline'
-  | 'bible'
   | 'research'
   | 'insights'
   | 'production'
@@ -52,7 +51,6 @@ export const RAIL_ORDER: readonly RailSection[] = [
   'characters',
   'locations',
   'timeline',
-  'bible',
   'research',
   'insights',
   'production',
@@ -63,7 +61,6 @@ export const RAIL_LABELS: readonly string[] = [
   'Characters',
   'Locations',
   'Timeline',
-  'Bible',
   'Research',
   'Insights',
   'Production',
@@ -124,15 +121,6 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     emptyState: { text: 'Your scenes have a page order, not a story time' },
   },
   {
-    route: 'bible',
-    scope: 'project',
-    rail: 'bible',
-    title: 'Bible',
-    defaults: { view: 'entry' },
-    column: { kind: 'context', width: 252 },
-    emptyState: { text: 'The rules of the world live here' },
-  },
-  {
     route: 'research',
     scope: 'project',
     rail: 'research',
@@ -151,9 +139,10 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
 ]
 
 /**
- * Eleven. Decision 5 episode-scoped production, decision 6 cut, assets
- * reserved; Beats cut 2026-09-12; Revisions and Notes cut 2026-09-14.
+ * Ten. Decision 5 episode-scoped production, decision 6 cut, assets
+ * reserved; Beats cut 2026-09-12; Revisions and Notes cut 2026-09-14; Bible
+ * cut 2026-09-15.
  */
-export const WORKSPACE_ROUTE_COUNT = 11
+export const WORKSPACE_ROUTE_COUNT = 10
 
 export const THEMES = ['dark', 'light'] as const

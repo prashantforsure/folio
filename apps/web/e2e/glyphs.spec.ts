@@ -37,7 +37,6 @@ const GLYPHS = [
   ['characters', '◍'],
   ['locations', '⌖'],
   ['timeline', '◷'],
-  ['bible', '◈'],
   ['research', '▧'],
   ['insights', '◎'],
   ['production', '▶'],

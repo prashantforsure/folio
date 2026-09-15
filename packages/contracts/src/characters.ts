@@ -180,13 +180,6 @@ export type CharacterProfile = CastRow & {
   readonly nameCues: number
 }
 
-/** Scenes per episode, in running order. Read by the Bible route's "cited by episode" bars. */
-export type EpisodeBar = {
-  readonly episode: EpisodeSlug
-  readonly ordinal: number
-  readonly scenes: number
-}
-
 /** One node of the relationships graphs. */
 export type MapColumn = {
   readonly id: CharacterId

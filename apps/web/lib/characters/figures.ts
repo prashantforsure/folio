@@ -1,4 +1,4 @@
-import type { CharacterMap, EpisodeBar, MapColumn, SceneRef } from '@folio/contracts'
+import type { CharacterMap, MapColumn, SceneRef } from '@folio/contracts'
 import type { SceneIndexRow } from '@folio/db'
 import type { CharacterId, NodeId } from '@folio/script'
 
@@ -50,22 +50,6 @@ export const sharedScenes = (a: readonly NodeId[], b: readonly NodeId[]): number
   for (const id of b) if (set.has(id)) shared += 1
   return shared
 }
-
-/**
- * Scenes per episode, in running order. Every episode gets a bar, zero
- * included. Read by the Bible route's cited-by-episode bars; the Characters
- * route no longer draws it.
- */
-export const perEpisodeBars = (
-  episodes: readonly { readonly slug: SceneRef['episode']; readonly ordinal: number }[],
-  index: readonly SceneIndexRow[],
-  scenes: ReadonlySet<NodeId>,
-): readonly EpisodeBar[] =>
-  episodes.map((episode) => ({
-    episode: episode.slug,
-    ordinal: episode.ordinal,
-    scenes: index.filter((row) => row.episodeOrdinal === episode.ordinal && scenes.has(row.sceneNodeId)).length,
-  }))
 
 // ---------------------------------------------------------------------------
 // The map

@@ -31,7 +31,6 @@ import {
   characters,
   documents,
   episodes,
-  locations,
   nodes,
   resolveRows,
   sceneDerivations,
@@ -281,17 +280,6 @@ export const listSceneIndex = async (scope: ProjectScope): Promise<readonly Scen
       ...readingOf(row.reading),
     }
   })
-}
-
-/** Location names by id. Read by the Bible route beside its own tables. */
-export const listLocationNames = async (
-  scope: ProjectScope,
-): Promise<ReadonlyMap<LocationId, string>> => {
-  const rows = await dbOf(scope)
-    .select({ id: locations.id, name: locations.name })
-    .from(locations)
-    .where(scoped(scope, locations))
-  return new Map(rows.map((row) => [brandLocationId(row.id), row.name]))
 }
 
 /** An open resolve-queue row for a cue, as stored. The route reads the JSON columns. */

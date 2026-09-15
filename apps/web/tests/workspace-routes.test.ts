@@ -30,7 +30,7 @@ import {
  */
 
 describe('the route tree', () => {
-  it('is eleven routes under the rulings on decisions 5, 6 and assets', () => {
+  it('is ten routes under the rulings on decisions 5, 6 and assets', () => {
     expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
     expect(WORKSPACE_ROUTES).toEqual([
       'script',
@@ -41,7 +41,6 @@ describe('the route tree', () => {
       'characters',
       'locations',
       'timeline',
-      'bible',
       'research',
       'insights',
     ])
@@ -50,19 +49,20 @@ describe('the route tree', () => {
     expect(WORKSPACE_ROUTES).not.toContain('search')
     // assets: reserved, no route.
     expect(WORKSPACE_ROUTES).not.toContain('assets')
-    // Settings is a stub, not one of the thirteen.
+    // Settings is a stub, not one of the ten.
     expect(WORKSPACE_ROUTES).not.toContain('settings')
+    // Bible was built, then cut 2026-09-15 - not one of the ten.
+    expect(WORKSPACE_ROUTES).not.toContain('bible')
   })
 })
 
 describe('the rail', () => {
-  it('is eight items, exactly this order, each with its specified glyph', () => {
+  it('is seven items, exactly this order, each with its specified glyph', () => {
     expect(RAIL.map((item) => `${item.label} ${GLYPHS[item.glyph]}`)).toEqual([
       'Writing ✎',
       'Characters ◍',
       'Locations ⌖',
       'Timeline ◷',
-      'Bible ◈',
       'Research ▧',
       'Insights ◎',
       'Production ▶',
@@ -72,7 +72,7 @@ describe('the rail', () => {
   it('lights Writing for all four episode nav routes and itself for the rest', () => {
     for (const item of EPISODE_NAV) expect(railSectionOf(item.route)).toBe('writing')
     expect(railSectionOf('production')).toBe('production')
-    expect(railSectionOf('bible')).toBe('bible')
+    expect(railSectionOf('timeline')).toBe('timeline')
   })
 })
 
@@ -92,7 +92,6 @@ describe('the episode nav', () => {
       production: 250,
       locations: 256,
       timeline: 250,
-      bible: 252,
       research: 250,
       insights: 250,
     })
@@ -100,7 +99,7 @@ describe('the episode nav', () => {
 })
 
 describe('sub-view params', () => {
-  it('has a schema for every one of the eleven', () => {
+  it('has a schema for every one of the ten', () => {
     expect(Object.keys(SUB_VIEW_SCHEMAS).sort()).toEqual([...WORKSPACE_ROUTES].sort())
   })
 
@@ -111,7 +110,6 @@ describe('sub-view params', () => {
     expect(parseSubViews('characters', {})).toEqual({ ok: true, params: { view: 'overview' } })
     expect(parseSubViews('locations', {})).toEqual({ ok: true, params: { view: 'record' } })
     expect(parseSubViews('timeline', {})).toEqual({ ok: true, params: { view: 'story' } })
-    expect(parseSubViews('bible', {})).toEqual({ ok: true, params: { view: 'entry' } })
     expect(parseSubViews('research', {})).toEqual({ ok: true, params: { view: 'library' } })
     expect(parseSubViews('outline', {})).toEqual({ ok: true, params: {} })
     expect(parseSubViews('script', {})).toEqual({ ok: true, params: {} })
@@ -192,7 +190,7 @@ describe('hrefs', () => {
     expect(episodeRouteHref({ projectId: id, shape: 'collapsed', episode: ep }, 'production')).toBe(
       `/app/project/${id}/production`,
     )
-    expect(projectRouteHref(id, 'bible')).toBe(`/app/project/${id}/bible`)
+    expect(projectRouteHref(id, 'timeline')).toBe(`/app/project/${id}/timeline`)
     expect(projectHref(id)).toBe(`/app/project/${id}`)
   })
 })

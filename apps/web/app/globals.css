@@ -34,7 +34,7 @@
    * icon-only", which is what makes it 46px tall rather than square.
    *
    * **78px wide, not the project rail's 56px, and that is a deliberate
-   * divergence.** The rail's labels are one short word - Writing, Bible,
+   * divergence.** The rail's labels are one short word - Writing, Timeline,
    * Scenes. This sidebar's are given by the brief and include SCREENWRITING,
    * which at 8px/600 with .08em tracking measures about 70px. At 56px it
    * overflows the 66px rail on both sides; it did, and the screenshot is how it

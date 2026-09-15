@@ -103,9 +103,9 @@ run identically in the browser, in server code, in the worker and in tests.
    the URL. The exceptions are named in the *Sub-views are query params — except* table below.
 4. **Both states always.** Populated and empty ship together. A new project opens into the empty
    state, so it is the first screen most users see. A route without its empty state is not done.
-5. **The server enforces; the client discloses.** Scope, tool allowlists, cost checks, bible
-   status and research readability are all enforced server-side. The UI's job is to show that
-   enforcement honestly — the scope chip, the capability chips, the cost on the button.
+5. **The server enforces; the client discloses.** Scope, tool allowlists, cost checks and research
+   readability are all enforced server-side. The UI's job is to show that enforcement honestly —
+   the scope chip, the capability chips, the cost on the button.
 6. **Make illegal states unrepresentable.** Prefer a discriminated union over a boolean plus a
    comment. The eight element types are a closed set; keep them closed.
 7. **Thin vertical slices.** Schema → contract → pure logic → repository → server action → UI,
@@ -161,7 +161,7 @@ Stop and ask before you:
 ```
 apps/web/                    Next.js app. UI and server actions only — no logic that belongs in packages/script.
   app/(app)/                 Signed-in shell: sidebar, theme, avatar. Everything user-facing lives under /app.
-  app/(app)/project/         Project workspace: rail, episode nav, the eleven routes.
+  app/(app)/project/         Project workspace: rail, episode nav, the ten routes.
   lib/                       Web-only glue: auth session, server action helpers, query client. Not domain logic.
 apps/worker/                 BullMQ consumers. Long-running. Generation, export, agent runs. Never a serverless fn.
 apps/sync/                   Deferred. Do not create this directory until realtime is actually scheduled.
@@ -250,25 +250,27 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 - Everything under `/app/`. One prefix for the signed-in product.
 - Sub-views are **query params**, never separate routes. Each defaults to its first value.
 - `:episodeId` shares a path position with the project-scoped names. Validate every episode id
-  against `characters`, `locations`, `timeline`, `bible`, `research`, `insights`, `production`,
+  against `characters`, `locations`, `timeline`, `research`, `insights`, `production`,
   `settings`, `assets`, and keep ids to the `ep_NNN` shape. Static-first precedence saves this
   tree by accident; do not rely on it.
 - `projectType: 'film'` **hides** the episode segment. The database still stores one episode row.
   The router special-cases the shape; the schema never does.
-- Rail order is fixed: Writing `✎` · Characters `◍` · Locations `⌖` · Timeline `◷` · Bible `◈` ·
-  Research `▧` · Insights `◎` · Production `▶`. Writing stays lit across all four episode routes.
+- Rail order is fixed: Writing `✎` · Characters `◍` · Locations `⌖` · Timeline `◷` · Research `▧` ·
+  Insights `◎` · Production `▶`. Writing stays lit across all four episode routes.
 - Episode nav order deliberately differs from the rail: **Storyboard sits above Scenes.**
 
 ### UI fidelity
 
 - **Every glyph is a Unicode character rendered as text.** The known set:
-  `✎ ◍ ⌖ ◷ ◈ ▧ ◎ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝` (`⧗` left with the Beats route, removed 2026-09-12 —
-  `docs/build-decisions.md`, "Beats route removed")
+  `✎ ◍ ⌖ ◷ ▧ ◎ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝` (`⧗` left with the Beats route, removed 2026-09-12; `◈` left
+  with the Bible route, removed 2026-09-15 — `docs/build-decisions.md`, "Beats route removed" and
+  "Bible route removed")
 - Rail active state is a 2px `-accent` bar at `left:-5px` **plus** the `-sel` background. Not a
   colour change alone.
 - Episode nav column is **238px**. Not "about 240".
 - Badges are **live counts**, never placeholders: Characters = unresolved cues · Locations =
-  unmatched sluglines · Bible = open canon conflicts.
+  unmatched sluglines. A third badge, Bible = open canon conflicts, existed while the Bible route
+  did (`docs/build-decisions.md`, "Bible route removed").
 - Empty meta follows a convention: things that legitimately count to zero show `0`; things that
   either exist or don't show `—`; the script says `empty`.
 - Project cards show **real derived metadata** — episode, scene and page counts, last edited —
@@ -292,10 +294,12 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   succeed without violating one is rejected at planning time.
 - **Parser parity** — agent output is parsed exactly like typed text. Ambiguous cues surface in
   the diff as merge / create / alias.
-- **Canon pre-flight** — bible conflict checking runs against proposed nodes, before review.
-- **Two context gates, both enforced server-side in the context builder, never in the UI**: bible
-  entry status (`canon` readable, `draft` not until promoted, `retired` ignored) and the
-  per-source research `readable` toggle.
+- ~~**Canon pre-flight** — bible conflict checking runs against proposed nodes, before review.~~
+  No source for this since the Bible route was cut 2026-09-15 (`docs/build-decisions.md`, "Bible
+  route removed") — there is no `canon` status left to check against.
+- **One context gate, enforced server-side in the context builder, never in the UI**: the
+  per-source research `readable` toggle. (A second gate, bible entry status, existed while the
+  Bible route did.)
 - A **lens** is four things: a system prompt, a tool allowlist, a readable-source list, and an
   output shape. The allowlist renders to the user as monospace chips, so a read-only lens is
   visibly read-only regardless of what its prompt says.
@@ -399,7 +403,7 @@ share a file.
 | Surface | Reason | Rule |
 | --- | --- | --- |
 | Research | Source material must stay trustworthy | Read-only |
-| Bible | Canon needs deliberate promotion | Write **only** on an explicit instruction in the current message |
+| ~~Bible~~ | Route cut 2026-09-15 (`docs/build-decisions.md`, "Bible route removed") | — |
 | Settings, people, billing, keys, export | Not creative surfaces | Never |
 
 ### Every route ships both states — no exceptions
@@ -427,11 +431,13 @@ There is no case where an empty state is optional. A new project is entirely emp
 
   Adding a real provider unlocks the notification surface above, so it is a dependency decision
   *and* a product decision — When to ask first applies twice over.
-- **No Beats, Revisions or Notes route.** All three were built, then cut on the client's
-  instruction (Beats 2026-09-12, Revisions and Notes 2026-09-14) — do not rebuild any of them. A
-  beat is still an outline `beat` block. The `revisions` and `comment_threads` tables stay and are
-  still read independently by the Script route's right panel; `beats` was dropped in migration
-  `0010`, and `scenes.beats` stays as an opaque column.
+- **No Beats, Revisions, Notes or Bible route.** All four were built, then cut on the client's
+  instruction (Beats 2026-09-12, Revisions and Notes 2026-09-14, Bible 2026-09-15) — do not
+  rebuild any of them. A beat is still an outline `beat` block. The `revisions` and
+  `comment_threads` tables stay and are still read independently by the Script route's right
+  panel; `beats` was dropped in migration `0010`, and `scenes.beats` stays as an opaque column.
+  Bible's five tables and three enums were dropped outright in migration `0015` — nothing was
+  left reading them once the rail badge stopped calling into `bible.ts`.
 - **No realtime collaboration.** Last-write-wins with a conflict banner. Loro CRDT and
   `apps/sync` are deferred; do not scaffold them.
 - **`/app/filmmaking` is a project list and a creation entry point. Stop there.** It needs an ADR
@@ -456,7 +462,7 @@ There is no case where an empty state is optional. A new project is entirely emp
    identity under paste, split, merge and reorder.
 6. **Repository function** in `packages/db`, project-scoped.
 7. **Server action or route handler.** Every gate is enforced here — scope, allowlist, cost,
-   bible status, research readability, tenancy.
+   research readability, tenancy.
 8. **UI last**, and both states in the same change: populated and empty.
 9. **Check both themes** before calling it done.
 10. **Run validation.** All of it.
@@ -484,7 +490,7 @@ pnpm --filter @folio/db drizzle-kit check
 pnpm --filter web test:e2e
 ```
 
-The E2E smoke test walks all eleven routes in both themes and both states. It is not optional
+The E2E smoke test walks all ten routes in both themes and both states. It is not optional
 coverage — it is the thing that catches a route shipped without its empty state.
 
 ---

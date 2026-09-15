@@ -170,10 +170,10 @@ let seriesId = ''
 let filmId = ''
 const RUN = Date.now().toString(36)
 
-test('the contract is eleven routes', () => {
+test('the contract is ten routes', () => {
   expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
   expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'episode')).toHaveLength(5)
-  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'project')).toHaveLength(6)
+  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'project')).toHaveLength(5)
 })
 
 test('a series opens on ep_001/script and a film on /script', async ({ page, account }) => {

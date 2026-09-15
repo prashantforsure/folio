@@ -33,7 +33,7 @@
 
 /**
  * Keyed by what the glyph *is for*, not by what it looks like. A rename of the
- * Bible route should not leave a `diamond` behind.
+ * Timeline route should not leave a `clock` behind.
  */
 export const GLYPHS = {
   /** Rail: Writing. */
@@ -44,8 +44,6 @@ export const GLYPHS = {
   locations: '⌖',
   /** Rail: Timeline. */
   timeline: '◷',
-  /** Rail: Bible. */
-  bible: '◈',
   /** Rail: Research. */
   research: '▧',
   /** Rail: Insights. */

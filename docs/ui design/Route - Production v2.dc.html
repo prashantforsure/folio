@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sans:"Geist",-apple-system,"Segoe UI",system-ui,sans-serif;
+  --mono:"Geist Mono",ui-monospace,monospace;
+  --bg:#0a0a0c; --sunk:#08080a;
+  --s1:rgba(255,255,255,.035); --s2:rgba(255,255,255,.055); --s3:rgba(255,255,255,.085);
+  --line:rgba(255,255,255,.085); --line2:rgba(255,255,255,.05);
+  --ink:#f3f2ef; --ink2:rgba(243,242,239,.62); --ink3:rgba(243,242,239,.36);
+  --hover:rgba(255,255,255,.06);
+  --accent:oklch(0.72 0.12 245); --accent-bg:oklch(0.72 0.12 245 / .16);
+  --ok:oklch(0.76 0.10 150); --ok-bg:oklch(0.76 0.10 150 / .14);
+  --warn:oklch(0.80 0.11 75); --warn-bg:oklch(0.80 0.11 75 / .12);
+  --live:oklch(0.72 0.14 40); --live-bg:oklch(0.72 0.14 40 / .14);
+  --bad:oklch(0.70 0.16 25); --bad-bg:oklch(0.70 0.16 25 / .13);
+  --glow-cool:oklch(0.55 0.16 250 / .20); --glow-warm:oklch(0.62 0.10 62 / .13);
+  --solid:#f3f2ef; --solid-ink:#0d0d10;
+  --script:rgba(243,242,239,.74);
+  --shade:rgba(0,0,0,.5);
+}
+[data-theme="light"]{
+  --bg:#f7f6f3; --sunk:#f2f0ec;
+  --s1:rgba(20,18,14,.035); --s2:rgba(20,18,14,.055); --s3:rgba(20,18,14,.085);
+  --line:rgba(20,18,14,.11); --line2:rgba(20,18,14,.06);
+  --ink:#16151a; --ink2:rgba(22,21,26,.64); --ink3:rgba(22,21,26,.40);
+  --hover:rgba(20,18,14,.05);
+  --accent:oklch(0.52 0.15 250); --accent-bg:oklch(0.52 0.15 250 / .10);
+  --ok:oklch(0.52 0.12 150); --ok-bg:oklch(0.52 0.12 150 / .10);
+  --warn:oklch(0.58 0.12 75); --warn-bg:oklch(0.58 0.12 75 / .10);
+  --live:oklch(0.55 0.16 40); --live-bg:oklch(0.55 0.16 40 / .10);
+  --bad:oklch(0.52 0.17 25); --bad-bg:oklch(0.52 0.17 25 / .09);
+  --glow-cool:oklch(0.65 0.14 250 / .10); --glow-warm:oklch(0.72 0.10 62 / .10);
+  --solid:#16151a; --solid-ink:#f7f6f3;
+  --script:rgba(22,21,26,.80);
+  --shade:rgba(20,18,14,.18);
+}
+*{box-sizing:border-box;scrollbar-color:var(--s3) transparent;scrollbar-width:thin}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+button{font-family:inherit;color:inherit;transition:background .14s,color .14s,border-color .14s,opacity .14s}
+::selection{background:var(--accent-bg)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--s3);border-radius:10px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:var(--ink3);background-clip:padding-box}
+::-webkit-scrollbar-corner{background:transparent}
+@keyframes orbdrift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(-4px,4px) scale(1.03)}100%{transform:translate(0,0) scale(1)}}
+@keyframes shimmer{0%{opacity:.35}50%{opacity:.8}100%{opacity:.35}}
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="position:relative;height:100vh;display:flex;background:var(--bg);color:var(--ink);overflow:hidden">
+
+  <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(900px 620px at 88% -8%,var(--glow-cool),transparent 70%),radial-gradient(1100px 700px at 42% 108%,var(--glow-warm),transparent 72%)"></div>
+
+  <!-- ── RAIL ── -->
+  <div style="position:relative;z-index:2;width:56px;flex:none;display:flex;flex-direction:column;align-items:center;padding:10px 0 10px;gap:2px">
+    <button onClick="{{ toggleNav }}" title="Toggle sidebar" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:34px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:10px;cursor:pointer;color:var(--ink2);margin-bottom:8px">
+      <svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 5h12M3 9h12M3 13h12"></path></svg>
+    </button>
+
+    <button title="Writing" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="2.8" width="11" height="14.4" rx="1.8"></rect><path d="M7.4 7h5.2M7.4 10h5.2M7.4 13h3"></path></svg>
+    </button>
+    <button onClick="{{ openChars }}" title="Characters" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:{{ charsBg }};border:none;border-radius:11px;cursor:pointer;color:{{ charsInk }}">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><circle cx="10" cy="7.4" r="2.9"></circle><path d="M4.4 16.2c.9-2.7 3-4.1 5.6-4.1s4.7 1.4 5.6 4.1"></path></svg>
+    </button>
+    <button title="Locations" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><circle cx="10" cy="8" r="2.4"></circle><path d="M10 17c3.2-3.8 4.8-6.4 4.8-8.4A4.8 4.8 0 0 0 5.2 8.6c0 2 1.6 4.6 4.8 8.4z"></path></svg>
+    </button>
+    <button title="Timeline" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><path d="M3.6 6h12.8M3.6 10h8.4M3.6 14h5.2"></path></svg>
+    </button>
+    <button title="Research" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35"><rect x="3.6" y="3.6" width="5.6" height="5.6" rx="1.3"></rect><rect x="10.8" y="3.6" width="5.6" height="5.6" rx="1.3"></rect><rect x="3.6" y="10.8" width="5.6" height="5.6" rx="1.3"></rect><rect x="10.8" y="10.8" width="5.6" height="5.6" rx="1.3"></rect></svg>
+    </button>
+    <button title="Production" style-hover="background:var(--s3)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:var(--s2);border:none;border-radius:11px;cursor:pointer;color:var(--ink)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"><rect x="3.4" y="3.4" width="13.2" height="13.2" rx="2.4"></rect><path d="M8.4 7.6l4.2 2.4-4.2 2.4z"></path></svg>
+    </button>
+
+    <div style="flex:1"></div>
+
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3);font-size:14px">{{ themeIcon }}</button>
+    <button title="Help" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:38px;height:38px;display:grid;place-items:center;background:transparent;border:none;border-radius:11px;cursor:pointer;color:var(--ink3)">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><circle cx="10" cy="10" r="6.6"></circle><path d="M8.2 8.1a1.9 1.9 0 1 1 2.5 1.8c-.5.2-.7.6-.7 1.1v.3"></path><path d="M10 13.6v.2"></path></svg>
+    </button>
+  </div>
+
+  <!-- ── CONTEXT COLUMN ── -->
+  <sc-if value="{{ navOpen }}" hint-placeholder-val="{{ true }}">
+  <aside style="position:relative;z-index:2;width:236px;flex:none;display:flex;flex-direction:column;padding:10px 10px 10px 0;min-height:0">
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:var(--s1);border:1px solid var(--line2);border-radius:16px;overflow:hidden;backdrop-filter:blur(12px)">
+
+      <div style="flex:none;display:flex;align-items:center;gap:6px;padding:14px 12px 10px">
+        <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="flex:1;min-width:0;display:flex;align-items:center;gap:7px;padding:6px 8px;background:transparent;border:none;border-radius:9px;cursor:pointer;text-align:left">
+          <span style="flex:1;min-width:0;font-size:14px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Episode 1</span>
+          <span style="flex:none;font-size:11px;color:var(--ink3)">▾</span>
+        </button>
+      </div>
+
+      <nav style="flex:1;min-height:0;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:center;padding:2px 10px 6px">
+          <span style="flex:1;font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">Scenes from script</span>
+          <span style="font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums">3</span>
+        </div>
+        <sc-for list="{{ sceneNav }}" as="s" hint-placeholder-count="3">
+          <button onClick="{{ s.select }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:flex-start;gap:9px;width:100%;padding:9px 10px;background:{{ s.navBg }};border:none;border-radius:11px;cursor:pointer;text-align:left">
+            <span style="flex:none;font-family:var(--mono);font-size:11px;color:var(--ink3);padding-top:1px">{{ s.no }}</span>
+            <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+              <span style="font-family:var(--mono);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ s.navInk }}">{{ s.heading }}</span>
+              <span style="height:3px;border-radius:3px;background:var(--s3);overflow:hidden"><span style="display:block;width:{{ s.pct }};height:100%;border-radius:3px;background:{{ s.barColor }}"></span></span>
+              <span style="font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ s.meta }}</span>
+            </span>
+          </button>
+        </sc-for>
+      </nav>
+
+      <div style="flex:none;padding:10px 10px 12px">
+        <div style="display:flex;flex-direction:column;gap:7px;padding:11px 12px;background:var(--s1);border:1px solid var(--line2);border-radius:12px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font-size:12px;color:var(--ink2)">Episode frames</span>
+            <span style="font-size:13px;font-weight:500;font-variant-numeric:tabular-nums">{{ epFramesLabel }}</span>
+          </div>
+          <div style="height:4px;border-radius:3px;background:var(--s3);overflow:hidden"><div style="width:{{ epFramesPct }};height:100%;border-radius:3px;background:var(--accent)"></div></div>
+          <span style="font-size:11px;color:var(--ink3)">{{ epFramesNote }}</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── MAIN ── -->
+  <main style="position:relative;z-index:2;flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+
+    <header style="position:relative;height:60px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px 0 4px">
+      <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;font-size:13px;overflow:hidden">
+        <span style="color:var(--ink3);white-space:nowrap">Not Magic, Just This</span>
+        <span style="color:var(--ink3)">/</span>
+        <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:transparent;border:none;border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink);white-space:nowrap">Episode 1
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="opacity:.5"><path d="M3 5l3 3 3-3"></path></svg>
+        </button>
+        <span style="flex:none;color:var(--ink3)">/</span>
+        <span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Production</span>
+      </div>
+
+      <div style="flex:none;display:flex;align-items:center;gap:3px;padding:4px;background:var(--s1);border:1px solid var(--line2);border-radius:999px">
+        <button style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:7px;padding:7px 15px;background:transparent;border:none;border-radius:999px;cursor:pointer;font-size:13px;font-weight:500;color:var(--ink2)">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" style="opacity:.75"><rect x="4" y="2.5" width="10" height="13" rx="1.6"></rect><path d="M6.6 6.5h4.8M6.6 9.5h4.8M6.6 12.5h2.8"></path></svg>Write</button>
+        <button style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:7px;padding:7px 15px;background:transparent;border:none;border-radius:999px;cursor:pointer;font-size:13px;font-weight:500;color:var(--ink2)">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round" style="opacity:.75"><rect x="2.5" y="4" width="13" height="10" rx="1.6"></rect><path d="M9 4v10"></path></svg>Storyboard</button>
+      </div>
+
+      <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:8px">
+        <div style="display:{{ presenceDisplay }};align-items:center">
+          <span title="You · Scene 01" style="width:26px;height:26px;border-radius:50%;background:oklch(0.55 0.13 300);color:#fff;font-size:10px;font-weight:600;display:grid;place-items:center;border:2px solid var(--bg)">PP</span>
+          <span title="Rukmini · idle 12m" style="width:26px;height:26px;border-radius:50%;background:oklch(0.60 0.10 200);color:#fff;font-size:10px;font-weight:600;display:grid;place-items:center;border:2px solid var(--bg);margin-left:-7px">RK</span>
+        </div>
+        <button style-hover="opacity:.88" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:34px;padding:0 16px;background:var(--solid);color:var(--solid-ink);border:none;border-radius:999px;cursor:pointer;font-size:13px;font-weight:500">Share</button>
+        <button onClick="{{ toggleAI }}" title="Assistant" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:34px;height:34px;display:grid;place-items:center;background:transparent;border:none;border-radius:50%;cursor:pointer;padding:0">
+          <span style="width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 33% 28%,#e8f6ff 0%,#8fd4ff 22%,#2a7fd4 58%,#123a72 100%);box-shadow:0 0 14px oklch(0.65 0.16 245 / .55)"></span>
+        </button>
+      </div>
+    </header>
+
+    <div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column;background:var(--s1);border:1px solid var(--line2);border-radius:18px 0 0 0;overflow:hidden;backdrop-filter:blur(10px)">
+
+      <!-- toolbar -->
+      <div style="flex:none;display:flex;align-items:center;gap:10px;padding:12px 20px">
+        <span style="font-size:14px;font-weight:500;letter-spacing:-.01em;white-space:nowrap">Production</span>
+        <span style="padding:4px 10px;border-radius:999px;background:var(--s2);font-size:11.5px;color:var(--ink2);white-space:nowrap;font-variant-numeric:tabular-nums">{{ reelsChip }}</span>
+
+        <div style="display:flex;align-items:center;gap:2px;padding:4px;background:var(--s1);border:1px solid var(--line2);border-radius:999px;margin-left:4px">
+          <button onClick="{{ goScene }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="padding:6px 14px;background:{{ vSceneBg }};border:none;border-radius:999px;cursor:pointer;font-size:12.5px;color:{{ vSceneInk }}">Scene</button>
+          <button onClick="{{ goEpisode }}" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="padding:6px 14px;background:{{ vEpBg }};border:none;border-radius:999px;cursor:pointer;font-size:12.5px;color:{{ vEpInk }}">Episode</button>
+        </div>
+
+        <div style="flex:1"></div>
+
+        <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:34px;display:flex;align-items:center;gap:7px;padding:0 13px;background:var(--s1);border:1px solid var(--line2);border-radius:10px;cursor:pointer;font-size:12.5px;color:var(--ink2);white-space:nowrap;font-variant-numeric:tabular-nums">720p <span style="opacity:.6">▾</span></button>
+        <span title="Credits" style="height:34px;display:flex;align-items:center;gap:7px;padding:0 13px;background:{{ creditsBg }};border:1px solid {{ creditsBorder }};border-radius:10px;font-size:12.5px;color:{{ creditsInk }};white-space:nowrap;font-variant-numeric:tabular-nums">◐ {{ creditsLabel }}</span>
+      </div>
+
+      <!-- ════ SCENE VIEW ════ -->
+      <sc-if value="{{ isScene }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Scene" style="flex:1;min-height:0;display:flex;flex-direction:column">
+
+        <!-- scene strip -->
+        <div style="flex:none;display:flex;align-items:center;gap:8px;padding:0 20px 12px">
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:4px;overflow-x:auto;padding-bottom:2px">
+            <sc-for list="{{ sceneTabs }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.select }}" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="flex:none;display:flex;align-items:center;gap:8px;padding:7px 12px;background:{{ t.bg }};border:1px solid {{ t.border }};border-radius:9px;cursor:pointer">
+                <span style="flex:none;width:6px;height:6px;border-radius:50%;background:{{ t.dot }}"></span>
+                <span style="font-family:var(--mono);font-size:11.5px;text-transform:uppercase;white-space:nowrap;color:{{ t.ink }}">{{ t.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <button style-hover="background:var(--accent);color:var(--solid-ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="flex:none;height:32px;display:flex;align-items:center;gap:7px;padding:0 13px;background:var(--accent-bg);border:1px solid transparent;border-radius:9px;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--accent)">＋ Add reel</button>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow-y:auto;padding:0 20px 24px">
+          <div style="max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
+
+            <!-- orphan strip -->
+            <sc-if value="{{ showOrphans }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--s1);border:1px solid var(--line2);border-radius:11px">
+                <span style="flex:1;min-width:0;font-size:12.5px;color:var(--ink2)">3 shots from the Storyboard aren't in a reel yet</span>
+                <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="flex:none;height:28px;padding:0 12px;background:transparent;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:12px;color:var(--ink2);white-space:nowrap">Put them in Reel 1</button>
+              </div>
+            </sc-if>
+
+            <!-- empty scene -->
+            <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:56px 24px;background:var(--s1);border:1px dashed var(--line);border-radius:16px;text-align:center">
+                <span style="font-size:15px;font-weight:500;letter-spacing:-.01em">No reels in this scene yet</span>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center">
+                  <button style-hover="background:var(--accent);color:var(--solid-ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:34px;display:flex;align-items:center;gap:8px;padding:0 15px;background:var(--accent-bg);border:none;border-radius:9px;cursor:pointer;font-size:13px;font-weight:500;color:var(--accent)">✦ Propose shots from scene</button>
+                  <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:34px;display:flex;align-items:center;gap:8px;padding:0 15px;background:transparent;border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px;color:var(--ink2)">＋ Empty reel</button>
+                </div>
+                <span style="font-size:12px;color:var(--ink3)">Proposing shots costs nothing. Frames cost 4 credits each.</span>
+              </div>
+            </sc-if>
+
+            <!-- reels -->
+            <sc-for list="{{ reels }}" as="r" hint-placeholder-count="1">
+              <section style="display:flex;flex-direction:column;background:var(--s1);border:1px solid var(--line2);border-radius:16px;overflow:hidden">
+
+                <!-- reel header -->
+                <div style="flex:none;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--line2)">
+                  <button title="Rename reel" style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:6px;padding:4px 8px;margin-left:-8px;background:transparent;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--ink)">{{ r.name }}</button>
+                  <span style="font-size:12px;color:var(--ink3);white-space:nowrap;font-variant-numeric:tabular-nums">{{ r.shotMeta }}</span>
+
+                  <div style="flex:1;min-width:180px;display:flex;align-items:center;gap:10px">
+                    <span style="flex:1;min-width:0;display:flex;height:8px;border-radius:5px;background:var(--s3);overflow:hidden">
+                      <sc-for list="{{ r.segs }}" as="g" hint-placeholder-count="3">
+                        <span style="width:{{ g.w }};height:100%;background:{{ g.color }};border-right:1px solid var(--bg)"></span>
+                      </sc-for>
+                    </span>
+                    <span style="flex:none;font-family:var(--mono);font-size:11px;color:{{ r.durInk }};font-variant-numeric:tabular-nums">{{ r.durLabel }}</span>
+                  </div>
+
+                  <div style="flex:none;display:flex;align-items:center;gap:2px;padding:3px;background:var(--s1);border:1px solid var(--line2);border-radius:9px">
+                    <sc-for list="{{ r.lengths }}" as="l" hint-placeholder-count="4">
+                      <button onClick="{{ l.go }}" title="Clip length" style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="min-width:28px;height:24px;padding:0 6px;background:{{ l.bg }};border:none;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:11px;color:{{ l.ink }};font-variant-numeric:tabular-nums">{{ l.v }}</button>
+                    </sc-for>
+                  </div>
+
+                  <span style="flex:none;padding:5px 11px;border-radius:999px;background:{{ r.statusBg }};font-size:11.5px;color:{{ r.statusInk }};white-space:nowrap">{{ r.statusLabel }}</span>
+
+                  <button style-hover="{{ r.renderHover }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="flex:none;height:32px;display:flex;align-items:center;gap:8px;padding:0 14px;background:{{ r.renderBg }};border:1px solid {{ r.renderBorder }};border-radius:9px;cursor:{{ r.renderCursor }};font-size:12.5px;font-weight:500;color:{{ r.renderInk }};white-space:nowrap;opacity:{{ r.renderOpacity }}">{{ r.renderLabel }}</button>
+                  <button title="More" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="flex:none;width:28px;height:28px;display:grid;place-items:center;background:transparent;border:none;border-radius:8px;cursor:pointer;color:var(--ink3);font-size:14px">⋯</button>
+                </div>
+
+                <!-- three columns -->
+                <div style="display:grid;grid-template-columns:{{ r.cols }};align-items:stretch">
+
+                  <!-- SHOTS -->
+                  <div style="display:flex;flex-direction:column;gap:9px;padding:14px 16px;border-right:1px solid var(--line2);min-width:0">
+                    <span style="font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">Shots</span>
+
+                    <sc-for list="{{ r.shots }}" as="sh" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 11px;background:{{ sh.rowBg }};border:1px {{ sh.rowBorderStyle }} {{ sh.rowBorder }};border-radius:11px;min-width:0">
+                        <span style="flex:none;width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:{{ sh.chipBg }};font-family:var(--mono);font-size:11px;color:{{ sh.chipInk }}">{{ sh.no }}</span>
+
+                        <span style="flex:none;display:flex;align-items:center;width:44px;height:22px;padding:0 7px;background:var(--sunk);border:1px solid var(--line2);border-radius:7px;font-family:var(--mono);font-size:11px;color:var(--ink2);font-variant-numeric:tabular-nums">{{ sh.secs }}</span>
+
+                        <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:7px">
+                          <span style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                            <sc-for list="{{ sh.chips }}" as="c" hint-placeholder-count="3">
+                              <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="padding:2px 8px;background:var(--s1);border:1px solid var(--line2);border-radius:999px;cursor:pointer;font-size:10.5px;color:var(--ink2);white-space:nowrap">{{ c }}</button>
+                            </sc-for>
+                          </span>
+
+                          <p style="margin:0;font-size:12.5px;line-height:1.55;color:{{ sh.descInk }};text-wrap:pretty">
+                            <sc-for list="{{ sh.desc }}" as="t" hint-placeholder-count="2">
+                              <span style="color:{{ t.ink }};font-style:{{ t.italic }};background:{{ t.bg }};border-radius:4px;padding:{{ t.pad }}">{{ t.text }}</span>
+                            </sc-for>
+                          </p>
+
+                          <sc-if value="{{ sh.proposed }}" hint-placeholder-val="{{ false }}">
+                            <span style="display:flex;align-items:center;gap:8px">
+                              <span style="flex:1;font-size:11px;color:var(--warn)">Proposed from the scene</span>
+                              <button style-hover="opacity:.88" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:24px;padding:0 11px;background:var(--warn-bg);border:none;border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:500;color:var(--warn)">Accept</button>
+                              <button style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:24px;padding:0 9px;background:transparent;border:none;border-radius:7px;cursor:pointer;font-size:11.5px;color:var(--ink3)">Discard</button>
+                            </span>
+                          </sc-if>
+
+                          <sc-if value="{{ sh.flagged }}" hint-placeholder-val="{{ false }}">
+                            <span style="display:flex;flex-direction:column;gap:8px;padding:10px 11px;background:var(--bad-bg);border-radius:9px">
+                              <span style="display:flex;gap:8px;font-size:12px;line-height:1.5;color:var(--bad)">
+                                <span style="flex:none">⚠</span>
+                                <span style="flex:1">Shot 2 includes gore or violence. It can't be rendered as a frame. Suggest a rewrite that keeps the beat.</span>
+                              </span>
+                              <button style-hover="opacity:.88" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="align-self:flex-start;height:26px;padding:0 11px;background:transparent;border:1px solid var(--bad);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:500;color:var(--bad)">Suggest rewrite</button>
+                            </span>
+                          </sc-if>
+                        </span>
+
+                        <span style="flex:none;display:flex;align-items:center;gap:1px">
+                          <button title="Move up" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:6px;cursor:pointer;color:var(--ink3);font-size:11px">↑</button>
+                          <button title="Move down" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:6px;cursor:pointer;color:var(--ink3);font-size:11px">↓</button>
+                          <button title="Remove" style-hover="background:var(--hover);color:var(--bad)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:22px;height:22px;display:grid;place-items:center;background:transparent;border:none;border-radius:6px;cursor:pointer;color:var(--ink3);font-size:11px">✕</button>
+                        </span>
+                      </div>
+                    </sc-for>
+
+                    <div style="display:flex;align-items:center;gap:8px;padding-top:2px">
+                      <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;background:transparent;border:1px solid var(--line2);border-radius:9px;cursor:pointer;font-size:12.5px;color:var(--ink2)">＋ Add shot</button>
+                      <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;background:transparent;border:1px solid var(--line2);border-radius:9px;cursor:pointer;font-size:12.5px;color:var(--ink2)">✦ Propose shots <span style="color:var(--ink3)">free</span></button>
+                    </div>
+
+                    <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--sunk);border:1px solid var(--line2);border-radius:11px">
+                      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <button style-hover="{{ r.genHover }}" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:32px;display:flex;align-items:center;gap:8px;padding:0 14px;background:{{ r.genBg }};border:none;border-radius:9px;cursor:{{ r.genCursor }};font-size:12.5px;font-weight:500;color:{{ r.genInk }};opacity:{{ r.genOpacity }};white-space:nowrap">{{ r.genLabel }}</button>
+                        <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:32px;padding:0 14px;background:transparent;border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:12.5px;color:var(--ink2);white-space:nowrap">Finalize</button>
+                      </div>
+                      <span style="font-size:11.5px;line-height:1.5;color:{{ r.reasonInk }}">{{ r.reason }}</span>
+                    </div>
+                  </div>
+
+                  <!-- FRAMES -->
+                  <div style="display:flex;flex-direction:column;gap:9px;padding:14px 16px;border-right:1px solid var(--line2);min-width:0">
+                    <span style="font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">Frames</span>
+
+                    <div style="display:flex;flex-direction:column;gap:13px">
+                    <sc-for list="{{ r.frames }}" as="f" hint-placeholder-count="3">
+                      <div style="display:flex;flex-direction:column;gap:7px;min-width:0;max-width:320px">
+                        <div style="position:relative;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;background:{{ f.tileBg }};border:1px {{ f.tileBorderStyle }} {{ f.tileBorder }};border-radius:10px;overflow:hidden">
+                          <sc-if value="{{ f.hasImage }}" hint-placeholder-val="{{ false }}">
+                            <span style="position:absolute;inset:0;background:linear-gradient(160deg,{{ f.imgA }},{{ f.imgB }} 62%,{{ f.imgC }})"></span>
+                          </sc-if>
+                          <span style="position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px;text-align:center">
+                            <span style="font-size:15px;color:{{ f.glyphInk }};animation:{{ f.anim }}">{{ f.glyph }}</span>
+                            <span style="font-size:11px;line-height:1.4;color:{{ f.labelInk }}">{{ f.label }}</span>
+                          </span>
+                          <sc-if value="{{ f.showBar }}" hint-placeholder-val="{{ false }}">
+                            <span style="position:absolute;left:10px;right:10px;bottom:10px;height:3px;border-radius:3px;background:var(--s3);overflow:hidden"><span style="display:block;width:{{ f.pct }};height:100%;border-radius:3px;background:var(--accent)"></span></span>
+                          </sc-if>
+                        </div>
+
+                        <div style="display:flex;align-items:center;gap:6px;min-width:0;font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums">
+                          <span style="flex:none;color:var(--ink3);white-space:nowrap">{{ f.caption }}</span>
+                          <span style="flex:1;min-width:0;color:{{ f.pillInk }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.stateWord }}</span>
+                        </div>
+
+                        <div style="display:{{ f.takesDisplay }};align-items:center;gap:6px;min-width:0">
+                          <span style="font-family:var(--mono);font-size:10.5px;color:var(--ink3);white-space:nowrap;font-variant-numeric:tabular-nums">{{ f.takeLabel }}</span>
+                          <button title="Previous take" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:20px;height:20px;display:grid;place-items:center;background:transparent;border:none;border-radius:5px;cursor:pointer;color:var(--ink3);font-size:10px">◂</button>
+                          <button title="Next take" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:20px;height:20px;display:grid;place-items:center;background:transparent;border:none;border-radius:5px;cursor:pointer;color:var(--ink3);font-size:10px">▸</button>
+                          <span style="flex:1"></span>
+                          <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="flex:none;height:22px;padding:0 9px;background:transparent;border:1px solid var(--line2);border-radius:6px;cursor:pointer;font-size:11px;color:var(--ink2)">Keep</button>
+                          <button style-hover="color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="flex:none;height:22px;padding:0 7px;background:transparent;border:none;border-radius:6px;cursor:pointer;font-size:11px;color:var(--ink3)">Compare</button>
+                        </div>
+                        <span style="display:{{ f.noTakesDisplay }};font-size:10.5px;color:var(--ink3)">{{ f.noTakeLabel }}</span>
+                      </div>
+                    </sc-for>
+                    </div>
+                  </div>
+
+                  <!-- IN THIS REEL -->
+                  <div style="display:flex;flex-direction:column;gap:14px;padding:14px 16px;min-width:0">
+                    <span style="font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">In this reel</span>
+
+                    <div style="display:flex;flex-direction:column;gap:9px">
+                      <div style="display:flex;align-items:baseline;gap:8px">
+                        <span style="flex:1;font-size:11.5px;color:var(--ink2)">Cast</span>
+                        <a href="#characters" style="font-size:11px">→ Characters</a>
+                      </div>
+                      <div style="display:flex;flex-direction:column;gap:8px">
+                        <sc-for list="{{ r.cast }}" as="c" hint-placeholder-count="2">
+                          <span style="display:flex;align-items:center;gap:10px;min-width:0">
+                            <span style="flex:none;width:34px;height:44px;border-radius:8px;background:linear-gradient(150deg,{{ c.a }},{{ c.b }});display:grid;place-items:center;font-size:10.5px;font-weight:600;color:#fff">{{ c.ini }}</span>
+                            <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                              <span style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.name }}</span>
+                              <span style="font-size:11px;color:var(--ink3)">{{ c.meta }}</span>
+                            </span>
+                          </span>
+                        </sc-for>
+                      </div>
+                    </div>
+
+                    <div style="display:flex;flex-direction:column;gap:9px;padding-top:12px;border-top:1px solid var(--line2)">
+                      <div style="display:flex;align-items:baseline;gap:8px">
+                        <span style="flex:1;font-size:11.5px;color:var(--ink2)">Location</span>
+                        <a href="#locations" style="font-size:11px">→ Locations</a>
+                      </div>
+                      <span style="font-family:var(--mono);font-size:12px;text-transform:uppercase;color:var(--ink)">{{ r.locName }}</span>
+                      <span style="font-size:11.5px;line-height:1.5;color:var(--ink3);text-wrap:pretty">{{ r.locDesc }}</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ════ EPISODE VIEW ════ -->
+      <sc-if value="{{ isEpisode }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Episode" style="flex:1;min-height:0;overflow-y:auto;padding:0 20px 24px">
+        <div style="max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+            <sc-for list="{{ stats }}" as="t" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:9px;padding:15px 16px;background:var(--s1);border:1px solid var(--line2);border-radius:14px">
+                <span style="font-size:11.5px;color:var(--ink2)">{{ t.label }}</span>
+                <span style="font-size:26px;font-weight:300;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:{{ t.ink }}">{{ t.value }}</span>
+                <span style="font-size:11px;color:var(--ink3)">{{ t.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="overflow-x:auto;background:var(--s1);border:1px solid var(--line2);border-radius:14px">
+            <div style="min-width:940px">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--sunk);border-bottom:1px solid var(--line2);font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">
+                <span style="width:34px;flex:none">#</span>
+                <span style="flex:1;min-width:0">Scene</span>
+                <span style="width:64px;flex:none">Reels</span>
+                <span style="width:64px;flex:none">Shots</span>
+                <span style="width:150px;flex:none">Frames</span>
+                <span style="width:64px;flex:none">Dur.</span>
+                <span style="width:130px;flex:none">Status</span>
+                <span style="width:72px;flex:none"></span>
+              </div>
+              <sc-for list="{{ epRows }}" as="e" hint-placeholder-count="3">
+                <div style-hover="background:var(--s1)" style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line2)">
+                  <span style="width:34px;flex:none;font-family:var(--mono);font-size:12px;color:var(--ink3)">{{ e.no }}</span>
+                  <span style="flex:1;min-width:0;font-family:var(--mono);font-size:12.5px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)">{{ e.heading }}</span>
+                  <span style="width:64px;flex:none;font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums">{{ e.reels }}</span>
+                  <span style="width:64px;flex:none;font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums">{{ e.shots }}</span>
+                  <span style="width:150px;flex:none;display:flex;align-items:center;gap:9px">
+                    <span style="flex:1;height:4px;border-radius:3px;background:var(--s3);overflow:hidden"><span style="display:block;width:{{ e.pct }};height:100%;border-radius:3px;background:{{ e.barColor }}"></span></span>
+                    <span style="flex:none;font-family:var(--mono);font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums">{{ e.frames }}</span>
+                  </span>
+                  <span style="width:64px;flex:none;font-family:var(--mono);font-size:11.5px;color:var(--ink2);font-variant-numeric:tabular-nums">{{ e.dur }}</span>
+                  <span style="width:130px;flex:none"><span style="padding:4px 10px;border-radius:999px;background:{{ e.statusBg }};font-size:11px;color:{{ e.statusInk }};white-space:nowrap">{{ e.status }}</span></span>
+                  <span style="width:72px;flex:none;display:flex;justify-content:flex-end">
+                    <button onClick="{{ e.open }}" style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="height:26px;padding:0 10px;background:transparent;border:1px solid var(--line2);border-radius:7px;cursor:pointer;font-size:11.5px;color:var(--ink2);white-space:nowrap">Open →</button>
+                  </span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ── STATUS BAR ── -->
+      <div style="flex:none;height:28px;display:flex;align-items:center;gap:10px;padding:0 16px;border-top:1px solid var(--line2);font-size:11px;color:var(--ink3)">
+        <span style="white-space:nowrap;font-variant-numeric:tabular-nums">{{ statusLeft }}</span>
+        <div style="flex:1"></div>
+        <button onClick="{{ toggleNav }}" style-hover="color:var(--ink2)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="padding:0 4px;background:transparent;border:none;border-radius:5px;cursor:pointer;font-size:11px;color:var(--ink3);white-space:nowrap">{{ navLabel }}</button>
+        <span style="display:flex;align-items:center;gap:6px;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--ok)"></span>Saved</span>
+        <span style="font-family:var(--mono);white-space:nowrap">ep_001/production</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── ASSISTANT ── -->
+  <sc-if value="{{ aiOpen }}" hint-placeholder-val="{{ false }}">
+  <aside style="position:relative;z-index:3;width:400px;flex:none;display:flex;flex-direction:column;min-height:0;background:var(--sunk);border-left:1px solid var(--line2)">
+    <div style="flex:none;height:60px;display:flex;align-items:center;gap:8px;padding:0 12px 0 16px">
+      <span style="width:20px;height:20px;flex:none;border-radius:50%;background:radial-gradient(circle at 33% 28%,#e8f6ff 0%,#8fd4ff 22%,#2a7fd4 58%,#123a72 100%)"></span>
+      <span style="flex:1;font-size:13.5px;font-weight:500">Assistant</span>
+      <button onClick="{{ toggleAI }}" title="Close" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:28px;height:28px;display:grid;place-items:center;background:transparent;border:none;border-radius:8px;cursor:pointer;color:var(--ink3)">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"></path></svg>
+      </button>
+    </div>
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px 28px">
+      <span style="width:124px;height:124px;border-radius:50%;background:radial-gradient(circle at 34% 26%,#f2fbff 0%,#a8e0ff 18%,#4b9fe0 48%,#1b4f92 76%,#0c2648 100%);box-shadow:0 0 90px oklch(0.62 0.17 245 / .45);animation:orbdrift 9s ease-in-out infinite"></span>
+      <div style="display:flex;flex-direction:column;gap:7px;text-align:center">
+        <span style="font-size:17px;font-weight:500;letter-spacing:-.01em">How can I help?</span>
+        <span style="font-size:13.5px;line-height:1.55;color:var(--ink2)">Ask about this reel, or have me propose shots from the scene.</span>
+      </div>
+    </div>
+    <div style="flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:0 20px 20px">
+      <sc-for list="{{ chips }}" as="c" hint-placeholder-count="3">
+        <button style-hover="background:var(--s2);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:9px;padding:8px 14px;background:var(--s1);border:1px solid var(--line2);border-radius:999px;cursor:pointer;font-size:13px;color:var(--ink2);white-space:nowrap">
+          <span style="width:7px;height:7px;flex:none;border-radius:2px;background:{{ c.dot }}"></span>{{ c.label }}
+        </button>
+      </sc-for>
+    </div>
+  </aside>
+  </sc-if>
+
+  <!-- ── CONTEXT OVERLAY ── -->
+  <sc-if value="{{ ctxOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;z-index:6;left:56px;top:10px;bottom:10px;width:330px;display:flex;flex-direction:column;background:var(--sunk);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 70px var(--shade);overflow:hidden">
+    <div style="flex:none;display:flex;align-items:center;gap:8px;padding:14px 12px 10px 16px">
+      <span style="flex:1;font-size:14px;font-weight:500">Characters</span>
+      <button onClick="{{ closeCtx }}" title="Close" style-hover="background:var(--hover);color:var(--ink)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="width:26px;height:26px;display:grid;place-items:center;background:transparent;border:none;border-radius:8px;cursor:pointer;color:var(--ink3)">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"></path></svg>
+      </button>
+    </div>
+    <div style="flex:1;min-height:0;overflow-y:auto;padding:4px 12px 16px;display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ people }}" as="p" hint-placeholder-count="2">
+        <button style-hover="background:var(--hover)" style-focus="outline:none;box-shadow:0 0 0 2px var(--accent)" style="display:flex;align-items:center;gap:11px;width:100%;padding:9px 10px;background:{{ p.bg }};border:none;border-radius:11px;cursor:pointer;text-align:left">
+          <span style="width:30px;height:30px;flex:none;border-radius:9px;background:{{ p.color }};color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center">{{ p.ini }}</span>
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+            <span style="font-size:13px;color:var(--ink)">{{ p.name }}</span>
+            <span style="font-size:11.5px;color:var(--ink3)">{{ p.meta }}</span>
+          </span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;scene&quot;,&quot;episode&quot;],&quot;default&quot;:&quot;scene&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;jobState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;authoring&quot;,&quot;empty&quot;,&quot;generating&quot;,&quot;blocked&quot;,&quot;nocredits&quot;,&quot;rendered&quot;],&quot;default&quot;:&quot;authoring&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;contextPanel&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;none&quot;,&quot;characters&quot;],&quot;default&quot;:&quot;none&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Route state&quot;},&quot;assistant&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Route state&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: this.props.theme || "dark",
+    view: this.props.view || "scene",
+    job: this.props.jobState || "authoring",
+    scene: 1,
+    len: 15,
+    navOverride: null,
+    aiOverride: null,
+    ctx: this.props.contextPanel || "none",
+    w: typeof window === "undefined" ? 1600 : window.innerWidth
+  };
+
+  componentDidMount() {
+    this._r = () => this.setState({ w: window.innerWidth });
+    window.addEventListener("resize", this._r);
+    this._r();
+  }
+  componentWillUnmount() { window.removeEventListener("resize", this._r); }
+
+  renderVals() {
+    const s = this.state, dark = s.theme === "dark";
+    const on = "var(--s2)", off = "transparent";
+    const job = s.job;
+    const empty = job === "empty";
+
+    const navOpen = s.navOverride === null ? s.w >= 1040 : s.navOverride;
+    const aiOpen = s.aiOverride === null ? (this.props.assistant === true && s.w >= 1400) : s.aiOverride;
+    const ctxOpen = s.ctx === "characters";
+    const wide = s.w - (navOpen ? 292 : 56) - (aiOpen ? 400 : 0) - 72;
+
+    const credits = job === "nocredits" ? 4 : 220;
+    const T = (text, kind) => ({
+      text,
+      ink: kind === "m" ? "var(--accent)" : kind === "q" ? "var(--ink)" : "inherit",
+      bg: kind === "m" ? "var(--accent-bg)" : "transparent",
+      pad: kind === "m" ? "1px 5px" : "0",
+      italic: kind === "q" ? "italic" : "normal"
+    });
+
+    const segColors = ["oklch(0.70 0.11 250)", "oklch(0.74 0.11 150)", "oklch(0.78 0.10 75)", "oklch(0.70 0.12 300)"];
+
+    const cast = [
+      { ini: "AD", name: "Ade", meta: "17 · lead", a: "oklch(0.58 0.13 300)", b: "oklch(0.38 0.10 300)" },
+      { ini: "OM", name: "Old man", meta: "unnamed · bench", a: "oklch(0.60 0.11 30)", b: "oklch(0.40 0.09 30)" }
+    ];
+
+    // ── reel 1 shots, varied by job state ──
+    const flagged2 = job === "blocked";
+    const r1shots = [
+      {
+        no: "1", secs: "4s", chips: ["Wide", "static", "eye level"],
+        desc: [T("Floodlights buzz on over an empty pitch. "), T("@Ade", "m"), T(" lines up a ball on the spot.")]
+      },
+      {
+        no: "2", secs: "5s", chips: ["Medium", "push in", "low"],
+        flagged: flagged2,
+        desc: [T("@Ade", "m"), T(" strikes and the ball sails wide. "), T("\u201cNot good enough. Never was.\u201d", "q")]
+      },
+      {
+        no: "3", secs: "3s", chips: ["Close", "handheld", "eye level"],
+        placeholder: job === "authoring",
+        desc: job === "authoring"
+          ? [T("Describe the shot. Type @ for cast, quote spoken lines.")]
+          : [T("@Ade", "m"), T(" yanks off his boots and hurls them into the dark.")]
+      }
+    ].map((sh) => ({
+      ...sh,
+      proposed: false,
+      rowBg: sh.flagged ? "var(--bad-bg)" : "var(--s1)",
+      rowBorder: sh.flagged ? "var(--bad)" : "var(--line2)",
+      rowBorderStyle: "solid",
+      chipBg: sh.flagged ? "var(--bad-bg)" : "var(--s2)",
+      chipInk: sh.flagged ? "var(--bad)" : "var(--ink2)",
+      descInk: sh.placeholder ? "var(--ink3)" : "var(--ink2)"
+    }));
+
+    const framePreset = {
+      authoring: [
+        { st: "done", take: [2, 3] },
+        { st: "await" },
+        { st: "needs" }
+      ],
+      nocredits: [
+        { st: "await" },
+        { st: "await" },
+        { st: "await" }
+      ],
+      generating: [
+        { st: "done", take: [2, 3] },
+        { st: "queued" },
+        { st: "gen", pct: 62 }
+      ],
+      blocked: [
+        { st: "done", take: [2, 3] },
+        { st: "blocked" },
+        { st: "await" }
+      ],
+      rendered: [
+        { st: "done", take: [3, 3] },
+        { st: "done", take: [1, 2] },
+        { st: "done", take: [2, 2] }
+      ]
+    }[job] || [];
+
+    const frameOf = (f, i, list) => {
+      const map = {
+        done: { pill: "Done", word: "Done", pillInk: "var(--ok)", pillBg: "var(--ok-bg)", label: "", glyph: "", img: true },
+        await: { pill: "Empty", word: "Awaiting frame", pillInk: "var(--ink3)", pillBg: "var(--s2)", label: "Awaiting frame", glyph: "◍" },
+        needs: { pill: "Empty", word: "Needs description", pillInk: "var(--warn)", pillBg: "var(--warn-bg)", label: "Needs description", glyph: "⌖" },
+        queued: { pill: "Queued", word: "Queued", pillInk: "var(--accent)", pillBg: "var(--accent-bg)", label: "Queued", glyph: "◐" },
+        gen: { pill: "Working", word: "Generating " + f.pct + "%", pillInk: "var(--accent)", pillBg: "var(--accent-bg)", label: "Generating " + f.pct + "%", glyph: "◐", anim: "shimmer 1.6s ease-in-out infinite" },
+        blocked: { pill: "Blocked", word: "Blocked", pillInk: "var(--bad)", pillBg: "var(--bad-bg)", label: "Can't render — Rewrite shot 2", glyph: "⚠" }
+      }[f.st];
+      const src = (list || [])[i];
+      const hue = [250, 40, 150][i % 3];
+      return {
+        pill: map.pill, pillInk: map.pillInk, pillBg: map.pillBg,
+        label: map.label, glyph: map.glyph,
+        glyphInk: map.pillInk, labelInk: f.st === "blocked" ? "var(--bad)" : f.st === "needs" ? "var(--warn)" : "var(--ink3)",
+        anim: map.anim || "none",
+        hasImage: !!map.img,
+        imgA: "oklch(" + (dark ? 0.32 : 0.74) + " 0.05 " + hue + ")",
+        imgB: "oklch(" + (dark ? 0.22 : 0.62) + " 0.04 " + (hue + 20) + ")",
+        imgC: "oklch(" + (dark ? 0.14 : 0.52) + " 0.03 " + (hue + 40) + ")",
+        tileBg: map.img ? "var(--sunk)" : "var(--sunk)",
+        tileBorder: f.st === "blocked" ? "var(--bad)" : f.st === "needs" ? "var(--warn)" : "var(--line2)",
+        tileBorderStyle: (f.st === "await" || f.st === "needs") ? "dashed" : "solid",
+        showBar: f.st === "gen", pct: (f.pct || 0) + "%",
+        caption: "Shot " + (src ? src.no : i + 1) + " · " + (src ? src.secs : "—") + " ·",
+        stateWord: map.word,
+        takesDisplay: f.take ? "flex" : "none",
+        noTakesDisplay: f.take ? "none" : "block",
+        takeLabel: f.take ? "take " + f.take[0] + " of " + f.take[1] : "",
+        noTakeLabel: f.st === "gen" ? "takes appear when the frame lands" : "no takes yet"
+      };
+    };
+
+    const doneCount = framePreset.filter((f) => f.st === "done").length;
+    const genCount = job === "rendered" ? 0 : job === "blocked" ? 1 : job === "nocredits" ? 3 : 2;
+    const cost = genCount * 4;
+
+    const reelStatus = {
+      authoring: { label: "Writing shots", ink: "var(--ink2)", bg: "var(--s2)" },
+      nocredits: { label: "Writing shots", ink: "var(--ink2)", bg: "var(--s2)" },
+      generating: { label: "Generating frames", ink: "var(--accent)", bg: "var(--accent-bg)" },
+      blocked: { label: "Blocked", ink: "var(--bad)", bg: "var(--bad-bg)" },
+      rendered: { label: "Rendered · view", ink: "var(--ok)", bg: "var(--ok-bg)" }
+    }[job] || { label: "Writing shots", ink: "var(--ink2)", bg: "var(--s2)" };
+
+    const reason = {
+      authoring: "1 shot needs a description before frames can generate.",
+      nocredits: "Needs 12 credits, you have 4. Top up to continue.",
+      generating: "You can keep editing shots that haven't started.",
+      blocked: "Shot 2 is blocked. Rewrite it to generate the remaining frame.",
+      rendered: "All 3 frames kept. Reel rendered at 720p."
+    }[job];
+
+    const noMoney = job === "nocredits";
+    const genLabel = job === "rendered" ? "✦ Regenerate frames · 12 cr" : "✦ Generate " + genCount + (genCount === 1 ? " frame · " : " frames · ") + cost + " cr";
+
+    const secsOf = (sh) => parseInt(sh.secs, 10);
+    const mkReel = (cfg) => {
+      const total = cfg.shots.reduce((a, b) => a + secsOf(b), 0);
+      const over = total > cfg.len;
+      const segs = cfg.shots.map((sh, i) => ({
+        w: Math.min(100, (secsOf(sh) / Math.max(cfg.len, total)) * 100) + "%",
+        color: sh.flagged ? "var(--bad)" : segColors[i % segColors.length]
+      }));
+      if (over) segs.push({ w: ((total - cfg.len) / total) * 100 + "%", color: "var(--bad)" });
+      return {
+        ...cfg,
+        shotMeta: cfg.shots.length + " shots · " + total + " s",
+        segs,
+        durLabel: total + " / " + cfg.len + " s",
+        durInk: over ? "var(--bad)" : "var(--ink3)",
+        lengths: [5, 8, 10, 15].map((v) => ({
+          v: String(v),
+          bg: v === cfg.len ? on : off,
+          ink: v === cfg.len ? "var(--ink)" : "var(--ink3)",
+          go: () => this.setState({ len: v })
+        })),
+        cols: wide >= 1020 ? "minmax(0,1.45fr) minmax(0,1fr) 230px" : wide >= 640 ? "minmax(0,1.2fr) minmax(0,1fr)" : "minmax(0,1fr)",
+        frameCols: wide >= 1020 ? "repeat(auto-fill,minmax(150px,1fr))" : wide >= 640 ? "repeat(auto-fill,minmax(150px,220px))" : "repeat(auto-fill,minmax(150px,200px))",
+        cast,
+        locName: "EXT. COMMUNITY PITCH",
+        locDesc: "Municipal five-a-side cage, two working floodlights, netting patched with cable ties."
+      };
+    };
+
+    const reel1 = mkReel({
+      name: "Reel 1",
+      len: s.len,
+      shots: r1shots,
+      frames: framePreset.map((f, i) => frameOf(f, i, r1shots)),
+      statusLabel: reelStatus.label, statusInk: reelStatus.ink, statusBg: reelStatus.bg,
+      renderLabel: job === "rendered" ? "Rendered · view" : "▶ Render reel · 40 cr",
+      renderBg: job === "rendered" ? "var(--ok-bg)" : "var(--accent-bg)",
+      renderBorder: "transparent",
+      renderInk: job === "rendered" ? "var(--ok)" : "var(--accent)",
+      renderHover: job === "rendered" ? "opacity:.85" : "background:var(--accent);color:var(--solid-ink)",
+      renderCursor: "pointer",
+      renderOpacity: doneCount === 3 || job === "rendered" ? "1" : ".55",
+      reason, reasonInk: noMoney ? "var(--live)" : "var(--ink3)",
+      genLabel,
+      genBg: noMoney ? "var(--s2)" : "var(--accent-bg)",
+      genInk: noMoney ? "var(--ink3)" : "var(--accent)",
+      genHover: noMoney ? "background:var(--s2)" : "background:var(--accent);color:var(--solid-ink)",
+      genCursor: noMoney ? "not-allowed" : "pointer",
+      genOpacity: noMoney ? ".5" : "1"
+    });
+
+    const r2shots = [
+      {
+        no: "1", secs: "4s", chips: ["Wide", "static", "low"],
+        desc: [T("An "), T("@Old Man", "m"), T(" sits on the bench at the touchline, a flat ball at his feet.")]
+      },
+      {
+        no: "2", secs: "2s", chips: ["Close", "static", "eye level"],
+        desc: [T("@Ade", "m"), T(" turns. "), T("\u201cI said I'm done.\u201d", "q")]
+      },
+      {
+        no: "3", secs: "3s", chips: ["Medium", "slow pan", "eye level"], proposed: true,
+        desc: [T("The old man taps the flat ball toward "), T("@Ade", "m"), T("; it barely rolls.")]
+      }
+    ].map((sh) => ({
+      ...sh,
+      flagged: false,
+      rowBg: sh.proposed ? "var(--warn-bg)" : "var(--s1)",
+      rowBorder: sh.proposed ? "var(--warn)" : "var(--line2)",
+      rowBorderStyle: sh.proposed ? "dashed" : "solid",
+      chipBg: sh.proposed ? "var(--warn-bg)" : "var(--s2)",
+      chipInk: sh.proposed ? "var(--warn)" : "var(--ink2)",
+      descInk: "var(--ink2)"
+    }));
+
+    const reel2 = mkReel({
+      name: "Reel 2",
+      len: 8,
+      shots: r2shots,
+      frames: [{ st: "await" }, { st: "await" }, { st: "needs" }].map((f, i) => frameOf(f, i, r2shots)),
+      statusLabel: "Writing shots", statusInk: "var(--ink2)", statusBg: "var(--s2)",
+      renderLabel: "▶ Render reel · 40 cr",
+      renderBg: "var(--accent-bg)", renderBorder: "transparent", renderInk: "var(--accent)",
+      renderHover: "background:var(--accent);color:var(--solid-ink)",
+      renderCursor: "pointer", renderOpacity: ".55",
+      reason: "1 shot is still a proposal. Accept it to generate frames.",
+      reasonInk: "var(--ink3)",
+      genLabel: "✦ Generate 2 frames · 8 cr",
+      genBg: "var(--accent-bg)", genInk: "var(--accent)",
+      genHover: "background:var(--accent);color:var(--solid-ink)",
+      genCursor: "pointer", genOpacity: "1"
+    });
+
+    const reels = empty ? [] : [reel1, reel2];
+
+    const sceneData = [
+      { n: 1, no: "1", heading: "EXT. COMMUNITY PITCH – DUSK", reels: empty ? 0 : 2, shots: empty ? 0 : 6, done: doneCount, total: 6, dur: empty ? "—" : "18s", state: empty ? "none" : job },
+      { n: 2, no: "2", heading: "EXT. COMMUNITY PITCH – MOMENTS LATER", reels: 0, shots: 0, done: 0, total: 0, dur: "—", state: "none" },
+      { n: 3, no: "3", heading: "EXT. COMMUNITY PITCH – NIGHT", reels: 1, shots: 2, done: 2, total: 2, dur: "8s", state: "rendered" }
+    ];
+
+    const stMap = {
+      none: { label: "No reels", ink: "var(--ink3)", bg: "var(--s2)", dot: "var(--ink3)" },
+      authoring: { label: "Writing shots", ink: "var(--ink2)", bg: "var(--s2)", dot: "var(--warn)" },
+      nocredits: { label: "Needs credits", ink: "var(--live)", bg: "var(--live-bg)", dot: "var(--live)" },
+      generating: { label: "Generating", ink: "var(--accent)", bg: "var(--accent-bg)", dot: "var(--accent)" },
+      blocked: { label: "Blocked", ink: "var(--bad)", bg: "var(--bad-bg)", dot: "var(--bad)" },
+      rendered: { label: "Rendered", ink: "var(--ok)", bg: "var(--ok-bg)", dot: "var(--ok)" },
+      empty: { label: "No reels", ink: "var(--ink3)", bg: "var(--s2)", dot: "var(--ink3)" }
+    };
+
+    const epDone = sceneData.reduce((a, b) => a + b.done, 0);
+    const epTotal = sceneData.reduce((a, b) => a + b.total, 0) || 1;
+
+    return {
+      theme: s.theme,
+      themeIcon: dark ? "☀" : "☾",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+
+      navOpen, aiOpen, ctxOpen,
+      navLabel: navOpen ? "Hide nav" : "Show nav",
+      toggleNav: () => this.setState({ navOverride: !navOpen }),
+      toggleAI: () => this.setState({ aiOverride: !aiOpen }),
+      openChars: () => this.setState({ ctx: ctxOpen ? "none" : "characters" }),
+      closeCtx: () => this.setState({ ctx: "none" }),
+      charsBg: ctxOpen ? on : off,
+      charsInk: ctxOpen ? "var(--ink)" : "var(--ink3)",
+      presenceDisplay: s.w >= 1200 ? "flex" : "none",
+
+      isScene: s.view === "scene", isEpisode: s.view === "episode",
+      goScene: () => this.setState({ view: "scene" }),
+      goEpisode: () => this.setState({ view: "episode" }),
+      vSceneBg: s.view === "scene" ? on : off, vSceneInk: s.view === "scene" ? "var(--ink)" : "var(--ink2)",
+      vEpBg: s.view === "episode" ? on : off, vEpInk: s.view === "episode" ? "var(--ink)" : "var(--ink2)",
+
+      reelsChip: reels.length + (reels.length === 1 ? " reel in this scene" : " reels in this scene"),
+      creditsLabel: credits + " cr",
+      creditsInk: noMoney ? "var(--live)" : "var(--ink2)",
+      creditsBg: noMoney ? "var(--live-bg)" : "var(--s1)",
+      creditsBorder: noMoney ? "transparent" : "var(--line2)",
+
+      sceneTabs: sceneData.map((sc) => ({
+        label: sc.no + ". " + sc.heading,
+        dot: stMap[sc.state].dot,
+        bg: sc.n === s.scene ? on : off,
+        border: sc.n === s.scene ? "var(--line)" : "transparent",
+        ink: sc.n === s.scene ? "var(--ink)" : "var(--ink2)",
+        select: () => this.setState({ scene: sc.n })
+      })),
+
+      sceneNav: sceneData.map((sc) => ({
+        no: sc.no,
+        heading: sc.heading,
+        pct: Math.round((sc.done / (sc.total || 1)) * 100) + "%",
+        barColor: sc.state === "rendered" ? "var(--ok)" : sc.state === "none" ? "var(--s3)" : "var(--accent)",
+        meta: sc.state === "none" ? "no reels" : sc.state === "rendered" ? "rendered" : sc.done + "/" + sc.total + " frames · " + sc.reels + " reels",
+        navBg: sc.n === s.scene ? on : off,
+        navInk: sc.n === s.scene ? "var(--ink)" : "var(--ink2)",
+        select: () => this.setState({ scene: sc.n })
+      })),
+
+      isEmpty: empty,
+      showOrphans: job === "authoring",
+      reels,
+
+      statusLeft: "Ep 1 · 3 scenes · " + reels.length + (reels.length === 1 ? " reel · Scene " : " reels · Scene ") + s.scene + " · " + (empty ? "No reels" : reelStatus.label),
+
+      epFramesLabel: epDone + " / " + epTotal,
+      epFramesPct: Math.round((epDone / epTotal) * 100) + "%",
+      epFramesNote: (epTotal - epDone) + " frames left to generate",
+
+      stats: [
+        { label: "Scenes with reels", value: sceneData.filter((x) => x.reels > 0).length + " / 3", note: "of 3 in the episode", ink: "var(--ink)" },
+        { label: "Reels", value: String(sceneData.reduce((a, b) => a + b.reels, 0)), note: sceneData.filter((x) => x.reels > 0).map((x) => x.reels + " in Scene " + x.no).join(" · "), ink: "var(--ink)" },
+        { label: "Frames done", value: epDone + " / " + epTotal, note: (epTotal - epDone) + " awaiting generation", ink: "var(--ink)" },
+        { label: "Clips rendered", value: "1", note: "720p · 8 s total", ink: "var(--ok)" }
+      ],
+
+      epRows: sceneData.map((sc) => ({
+        no: sc.no, heading: sc.heading,
+        reels: sc.reels || "—", shots: sc.shots || "—",
+        frames: sc.total ? sc.done + "/" + sc.total : "—",
+        pct: Math.round((sc.done / (sc.total || 1)) * 100) + "%",
+        barColor: sc.state === "rendered" ? "var(--ok)" : "var(--accent)",
+        dur: sc.dur,
+        status: stMap[sc.state].label, statusInk: stMap[sc.state].ink, statusBg: stMap[sc.state].bg,
+        open: () => this.setState({ view: "scene", scene: sc.n })
+      })),
+
+      chips: [
+        { label: "Propose shots for Scene 1", dot: "var(--accent)" },
+        { label: "Tighten Reel 1 to 10 seconds", dot: "var(--warn)" },
+        { label: "Rewrite shot 2 without violence", dot: "var(--live)" }
+      ],
+
+      people: [
+        { ini: "AD", name: "Ade", meta: "17 · 3 scenes · lead", color: "oklch(0.55 0.13 300)", bg: on },
+        { ini: "OM", name: "Old man", meta: "unnamed · 2 scenes", color: "oklch(0.58 0.11 30)", bg: off }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

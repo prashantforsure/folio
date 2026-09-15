@@ -10,7 +10,7 @@ import { episodeSegmentFromSegments, railSectionFromSegments } from '../lib/work
  *
  * AGENTS.md, Routing: "`:episodeId` shares a path position with the
  * project-scoped names. Validate every episode id against `characters`,
- * `locations`, `timeline`, `bible`, `research`, `insights`, `production`,
+ * `locations`, `timeline`, `research`, `insights`, `production`,
  * `settings`, `assets`, and keep ids to the `ep_NNN` shape. Static-first
  * precedence saves this tree by accident; do not rely on it."
  *
@@ -40,12 +40,11 @@ describe('parseEpisodeSegment - the router', () => {
     }
   })
 
-  it('names the nine AGENTS.md lists, in its order, with assets kept', () => {
+  it('names the eight AGENTS.md lists, in its order, with assets kept', () => {
     expect(RESERVED_PROJECT_SEGMENTS).toEqual([
       'characters',
       'locations',
       'timeline',
-      'bible',
       'research',
       'insights',
       'production',
