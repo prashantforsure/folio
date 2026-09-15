@@ -19,6 +19,7 @@ import {
   LocationIdSchema,
   NodeIdSchema,
   ProjectIdSchema,
+  ReelIdSchema,
   ShotIdSchema,
   UserIdSchema,
 } from './ids'
@@ -44,9 +45,11 @@ import { OrderKeySchema, TimestampSchema } from './primitives'
  *                        row links to its job and, on failure, to its refund
  *                        ledger entry" - two foreign keys and nothing else.
  *
- * A shot's *frame* is not a column. It is the latest generation for the
- * shot, read with its job, and `FrameState` below is that read folded into
- * the seven states the route draws.
+ * A shot's *frame* is not a column. It is the generation the writer kept,
+ * or failing that the latest one, read with its job, and `FrameState` below
+ * is that read folded into the seven states the route draws. Every other
+ * generation is a *take* the Production route can page through
+ * (`production.ts`).
  *
  * ## Cost is named before it is spent
  *
@@ -91,6 +94,12 @@ export const ShotSchema = z.object({
   /** The heading node's id, as `scenes.scene_node_id`. Not a foreign key. */
   sceneNodeId: NodeIdSchema,
   orderKey: OrderKeySchema,
+  /**
+   * The reel this shot renders in, or null: a shot boarded in the Storyboard
+   * and not yet put in a reel. A reel is a Production-phase grouping over the
+   * same rows (`production.ts`); the shot list stays one list, in one order.
+   */
+  reelId: ReelIdSchema.nullable(),
   origin: ShotOriginSchema,
   state: ShotStateSchema,
   createdAt: TimestampSchema,
@@ -142,6 +151,12 @@ export const FrameGenerationSchema = z.object({
   frameUrl: z.string().nullable(),
   /** The `refund` entry, when the job failed. Null otherwise. */
   refundEntryId: LedgerEntryIdSchema.nullable(),
+  /**
+   * When the writer kept this take. At most one per shot (a partial unique
+   * index says so); the shot's frame is the kept generation when there is
+   * one, else the latest. Null on every other row.
+   */
+  keptAt: TimestampSchema.nullable(),
   createdAt: TimestampSchema,
 })
 

@@ -315,15 +315,46 @@ export type ShotState = (typeof SHOT_STATES)[number]
 export const ShotStateSchema = z.enum(SHOT_STATES)
 
 /**
- * What a job does. One kind this phase - a frame for a shot. Export, agent
- * runs and reels join it as they are built; the column is an enum so a
- * consumer switching on it is told when they do.
+ * What a job does. Two kinds: a frame for a shot (the Storyboard phase), and
+ * a clip for a reel (the Production phase). Export and agent runs join it as
+ * they are built; the column is an enum so a consumer switching on it is
+ * told when they do.
  */
-export const JOB_KINDS = ['frame_generation'] as const
+export const JOB_KINDS = ['frame_generation', 'reel_render'] as const
 
 export type JobKind = (typeof JOB_KINDS)[number]
 
 export const JobKindSchema = z.enum(JOB_KINDS)
+
+/**
+ * How long a reel's clip is, in seconds. A closed set, because the clip is
+ * what a video model produces and a model produces a fixed length; the
+ * writer picks one and the shots' durations must fill it exactly. Ruling A
+ * of the Production phase (`docs/build-decisions.md`) - reversible, one edit.
+ */
+export const CLIP_SECONDS = [5, 8, 10, 15] as const
+
+export type ClipSeconds = (typeof CLIP_SECONDS)[number]
+
+export const ClipSecondsSchema = z.literal(CLIP_SECONDS)
+
+export const DEFAULT_CLIP_SECONDS: ClipSeconds = 15
+
+export const isClipSeconds = (value: number): value is ClipSeconds =>
+  (CLIP_SECONDS as readonly number[]).includes(value)
+
+/**
+ * The resolution a reel renders at. Project-wide, on the project row, not
+ * per reel: one fewer decision per click, and every clip of a project
+ * matches. Ruling D of the Production phase.
+ */
+export const RENDER_RESOLUTIONS = ['720p', '1080p'] as const
+
+export type RenderResolution = (typeof RENDER_RESOLUTIONS)[number]
+
+export const RenderResolutionSchema = z.enum(RENDER_RESOLUTIONS)
+
+export const DEFAULT_RENDER_RESOLUTION: RenderResolution = '720p'
 
 /**
  * A job's lifecycle. AGENTS.md, Jobs, credits and cost, and the Production

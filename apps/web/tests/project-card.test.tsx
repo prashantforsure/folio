@@ -30,6 +30,7 @@ const card = ({
     format: 'hollywood',
     pageMode: 'paged',
     liveRepaginate: false,
+    renderResolution: '720p',
     tags: [],
     createdBy: userId('00000000-0000-4000-8000-0000000000aa'),
     createdAt: '2026-09-01T09:00:00.000Z',

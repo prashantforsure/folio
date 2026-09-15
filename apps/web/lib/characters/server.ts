@@ -52,7 +52,8 @@ import { buildMap, sceneRefOf } from './figures'
 const byGrid = (a: CastRow, b: CastRow): number =>
   b.appearances - a.appearances || b.lines - a.lines || a.name.localeCompare(b.name)
 
-const castRowOf = (record: CharacterRecordRow): CastRow => ({
+/** A character record as the grid draws it. Shared with the Production loader, which reads the same cast. */
+export const castRowOf = (record: CharacterRecordRow): CastRow => ({
   id: record.id,
   name: record.name,
   color: record.color,

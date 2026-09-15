@@ -6,6 +6,7 @@ import type {
   JobId,
   LedgerEntryId,
   OrderKey,
+  ReelId,
   Shot,
   ShotEdit,
   ShotId,
@@ -28,6 +29,7 @@ import {
   frameGenerations,
   jobs,
   nodes,
+  reels,
   sceneDerivations,
   shots,
 } from '../schema'
@@ -45,10 +47,20 @@ import { stamp, stampOrNull } from './mapping'
  * chain `workspace.ts` walks: `scene_derivations` in state
  * `present`, through the heading node to the episode's screenplay document.
  * Under each column, its `shots` in `order_key` order, and for each shot the
- * latest `frame_generations` row with its `jobs` row, folded into a
- * `FrameState`. Three statements for the whole board, whatever its size:
- * the scenes, the shots, the generations. Nothing is computed that a table
- * owns; the one thing computed is the shot's number, which no table owns.
+ * `frame_generations` row the writer kept - or, with none kept, the latest -
+ * with its `jobs` row, folded into a `FrameState`. Three statements for the
+ * whole board, whatever its size: the scenes, the shots, the generations.
+ * Nothing is computed that a table owns; the one thing computed is the
+ * shot's number, which no table owns.
+ *
+ * ## A finalized reel locks its shots, here
+ *
+ * The Production phase's `reels.finalized_at` (`schema/production.ts`)
+ * means "these shots are what the clip renders from". Every shot write in
+ * this file carries `notLocked`, so a shot in a finalized reel refuses an
+ * edit, a move, a delete or an acceptance from either route, and the action
+ * that asked reads `readShotLock` to say why. The server enforces; the
+ * client discloses.
  *
  * ## Reserve then execute, in one statement
  *
@@ -83,11 +95,13 @@ const descriptionOf = (raw: unknown): ShotSpec['description'] => {
   return [{ kind: 'text', text: `(description would not read: ${read.error.reason.kind})` }]
 }
 
-const toShot = (row: ShotRowShape): Shot => ({
+/** The `shots` row as the contract. Shared with the Production read. */
+export const shotFromRow = (row: ShotRowShape): Shot => ({
   id: row.id as ShotId,
   projectId: brandProjectId(row.projectId),
   sceneNodeId: row.sceneNodeId as NodeId,
   orderKey: row.orderKey as OrderKey,
+  reelId: row.reelId === null ? null : (row.reelId as ReelId),
   size: row.size,
   movement: row.movement,
   angle: row.angle,
@@ -100,7 +114,8 @@ const toShot = (row: ShotRowShape): Shot => ({
   updatedAt: stamp(row.updatedAt),
 })
 
-const toJob = (row: JobRowShape): Job => ({
+/** The `jobs` row as the contract. Shared with the Production read. */
+export const jobFromRow = (row: JobRowShape): Job => ({
   id: row.id as JobId,
   projectId: brandProjectId(row.projectId),
   kind: row.kind,
@@ -143,6 +158,12 @@ export const frameStateOf = (
 // Reads
 // ---------------------------------------------------------------------------
 
+/**
+ * The predicate every shot write carries: the shot is not in a finalized
+ * reel. Rendered inline so each write stays one statement.
+ */
+const notLocked = sql`not exists (select 1 from ${reels} where ${reels.id} = ${shots.reelId} and ${reels.finalizedAt} is not null)`
+
 /** One present scene of the episode, as the board's column header reads it. */
 type SceneHeader = {
   readonly sceneNodeId: NodeId
@@ -150,6 +171,8 @@ type SceneHeader = {
   readonly heading: string
   readonly reading: SluglineReading | null
   readonly locationId: LocationId | null
+  /** Derivation's cast - who is in the scene, from the script. */
+  readonly cast: readonly CharacterId[]
 }
 
 const readingOf = (raw: unknown): SluglineReading | null =>
@@ -164,6 +187,7 @@ export const listStoryboardScenes = async (scope: ProjectScope, episodeId: Episo
       heading: sceneDerivations.heading,
       reading: sceneDerivations.reading,
       locationId: sceneDerivations.locationId,
+      cast: sceneDerivations.cast,
     })
     .from(sceneDerivations)
     .innerJoin(nodes, eq(nodes.id, sceneDerivations.sceneNodeId))
@@ -179,10 +203,19 @@ export const listStoryboardScenes = async (scope: ProjectScope, episodeId: Episo
     heading: row.heading,
     reading: readingOf(row.reading),
     locationId: row.locationId === null ? null : (row.locationId as LocationId),
+    cast: row.cast.map((id) => id as CharacterId),
   }))
 }
 
-/** The latest generation per shot, with its job. One statement over the shot ids. */
+/**
+ * The order in which a shot's generations are its frame: the kept one first
+ * (`kept_at` is null on every other row - `desc` alone would put nulls
+ * first in Postgres), then newest first. Shared with the Production read,
+ * which lists every row in this order as takes.
+ */
+export const byFramePrecedence = () => [sql`${frameGenerations.keptAt} desc nulls last`, desc(frameGenerations.createdAt)]
+
+/** The kept-else-latest generation per shot, with its job. One statement over the shot ids. */
 const readFrames = async (
   scope: ProjectScope,
   shotIds: readonly ShotId[],
@@ -198,13 +231,13 @@ const readFrames = async (
     .from(frameGenerations)
     .innerJoin(jobs, eq(jobs.id, frameGenerations.jobId))
     .where(scoped(scope, frameGenerations, inArray(frameGenerations.shotId, [...shotIds])))
-    .orderBy(desc(frameGenerations.createdAt))
+    .orderBy(...byFramePrecedence())
   const frames = new Map<ShotId, FrameState>()
   for (const row of rows) {
     const shotId = row.shotId as ShotId
-    // Newest first, so the first row seen for a shot is its frame.
+    // Kept first, then newest, so the first row seen for a shot is its frame.
     if (frames.has(shotId)) continue
-    frames.set(shotId, frameStateOf({ frameUrl: row.frameUrl, refundEntryId: row.refundEntryId }, toJob(row.job)))
+    frames.set(shotId, frameStateOf({ frameUrl: row.frameUrl, refundEntryId: row.refundEntryId }, jobFromRow(row.job)))
   }
   return frames
 }
@@ -233,7 +266,7 @@ export const listStoryboard = async (
   const byScene = new Map<string, Shot[]>()
   for (const row of shotRows) {
     const list = byScene.get(row.sceneNodeId) ?? []
-    list.push(toShot(row))
+    list.push(shotFromRow(row))
     byScene.set(row.sceneNodeId, list)
   }
 
@@ -275,6 +308,7 @@ export const readSceneHeader = async (
       heading: sceneDerivations.heading,
       reading: sceneDerivations.reading,
       locationId: sceneDerivations.locationId,
+      cast: sceneDerivations.cast,
     })
     .from(sceneDerivations)
     .innerJoin(nodes, eq(nodes.id, sceneDerivations.sceneNodeId))
@@ -294,6 +328,7 @@ export const readSceneHeader = async (
     heading: row.heading,
     reading: readingOf(row.reading),
     locationId: row.locationId === null ? null : (row.locationId as LocationId),
+    cast: row.cast.map((id) => id as CharacterId),
   }
 }
 
@@ -324,7 +359,7 @@ export const listSceneShots = async (scope: ProjectScope, sceneNodeId: NodeId): 
     .from(shots)
     .where(scoped(scope, shots, eq(shots.sceneNodeId, sceneNodeId)))
     .orderBy(byOrderKey(shots.orderKey))
-  return rows.map(toShot)
+  return rows.map(shotFromRow)
 }
 
 /** One shot, or `null` when it is not this project's. */
@@ -335,7 +370,7 @@ export const readShot = async (scope: ProjectScope, shotId: ShotId): Promise<Sho
     .where(scoped(scope, shots, eq(shots.id, shotId)))
     .limit(1)
   const row = rows[0]
-  return row === undefined ? null : toShot(row)
+  return row === undefined ? null : shotFromRow(row)
 }
 
 /** The alias table's bound half, for `boundCueMap`. */
@@ -390,6 +425,8 @@ export const insertShots = async (
   origin: ShotOrigin,
   state: ShotState,
   neighbours: { readonly before: OrderKey | null; readonly after: OrderKey | null },
+  /** The reel the shots are born in. The Storyboard passes none; Production passes its reel. */
+  reelId: ReelId | null = null,
 ): Promise<readonly Shot[]> => {
   if (specs.length === 0) return []
   const keys = spread(neighbours.before, neighbours.after, specs.length)
@@ -400,6 +437,7 @@ export const insertShots = async (
         ...tenant(scope),
         sceneNodeId: sceneNodeId as string,
         orderKey: keys[index] as string,
+        reelId: reelId === null ? null : (reelId as string),
         size: spec.size,
         movement: spec.movement,
         angle: spec.angle,
@@ -411,12 +449,28 @@ export const insertShots = async (
       })),
     )
     .returning()
-  return rows.map(toShot)
+  return rows.map(shotFromRow)
+}
+
+/**
+ * Whether a shot is in a finalized reel. `false` for a shot that is not this
+ * project's, too - the caller has already found it missing by then.
+ */
+export const readShotLock = async (scope: ProjectScope, shotId: ShotId): Promise<boolean> => {
+  const rows = await dbOf(scope)
+    .select({ id: shots.id })
+    .from(shots)
+    .innerJoin(reels, and(eq(reels.id, shots.reelId), sql`${reels.finalizedAt} is not null`))
+    .where(scoped(scope, shots, eq(shots.id, shotId)))
+    .limit(1)
+  return rows.length > 0
 }
 
 /**
  * Rewrite a shot, whole. Editing is acceptance: the row leaves `proposed`
  * on any edit, because a writer who changed a proposal has taken it.
+ * `null` for a missing shot and for a locked one alike; `readShotLock`
+ * tells them apart.
  */
 export const updateShot = async (scope: ProjectScope, shotId: ShotId, edit: ShotEdit): Promise<Shot | null> => {
   const rows = await dbOf(scope)
@@ -431,29 +485,29 @@ export const updateShot = async (scope: ProjectScope, shotId: ShotId, edit: Shot
       state: 'accepted',
       updatedAt: new Date(),
     })
-    .where(scoped(scope, shots, eq(shots.id, shotId)))
+    .where(scoped(scope, shots, eq(shots.id, shotId), notLocked))
     .returning()
   const row = rows[0]
-  return row === undefined ? null : toShot(row)
+  return row === undefined ? null : shotFromRow(row)
 }
 
-/** Accept proposals. Returns how many rows changed. */
+/** Accept proposals. Returns how many rows changed. A locked reel accepts nothing. */
 export const acceptShots = async (scope: ProjectScope, shotIds: readonly ShotId[]): Promise<number> => {
   if (shotIds.length === 0) return 0
   const rows = await dbOf(scope)
     .update(shots)
     .set({ state: 'accepted', updatedAt: new Date() })
-    .where(scoped(scope, shots, inArray(shots.id, [...shotIds]), eq(shots.state, 'proposed')))
+    .where(scoped(scope, shots, inArray(shots.id, [...shotIds]), eq(shots.state, 'proposed'), notLocked))
     .returning({ id: shots.id })
   return rows.length
 }
 
-/** Delete shots - a discarded proposal or a removed shot. Generations cascade; jobs stay as history. */
+/** Delete shots - a discarded proposal or a removed shot. Generations cascade; jobs stay as history. A locked shot stays. */
 export const deleteShots = async (scope: ProjectScope, shotIds: readonly ShotId[]): Promise<number> => {
   if (shotIds.length === 0) return 0
   const rows = await dbOf(scope)
     .delete(shots)
-    .where(scoped(scope, shots, inArray(shots.id, [...shotIds])))
+    .where(scoped(scope, shots, inArray(shots.id, [...shotIds]), notLocked))
     .returning({ id: shots.id })
   return rows.length
 }
@@ -468,10 +522,10 @@ export const moveShot = async (
   const rows = await dbOf(scope)
     .update(shots)
     .set({ orderKey: key as string, updatedAt: new Date() })
-    .where(scoped(scope, shots, eq(shots.id, shotId)))
+    .where(scoped(scope, shots, eq(shots.id, shotId), notLocked))
     .returning()
   const row = rows[0]
-  return row === undefined ? null : toShot(row)
+  return row === undefined ? null : shotFromRow(row)
 }
 
 // ---------------------------------------------------------------------------
@@ -587,7 +641,8 @@ export type CancelJobResult =
   | { readonly status: 'no-job' }
 
 /**
- * Stop a job. A queued one is cancelled outright and its reservation
+ * Stop a job - a frame's or, since the Production phase, a reel render's.
+ * A queued one is cancelled outright and its reservation
  * released; a running one is asked to stop - `cancel_requested_at` - and the
  * worker settles it. One statement either way, and the balance the caller
  * prints is the one read in it plus what was released: a data-modifying CTE
@@ -630,7 +685,7 @@ export const cancelJob = async (scope: ProjectScope, jobId: JobId): Promise<Canc
       set status = 'cancelled', finished_at = now(), cancel_requested_at = coalesce(j.cancel_requested_at, now())
       from target
       where j.id = target.id and target.status = 'queued'
-      returning j.id as id, j.cost as cost
+      returning j.id as id, j.cost as cost, j.kind as kind
     ),
     requested as (
       update ${jobs} as j
@@ -642,7 +697,9 @@ export const cancelJob = async (scope: ProjectScope, jobId: JobId): Promise<Canc
     released as (
       insert into ${creditLedger} (project_id, kind, delta, job_id, idempotency_key, reason, created_by)
       select ${project}, 'release', cancelled.cost, cancelled.id, 'release:job:' || cancelled.id::text,
-             'Frame generation cancelled before it ran', ${actor}::uuid
+             case cancelled.kind when 'reel_render' then 'Clip render cancelled before it ran'
+                                 else 'Frame generation cancelled before it ran' end,
+             ${actor}::uuid
       from cancelled
       where cancelled.cost > 0
       on conflict (project_id, idempotency_key) do nothing
@@ -673,7 +730,7 @@ export const readJob = async (scope: ProjectScope, jobId: JobId): Promise<Job | 
     .where(scoped(scope, jobs, eq(jobs.id, jobId)))
     .limit(1)
   const row = rows[0]
-  return row === undefined ? null : toJob(row)
+  return row === undefined ? null : jobFromRow(row)
 }
 
 /** The `refund` entry a failed generation links to, for a worker settling a failure. */

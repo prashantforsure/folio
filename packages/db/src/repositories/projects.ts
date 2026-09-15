@@ -36,6 +36,7 @@ export const toProject = (row: ProjectRow): Project => ({
   format: row.format,
   pageMode: row.pageMode,
   liveRepaginate: row.liveRepaginate,
+  renderResolution: row.renderResolution as Project['renderResolution'],
   tags: row.tags,
   createdBy: row.createdBy as UserId,
   createdAt: stamp(row.createdAt),
@@ -126,6 +127,22 @@ export const setProjectPagination = async (
       liveRepaginate: pagination.liveRepaginate,
       updatedAt: new Date(),
     })
+    .where(scoped(scope, projects))
+}
+
+/**
+ * Set the resolution every reel of the project renders at. Project-wide for
+ * the pagination pair's reason (Production phase, ruling D). The value is
+ * checked at the boundary (`RenderResolutionSchema`) and by the column's
+ * check constraint.
+ */
+export const setRenderResolution = async (
+  scope: ProjectScope,
+  renderResolution: Project['renderResolution'],
+): Promise<void> => {
+  await dbOf(scope)
+    .update(projects)
+    .set({ renderResolution, updatedAt: new Date() })
     .where(scoped(scope, projects))
 }
 

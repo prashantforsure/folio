@@ -33,7 +33,9 @@
  *   credit_ledger                append-only
  *   shots                        a scene does not say how it is shot - keyed by the heading node's id
  *   jobs                         the job row is the status; written by the system on a click
- *   frame_generations            shot to job, and on failure to the refund entry
+ *   frame_generations            shot to job, and on failure to the refund entry; `kept_at` marks the take the writer chose
+ *   reels                        a run of one scene's shots that renders as one clip - keyed by the heading node's id, like shots
+ *   reel_renders                 reel to job, and on failure to the refund entry
  *   bible_entries                sectioned, statused - the status is the first context gate
  *   bible_facts                  numbered rules citing heading nodes, each able to carry a conflict
  *   bible_questions              open questions, each with an author
@@ -87,8 +89,9 @@
  * 7 and was left open on purpose. The rest are out of scope so far. Jobs,
  * generations and storyboard shots were on this list until the Storyboard
  * phase, story threads until the Timeline phase, bible entries until the
- * Bible phase; `storyboard.ts`, `timeline.ts` and `bible.ts` say what each
- * now is.
+ * Bible phase, reels and renders until the Production phase;
+ * `storyboard.ts`, `timeline.ts`, `bible.ts` and `production.ts` say what
+ * each now is.
  */
 
 export * from './columns'
@@ -100,5 +103,6 @@ export * from './measurement'
 export * from './derived'
 export * from './credits'
 export * from './storyboard'
+export * from './production'
 export * from './timeline'
 export * from './bible'

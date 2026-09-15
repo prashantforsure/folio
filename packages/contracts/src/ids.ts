@@ -99,6 +99,10 @@ export type BibleQuestionId = Branded<'BibleQuestionId'>
 export type BiblePitchFieldId = Branded<'BiblePitchFieldId'>
 /** A glossary term. Authored; its use count is not. */
 export type BibleTermId = Branded<'BibleTermId'>
+/** A reel: a run of a scene's shots that renders as one clip. Authored; keyed to the heading node like a shot. See `production.ts`. */
+export type ReelId = Branded<'ReelId'>
+/** One attempt at rendering a reel's clip. Links a reel to its job, and on failure to its refund. */
+export type ReelRenderId = Branded<'ReelRenderId'>
 
 export const projectId = (raw: string): ProjectId => raw as ProjectId
 export const episodeId = (raw: string): EpisodeId => raw as EpisodeId
@@ -119,6 +123,8 @@ export const bibleFactId = (raw: string): BibleFactId => raw as BibleFactId
 export const bibleQuestionId = (raw: string): BibleQuestionId => raw as BibleQuestionId
 export const biblePitchFieldId = (raw: string): BiblePitchFieldId => raw as BiblePitchFieldId
 export const bibleTermId = (raw: string): BibleTermId => raw as BibleTermId
+export const reelId = (raw: string): ReelId => raw as ReelId
+export const reelRenderId = (raw: string): ReelRenderId => raw as ReelRenderId
 
 // ---------------------------------------------------------------------------
 // The schemas
@@ -161,6 +167,8 @@ export const BibleFactIdSchema = brandedUuid(bibleFactId)
 export const BibleQuestionIdSchema = brandedUuid(bibleQuestionId)
 export const BiblePitchFieldIdSchema = brandedUuid(biblePitchFieldId)
 export const BibleTermIdSchema = brandedUuid(bibleTermId)
+export const ReelIdSchema = brandedUuid(reelId)
+export const ReelRenderIdSchema = brandedUuid(reelRenderId)
 
 // The five brands the pure core owns must survive the round trip through Zod.
 // If one of these stops compiling, a schema has started minting its own brand

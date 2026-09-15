@@ -1,4 +1,11 @@
-import { LEDGER_ENTRY_KINDS, MEMBERSHIP_ROLES, PROJECT_KINDS, PROJECT_TYPES } from '@folio/contracts'
+import {
+  DEFAULT_RENDER_RESOLUTION,
+  LEDGER_ENTRY_KINDS,
+  MEMBERSHIP_ROLES,
+  PROJECT_KINDS,
+  PROJECT_TYPES,
+  RENDER_RESOLUTIONS,
+} from '@folio/contracts'
 import { PAGE_MODES, REVISION_COLOURS, SCRIPT_FORMATS } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import {
@@ -157,6 +164,8 @@ export const projects = pgTable(
     pageMode: pageModeEnum('page_mode').notNull().default('paged'),
     /** A cadence flag: repaginate on every keystroke. Changes no output. */
     liveRepaginate: boolean('live_repaginate').notNull().default(false),
+    /** `720p | 1080p`. What every reel of the project renders at. Production phase. */
+    renderResolution: text('render_resolution').notNull().default(DEFAULT_RENDER_RESOLUTION),
     tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
     createdBy: uuid('created_by')
       .notNull()
@@ -165,7 +174,13 @@ export const projects = pgTable(
     updatedAt: updatedAtColumn(),
     trashedAt: timestampColumn('trashed_at'),
   },
-  (table) => [index('projects_created_by_idx').on(table.createdBy)],
+  (table) => [
+    index('projects_created_by_idx').on(table.createdBy),
+    check(
+      'projects_render_resolution_allowed',
+      sql`${table.renderResolution} = any(${sql.raw(`ARRAY[${RENDER_RESOLUTIONS.map((value) => `'${value}'`).join(', ')}]::text[]`)})`,
+    ),
+  ],
 )
 
 // ---------------------------------------------------------------------------

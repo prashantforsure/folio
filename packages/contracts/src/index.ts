@@ -41,8 +41,10 @@
  *     its tables and these are not among them. Story threads were on this
  *     list until the Timeline phase and bible entries until the Bible phase;
  *     `timeline.ts` and `bible.ts` are what they are.
- *   - **Jobs and generations.** Same. The ledger carries `jobId` as a forward
- *     reference with no foreign key so that early rows are not unattributable.
+ *   - **Jobs and generations** were on this list until the Storyboard phase,
+ *     reels and renders until the Production phase; `storyboard.ts` and
+ *     `production.ts` say what each now is. The ledger still carries `jobId`
+ *     as a forward reference with no foreign key.
  *   - **A scene *record* id.** `docs/adr/0001-node-identity.md` Ruling 3 says
  *     `SCENE_xxx` is a derived id in its own space; `packages/script` then made
  *     a scene record's id be the heading node's id. Both cannot hold. See the
@@ -70,6 +72,8 @@ export type {
   MeasurementId,
   MembershipId,
   ProjectId,
+  ReelId,
+  ReelRenderId,
   ReservedProjectSegment,
   RevisionId,
   ShotId,
@@ -99,6 +103,8 @@ export {
   NodeIdSchema,
   ProjectIdSchema,
   RESERVED_PROJECT_SEGMENTS,
+  ReelIdSchema,
+  ReelRenderIdSchema,
   RevisionIdSchema,
   RunIdSchema,
   ShotIdSchema,
@@ -123,6 +129,8 @@ export {
   membershipId,
   parseEpisodeSegment,
   projectId,
+  reelId,
+  reelRenderId,
   revisionId,
   shotId,
   storyThreadId,
@@ -133,6 +141,7 @@ export {
 } from './ids'
 
 export type {
+  ClipSeconds,
   JobKind,
   JobStatus,
   LedgerEntryKind,
@@ -140,6 +149,7 @@ export type {
   PoolerMode,
   ProjectKind,
   ProjectType,
+  RenderResolution,
   ShotOrigin,
   ShotState,
   ThreadAnchorKind,
@@ -147,8 +157,12 @@ export type {
   TombstoneReason,
 } from './enums'
 export {
+  CLIP_SECONDS,
   CameraAngleSchema,
+  ClipSecondsSchema,
   ConfidenceSchema,
+  DEFAULT_CLIP_SECONDS,
+  DEFAULT_RENDER_RESOLUTION,
   DeliveryModifierSchema,
   DocumentKindSchema,
   InteriorExteriorSchema,
@@ -172,6 +186,8 @@ export {
   ProjectKindSchema,
   ProjectTypeSchema,
   ProvenanceSourceSchema,
+  RENDER_RESOLUTIONS,
+  RenderResolutionSchema,
   ResolveRowStateSchema,
   RevisionColourSchema,
   SHOT_ORIGINS,
@@ -188,6 +204,7 @@ export {
   ThreadAnchorKindSchema,
   ThreadStateSchema,
   TombstoneReasonSchema,
+  isClipSeconds,
   isTerminalJobStatus,
 } from './enums'
 
@@ -376,6 +393,28 @@ export {
   ShotSpecSchema,
   StoryboardSceneSchema,
 } from './storyboard'
+
+export type {
+  ClipState,
+  ProductionScene,
+  ProductionShot,
+  Reel,
+  ReelEdit,
+  ReelRender,
+  ReelRow,
+  Take,
+} from './production'
+export {
+  ClipStateSchema,
+  ProductionSceneSchema,
+  ProductionShotSchema,
+  REEL_RENDER_COST,
+  ReelEditSchema,
+  ReelRenderSchema,
+  ReelRowSchema,
+  ReelSchema,
+  TakeSchema,
+} from './production'
 
 export type {
   EpisodeBoardRow,

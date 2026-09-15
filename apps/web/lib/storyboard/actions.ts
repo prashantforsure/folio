@@ -18,10 +18,10 @@ import {
   readSceneHeader,
   readScreenplayNodes,
   readShot,
+  readShotLock,
   updateShot,
 } from '@folio/db'
 import type { StoryboardSceneHeader } from '@folio/db'
-import type { NodeId, ScreenplayNode } from '@folio/script'
 import { boundCueMap, proposeShots } from '@folio/script'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
@@ -29,6 +29,7 @@ import { z } from 'zod'
 import type { EpisodeGate } from '../script/gate'
 import { isRefusal, openEpisode } from '../script/gate'
 import type { CancelResult, FrameResult, SceneShotsResult, ShotResult } from './result'
+import { cutScene } from './scene-cut'
 
 /**
  * The Storyboard route's writes.
@@ -55,6 +56,11 @@ import type { CancelResult, FrameResult, SceneShotsResult, ShotResult } from './
  * in one statement, or asks a running one to stop. Each is one statement
  * after the gate: the shot and job checks ride inside it.
  *
+ * **The lock** - since the Production phase, a shot in a finalized reel
+ * refuses every write above; the repository's predicate does the refusing
+ * and `readShotLock` is how the refusal is named here rather than reported
+ * as a missing shot.
+ *
  * Membership, not role, as everywhere. The gate is the Script route's.
  */
 
@@ -67,6 +73,12 @@ const SceneAndShotsSchema = z.object({
 
 const NOT_A_SCENE = 'That scene is not in this episode. Reload the board.'
 const NOT_A_SHOT = 'That shot is not on this board. Reload the board.'
+/** A finalized reel locks its shots from both routes (`@folio/db`, `storyboard.ts`); this is the why. */
+const LOCKED = 'This shot is in a finalized reel. Unlock the reel in Production to edit it.'
+
+/** The message for a write that changed nothing: locked if the shot is, missing otherwise. */
+const refusedWrite = async (scope: ProjectScope, shotId: Parameters<typeof readShotLock>[1]): Promise<string> =>
+  (await readShotLock(scope, shotId)) ? LOCKED : NOT_A_SHOT
 
 /** The scene, checked as this episode's, or the refusal to report. */
 const sceneOf = async (
@@ -85,24 +97,6 @@ const isScene = (value: StoryboardSceneHeader | { readonly status: string }): va
 const sceneResult = async (scope: ProjectScope, scene: StoryboardSceneHeader): Promise<SceneShotsResult> => {
   const shots = await listSceneShotRows(scope, scene.sceneNodeId, scene.number)
   return { status: 'saved', shots, accepted: shots.filter((shot) => shot.state === 'accepted').length }
-}
-
-/** The scene's own nodes, heading first, cut at the next present heading. */
-const cutScene = (
-  nodes: readonly ScreenplayNode[],
-  sceneNodeId: NodeId,
-  presentSceneIds: ReadonlySet<string>,
-): readonly ScreenplayNode[] => {
-  const start = nodes.findIndex((node) => node.id === sceneNodeId)
-  if (start === -1) return []
-  const out: ScreenplayNode[] = []
-  for (let index = start; index < nodes.length; index += 1) {
-    const node = nodes[index]
-    if (node === undefined) break
-    if (index > start && node.type === 'scene' && presentSceneIds.has(node.id as string)) break
-    out.push(node)
-  }
-  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -216,7 +210,7 @@ export const saveShot = async (
   if (scene === null) return { status: 'error', message: NOT_A_SCENE }
   const wasProposed = before.state === 'proposed'
   const written = await updateShot(scope, id.data, edit.data)
-  if (written === null) return { status: 'error', message: NOT_A_SHOT }
+  if (written === null) return { status: 'error', message: await refusedWrite(scope, id.data) }
   if (wasProposed) revalidatePath(workspacePath(gate.project.id), 'layout')
 
   const rows = await listSceneShotRows(scope, scene.sceneNodeId, scene.number)
@@ -235,7 +229,11 @@ export const acceptShots = async (projectId: string, episode: string, raw: unkno
 
   const scene = await sceneOf(gate, input.data.sceneNodeId)
   if (!isScene(scene)) return scene
-  await acceptShotRows(scope, input.data.shotIds)
+  const accepted = await acceptShotRows(scope, input.data.shotIds)
+  const first = input.data.shotIds[0]
+  if (accepted === 0 && first !== undefined && (await readShotLock(scope, first))) {
+    return { status: 'error', message: LOCKED }
+  }
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return sceneResult(scope, scene)
 }
@@ -251,10 +249,12 @@ export const discardShots = async (projectId: string, episode: string, raw: unkn
   const scene = await sceneOf(gate, input.data.sceneNodeId)
   if (!isScene(scene)) return scene
   const own = new Set((await listSceneShots(scope, scene.sceneNodeId)).map((shot) => shot.id as string))
-  await deleteShots(
-    scope,
-    input.data.shotIds.filter((id) => own.has(id as string)),
-  )
+  const wanted = input.data.shotIds.filter((id) => own.has(id as string))
+  const deleted = await deleteShots(scope, wanted)
+  const first = wanted[0]
+  if (deleted === 0 && first !== undefined && (await readShotLock(scope, first))) {
+    return { status: 'error', message: LOCKED }
+  }
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return sceneResult(scope, scene)
 }
@@ -285,10 +285,11 @@ export const moveShot = async (
   if (at === -1 || neighbour === undefined) return sceneResult(scope, scene)
   // Landing on the far side of the neighbour: between it and the one beyond.
   const beyond = list[direction === 'up' ? target - 1 : target + 1]
-  await moveShotRow(scope, shot.id, {
+  const moved = await moveShotRow(scope, shot.id, {
     before: direction === 'up' ? (beyond?.orderKey ?? null) : neighbour.orderKey,
     after: direction === 'up' ? neighbour.orderKey : (beyond?.orderKey ?? null),
   })
+  if (moved === null) return { status: 'error', message: await refusedWrite(scope, shot.id) }
   return sceneResult(scope, scene)
 }
 // ---------------------------------------------------------------------------

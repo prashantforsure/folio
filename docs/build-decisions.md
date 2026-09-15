@@ -2292,3 +2292,143 @@ same way to confirm nothing else regressed - the seven failures it shows (`proje
 `shell-and-state.test.ts`, `workspace.test.tsx`) are the jsdom-only tests breaking under a
 node-forced environment, unrelated to this change and present before it. The E2E walk
 (`workspace.spec.ts`) is updated but **not run** - it needs the E2E account and a dev server.
+
+## Production route phase, backend: reels, takes, and the clip that cannot render yet
+
+### The comparison, and the ruling it produced
+
+Production was the last episode route with no body: the stub `RouteShell` beside an empty 250px
+column. Before building it, the mock (`Route - Production.dc.html`) was compared with laper.ai's
+Production canvas and preview.io's Studio against what Folio's user - a writer carrying their
+own script to a clip, not an agency producing AI video - needs. Laper's *content model* fits that
+user: a reel is one clip of a fixed length, the shots are timed segments that must fill it, and
+the cast and location context sits beside the shot text. Preview's *take management* fits too:
+every generation kept, one chosen, two compared. Preview's infinite canvas, multi-model picker,
+owners and approvals, and real-time review do not - they are an agency's tools and would fight
+"the script is the only authored artefact". Laper's node canvas, wired edges, seven pre-made
+"Start Shooting" reels and in-canvas character editing were not taken either: the last would make
+Production a second authoritative surface for a character's look.
+
+The client accepted a Claude Design of that model on 2026-09-15 with a new shell and theme, then
+ruled: **the whole UI is being redesigned; ship the backend and the route's server surface first,
+the body follows the design file.** This phase is that. AGENTS.md's Feature workflow wants a
+vertical slice with the UI and both states in the same change; this pass stops at the server
+action on the client's instruction, as the Characters second pass shipped `appearance` ahead of
+Generate. Flagged here, not quietly.
+
+### Six assumptions, each a ruling the client has not made yet, each reversible
+
+| # | Assumed | Where it lives | Why it is a ruling |
+| --- | --- | --- | --- |
+| A | A reel renders as one clip of `5 / 8 / 10 / 15` s (default 15); its shots' durations must fill it **exactly** before Finalize | `CLIP_SECONDS`, `reels.clip_seconds` check, `status.ts` | The mock's reel has no cap (12 s) |
+| B | Every generation is a take; a shot's frame is the take the writer kept, else the latest - for the Storyboard too | `frame_generations.kept_at`, `byFramePrecedence` | The mock has Regenerate / Replace only |
+| C | No location plate - the route reads a location's name and description and links to Locations | `lib/production/server.ts` | The mock says `Generate plate · 8 cr`; the Locations phase refused to invent a plate |
+| D | Render resolution is project-wide, `720p` default | `projects.render_resolution` | The mock's `720p ▾` is a header control with no home |
+| E | `REEL_RENDER_COST = 40`, placeholder, beside `FRAME_GENERATION_COST = 4`; a second job kind `reel_render` | `@folio/contracts` | Pricing and the ledger are "ask first" |
+| F | Finalize locks a reel's shots against edits from **both** routes, in the repository | `notLocked` on every shot write in `repositories/storyboard.ts` | Cross-route lock |
+
+### What was built, table by table
+
+Migration `0014_production_route.sql`, applied to the dev project and confirmed by query (the
+`C` collation, the partial index predicate, both enum values, RLS on with the member-all policies):
+
+- **`reels`** - AUTHORED. Keyed by `scene_node_id`, the heading node's id, no foreign key, as
+  `shots` and `scenes` are. `order_key COLLATE "C"` by hand, as `0006` did. `name`, `clip_seconds`
+  checked against `CLIP_SECONDS`, `finalized_at`. A reel's *status* is never a column.
+- **`reel_renders`** - AUTHORED. `frame_generations` for a reel: `reel_id`, `job_id` (unique -
+  a job makes one clip), `clip_url`, `refund_entry_id`. The latest row per reel with its job is
+  the reel's `ClipState`, folded by `clipStateOf` exactly as `frameStateOf` folds a frame.
+- **`shots.reel_id`**, `set null` on delete: removing a reel keeps its shots, which reappear as
+  the scene's "not in a reel" list. The order within a reel is the scene's own `order_key` - a
+  reel adds no second order, so the Storyboard and Production read one list. The assign
+  statement, not a constraint, keeps a reel's shots in the reel's scene.
+- **`frame_generations.kept_at`** with `frame_generations_kept_key` unique on `(shot_id) WHERE
+  kept_at IS NOT NULL`. `readFrames` orders `kept_at DESC NULLS LAST, created_at DESC` - `DESC`
+  alone would put nulls first - and the same order lists a shot's takes.
+- **`projects.render_resolution`**, checked, and `job_kind` gains `reel_render`. `ALTER TYPE ...
+  ADD VALUE` runs inside drizzle's migration transaction, which Postgres 12+ allows because
+  nothing in `0014` uses the value.
+
+`schema/production.ts` and `schema/storyboard.ts` import each other (`shots.reel_id` to `reels`,
+`reel_renders.job_id` to `jobs`). Drizzle takes every foreign key as a thunk and evaluates the
+extra-config callback lazily, so the cycle is safe at load; the file header says so.
+
+### The repository, and three things worth knowing about it
+
+`repositories/production.ts`, every function on a `ProjectScope`:
+
+- **Five statements for the whole episode.** `listProductionScenes` walks the board's scene chain,
+  then reels, shots, every generation with its job (takes), the latest render per reel with its
+  job. The shot's number is computed over the scene's whole list so both routes print the same
+  `01-03`; the reel's number is its place in the scene.
+- **Reserve then execute, for N.** `queueFrameGenerations` is the Storyboard's one-shot CTE
+  generalised: N jobs, N `reserve` entries, N generation rows, conditioned on the balance covering
+  `cost x N`, every named shot an accepted shot of this reel, the reel not finalized; short by one
+  credit, nothing is written. `queueReelRender` is the same shape for one `reel_render` job,
+  conditioned on the reel being finalized and no render of it queued or running. The READ
+  COMMITTED race the Storyboard phase flagged is the same race here.
+- **The kept take is two commands in one transaction, not one statement.** The partial unique
+  index is checked as each row is written, and a row updated by the *same command* still counts
+  as live to that check, so clear-then-set in one CTE can refuse the set. `keepGeneration` clears
+  the shot's other kept row, then sets this one, inside `db.transaction` - which `documents.ts`
+  and `history.ts` already use through the transaction pooler.
+
+`cancelJob` gained `kind` on its returning row so the `release` entry's reason names a clip render
+when it is one. `deleteReel` and `setFinalized(false)` refuse while a render is queued or running:
+the job would keep its reservation with nothing to settle against.
+
+### The server surface
+
+`apps/web/lib/production/` - data, not view props; the redesign renders what comes back:
+
+- `server.ts` - `loadProduction`, `cache()`d: scenes with reels, takes and clips; mention labels;
+  the Characters route's own `CastRow`s (`castRowOf` is now exported) for the read-only cast
+  column; location name and description by id; the balance; the two cost placeholders; the
+  project's resolution; the episode's counts.
+- `status.ts` - pure, 21 tests. `reelGates` folds a reel into nine statuses by precedence
+  (rendered, rendering, finalized, generating, blocked, writing, needs-credits, frames-done,
+  ready), the four gates, and a `ReasonCode` that `describeReason` prints with the mock's own
+  sentences plus the cap rules'. A refused frame flags the shot only until the shot is edited
+  (`updatedAt` after the take's `createdAt`): the refusal was of the text that was refused.
+  `sceneMode` gives the bundle's six modes; `episodeStats` the tiles.
+- `actions.ts` - `addReel`, `putShotsInReel` (the first-visit path for a scene boarded in the
+  Storyboard), `renameReel`, `setReelClip`, `moveReel`, `removeReel`, `addShotToReel`,
+  `proposeShotsForReel` (the Storyboard's proposer and cut - `cutScene` moved to
+  `lib/storyboard/scene-cut.ts` so both can import it), `assignShotsToReel`, `moveShotInReel`,
+  `generateReelFrames`, `keepFrame`, `finalizeReel`, `unlockReel`, `renderReel`, `cancelSceneJob`,
+  `setRenderResolution`. Generate, Finalize and Render re-read and fold before writing and refuse
+  with the fold's own sentence. Every scene write returns the whole scene re-read.
+- The Storyboard's `saveShot`, `acceptShots`, `discardShots` and `moveShot` now say *"This shot
+  is in a finalized reel. Unlock the reel in Production to edit it."* when the lock is what
+  refused them (`readShotLock`), instead of reporting a missing shot.
+
+### Not built, and why
+
+- **The route body, the column, the E2E walk** - the redesign's, on the client's ruling.
+- **A worker, a queue, a model** - a dependency decision. Every job here stays `queued`.
+- **The prompt bar** ("describe a shot, or ask...") - needs the agent, which needs a model. The
+  Bible precedent: a button that cannot do what it says is a placeholder.
+- **Continuity from the previous reel's last frame** (Laper) - a stored flag with no effect
+  until a clip renders; arrives with the worker.
+- **A purchase flow** - the credits chip is a number.
+
+### Verified
+
+`pnpm typecheck` clean across the six packages; `pnpm lint` clean; `db:check` clean; `0014`
+applied to dev and every column, index, enum value and policy confirmed by query.
+`tests/production-status.test.ts` (21 tests) under `--environment node`. A throwaway vitest file
+in `packages/db` (written, run twice, deleted) walked the repository against the dev project's
+"Outline walk" E2E project: two probe shots inserted; a reel inserted and the shots assigned;
+`queueFrameGenerations` refused at `needed 218, available 108` and queued two jobs at 4 each
+(`108 to 100`); one cancelled and released (`to 104`); the other finished by hand with a `spend`,
+as a worker would; a second take queued and finished; the shot read `2 takes` with the latest as
+its frame; `keepGeneration` on the first made it the frame for `readProductionScene` **and**
+`listSceneShotRows`; keeping the second left exactly one `kept_at` row; a cancelled take was
+`not-drawn`; `setFinalized(true)` made `updateShot` return `null`, `readShotLock` `true`,
+`assignShotsToReel` `0`, `setReelClip` `false` and `queueFrameGenerations` `finalized`;
+`queueReelRender` queued at 40 (`to 56`) and a second was `busy`; unlock and delete were `busy`
+while it was queued; `cancelJob` released it with the reason `Clip render cancelled before it
+ran`; unlock then `set`; the reel deleted with its shots detached, the shots deleted, the reel
+count back to zero; the balance ended at `48 + 60 - 12 = 96`. The `storyboard-route.spec.ts` walk
+was **not run** - no `E2E_EMAIL`/`E2E_PASSWORD` in the environment - so the Storyboard's frame
+read and lock are verified by the probe's `listSceneShotRows` call, not through the browser.

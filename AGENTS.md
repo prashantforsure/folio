@@ -37,7 +37,7 @@ days.
 | Build | Turborepo | |
 | Framework | Next.js App Router + React | Server Components for reads, Server Actions for mutations |
 | Styling | Tailwind + CSS variables | Tokens as variables; theming via `data-theme` |
-| Editor | Plate (on Slate) | Typed nodes only. **Pagination is ours, not Plate's** |
+| Editor | Tiptap 3 on ProseMirror | Typed nodes only, never React state. **Pagination is ours, not the editor's** |
 | Client state | URL first, then React state | Zustand only for the agent window rect and session flags |
 | Server state | TanStack Query | Only where Server Components don't fit |
 | Validation | Zod, in `packages/contracts` | Every API boundary, shared by web and worker |
@@ -83,6 +83,9 @@ silently destroy the product.
   sender covers address confirmation and password reset, and nothing else. Adding a real provider
   is a dependency decision *and* a product one, because it would make asynchronous notification
   possible — and notification is cut. See Constraints.
+- **Plate, Slate, or any `@platejs/*` / `@udecode/*` package.** Both editors were rebuilt on
+  Tiptap 3 over ProseMirror (2026-09-13); `platejs` is uninstalled and lint bans the whole family
+  under both editors. Do not reintroduce it for a third editor either.
 
 `packages/script` takes **zero** new runtime dependencies without an explicit decision. It must
 run identically in the browser, in server code, in the worker and in tests.
@@ -97,7 +100,7 @@ run identically in the browser, in server code, in the worker and in tests.
    no `Date.now()` and no `Math.random()`. Determinism is what makes speculative derivation —
    and therefore blast radius and review tiers — possible.
 3. **The URL is the state container.** Route, episode, sub-view and selected record all come from
-   the URL. Only the items listed in *State not in the URL* live anywhere else.
+   the URL. The exceptions are named in the *Sub-views are query params — except* table below.
 4. **Both states always.** Populated and empty ship together. A new project opens into the empty
    state, so it is the first screen most users see. A route without its empty state is not done.
 5. **The server enforces; the client discloses.** Scope, tool allowlists, cost checks, bible
@@ -138,7 +141,7 @@ Stop and ask before you:
 
 | # | Question | Blocks |
 | --- | --- | --- |
-| 1 | Which node id survives a split, and what happens on merge and paste | Proposal anchoring, comments, diffs, provenance |
+| 1 | ~~Which node id survives a split, and what happens on merge and paste~~ **Ruled, by delegation: [ADR 0001](docs/adr/0001-node-identity.md)** — each position is reversible; Q3's id-shape ruling is the one flagged for a human look | — |
 | 2 | The numeric thresholds separating review tiers 1 / 2 / 3 | The whole agent review flow |
 | 3 | Whether rename rewrites unlinked prose mentions in action, or only cues, sluglines and `@mentions` | Rename blast radius |
 | 4 | The `?lens=` value shape — `lens/<id>` as written, or just `<id>` | Insights routing |
@@ -147,6 +150,9 @@ Stop and ask before you:
 | 7 | Where project settings `transfer`, `keys` and `episodes` went | Settings |
 | 8 | Sheet width for `format: asian` — A4 is ~794px, not 816px | Pagination engine |
 | 9 | The `/app/filmmaking` ADR | Anything past a project list |
+| 10 | Whether `SCENE_xxx` is a node id or the derived scene record's id. ADR 0001 ruled the latter, in a separate id space — but `packages/script`'s `SceneRecord.id` is implemented as the heading node's own id, so the ADR and the code contradict each other | `?selected=`, any URL naming a scene |
+| 11 | The revision colour sequence past green (`nextRevisionColour` refuses at green) | Issuing a sixth revision |
+| 12 | Locked-page numbering past the last lock — a judgement call is implemented (the sequence continues unprotected), not ruled | Export, revision compare |
 
 ---
 
@@ -155,7 +161,7 @@ Stop and ask before you:
 ```
 apps/web/                    Next.js app. UI and server actions only — no logic that belongs in packages/script.
   app/(app)/                 Signed-in shell: sidebar, theme, avatar. Everything user-facing lives under /app.
-  app/(app)/project/         Project workspace: rail, episode nav, the thirteen routes.
+  app/(app)/project/         Project workspace: rail, episode nav, the eleven routes.
   lib/                       Web-only glue: auth session, server action helpers, query client. Not domain logic.
 apps/worker/                 BullMQ consumers. Long-running. Generation, export, agent runs. Never a serverless fn.
 apps/sync/                   Deferred. Do not create this directory until realtime is actually scheduled.
@@ -190,6 +196,9 @@ review comment**. Keep the rule enforced in CI.
 - The Outline is a **different document kind in the same table** with a different, tiny, closed
   block set (Body, H1, H2, H3, Quote, Rule, numbered beats). Do not widen the screenplay schema
   to hold an `H2` — rejecting anything outside the eight types is that schema's entire job.
+- **Neither editor has a persistent element-type bar** (the Script route's was retired
+  2026-09-13). `/` opens a slash menu over the closed type set and `⌘1`–`⌘8` (Script) /
+  `⌘0`–`⌘3` (Outline) select one directly. Do not restore a type bar.
 
 ### Derivation
 
@@ -225,9 +234,10 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 
 - Computed **server-side**, so client, print and export agree. Results go on a **measurement
   record**, never onto a node.
-- US Letter is 816px at 96dpi. Courier Prime 12pt, 12 lines per inch. `format` is an **input to
-  the engine**, not a print preference — it changes line width, page count, page numbers and
-  eighths.
+- US Letter is 816px at 96dpi. Courier Prime 12pt, **six** lines per inch (`LINES_PER_INCH` in
+  `sheet.ts`; ruled 2026-09-11 against the design bundle's sheet — moves page count by roughly
+  2×, so re-ruling it needs a human, not a commit). `format` is an **input to the engine**, not a
+  print preference — it changes line width, page count, page numbers and eighths.
 - Two rendering modes plus a cadence flag: **`pageMode: paged | continuous`** and
   **`liveRepaginate: boolean`**. Not three peer modes.
 - Break rules the engine owes: `(MORE)` at a split, `(CONT'D)` on the continuation, no orphaned
@@ -246,7 +256,7 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 - `projectType: 'film'` **hides** the episode segment. The database still stores one episode row.
   The router special-cases the shape; the schema never does.
 - Rail order is fixed: Writing `✎` · Characters `◍` · Locations `⌖` · Timeline `◷` · Bible `◈` ·
-  Research `▧` · Insights `◎` · Production `▶`. Writing stays lit across all six episode routes.
+  Research `▧` · Insights `◎` · Production `▶`. Writing stays lit across all four episode routes.
 - Episode nav order deliberately differs from the rail: **Storyboard sits above Scenes.**
 
 ### UI fidelity
@@ -329,9 +339,7 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 Zod schemas are `XSchema`, with `type X = z.infer<typeof XSchema>`.
 
 **Naming.** `camelCase` for values, `PascalCase` for types and components, `snake_case` for
-database columns. Episode ids are `ep_NNN`. Note that scene ids appear as `SCENE_xxx` in the
-route spec — the casing is inconsistent with `ep_NNN` and needs one ruling before either is
-codified.
+database columns. Episode ids are `ep_NNN`. Scene ids: open decision 10.
 
 **Imports.** Workspace packages by name — `@folio/script`, `@folio/ui`, `@folio/db`,
 `@folio/contracts`. Never reach across a package boundary with a relative path. No default
@@ -402,39 +410,28 @@ There is no case where an empty state is optional. A new project is entirely emp
 
 ## Constraints — what this version deliberately does not do
 
-- **No transactional email provider — but email sign-in exists.** This constraint was rewritten
-  when auth was built; the paragraph it replaced said "No email provider. Therefore: Google OAuth
-  only, no password accounts, no magic links, no email confirmation."
-
-  **What changed.** Auth is Google OAuth **and** email + password. Address confirmation and
-  password reset are real, and both are delivered by **Supabase Auth's own built-in SMTP sender**.
-  That sender is rate limited project-wide — a handful of messages an hour — and Supabase
-  documents it as unsuitable for production. That cost was named and accepted rather than
-  discovered; it is a ruled decision, recorded in
-  [docs/build-decisions.md](docs/build-decisions.md).
-
-  Two consequences of the change, both deliberate. A forgotten password is now recoverable, which
-  under the old constraint it was not — an account was simply lost. And an email address is now
-  *verified*, so it can be treated as an identity, which an unconfirmed address could never be.
-
-  **What did not change.** Nothing here can send an arbitrary message to a user: the built-in
-  sender is reachable only through Supabase's own auth templates, and the app has no way to
-  compose mail. So every downstream constraint still holds, and each is still a rule rather than a
-  missing feature:
-
+- **No transactional email provider — but email sign-in exists.** Auth is Google OAuth **and**
+  email + password, with address confirmation and password reset both delivered by **Supabase
+  Auth's own built-in SMTP sender** — rate limited project-wide to a handful of messages an hour,
+  and documented by Supabase as unsuitable for production. That cost was named and accepted, not
+  discovered; full history in [docs/build-decisions.md](docs/build-decisions.md), "Auth phase:
+  email sign-in, and what it cost." The sender is reachable only through Supabase's own auth
+  templates — the app has no way to compose mail — so every consequence below still holds:
   - **Nothing notifies asynchronously.** No "your export is ready", no "@mentioned you", no
     digest, no reminder, no failure alert.
-  - **Job completion is in-app only.** A long render tells you in the UI, and only there. A closed
-    tab means you find out when you come back.
-  - **Team invites are share links** generated in-app and copied by the inviter. Folio does not
-    send an invitation; a human does, in whatever channel they already use.
-  - **No magic links.** They are passwordless sign-in over email, so they would make the built-in
-    sender load-bearing for *every* sign-in rather than for the rare recovery. One rate-limited
-    hour would lock every email user out.
+  - **Job completion is in-app only.** A closed tab means you find out when you come back.
+  - **Team invites are share links** generated in-app and copied by the inviter, never sent by
+    Folio.
+  - **No magic links** — passwordless sign-in over email would make the rate-limited sender
+    load-bearing for *every* sign-in, not just the rare recovery.
 
-  Adding a real provider is not a small change: it unlocks the notification surface listed above,
-  and that surface is cut. AGENTS.md, When to ask first applies twice over — it is a dependency
-  and it is a product decision.
+  Adding a real provider unlocks the notification surface above, so it is a dependency decision
+  *and* a product decision — When to ask first applies twice over.
+- **No Beats, Revisions or Notes route.** All three were built, then cut on the client's
+  instruction (Beats 2026-09-12, Revisions and Notes 2026-09-14) — do not rebuild any of them. A
+  beat is still an outline `beat` block. The `revisions` and `comment_threads` tables stay and are
+  still read independently by the Script route's right panel; `beats` was dropped in migration
+  `0010`, and `scenes.beats` stays as an opaque column.
 - **No realtime collaboration.** Last-write-wins with a conflict banner. Loro CRDT and
   `apps/sync` are deferred; do not scaffold them.
 - **`/app/filmmaking` is a project list and a creation entry point. Stop there.** It needs an ADR
@@ -444,7 +441,6 @@ There is no case where an empty state is optional. A new project is entirely emp
 - **Cut, do not build:** Community, writing leaderboard, activity heatmap, sidebar credits card.
   Credits appear in the Production header, where they are spent.
 - **No `short` project type.** `film` and `series` only.
-- **Reports never call a model.** Lenses do; reports never.
 
 ---
 
@@ -488,12 +484,8 @@ pnpm --filter @folio/db drizzle-kit check
 pnpm --filter web test:e2e
 ```
 
-The E2E smoke test walks all thirteen routes in both themes and both states. It is not optional
+The E2E smoke test walks all eleven routes in both themes and both states. It is not optional
 coverage — it is the thing that catches a route shipped without its empty state.
-
-> **Note while the repo is still being scaffolded:** these commands are the contract the scaffold
-> must satisfy. Until the workspace exists they will not run. Do not silently skip validation and
-> do not invent a passing result — say which commands do not yet exist.
 
 ---
 

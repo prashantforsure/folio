@@ -5,6 +5,7 @@ import {
   PageModeSchema,
   ProjectKindSchema,
   ProjectTypeSchema,
+  RenderResolutionSchema,
   RevisionColourSchema,
   ScriptFormatSchema,
 } from './enums'
@@ -113,6 +114,12 @@ export const ProjectSchema = z.object({
    */
   pageMode: PageModeSchema,
   liveRepaginate: z.boolean(),
+  /**
+   * The resolution every reel of the project renders at. Project-wide, like
+   * the pagination pair, and for the same reason: two people on one project
+   * must not disagree about what a clip is. Production phase, ruling D.
+   */
+  renderResolution: RenderResolutionSchema,
   /** Free tags, as the project cards show them. Lower case, deduplicated by the repository. */
   tags: z.array(z.string().trim().min(1).max(40)).max(24),
   createdBy: UserIdSchema,

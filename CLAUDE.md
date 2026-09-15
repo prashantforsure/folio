@@ -10,7 +10,7 @@ lives in `docs/build-decisions.md`, one section per phase — read the phase for
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
 surface quietly becoming authoritative.
 
-## AGENTS.md is the contract — read the section for your task, not all 509 lines
+## AGENTS.md is the contract — read the section for your task, not all of it
 
 Always read **Open decisions** (under "When to ask first") and **Constraints**. Then only what
 your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
@@ -41,46 +41,40 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 ## Repository map
 
 - `packages/script` — the pure core, done, no dependencies: node model, operations, Fountain both
-  ways, FDX import, derivation, pagination, the draft diff, and one read module per derived route
-  (`beats.ts`, `shots.ts`, `timeline.ts`, `bible.ts`, `rename.ts`).
+  ways, FDX import/export, derivation, pagination, the draft diff, and one read module per
+  derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `bible.ts`, `rename.ts`).
 - `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, migrations
-  `0000`–`0013` (forward-only, all applied to the dev Supabase project), project-scoped
+  `0000`–`0014` (forward-only, all applied to the dev Supabase project), project-scoped
   repositories. `packages/ui` — tokens as CSS custom properties plus five small components.
 - `apps/web` — auth, the home shell, the workspace chrome, and the built route bodies: Script,
-  Scenes, Outline, Storyboard, Characters, Locations, Timeline, Bible. Each has an
-  `app/(app)/app/project/[projectId]/_<route>/` directory and a `lib/<route>/` with its actions.
-  `lib/workspace/routes.ts` is the route tree. Other route bodies are unbuilt on purpose.
+  Outline, Storyboard, Scenes, Characters, Locations, Timeline, Bible — eight of the eleven
+  routes (AGENTS.md, Architecture). Each has an `app/(app)/app/project/[projectId]/_<route>/`
+  directory and a `lib/<route>/` with its actions. `lib/workspace/routes.ts` is the route tree.
+  Research, Insights, Production and the `/settings` stub have no route body yet. Production
+  has its backend and server surface (`lib/production/`, migration `0014`, "Production route
+  phase, backend" in `docs/build-decisions.md`); its body waits on the UI redesign.
 - `apps/worker` — empty on purpose. Do not create `apps/sync/`.
-- Unwritten and unblocked: **FDX export**.
 
-Rulings that supersede AGENTS.md (details in `docs/build-decisions.md`):
+Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
+`docs/build-decisions.md`):
 
-- Pagination is **six lines per inch** (ruled 2026-09-11; AGENTS.md still says twelve).
-- **There is no Beats route** — built, then cut 2026-09-12; do not rebuild it. A beat is still an
-  outline `beat` block. The `beats` table was dropped in `0010`; `scenes.beats` stays, opaque.
-- **There is no Revisions or Notes route** — both built (Notes as an empty shell only), then cut
-  2026-09-14; do not rebuild either. The workspace is **eleven routes**, the episode nav **four
-  rows** (AGENTS.md still says thirteen and six). The `revisions` and `comment_threads` tables and
-  their `@folio/db` reads stay — the Script route's right panel reads both independently.
-- `fast-xml-parser` is approved and used in `apps/web` for FDX import.
-- **The Script route has no element type bar** (retired 2026-09-13 on the client's instruction; the
-  bundle still draws one). `/` opens a slash menu over the eight types and `⌘1`–`⌘8` stay; do not
-  restore the bar.
-- **Both editors are Tiptap 3 on ProseMirror** (Script ruled 2026-09-13; the Outline ported the
-  same day; AGENTS.md still says Plate). `@tiptap/{core,pm,react,suggestion}` and `@floating-ui/dom`
-  are approved in `apps/web`; **`platejs` is uninstalled** and lint bans it under both editors. The
-  boundaries are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`; the document lives in the
-  editor, never in React state. The Outline has no block toolbar and nothing in its left margin:
-  `/` opens its slash menu, `⌘0`–`⌘3` / `⌘⇧Q/R/B` stay. FDX export is built.
-- **The Characters route is the client's laper.ai shape, not the repo's bundle** (ruled
-  2026-09-14; "Characters route, second pass" in `docs/build-decisions.md`). `Route -
-  Characters.dc.html` and `screenshots/characters.png` are the old design and are not this
-  route's reference. No cast column; `?view=overview | relationships | casting`;
-  `/characters/:uuid` is the edit drawer over the grid; unmatched cues are ghost cards, never a
-  screen. Migration `0013` dropped the first pass's drives, arc turns, voice rules and key lines
-  (client ruling). Portraits are on Cloudflare R2 through `apps/web/lib/storage/r2.ts`
-  (`aws4fetch` approved), gated on the optional `R2_*` env block. `character_relationships` is
-  kept as a derivation read and nothing writes it. Generate (the look-sheet job) is not built.
+- **Editor packages approved in `apps/web`:** `@tiptap/{core,pm,react,suggestion}` and
+  `@floating-ui/dom`, version-pinned — no other `@tiptap/*` extension without asking (AGENTS.md,
+  Adding a dependency). Boundary files are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`;
+  the document lives in the editor, never in React state. See AGENTS.md, The node model, for the
+  slash-menu / no-type-bar rule both editors follow.
+- **The Characters route is the client's laper.ai shape, not the repo's bundle** ("Characters
+  route, second pass" in `docs/build-decisions.md`). `Route - Characters.dc.html` and
+  `screenshots/characters.png` are the old design and are not this route's reference. No cast
+  column; `?view=overview | relationships | casting`; `/characters/:uuid` is the edit drawer over
+  the grid; unmatched cues are ghost cards, never a screen. Migration `0013` dropped the first
+  pass's drives, arc turns, voice rules and key lines. Portraits are on Cloudflare R2 through
+  `apps/web/lib/storage/r2.ts` (`aws4fetch`), gated on the optional `R2_*` env block.
+  `character_relationships` is kept as a derivation read and nothing writes it. Generate (the
+  look-sheet job) is not built.
+- **`beats`, `revisions` and `comment_threads` are tables with no route above them** (AGENTS.md,
+  Constraints — all three routes were built, then cut). `beats` was dropped in migration `0010`;
+  `revisions` and `comment_threads` stay, and the Script route's right panel reads both directly.
 
 **Nothing needs a live database** to typecheck, lint, build or unit-test. The signed-in E2E
 walks (`apps/web/e2e/*-route.spec.ts`) need `E2E_EMAIL`/`E2E_PASSWORD` and skip without them;
@@ -123,8 +117,7 @@ Traps that produce a false reading:
 
 ## Working here
 
-- **Escalate the open decisions; do not resolve them.** Blocking now: A4 sheet width, page
-  numbering past the last lock, revision sequence past green, the `SCENE_xxx` id shape (blocks
-  `?selected=`), the `?lens=` value shape.
+- **Escalate the open decisions in AGENTS.md; do not resolve them.** They're one table there
+  now (twelve rows) — read it before touching any of them.
 - **Any dependency needs approval, every time.** `packages/script` has none — keep it that way.
 - Report literally: paste failing output, name assumptions, flag any rule you were tempted to break.
