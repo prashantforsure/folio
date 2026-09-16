@@ -38,8 +38,8 @@ import type { ClipState, FrameState, ProductionScene, ProductionShot, ReelRow, R
  *
  * ## Copy
  *
- * `describeReason` holds the mock's final copy (`docs/ui design/Route -
- * Production.dc.html`) in one place, with the cap rules' sentences beside
+ * `describeReason` holds the mockup's final copy (`docs/ui design/Route -
+ * Production v2.dc.html`) in one place, with the cap rules' sentences beside
  * it. The reason is a code so the redesign may print it its own way and the
  * test can assert on the rule, not the sentence.
  */
@@ -134,7 +134,7 @@ export type ReelStatus =
 export type ReasonCode =
   | { readonly kind: 'no-shots' }
   | { readonly kind: 'missing-descriptions'; readonly count: number }
-  | { readonly kind: 'blocked'; readonly shotNumber: string; readonly reason: string }
+  | { readonly kind: 'blocked'; readonly shotNumber: string; readonly reason: string; readonly remaining: number }
   | { readonly kind: 'generating' }
   | { readonly kind: 'needs-credits'; readonly needed: number; readonly available: number }
   | { readonly kind: 'ready'; readonly pending: number; readonly costEach: number }
@@ -143,7 +143,7 @@ export type ReasonCode =
   | { readonly kind: 'timing'; readonly total: number; readonly clipSeconds: number }
   | { readonly kind: 'finalized' }
   | { readonly kind: 'rendering' }
-  | { readonly kind: 'rendered'; readonly resolution: RenderResolution; readonly cost: number }
+  | { readonly kind: 'rendered'; readonly resolution: RenderResolution; readonly cost: number; readonly frames: number }
   | { readonly kind: 'clip-failed'; readonly error: string | null; readonly refunded: boolean }
   | { readonly kind: 'clip-blocked'; readonly reason: string }
 
@@ -198,7 +198,7 @@ export const reelGates = (reel: ReelRow, input: GateInput): ReelGates => {
       status: 'rendered',
       canRender: finalized && input.available >= input.renderCost,
       canUnlock: finalized,
-      reason: { kind: 'rendered', resolution: input.resolution, cost: input.renderCost },
+      reason: { kind: 'rendered', resolution: input.resolution, cost: input.renderCost, frames: accepted.length },
     }
   }
   if (clipBusy) return { ...none, status: 'rendering', reason: { kind: 'rendering' } }
@@ -222,7 +222,7 @@ export const reelGates = (reel: ReelRow, input: GateInput): ReelGates => {
     return {
       ...none,
       status: 'blocked',
-      reason: { kind: 'blocked', shotNumber: flagged.number, reason: flagged.frame.reason },
+      reason: { kind: 'blocked', shotNumber: flagged.number, reason: flagged.frame.reason, remaining: pending.length },
     }
   }
   if (accepted.length === 0) return { ...none, status: 'writing', reason: { kind: 'no-shots' } }
@@ -264,9 +264,12 @@ export const describeReason = (reason: ReasonCode): string => {
     case 'missing-descriptions':
       return `${plural(reason.count, 'shot needs', 'shots need')} a description before frames can generate.`
     case 'blocked':
-      return `Shot ${reason.shotNumber} can't be rendered: ${reason.reason} Fix it and the rest of the reel generates.`
+      // The refusal itself is printed on the shot's row; this line says what to do.
+      return reason.remaining === 0
+        ? `Shot ${reason.shotNumber} is blocked. Rewrite it to generate its frame.`
+        : `Shot ${reason.shotNumber} is blocked. Rewrite it to generate the remaining ${plural(reason.remaining, 'frame', 'frames')}.`
     case 'generating':
-      return "Frames are generating. You can keep editing shots that haven't started."
+      return "You can keep editing shots that haven't started."
     case 'needs-credits':
       return `Needs ${reason.needed} credits, you have ${reason.available}. Top up to continue.`
     case 'ready':
@@ -286,7 +289,7 @@ export const describeReason = (reason: ReasonCode): string => {
     case 'rendering':
       return 'The clip is rendering. Unlock waits until it is done.'
     case 'rendered':
-      return `Rendered at ${reason.resolution} · ${reason.cost} credits spent.`
+      return `All ${plural(reason.frames, 'frame', 'frames')} kept. Reel rendered at ${reason.resolution}.`
     case 'clip-failed':
       return reason.refunded
         ? `The render failed and the credits were refunded.${reason.error === null ? '' : ` ${reason.error}`}`

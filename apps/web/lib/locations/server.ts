@@ -1,8 +1,5 @@
 import { hueOfColor } from '@folio/contracts'
 import type {
-  BreakdownRow,
-  LocationArcNoteRow,
-  LocationRecordView,
   LocationRow,
   LocationSceneRow,
   SceneRef,
@@ -14,7 +11,6 @@ import type {
 import {
   listBoundSluglines,
   listCharacterRecords,
-  listLocationArcNotes,
   listLocationRecords,
   listOpenLocationRows,
   listSceneEighths,
@@ -30,17 +26,10 @@ import { cache } from 'react'
 
 import { sceneRefOf } from '../characters/figures'
 import { deriveSpeculatively, readDerivationReads } from '../script/server'
+import { publicUrl, storageAvailable } from '../storage/r2'
 import type { ProjectContext } from '../workspace/context'
-import { loadProject } from '../workspace/context'
-import {
-  NO_LOCATION_COUNTS,
-  ieOf,
-  peopleAt,
-  perEpisodeCells,
-  subtreeOf,
-  sumEighths,
-  treeOrder,
-} from './figures'
+import { NO_LOCATION_COUNTS, ieOf, perEpisodeCounts, peopleAt, subtreeOf, sumEighths, treeOrder } from './figures'
+import { kindOf } from './view'
 
 /**
  * Everything the Locations route reads, and where each part comes from.
@@ -48,29 +37,32 @@ import {
  * A *join*, never a computation over the script: every count comes from the
  * table that owns it -
  *
- *   `rows[]`           `locations` ⋈ `location_derivations`  (`listLocationRecords`),
- *                      in tree order (`treeOrder`); `ie` read off the scenes
- *   `rows[].rollup`    `location_derivations.rollup_*` - the pure core's
- *                      tree walk, stored, which is what "how many days in the
- *                      chawl" reads
- *   `index[]`          the derived `scenes` against `scene_derivations` ⋈
- *                      `nodes` ⋈ `documents` ⋈ `episodes` (`listSceneIndex`),
- *                      each with its heading's reading
- *   `eighths`          `measurement_scenes` at the project's format, `paged`
- *                      (`listSceneEighths`) - the only source of a page count
- *   `resolve[]`        `resolve_rows` open, kind slugline  (`listOpenLocationRows`)
- *   `structure[]`      `resolve_rows` open, kind structure, with a proposal
- *   `breakdown[]`      the above, cut per episode
- *   a record           the above plus `location_slugline_tallies`,
- *                      `location_bound_sluglines`, `location_arc_notes`,
- *                      `scenes.synopsis` and the cast's names.
+ *   `rows[]`             `locations` ⋈ `location_derivations`  (`listLocationRecords`),
+ *                        in tree order (`treeOrder`); `ie` read off the scenes
+ *   `rows[].rollup`      `location_derivations.rollup_*` - the pure core's
+ *                        tree walk, stored, which is what "how many days in
+ *                        the chawl" reads
+ *   `rows[].scenes`      the derived `scenes` against `scene_derivations` ⋈
+ *                        `nodes` ⋈ `documents` ⋈ `episodes` (`listSceneIndex`),
+ *                        each with its heading's reading, its synopsis
+ *                        (`scenes.synopsis`) and its cast's names
+ *   `rows[].eighths`     `measurement_scenes` at the project's format, `paged`
+ *                        (`listSceneEighths`) - the only source of a page count
+ *   `rows[].sluglines`   `location_slugline_tallies`, here or below
+ *   `rows[].conflicts`   `resolve_rows` open, kind structure, about this record
+ *   `resolve[]`          `resolve_rows` open, kind slugline  (`listOpenLocationRows`)
+ *
+ * One shape for every view (`LocationRow`, `@folio/contracts`): the drawer
+ * opens over any card and the "Scenes here" view lists every record's
+ * scenes, so every field is read for every row, in six statements
+ * regardless of how many records there are.
  *
  * The one place a derivation is *run* is the empty state, exactly as the
  * Characters loader does it: with no record at all, a speculative pass says
  * how many places the headings name - ids discarded, nothing written.
  *
- * `cache()`d per request, keyed by the project context, so the nav column
- * (in the layout), the header and the body share one read.
+ * `cache()`d per request, keyed by the project context, so the sidebar (in
+ * the layout), the header and the body share one read.
  */
 
 const isSluglineSubject = (value: unknown): value is Extract<ResolveSubject, { kind: 'slugline' }> =>
@@ -92,120 +84,179 @@ const isStructureSubject = (value: unknown): value is Extract<ResolveSubject, { 
 const isTarget = (value: unknown): value is ProposalTarget =>
   typeof value === 'object' && value !== null && 'kind' in value && typeof value.kind === 'string'
 
-/** The row without its I/E, which is read over the subtree once the tree is known. */
-const rowOf = (record: LocationRecordRow, children: number): LocationRow => {
-  return {
-    id: record.id,
-    name: record.name,
-    parentId: record.parentId,
-    depth: record.derived?.depth ?? 0,
-    ie: null,
-    presence: record.derived?.presence ?? 'absent',
-    own: record.derived?.own ?? NO_LOCATION_COUNTS,
-    rollup: record.derived?.rollup ?? NO_LOCATION_COUNTS,
-    children,
-  }
+/** The tree's own reading of a record: the edge, the depth, the counts. What `treeOrder` and `subtreeOf` walk. */
+type Skeleton = {
+  readonly id: LocationId
+  readonly name: string
+  readonly parentId: LocationId | null
+  readonly depth: number
+  readonly children: number
+  readonly rollup: LocationRow['rollup']
+  readonly record: LocationRecordRow
+}
+
+export type Derivable = {
+  readonly count: number
+  /** Distinct heading spellings the pass read - `15 sluglines across 9 distinct places`. */
+  readonly sluglines: number
+  /** `INT. CHAWL CORRIDOR - DAY × 6`, busiest first, at most three - the empty card's mono block. */
+  readonly top: readonly { readonly set: string; readonly n: number }[]
 }
 
 export type LocationsLoad = {
-  readonly records: readonly LocationRecordRow[]
   /** Tree order: primary sets by weight, each followed by its sub-sets. */
   readonly rows: readonly LocationRow[]
   readonly resolve: readonly SluglineResolveItem[]
-  readonly structure: readonly StructureResolveItem[]
-  readonly breakdown: readonly BreakdownRow[]
-  readonly index: readonly SceneIndexRow[]
-  readonly eighths: ReadonlyMap<NodeId, number>
-  /** Present scenes across the project - the footer's `M scenes`. */
+  /** Present scenes across the project - the status bar's `M scenes`. */
   readonly sceneTotal: number
-  /** Distinct counted heading spellings across every record - the header's `derived from N sluglines`. */
-  readonly sluglineTotal: number
-  /** Every counted heading per record - what the nav's find input matches beside the name. */
-  readonly sluglinesOf: Readonly<Record<string, readonly string[]>>
   /** Only with no record at all: how many a pass would derive, and the headings it read. */
-  readonly derivable: { readonly count: number; readonly top: readonly { readonly set: string; readonly n: number }[] } | null
+  readonly derivable: Derivable | null
+  /** Whether the five `R2_*` variables are set - whether Upload can be offered. */
+  readonly storage: boolean
 }
 
 /** The scenes of a subtree: this record's derived list plus every descendant's. */
-const subtreeScenes = (
-  id: LocationId,
-  rows: readonly LocationRow[],
-  records: readonly LocationRecordRow[],
-): ReadonlySet<NodeId> => {
-  const ids = subtreeOf(id, rows)
+const subtreeScenes = (id: LocationId, skeletons: readonly Skeleton[]): ReadonlySet<NodeId> => {
+  const ids = subtreeOf(id, skeletons)
   const out = new Set<NodeId>()
-  for (const record of records) {
-    if (!ids.has(record.id)) continue
-    for (const scene of record.derived?.scenes ?? []) out.add(scene)
+  for (const entry of skeletons) {
+    if (!ids.has(entry.id)) continue
+    for (const scene of entry.record.derived?.scenes ?? []) out.add(scene)
   }
   return out
 }
 
 export const loadLocations = cache(async (context: ProjectContext): Promise<LocationsLoad> => {
   const { scope, episodes, project } = context
-  const [records, index, openRows, tallies, eighths] = await Promise.all([
+  const [records, index, openRows, tallies, eighths, bound, synopses, characters] = await Promise.all([
     listLocationRecords(scope),
     listSceneIndex(scope),
     listOpenLocationRows(scope),
     listSluglineTallies(scope),
     listSceneEighths(scope, project.format),
+    listBoundSluglines(scope),
+    listSceneSynopses(scope),
+    listCharacterRecords(scope),
   ])
 
   const childCount = new Map<LocationId, number>()
   for (const record of records) {
     if (record.parentId !== null) childCount.set(record.parentId, (childCount.get(record.parentId) ?? 0) + 1)
   }
-  const unordered = records.map((record) => rowOf(record, childCount.get(record.id) ?? 0))
-  // I/E is read over the whole subtree: a primary set with no heading of its
-  // own is `INT/EXT` when its sub-sets are, not `—`.
-  const rows = treeOrder(unordered).map((row) => {
-    const scenes = subtreeScenes(row.id, unordered, records)
-    return { ...row, ie: ieOf(index.filter((entry) => scenes.has(entry.sceneNodeId)).map((entry) => entry.ie)) }
-  })
-  const rowById = new Map(rows.map((row) => [row.id, row]))
+  const skeletons: readonly Skeleton[] = treeOrder(
+    records.map((record) => ({
+      id: record.id,
+      name: record.name,
+      parentId: record.parentId,
+      depth: record.derived?.depth ?? 0,
+      children: childCount.get(record.id) ?? 0,
+      rollup: record.derived?.rollup ?? NO_LOCATION_COUNTS,
+      record,
+    })),
+  )
+  const nameOf = new Map(skeletons.map((entry) => [entry.id, entry.name]))
+  const sceneOrder = new Map<NodeId, number>(index.map((entry, at) => [entry.sceneNodeId, at]))
   const refByScene = new Map<NodeId, SceneRef>(index.map((row) => [row.sceneNodeId, sceneRefOf(row)]))
+  const people = new Map<CharacterId, { readonly name: string; readonly hue: number }>(
+    characters.map((character) => [character.id, { name: character.name, hue: hueOfColor(character.color) }]),
+  )
+  const subtreeIds = new Map(skeletons.map((entry) => [entry.id, subtreeOf(entry.id, skeletons)]))
 
+  // The queue, split: sluglines pointing at nothing (the banner) and
+  // structure proposals (a conflict block on the record they are about).
   const resolve: SluglineResolveItem[] = []
-  const structure: StructureResolveItem[] = []
+  const conflictsOf = new Map<LocationId, StructureResolveItem[]>()
   for (const row of openRows) {
     if (row.subjectKind === 'slugline') {
-      const item = sluglineItemOf(row, rowById, refByScene)
+      const item = sluglineItemOf(row, nameOf, refByScene)
       if (item !== null) resolve.push(item)
       continue
     }
-    const item = structureItemOf(row, rowById)
-    if (item !== null) structure.push(item)
+    const item = structureItemOf(row, nameOf)
+    if (item === null) continue
+    const list = conflictsOf.get(item.location.id) ?? []
+    list.push(item)
+    conflictsOf.set(item.location.id, list)
   }
 
-  const breakdown: BreakdownRow[] = rows.map((row) => {
-    const scenes = subtreeScenes(row.id, rows, records)
-    const cells = perEpisodeCells(episodes, index, scenes, eighths)
-    return { ...row, cells, eighths: sumEighths(scenes, eighths) }
+  const rows: LocationRow[] = skeletons.map((entry) => {
+    const { record } = entry
+    const scenes = subtreeScenes(entry.id, skeletons)
+    const here = index.filter((row) => scenes.has(row.sceneNodeId))
+    const ordered = [...scenes].sort((a, b) => (sceneOrder.get(a) ?? 0) - (sceneOrder.get(b) ?? 0))
+    const first = ordered[0]
+    const last = ordered[ordered.length - 1]
+    const ids = subtreeIds.get(entry.id) ?? new Set<LocationId>([entry.id])
+    const nameKey = canonicalKey(record.name)
+    const parentName = record.parentId === null ? undefined : nameOf.get(record.parentId)
+    const skeleton = { parentId: record.parentId, children: entry.children, rollup: entry.rollup }
+
+    const sceneRows: LocationSceneRow[] = here.map((row) => sceneRowOf(row, synopses, people, eighths, entry, nameOf))
+
+    return {
+      id: entry.id,
+      name: record.name,
+      parentId: record.parentId,
+      parent: record.parentId === null || parentName === undefined ? null : { id: record.parentId, name: parentName },
+      depth: entry.depth,
+      ie: ieOf(here.map((row) => row.ie)),
+      presence: record.derived?.presence ?? 'absent',
+      kind: kindOf(skeleton),
+      own: record.derived?.own ?? NO_LOCATION_COUNTS,
+      rollup: entry.rollup,
+      children: entry.children,
+      status: record.status,
+      address: record.address,
+      description: record.description,
+      photoUrl: publicUrl(record.photoKey),
+      sluglines: tallies
+        .filter((tally) => ids.has(tally.locationId))
+        .map((tally) => ({ slugline: tally.slugline, occurrences: tally.occurrences })),
+      boundSluglines: bound.filter((row) => row.locationId === entry.id).map((row) => row.slugline),
+      scenes: sceneRows,
+      people: peopleAt(index, scenes, people),
+      perEpisode: perEpisodeCounts(episodes, index, scenes),
+      eighths: sumEighths(scenes, eighths),
+      firstSeen: first === undefined ? null : (refByScene.get(first) ?? null),
+      lastSeen: last === undefined ? null : (refByScene.get(last) ?? null),
+      nameHeadings: tallies
+        .filter((tally) => tally.locationId === entry.id && tally.key === nameKey)
+        .reduce((total, tally) => total + tally.occurrences, 0),
+      conflicts: conflictsOf.get(entry.id) ?? [],
+    }
   })
 
   const derivable = records.length === 0 ? await countDerivable(context) : null
 
-  const sluglinesOf: Record<string, string[]> = {}
-  for (const tally of tallies) (sluglinesOf[tally.locationId] ??= []).push(tally.slugline)
+  return { rows, resolve, sceneTotal: index.length, derivable, storage: storageAvailable() }
+})
 
-  return {
-    records,
-    rows,
-    resolve,
-    structure,
-    breakdown,
-    index,
-    eighths,
-    sceneTotal: index.length,
-    sluglineTotal: new Set(tallies.map((tally) => tally.slugline)).size,
-    sluglinesOf,
-    derivable,
-  }
+const sceneRowOf = (
+  row: SceneIndexRow,
+  synopses: ReadonlyMap<NodeId, string>,
+  people: ReadonlyMap<CharacterId, { readonly name: string; readonly hue: number }>,
+  eighths: ReadonlyMap<NodeId, number>,
+  at: Skeleton,
+  nameOf: ReadonlyMap<LocationId, string>,
+): LocationSceneRow => ({
+  scene: sceneRefOf(row),
+  light: row.light,
+  timeOfDay: row.timeOfDay,
+  gist: synopses.get(row.sceneNodeId) ?? null,
+  cast: row.cast.flatMap((id) => {
+    const person = people.get(id)
+    return person === undefined ? [] : [{ id, name: person.name, hue: person.hue }]
+  }),
+  eighths: eighths.get(row.sceneNodeId) ?? null,
+  at: {
+    id: row.locationId ?? at.id,
+    name: (row.locationId === null ? undefined : nameOf.get(row.locationId)) ?? at.name,
+  },
 })
 
 const sluglineItemOf = (
   row: OpenLocationRow,
-  rowById: ReadonlyMap<LocationId, LocationRow>,
+  nameOf: ReadonlyMap<LocationId, string>,
   refByScene: ReadonlyMap<NodeId, SceneRef>,
 ): SluglineResolveItem | null => {
   if (!isSluglineSubject(row.subject)) return null
@@ -213,11 +264,8 @@ const sluglineItemOf = (
   if (row.proposalConfidence !== null && isTarget(row.proposalTarget)) {
     const target = row.proposalTarget
     if (target.kind === 'location') {
-      const record = rowById.get(target.id)
-      proposal =
-        record === undefined
-          ? null
-          : { kind: 'location', id: record.id, name: record.name, confidence: row.proposalConfidence }
+      const name = nameOf.get(target.id)
+      proposal = name === undefined ? null : { kind: 'location', id: target.id, name, confidence: row.proposalConfidence }
     } else if (target.kind === 'new-record') {
       proposal = { kind: 'new-record', confidence: row.proposalConfidence }
     }
@@ -234,19 +282,16 @@ const sluglineItemOf = (
   }
 }
 
-const structureItemOf = (
-  row: OpenLocationRow,
-  rowById: ReadonlyMap<LocationId, LocationRow>,
-): StructureResolveItem | null => {
+const structureItemOf = (row: OpenLocationRow, nameOf: ReadonlyMap<LocationId, string>): StructureResolveItem | null => {
   if (!isStructureSubject(row.subject)) return null
-  const location = rowById.get(row.subject.location)
-  if (location === undefined || row.proposalConfidence === null || !isTarget(row.proposalTarget)) return null
+  const name = nameOf.get(row.subject.location)
+  if (name === undefined || row.proposalConfidence === null || !isTarget(row.proposalTarget)) return null
   const target = row.proposalTarget
   let proposal: StructureResolveProposal | null = null
   if (target.kind === 'attach') {
-    const parent = rowById.get(target.parent)
+    const parent = nameOf.get(target.parent)
     if (parent !== undefined) {
-      proposal = { kind: 'attach', parent: { id: parent.id, name: parent.name }, confidence: row.proposalConfidence }
+      proposal = { kind: 'attach', parent: { id: target.parent, name: parent }, confidence: row.proposalConfidence }
     }
   } else if (target.kind === 'new-parent') {
     proposal = { kind: 'new-parent', name: target.name, confidence: row.proposalConfidence }
@@ -254,18 +299,19 @@ const structureItemOf = (
   if (proposal === null) return null
   return {
     key: row.key,
-    location: { id: location.id, name: location.name },
+    location: { id: row.subject.location, name },
     scenes: row.occurrences,
     proposal,
   }
 }
 
 /** With no record yet: how many places a pass over the script would mint, and the headings behind them. */
-const countDerivable = async (context: ProjectContext): Promise<LocationsLoad['derivable']> => {
+const countDerivable = async (context: ProjectContext): Promise<Derivable> => {
   const reads = await readDerivationReads(context.scope)
   const pass = deriveSpeculatively(reads)
-  if (pass === null) return { count: 0, top: [] }
+  if (pass === null) return { count: 0, sluglines: 0, top: [] }
   const present = pass.entities.locations.filter((record) => record.presence === 'present')
+  const sluglines = new Set(present.flatMap((record) => record.sluglines.map((entry) => entry.slugline))).size
   const top = present
     .map((record) => ({
       set: record.sluglines[0]?.slugline ?? record.authored.name,
@@ -273,104 +319,23 @@ const countDerivable = async (context: ProjectContext): Promise<LocationsLoad['d
     }))
     .sort((a, b) => b.n - a.n || a.set.localeCompare(b.set))
     .slice(0, 3)
-  return { count: present.length, top }
+  return { count: present.length, sluglines, top }
 }
 
-export type RecordLoad =
-  | { readonly state: 'record'; readonly record: LocationRecordView }
+export type SelectedLoad =
+  | { readonly state: 'record'; readonly record: LocationRow }
   | { readonly state: 'merged'; readonly into: LocationId }
   | { readonly state: 'missing' }
 
 /**
- * One record's view. The route load plus what only this record reads: its
- * counted headings, its bound set texts, its arc notes, the synopses and
- * the cast's names for its scene list.
+ * The record `/locations/:locationId` names, from the route load. A record
+ * merged into another says where it went - the loser's row is a tombstone
+ * - and an id that names nothing here is missing.
  */
-export const loadLocationRecord = cache(
-  async (context: ProjectContext, locationId: LocationId): Promise<RecordLoad> => {
-    const { scope, episodes } = context
-    const load = await loadLocations(context)
-    const record = load.records.find((entry) => entry.id === locationId)
-    const row = load.rows.find((entry) => entry.id === locationId)
-    if (record === undefined || row === undefined) {
-      const into = await readLocationMergedInto(scope, locationId)
-      return into === null ? { state: 'missing' } : { state: 'merged', into }
-    }
-
-    const [tallies, bound, notes, synopses, characters] = await Promise.all([
-      listSluglineTallies(scope),
-      listBoundSluglines(scope),
-      listLocationArcNotes(scope, locationId),
-      listSceneSynopses(scope),
-      listCharacterRecords(scope),
-    ])
-
-    const scenes = subtreeScenes(locationId, load.rows, load.records)
-    const sceneOrder = new Map<NodeId, number>(load.index.map((entry, at) => [entry.sceneNodeId, at]))
-    const refByScene = new Map<NodeId, SceneRef>(load.index.map((entry) => [entry.sceneNodeId, sceneRefOf(entry)]))
-    const people = new Map<CharacterId, { readonly name: string; readonly hue: number }>(
-      characters.map((character) => [character.id, { name: character.name, hue: hueOfColor(character.color) }]),
-    )
-    const nameOf = new Map(load.rows.map((entry) => [entry.id, entry.name]))
-
-    const sceneRows: LocationSceneRow[] = load.index
-      .filter((entry) => scenes.has(entry.sceneNodeId))
-      .map((entry) => ({
-        scene: sceneRefOf(entry),
-        light: entry.light,
-        timeOfDay: entry.timeOfDay,
-        gist: synopses.get(entry.sceneNodeId) ?? null,
-        cast: entry.cast.flatMap((id) => {
-          const person = people.get(id)
-          return person === undefined ? [] : [{ id, name: person.name, hue: person.hue }]
-        }),
-        eighths: load.eighths.get(entry.sceneNodeId) ?? null,
-        at: {
-          id: entry.locationId ?? locationId,
-          name: (entry.locationId === null ? undefined : nameOf.get(entry.locationId)) ?? row.name,
-        },
-      }))
-
-    const nameKey = canonicalKey(record.name)
-    const mine = tallies.filter((tally) => tally.locationId === locationId)
-    const noteByEpisode = new Map(notes.map((note) => [note.episodeId, note.text]))
-    const arc: LocationArcNoteRow[] = episodes.map((episode) => ({
-      episodeId: episode.id,
-      episode: episode.slug,
-      ordinal: episode.ordinal,
-      text: noteByEpisode.get(episode.id) ?? null,
-    }))
-
-    const ordered = [...scenes].sort((a, b) => (sceneOrder.get(a) ?? 0) - (sceneOrder.get(b) ?? 0))
-    const first = ordered[0]
-    const last = ordered[ordered.length - 1]
-    const parentRow = record.parentId === null ? undefined : load.rows.find((entry) => entry.id === record.parentId)
-
-    const view: LocationRecordView = {
-      ...row,
-      description: record.description,
-      scheduledDays: record.scheduledDays,
-      parent: parentRow === undefined ? null : { id: parentRow.id, name: parentRow.name },
-      subLocations: load.rows.filter((entry) => entry.parentId === locationId),
-      sluglines: mine.map((tally) => ({ slugline: tally.slugline, occurrences: tally.occurrences })),
-      boundSluglines: bound.filter((entry) => entry.locationId === locationId).map((entry) => entry.slugline),
-      scenes: sceneRows,
-      arc,
-      people: peopleAt(load.index, scenes, people),
-      perEpisode: perEpisodeCells(episodes, load.index, scenes, load.eighths),
-      eighths: sumEighths(scenes, load.eighths),
-      firstSeen: first === undefined ? null : (refByScene.get(first) ?? null),
-      lastSeen: last === undefined ? null : (refByScene.get(last) ?? null),
-      nameHeadings: mine.filter((tally) => tally.key === nameKey).reduce((total, tally) => total + tally.occurrences, 0),
-    }
-    return { state: 'record', record: view }
-  },
-)
-
-/** The route's context and its load, for a page or a layout that has only raw params. */
-export const enterLocations = async (
-  rawProjectId: string,
-): Promise<{ readonly context: ProjectContext; readonly load: LocationsLoad }> => {
-  const context = await loadProject(rawProjectId)
-  return { context, load: await loadLocations(context) }
-}
+export const loadSelectedLocation = cache(async (context: ProjectContext, locationId: LocationId): Promise<SelectedLoad> => {
+  const load = await loadLocations(context)
+  const record = load.rows.find((entry) => entry.id === locationId)
+  if (record !== undefined) return { state: 'record', record }
+  const into = await readLocationMergedInto(context.scope, locationId)
+  return into === null ? { state: 'missing' } : { state: 'merged', into }
+})

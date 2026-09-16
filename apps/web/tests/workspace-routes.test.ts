@@ -100,9 +100,7 @@ describe('the writing sidebar and the mode pill', () => {
     expect(PANEL_WIDTH).toBe(400)
     expect(CONTEXT_PANEL_WIDTH).toEqual({
       production: 250,
-      locations: 256,
       timeline: 250,
-      research: 250,
     })
   })
 })
@@ -116,8 +114,8 @@ describe('sub-view params', () => {
     expect(parseSubViews('storyboard', {})).toEqual({ ok: true, params: { view: 'board' } })
     expect(parseSubViews('scenes', {})).toEqual({ ok: true, params: { view: 'cards' } })
     expect(parseSubViews('production', {})).toEqual({ ok: true, params: { view: 'scene' } })
-    expect(parseSubViews('characters', {})).toEqual({ ok: true, params: { view: 'overview' } })
-    expect(parseSubViews('locations', {})).toEqual({ ok: true, params: { view: 'record' } })
+    expect(parseSubViews('characters', {})).toEqual({ ok: true, params: { view: 'cast' } })
+    expect(parseSubViews('locations', {})).toEqual({ ok: true, params: { view: 'places' } })
     expect(parseSubViews('timeline', {})).toEqual({ ok: true, params: { view: 'story' } })
     expect(parseSubViews('research', {})).toEqual({ ok: true, params: { view: 'library' } })
     expect(parseSubViews('outline', {})).toEqual({ ok: true, params: {} })

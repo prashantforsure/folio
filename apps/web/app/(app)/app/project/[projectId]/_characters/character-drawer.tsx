@@ -1,519 +1,349 @@
 'use client'
 
-import type { CastRow, CharacterProfile, ProjectId } from '@folio/contracts'
+import type { CharacterProfile, ProjectId } from '@folio/contracts'
 import { PORTRAIT_TYPES } from '@folio/contracts'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
-import {
-  bindAlias,
-  deleteCharacter,
-  mergeCharacters,
-  removePortrait,
-  renameCharacter,
-  saveProfile,
-  unbindAlias,
-  uploadPortrait,
-} from '../../../../../../lib/characters/actions'
-import { characterHref } from '../../../../../../lib/workspace/hrefs'
+import { deleteCharacter, removePortrait, renameCharacter, saveProfile, uploadPortrait } from '../../../../../../lib/characters/actions'
+import type { CastFigure } from '../../../../../../lib/characters/cast'
+import { formatSceneRef } from '../../../../../../lib/characters/figures'
 import type { ProjectRoutePath } from '../../../../../../lib/workspace/hrefs'
-import { CharacterFields, Panel } from './character-form'
-import type { Draft } from './character-form'
+import { characterHref } from '../../../../../../lib/workspace/hrefs'
+import { count } from '../../../../../../lib/workspace/format'
+import { CastMark } from './cast-mark'
 import type { Run } from './characters-workspace'
-import { PortraitTile } from './portrait-tile'
+import { DrawerShell, Section } from './drawer-shell'
+import type { ProfileDraft } from './profile-fields'
+import { ProfileFields } from './profile-fields'
 
 /**
- * `/characters/:characterId`: the edit drawer, over the grid. `Edit
- * Character` / `Modify character info and backstory`, then the portrait,
- * the shared fields, the alias table, and a footer with `Delete`, `Merge
- * into…` and `Save`.
+ * `/characters/:characterId` - the edit drawer, `Route - Characters
+ * v2.dc.html`: `Edit character` over `79 scenes · 412 lines · E1 Sc 1 →
+ * E3 Sc 30`; the 78×98 tile with `Upload reference` / `Remove`; the
+ * fields (`profile-fields.tsx`); `Arc · from the script`; `Shares scenes
+ * with` and its `Relationships →`; and the foot - `Delete` left, `Cancel`
+ * / `Save` right (README, "Drawer").
+ *
+ * ## What the arc is, honestly
+ *
+ * The mockup's arc rows are authored prose per scene ref, the last in
+ * amber as "unwritten". Nothing in the model holds such text and the app
+ * never invents it, so the section draws what its eyebrow claims - the
+ * character's scenes from the script, ref and heading, first six and a
+ * count of the rest. Citations, not prose.
  *
  * ## Save is one write; a changed name is a rename first
  *
- * The fields are a draft until `Save`. Save writes them in one
- * `saveProfile`. If the name changed too, that is not a profile field -
- * it is the sanctioned write-back (AGENTS.md, "Derivation is one-way -
- * except"), so the drawer asks first, in place: "Rename everywhere? N cues
- * will be rewritten across the script." Confirming runs `renameCharacter`
- * and then the profile save; cancelling keeps the old name and saves the
- * rest.
+ * The fields are a draft until `Save`, written in one `saveProfile`. A
+ * changed name is not a profile field: it is the sanctioned write-back
+ * (AGENTS.md, "Derivation is one-way - except"), so the drawer asks in
+ * place - "Rename everywhere? N cues will be rewritten" - and runs
+ * `renameCharacter` first on yes. Delete is refused by the action while
+ * the record is in the script; the button says so before it is pressed.
  *
- * ## What stays from the first pass, and why
- *
- * The alias table row - "Also appears in the script as" - is the mechanism
- * that makes `मीरा` and `MEERA` one person, and the only place a writer can
- * see and change it. Merge is how two records that were one person become
- * one. Delete keeps its rule: refused while the record is in the script,
- * because a record deleted under a live cue is minted again on the next
- * pass. Each is one quiet control; none is a screen.
+ * Gender, the colour picker, appearance notes, the alias table and merge
+ * were the second pass's controls and are not in the v2 drawer; the
+ * actions stay (`lib/characters/actions.ts`), the surfaces go. Flagged.
  */
+export type Relation = {
+  readonly id: string
+  readonly short: string
+  readonly initial: string
+  readonly hue: number
+  readonly shared: number
+}
+
+const ARC_SHOWN = 6
+
 export const CharacterDrawer = ({
   projectId,
+  figure,
   profile,
-  cast,
+  relations,
   storage,
   baseHref,
   run,
 }: {
   readonly projectId: ProjectId
+  readonly figure: CastFigure
   readonly profile: CharacterProfile
-  readonly cast: readonly CastRow[]
+  readonly relations: readonly Relation[]
   readonly storage: boolean
   readonly baseHref: ProjectRoutePath
   readonly run: Run
 }) => {
   const router = useRouter()
-  const [draft, setDraft] = useState<Draft>({
-    name: profile.name,
-    color: profile.color,
-    gender: profile.gender,
-    age: profile.age ?? '',
-    role: profile.role ?? '',
-    bio: profile.bio ?? '',
-    appearance: profile.appearance ?? '',
-  })
-  const [confirmRename, setConfirmRename] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [merging, setMerging] = useState(false)
-  const [winner, setWinner] = useState('')
-  const [aliasOpen, setAliasOpen] = useState(false)
-  const [alias, setAlias] = useState('')
-  const [notice, setNotice] = useState<string | null>(null)
   const picker = useRef<HTMLInputElement>(null)
-
-  const close = (): void => {
+  const [draft, setDraft] = useState<ProfileDraft>({
+    name: profile.name,
+    role: profile.role ?? '',
+    age: profile.age ?? '',
+    bio: profile.bio ?? '',
+    status: profile.status,
+    wants: profile.wants ?? '',
+    needs: profile.needs ?? '',
+  })
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<'rename' | 'delete' | null>(null)
+  const close = useCallback(() => {
     router.push(baseHref)
-  }
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') router.push(baseHref)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [router, baseHref])
+  }, [baseHref, router])
 
-  const nameChanged = draft.name.trim() !== '' && draft.name.trim() !== profile.name
+  const renamed = draft.name.trim() !== '' && draft.name.trim() !== profile.name
+  const onPage = figure.appearances > 0
 
   const writeProfile = async (): Promise<string | null> => {
     const result = await saveProfile(projectId, profile.id, {
-      color: draft.color,
-      gender: draft.gender,
-      age: draft.age,
       role: draft.role,
+      age: draft.age,
       bio: draft.bio,
-      appearance: draft.appearance,
+      status: draft.status,
+      wants: draft.wants,
+      needs: draft.needs,
     })
     return result.status === 'saved' ? null : result.message
   }
 
-  const save = (): void => {
-    if (nameChanged && !confirmRename) {
-      setConfirmRename(true)
+  const save = (withRename: boolean): void => {
+    if (draft.name.trim() === '') {
+      setNotice('A character needs a name.')
       return
     }
-    setConfirmRename(false)
+    if (renamed && !withRename && confirm !== 'rename') {
+      setConfirm('rename')
+      return
+    }
+    setBusy(true)
+    setNotice(null)
+    setConfirm(null)
     run(async () => {
-      if (nameChanged) {
-        const renamed = await renameCharacter(projectId, profile.id, draft.name.trim())
-        if (renamed.status !== 'renamed') return renamed.message
-        setNotice(
-          renamed.cues === 0
-            ? 'Renamed. No cue carried the old name.'
-            : `Renamed. ${String(renamed.cues)} ${renamed.cues === 1 ? 'cue' : 'cues'} rewritten across ${String(renamed.episodes)} ${
-                renamed.episodes === 1 ? 'episode' : 'episodes'
-              }.`,
-        )
+      let failure: string | null = null
+      if (renamed && withRename) {
+        const result = await renameCharacter(projectId, profile.id, draft.name.trim())
+        if (result.status !== 'renamed') failure = result.message
       }
-      return writeProfile()
+      if (failure === null) failure = await writeProfile()
+      setBusy(false)
+      if (failure !== null) {
+        setNotice(failure)
+        return failure
+      }
+      router.push(baseHref)
+      return null
     })
   }
 
-  const saveWithoutRename = (): void => {
-    setConfirmRename(false)
-    setDraft((state) => ({ ...state, name: profile.name }))
-    run(writeProfile)
-  }
-
   const upload = (file: File): void => {
+    setBusy(true)
     run(async () => {
       const form = new FormData()
       form.set('portrait', file)
       const result = await uploadPortrait(projectId, profile.id, form)
-      return result.status === 'saved' ? null : result.message
+      setBusy(false)
+      if (result.status !== 'saved') {
+        setNotice(result.message)
+        return result.message
+      }
+      return null
     })
   }
 
-  const bind = (): void => {
-    const cue = alias.trim()
-    if (cue === '') return
-    setAlias('')
-    setAliasOpen(false)
+  const remove = (): void => {
+    setBusy(true)
     run(async () => {
-      const result = await bindAlias(projectId, profile.id, cue)
-      return result.status === 'bound' ? null : result.message
+      const result = await removePortrait(projectId, profile.id)
+      setBusy(false)
+      if (result.status !== 'saved') {
+        setNotice(result.message)
+        return result.message
+      }
+      return null
     })
   }
 
-  const counted = new Map(profile.cues.map((cue) => [cue.cue, cue]))
-  const uncounted = profile.boundCues.filter((cue) => !counted.has(cue))
+  const destroy = (): void => {
+    setBusy(true)
+    setConfirm(null)
+    run(async () => {
+      const result = await deleteCharacter(projectId, profile.id)
+      setBusy(false)
+      if (result.status !== 'deleted') {
+        setNotice(result.message)
+        return result.message
+      }
+      router.push(baseHref)
+      return null
+    })
+  }
+
+  const span = figure.first === null || figure.last === null ? 'not in the script' : `${formatSceneRef(figure.first)} → ${formatSceneRef(figure.last)}`
+  const meta = `${count(figure.appearances)} ${figure.appearances === 1 ? 'scene' : 'scenes'} · ${count(figure.lines)} ${figure.lines === 1 ? 'line' : 'lines'} · ${span}`
+  const arc = figure.refs.slice(0, ARC_SHOWN)
+  const arcRest = figure.refs.length - arc.length
 
   return (
-    <div
-      className="fixed inset-0 z-30 flex justify-end bg-scrim"
-      data-character-drawer={profile.id}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) close()
-      }}
-    >
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-character-title"
-        className="flex h-full w-full max-w-[560px] flex-col border-l border-line bg-desk shadow-[0_0_48px_var(--scrim)]"
-      >
-        <header className="flex items-start gap-[12px] px-[24px] pb-[14px] pt-[22px]">
-          <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
-            <h2 id="edit-character-title" className="m-0 font-serif text-21 font-medium leading-none tracking-title">
-              Edit Character
-            </h2>
-            <span className="text-11-5 text-ink3">Modify character info and backstory</span>
-          </div>
-          <button
-            type="button"
-            onClick={close}
-            aria-label="Close"
-            data-drawer-close
-            className="grid h-[32px] w-[32px] flex-none place-items-center rounded-full border border-line2 bg-transparent text-14 text-ink2 hover:bg-hover hover:text-ink"
-          >
-            ×
-          </button>
-        </header>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-[14px] overflow-auto px-[24px] pb-[20px]">
-          {/* portrait */}
-          <Panel title="Portrait">
-            <div className="flex items-center gap-[14px]">
-              <PortraitTile
-                hue={profile.hue}
-                portraitUrl={profile.portraitUrl}
-                name={profile.name}
-                className="h-[96px] w-[72px] flex-none rounded-[7px]"
-              />
-              <div className="flex flex-col gap-[6px]">
-                <button
-                  type="button"
-                  disabled={!storage}
-                  title={storage ? 'Upload a portrait' : 'Portrait storage is not set up on this server yet.'}
-                  data-drawer-upload
-                  onClick={() => {
-                    picker.current?.click()
-                  }}
-                  className={SMALL}
-                >
-                  ⇧ Upload
-                </button>
-                {profile.portraitUrl === null ? null : (
-                  <button
-                    type="button"
-                    data-drawer-remove-portrait
-                    onClick={() => {
-                      run(async () => {
-                        const result = await removePortrait(projectId, profile.id)
-                        return result.status === 'saved' ? null : result.message
-                      })
-                    }}
-                    className={SMALL}
-                  >
-                    Remove
-                  </button>
-                )}
-                <span className="text-10 text-ink3">PNG, JPEG or WebP, up to 5 MB.</span>
-              </div>
-              <input
-                ref={picker}
-                type="file"
-                accept={PORTRAIT_TYPES.join(',')}
-                aria-label={`Portrait for ${profile.name}`}
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  event.target.value = ''
-                  if (file !== undefined) upload(file)
-                }}
-              />
-            </div>
-          </Panel>
-
-          <CharacterFields draft={draft} onChange={setDraft} />
-
-          {/* the alias table */}
-          <Panel title="Also appears in the script as" note="Every spelling that resolves to this character. Cues stay as written.">
-            <div className="flex flex-wrap items-center gap-[6px]" data-cues>
-              {profile.cues.map((cue) => (
-                <CueChip
-                  key={cue.cue}
-                  cue={cue.cue}
-                  count={cue.occurrences}
-                  bound={profile.boundCues.includes(cue.cue)}
-                  onUnbind={() => {
-                    run(async () => {
-                      const result = await unbindAlias(projectId, profile.id, cue.cue)
-                      return result.status === 'saved' ? null : result.message
-                    })
-                  }}
-                />
-              ))}
-              {uncounted.map((cue) => (
-                <CueChip
-                  key={cue}
-                  cue={cue}
-                  count={0}
-                  bound
-                  onUnbind={() => {
-                    run(async () => {
-                      const result = await unbindAlias(projectId, profile.id, cue)
-                      return result.status === 'saved' ? null : result.message
-                    })
-                  }}
-                />
-              ))}
-              {aliasOpen ? (
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    bind()
-                  }}
-                  className="flex items-center gap-[4px]"
-                >
-                  <input
-                    autoFocus
-                    type="text"
-                    value={alias}
-                    onChange={(event) => {
-                      setAlias(event.target.value)
-                    }}
-                    onBlur={() => {
-                      if (alias.trim() === '') setAliasOpen(false)
-                    }}
-                    placeholder="Another spelling"
-                    aria-label="Another spelling"
-                    data-alias-input
-                    className="w-[160px] rounded-chrome border border-accent-line bg-sheet px-[8px] py-[3px] font-mono text-10-5 text-ink outline-none placeholder:text-ink3"
-                  />
-                  <button type="submit" className="rounded-chrome border-none bg-ink px-[8px] py-[4px] text-10-5 font-semibold text-desk">
-                    Add
-                  </button>
-                </form>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAliasOpen(true)
-                  }}
-                  data-add-alias
-                  className="rounded-chrome border border-dashed border-line bg-transparent px-[8px] py-[3px] text-10-5 text-ink3 hover:bg-hover hover:text-ink"
-                >
-                  ＋ add spelling
-                </button>
-              )}
-            </div>
-          </Panel>
-
-          {notice === null ? null : (
-            <span className="text-11 text-add" data-renamed>
-              {notice}
+    <DrawerShell
+      title="Edit character"
+      meta={meta}
+      label={`Edit ${profile.name}`}
+      onClose={close}
+      footer={
+        confirm === 'delete' ? (
+          <>
+            <span className="min-w-0 flex-1 text-12 leading-[1.45] text-ink2" style={{ textWrap: 'pretty' }}>
+              Delete {profile.name}? The record goes; the script is untouched.
             </span>
-          )}
-        </div>
-
-        <footer className="flex flex-col gap-[10px] border-t border-line px-[24px] py-[14px]">
-          {confirmRename ? (
-            <div className="flex flex-col gap-[6px] rounded-chrome border border-note bg-note-bg px-[12px] py-[10px]" data-rename-confirm>
-              <span className="font-serif text-14">
-                Rename {profile.name} to {draft.name.trim()} everywhere?
-              </span>
-              <span className="text-11 text-ink2">
-                {profile.nameCues === 0
-                  ? 'No cue in the script carries this name; only the record changes.'
-                  : `${String(profile.nameCues)} ${profile.nameCues === 1 ? 'cue' : 'cues'} will be rewritten across the script. Other spellings bound to this character stay as they are.`}
-              </span>
-              <span className="flex gap-[6px]">
-                <button type="button" onClick={save} data-rename-everywhere className={PRIMARY}>
-                  Rename everywhere
-                </button>
-                <button type="button" onClick={saveWithoutRename} className={SMALL}>
-                  Keep the old name
-                </button>
-              </span>
-            </div>
-          ) : null}
-
-          {confirmDelete ? (
-            <div className="flex flex-col gap-[6px] rounded-chrome border border-del bg-del-bg px-[12px] py-[10px]">
-              <span className="text-11-5 text-ink">Delete {profile.name}? The profile, portrait and aliases go with it.</span>
-              <span className="flex gap-[6px]">
-                <button
-                  type="button"
-                  data-confirm-delete
-                  onClick={() => {
-                    run(async () => {
-                      const result = await deleteCharacter(projectId, profile.id)
-                      if (result.status !== 'deleted') return result.message
-                      router.push(baseHref)
-                      return null
-                    })
-                  }}
-                  className="rounded-chrome border-none bg-del px-[11px] py-[6px] text-11-5 font-semibold text-accent-ink"
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfirmDelete(false)
-                  }}
-                  className={SMALL}
-                >
-                  Keep
-                </button>
-              </span>
-            </div>
-          ) : null}
-
-          {merging ? (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (winner === '') return
-                run(async () => {
-                  const result = await mergeCharacters(projectId, profile.id, winner)
-                  if (result.status !== 'merged') return result.message
-                  router.push(characterHref(projectId, result.into))
-                  return null
-                })
-              }}
-              className="flex flex-col gap-[6px] rounded-chrome border border-line2 bg-panel px-[12px] py-[10px]"
-            >
-              <select
-                autoFocus
-                value={winner}
-                onChange={(event) => {
-                  setWinner(event.target.value)
-                }}
-                aria-label="Merge into"
-                data-merge-into
-                className="rounded-chrome border border-line2 bg-sheet px-[8px] py-[5px] text-11-5 text-ink outline-none"
-              >
-                <option value="">Merge into…</option>
-                {cast
-                  .filter((row) => row.id !== profile.id)
-                  .map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.name}
-                    </option>
-                  ))}
-              </select>
-              <span className="text-10 text-ink3">
-                {profile.name}’s spellings move across; this record is kept as a pointer to the other.
-              </span>
-              <span className="flex gap-[6px]">
-                <button type="submit" disabled={winner === ''} className={PRIMARY}>
-                  Merge
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMerging(false)
-                  }}
-                  className={SMALL}
-                >
-                  Cancel
-                </button>
-              </span>
-            </form>
-          ) : null}
-
-          <div className="flex items-center gap-[8px]">
-            <button
-              type="button"
-              disabled={profile.presence === 'present'}
-              title={
-                profile.presence === 'present'
-                  ? 'Still in the script. Remove the cues first, or merge the record into another.'
-                  : 'Delete this character'
-              }
-              data-delete-button
-              onClick={() => {
-                setConfirmDelete(true)
-              }}
-              className="flex items-center gap-[6px] rounded-chrome border-none bg-del px-[14px] py-[8px] text-12 font-semibold text-accent-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <span aria-hidden="true" style={{ fontFamily: 'var(--font-glyph)' }}>
-                ▢
-              </span>
+            <button type="button" data-delete-keep onClick={() => setConfirm(null)} className="folio-line-button h-[34px] flex-none rounded-[9px] px-[14px]">
+              Keep
+            </button>
+            <button type="button" data-delete-confirm onClick={destroy} className="folio-line-button h-[34px] flex-none rounded-[9px] border-live px-[14px] text-live hover:border-live hover:bg-live-bg hover:text-live">
               Delete
             </button>
+          </>
+        ) : confirm === 'rename' ? (
+          <>
+            <span className="min-w-0 flex-1 text-12 leading-[1.45] text-ink2" style={{ textWrap: 'pretty' }}>
+              Rename everywhere? {profile.nameCues} {profile.nameCues === 1 ? 'cue' : 'cues'} in the script will read {draft.name.trim()}.
+            </span>
+            <button type="button" data-rename-cancel onClick={() => setConfirm(null)} className="folio-line-button h-[34px] flex-none rounded-[9px] px-[14px]">
+              Keep the name
+            </button>
+            <button type="button" data-rename-confirm onClick={() => save(true)} className="folio-solid-button h-[34px] flex-none rounded-[9px] px-[14px] text-12-5 font-medium">
+              Rename
+            </button>
+          </>
+        ) : (
+          <>
             <button
               type="button"
-              disabled={cast.length < 2}
-              data-merge-button
-              onClick={() => {
-                setMerging(true)
-                setWinner('')
-              }}
-              className="rounded-chrome border-none bg-transparent px-[8px] py-[8px] text-11-5 text-ink3 hover:text-ink disabled:opacity-40"
+              data-drawer-delete
+              disabled={busy || onPage}
+              title={onPage ? `Still in the script (${count(figure.appearances)} ${figure.appearances === 1 ? 'scene' : 'scenes'}). A record under a live cue is minted again on the next pass.` : 'Delete this record'}
+              onClick={() => setConfirm('delete')}
+              className="folio-delete-button h-[34px] flex-none rounded-[9px] px-[13px] text-12-5"
             >
-              Merge into…
+              Delete
             </button>
+            {notice === null ? null : (
+              <span className="min-w-0 flex-1 truncate text-11-5 text-live" role="alert" data-drawer-notice>
+                {notice}
+              </span>
+            )}
             <div className="flex-1" />
-            <button type="button" onClick={save} disabled={draft.name.trim() === ''} data-save-character className={`${PRIMARY} px-[18px] py-[8px] text-12`}>
-              Save
+            <button type="button" data-drawer-cancel disabled={busy} onClick={close} className="folio-line-button h-[34px] flex-none rounded-[9px] px-[14px]">
+              Cancel
             </button>
+            <button type="button" data-drawer-save disabled={busy} onClick={() => save(false)} className="folio-solid-button h-[34px] flex-none rounded-[9px] px-[18px] text-12-5 font-medium">
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          </>
+        )
+      }
+    >
+      <div className="flex items-end gap-[12px]">
+        {profile.portraitUrl === null ? (
+          <CastMark initial={figure.initial} hue={figure.hue} size={{ width: 78, height: 98 }} radius={11} fontSize={26} face />
+        ) : (
+          <span className="relative h-[98px] w-[78px] flex-none overflow-hidden rounded-[11px]" data-drawer-portrait>
+            <img src={profile.portraitUrl} alt={`${profile.name}'s reference`} className="absolute inset-0 h-full w-full object-cover" />
+          </span>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col gap-[7px]">
+          <button
+            type="button"
+            data-drawer-upload
+            disabled={busy || !storage}
+            title={storage ? 'A reference image for the look sheet' : 'Portrait storage is not set up on this server yet.'}
+            onClick={() => {
+              picker.current?.click()
+            }}
+            className="folio-line-button h-[30px] justify-center rounded-[9px] text-12-5"
+          >
+            Upload reference
+          </button>
+          <input
+            ref={picker}
+            type="file"
+            accept={PORTRAIT_TYPES.join(',')}
+            aria-label={`Reference for ${profile.name}`}
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file !== undefined) upload(file)
+            }}
+          />
+          <button
+            type="button"
+            data-drawer-remove-portrait
+            disabled={busy || profile.portraitUrl === null}
+            onClick={remove}
+            className="folio-ghost-button h-[30px] rounded-[9px] text-12 text-ink3 hover:!text-ink2 disabled:cursor-default disabled:opacity-50 disabled:hover:!bg-transparent"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+
+      <ProfileFields draft={draft} onChange={setDraft} busy={busy} />
+
+      <Section>
+        <div className="flex items-baseline gap-[8px]">
+          <span className="flex-1 text-11-5 text-ink2">Arc</span>
+          <span className="text-11 text-ink3">from the script</span>
+        </div>
+        {arc.length === 0 ? (
+          <span className="text-11 text-ink3" data-arc="none">
+            Not on the page yet
+          </span>
+        ) : (
+          <div className="flex flex-col gap-[7px]" data-arc={figure.refs.length}>
+            {arc.map((ref) => (
+              <div key={ref.sceneNodeId} className="flex min-w-0 gap-[10px]">
+                <span className="tabular w-[58px] flex-none pt-[2px] font-mono text-10-5 text-ink3">{formatSceneRef(ref)}</span>
+                <span className="min-w-0 flex-1 truncate text-12-5 leading-[1.5] text-ink2">{ref.heading === '' ? 'No heading yet' : ref.heading}</span>
+              </div>
+            ))}
+            {arcRest > 0 ? (
+              <span className="tabular pl-[68px] text-11 text-ink3">
+                + {arcRest} more {arcRest === 1 ? 'scene' : 'scenes'}
+              </span>
+            ) : null}
           </div>
-        </footer>
-      </aside>
-    </div>
+        )}
+      </Section>
+
+      <Section>
+        <div className="flex items-baseline gap-[8px]">
+          <span className="flex-1 text-11-5 text-ink2">Shares scenes with</span>
+          <Link href={`${baseHref}?view=relationships`} data-drawer-relationships className="text-11 text-accent no-underline hover:underline">
+            Relationships →
+          </Link>
+        </div>
+        {relations.length === 0 ? (
+          <span className="text-11 text-ink3" data-relations="none">
+            {onPage ? 'Alone in every scene.' : 'Not on the page yet'}
+          </span>
+        ) : (
+          <div className="-mx-[9px] flex flex-col gap-[2px]" data-relations={relations.length}>
+            {relations.map((relation) => (
+              <Link
+                key={relation.id}
+                href={characterHref(projectId, relation.id)}
+                data-relation={relation.id}
+                className="folio-ghost-button flex w-full items-center gap-[10px] rounded-[9px] px-[9px] py-[7px] text-left text-ink"
+              >
+                <CastMark initial={relation.initial} hue={relation.hue} size={22} radius={7} fontSize={9} />
+                <span className="min-w-0 flex-1 truncate text-12-5">{relation.short}</span>
+                <span className="tabular flex-none font-mono text-10-5 text-ink3">{relation.shared} sc</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </Section>
+    </DrawerShell>
   )
 }
-
-const PRIMARY =
-  'rounded-chrome border-none bg-accent px-[11px] py-[6px] text-11-5 font-semibold text-accent-ink hover:opacity-90 disabled:opacity-50'
-
-const SMALL =
-  'rounded-chrome border border-line2 bg-transparent px-[9px] py-[5px] text-11 text-ink2 hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-40'
-
-/** One alias-table row: Courier, the count, and `×` to unbind a bound one. */
-const CueChip = ({
-  cue,
-  count,
-  bound,
-  onUnbind,
-}: {
-  readonly cue: string
-  readonly count: number
-  readonly bound: boolean
-  readonly onUnbind: () => void
-}) => (
-  <span
-    data-cue-chip={cue}
-    className={`group inline-flex items-center gap-[6px] rounded-chrome border border-line2 bg-sheet px-[8px] py-[3px] font-mono text-10-5 text-ink2 ${
-      count === 0 ? 'opacity-70' : ''
-    }`}
-  >
-    {cue}
-    <span className="text-ink3">× {count}</span>
-    {bound ? (
-      <button
-        type="button"
-        onClick={onUnbind}
-        aria-label={`Unbind ${cue}`}
-        title="This spelling no longer resolves here"
-        className="hidden rounded-chrome border-none bg-transparent px-[2px] font-sans text-10 text-ink3 hover:text-del group-hover:inline"
-      >
-        ×
-      </button>
-    ) : null}
-  </span>
-)

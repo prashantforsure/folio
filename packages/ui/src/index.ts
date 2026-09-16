@@ -48,3 +48,4 @@ export { Avatar } from './avatar'
 
 export { Editable } from './editable'
 export { IdentityChip } from './identity-chip'
+export { EpisodeBars } from './episode-bars'

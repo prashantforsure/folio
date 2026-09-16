@@ -30,7 +30,8 @@ export type WorkspaceRouteRow = {
   /** The sub-view params and the default each must resolve to. */
   readonly defaults: Readonly<Record<string, string>>
   /** Which column sits beside the page, and its width in px. */
-  readonly column: { readonly kind: 'sidebar' | 'context' | 'none'; readonly width: number }
+  /** `card`: the route's own 236px sidebar card - the shared `Sidebar` with the route's slots, no writing rows (Characters). */
+  readonly column: { readonly kind: 'sidebar' | 'context' | 'card' | 'none'; readonly width: number }
   /**
    * Added by later phases: what the route's empty state must show. Empty
    * this phase because the routes are empty shells - which is the honest
@@ -87,17 +88,18 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     scope: 'project',
     rail: 'characters',
     title: 'Characters',
-    defaults: { view: 'overview' },
-    /** No column since the second pass: the card grid is the list. */
-    column: { kind: 'none', width: 0 },
+    defaults: { view: 'cast' },
+    /** The v2 pass (2026-09-16): the sidebar card is the cast list - groups and the Defined widget. */
+    column: { kind: 'card', width: SIDEBAR_WIDTH },
   },
   {
     route: 'locations',
     scope: 'project',
     rail: 'locations',
     title: 'Locations',
-    defaults: { view: 'record' },
-    column: { kind: 'context', width: 256 },
+    defaults: { view: 'places' },
+    /** The v2 pass (2026-09-16): the sidebar card is the location list - groups and the Scouted widget. */
+    column: { kind: 'card', width: SIDEBAR_WIDTH },
     emptyState: { text: 'No locations yet' },
   },
   {
@@ -115,7 +117,9 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     rail: 'research',
     title: 'Research',
     defaults: { view: 'library' },
-    column: { kind: 'context', width: 250 },
+    /** The v2 pass (2026-09-16): the sidebar card is the collection list and the `Clips filed` widget. */
+    column: { kind: 'card', width: SIDEBAR_WIDTH },
+    emptyState: { text: 'Nothing in research yet' },
   },
 ]
 

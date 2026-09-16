@@ -1576,3 +1576,1306 @@ html[data-nav-open='false'] [data-sidebar],
 html[data-nav-open='false'] [data-context-column] {
   display: none;
 }
+
+/*
+ * The Storyboard - `docs/ui design/Route - Storyboard v2.dc.html`,
+ * transcribed. The classes that repeat across the three views and the
+ * sidebar's `Boards` group; the geometry that is one element's stays at that
+ * element as Tailwind utilities (`_storyboard/`).
+ *
+ *   .folio-view-pill      the toolbar's view switcher (`_chrome/view-pill.tsx`):
+ *                         the icon shape is an 11px pill of 34×30 tabs at an
+ *                         8px radius; the text shape a 999px pill of `6px
+ *                         14px` tabs at 12.5px. `--s2` and full ink on the
+ *                         current tab, `--ink3` otherwise, ink on hover.
+ *   .folio-board-row      a scene row in the sidebar's `Boards` group: 8px
+ *                         10px, a 10px radius, `--s2` while selected.
+ *   .folio-shot-card      a board card: `--s1` on `--line2`, a 12px radius,
+ *                         `--s2` on `--line` when hovered, `cursor: grab`.
+ *   .folio-drop-before    the accent line a dragged card will land at.
+ *   .folio-shot-node      a canvas node: 306px, `--sunk`, a 14px radius and
+ *                         the `--shade` shadow.
+ *   .folio-canvas-ground  the dotted ground: `--grid-dot` every 24px.
+ *   .folio-frame          the drawn frame's gradient, `--frame-a` to
+ *                         `--frame-b` at 160deg; `.folio-frame-grid` the 3×3
+ *                         grid over it in `--frame-grid`, and
+ *                         `.folio-frame-grid-faint` the same grid in
+ *                         `--line2` over an empty tile.
+ *   .folio-clamp-2 / -3   the description's line clamp.
+ */
+@layer components {
+  .folio-view-pill {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 11px;
+  }
+
+  .folio-view-pill[data-shape='text'] {
+    gap: 3px;
+    border-radius: var(--radius-pill);
+  }
+
+  .folio-view-pill-tab {
+    width: 34px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--ink3);
+    text-decoration: none;
+  }
+
+  .folio-view-pill[data-shape='text'] > .folio-view-pill-tab {
+    width: auto;
+    height: auto;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-12-5);
+    color: var(--ink2);
+  }
+
+  .folio-view-pill-tab:hover {
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .folio-view-pill-tab[aria-current='page'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-board-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--ink2);
+  }
+
+  .folio-board-row:hover {
+    background: var(--hover);
+  }
+
+  .folio-board-row[aria-current='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-board {
+    scroll-snap-type: x proximity;
+    scroll-padding-left: 20px;
+  }
+
+  .folio-shot-card {
+    cursor: grab;
+    text-align: left;
+  }
+
+  .folio-shot-card:hover {
+    background: var(--s2);
+    border-color: var(--line);
+  }
+
+  .folio-shot-card[data-shot-state='proposed']:hover {
+    border-color: var(--warn);
+  }
+
+  .folio-shot-card:active {
+    cursor: grabbing;
+  }
+
+  .folio-drop-before::before,
+  .folio-drop-line {
+    content: '';
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+
+  .folio-drop-before::before {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -5px;
+  }
+
+  .folio-drop-line {
+    flex: none;
+  }
+
+  .folio-new-scene:hover {
+    background: var(--s1);
+    color: var(--ink2);
+    text-decoration: none;
+  }
+
+  .folio-shot-node {
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 12px 34px var(--shade);
+  }
+
+  .folio-canvas-ground {
+    background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: 12px 12px;
+  }
+
+  .folio-frame {
+    background: linear-gradient(160deg, var(--frame-a), var(--frame-b));
+  }
+
+  .folio-frame-grid {
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, var(--frame-grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--frame-grid) 1px, transparent 1px);
+    background-size: 33.34% 33.34%;
+  }
+
+  .folio-frame-grid-faint {
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, var(--line2) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--line2) 1px, transparent 1px);
+    background-size: 33.34% 33.34%;
+  }
+
+  .folio-clamp-2,
+  .folio-clamp-3 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .folio-clamp-2 {
+    -webkit-line-clamp: 2;
+  }
+
+  .folio-clamp-3 {
+    -webkit-line-clamp: 3;
+  }
+
+  /* A `<select>` on the recessed ground: the field's chrome, the platform's arrow. */
+  .folio-select {
+    appearance: auto;
+    width: 100%;
+    font-family: var(--font-sans);
+  }
+}
+
+/* A folded group's chevron points right. */
+@layer components {
+  .folio-folded {
+    transform: rotate(-90deg);
+  }
+}
+
+/*
+ * The Production route - `docs/ui design/Route - Production v2.dc.html`,
+ * transcribed. Colour is a `data-tone` on a handful of shapes rather than
+ * a class per colour, so a component names a tone (`lib/production/view.ts`)
+ * and never a hue: `none` is the neutral surface, `accent` the AI and the
+ * in-flight, `ok` settled, `warn` a decision waiting, `live` money and
+ * failure, `bad` the mockup's fifth hue for a refused shot.
+ */
+@layer components {
+  /* A status pill: the reel's, the episode table's. */
+  .folio-tone-pill {
+    padding: 5px 11px;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-11-5);
+    white-space: nowrap;
+    background: var(--s2);
+    color: var(--ink2);
+  }
+
+  .folio-tone-pill[data-size='table'] {
+    padding: 4px 10px;
+    font-size: var(--text-11);
+  }
+
+  .folio-tone-pill[data-tone='accent'] {
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+
+  .folio-tone-pill[data-tone='ok'] {
+    background: var(--ok-bg);
+    color: var(--ok);
+  }
+
+  .folio-tone-pill[data-tone='warn'] {
+    background: var(--warn-bg);
+    color: var(--warn);
+  }
+
+  .folio-tone-pill[data-tone='live'] {
+    background: var(--live-bg);
+    color: var(--live);
+  }
+
+  .folio-tone-pill[data-tone='bad'] {
+    background: var(--bad-bg);
+    color: var(--bad);
+  }
+
+  .folio-tone-pill[data-tone='none'][data-muted='true'] {
+    color: var(--ink3);
+  }
+
+  /* Ink in a tone: a caption's state word, a glyph, a duration that runs over. */
+  .folio-tone-ink {
+    color: var(--ink3);
+  }
+
+  .folio-tone-ink[data-tone='accent'] {
+    color: var(--accent);
+  }
+
+  .folio-tone-ink[data-tone='ok'] {
+    color: var(--ok);
+  }
+
+  .folio-tone-ink[data-tone='warn'] {
+    color: var(--warn);
+  }
+
+  .folio-tone-ink[data-tone='live'] {
+    color: var(--live);
+  }
+
+  .folio-tone-ink[data-tone='bad'] {
+    color: var(--bad);
+  }
+
+  /* A fill in a tone: a 6px dot, a bar. */
+  .folio-tone-fill {
+    background: var(--ink3);
+  }
+
+  .folio-tone-fill[data-tone='accent'] {
+    background: var(--accent);
+  }
+
+  .folio-tone-fill[data-tone='ok'] {
+    background: var(--ok);
+  }
+
+  .folio-tone-fill[data-tone='warn'] {
+    background: var(--warn);
+  }
+
+  .folio-tone-fill[data-tone='live'] {
+    background: var(--live);
+  }
+
+  .folio-tone-fill[data-tone='bad'] {
+    background: var(--bad);
+  }
+
+  /* The bar with no fill: the sidebar row of a scene with no reel. */
+  .folio-tone-fill[data-tone='none'][data-bare='true'] {
+    background: var(--s3);
+  }
+
+  /* The timing bar's segments: one per shot, cycling four; the overrun is red. */
+  .folio-seg {
+    height: 100%;
+    border-right: 1px solid var(--bg);
+  }
+
+  .folio-seg[data-tone='seg-1'] {
+    background: var(--seg-1);
+  }
+
+  .folio-seg[data-tone='seg-2'] {
+    background: var(--seg-2);
+  }
+
+  .folio-seg[data-tone='seg-3'] {
+    background: var(--seg-3);
+  }
+
+  .folio-seg[data-tone='seg-4'] {
+    background: var(--seg-4);
+  }
+
+  .folio-seg[data-tone='bad'] {
+    background: var(--bad);
+  }
+
+  /* A scene tab on the strip: a dot and the mono heading; the selected one on `--s2` with a hairline. */
+  .folio-scene-tab {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    cursor: pointer;
+    color: var(--ink2);
+  }
+
+  .folio-scene-tab:hover {
+    background: var(--hover);
+  }
+
+  .folio-scene-tab[aria-current='true'] {
+    background: var(--s2);
+    border-color: var(--line);
+    color: var(--ink);
+  }
+
+  /* The sidebar's scene row: number, mono heading, a 3px bar, the meta. */
+  .folio-prod-scene-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    width: 100%;
+    padding: 9px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 11px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--ink2);
+  }
+
+  .folio-prod-scene-row:hover {
+    background: var(--hover);
+  }
+
+  .folio-prod-scene-row[aria-current='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  /* A reel card. */
+  .folio-reel {
+    display: flex;
+    flex-direction: column;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-panel);
+    overflow: hidden;
+  }
+
+  /* A shot row: plain, a proposal (amber, dashed), a refused shot (red). */
+  .folio-shot-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    padding: 10px 11px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 11px;
+  }
+
+  .folio-shot-row[data-tone='proposed'] {
+    background: var(--warn-bg);
+    border-color: var(--warn);
+    border-style: dashed;
+  }
+
+  .folio-shot-row[data-tone='flagged'] {
+    background: var(--bad-bg);
+    border-color: var(--bad);
+  }
+
+  /* The shot's number chip, coloured with its row. */
+  .folio-shot-no {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    background: var(--s2);
+    font-family: var(--font-mono);
+    font-size: var(--text-11);
+    color: var(--ink2);
+  }
+
+  .folio-shot-row[data-tone='proposed'] .folio-shot-no {
+    background: var(--warn-bg);
+    color: var(--warn);
+  }
+
+  .folio-shot-row[data-tone='flagged'] .folio-shot-no {
+    background: var(--bad-bg);
+    color: var(--bad);
+  }
+
+  /* The seconds field beside it, on the recessed ground. */
+  .folio-shot-secs {
+    flex: none;
+    display: flex;
+    align-items: center;
+    width: 44px;
+    height: 22px;
+    padding: 0 7px;
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    border-radius: 7px;
+    font-family: var(--font-mono);
+    font-size: var(--text-11);
+    color: var(--ink2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Size · movement · angle. A click opens the editor. */
+  .folio-shot-chip {
+    padding: 2px 8px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: var(--text-10-5);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-shot-chip:hover {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  /* The description: 12.5px at 1.55; a spoken line in full ink, italic. */
+  .folio-shot-desc {
+    margin: 0;
+    font-size: var(--text-12-5);
+    line-height: 1.55;
+    color: var(--ink2);
+    text-wrap: pretty;
+    cursor: text;
+  }
+
+  .folio-shot-desc[data-placeholder='true'] {
+    color: var(--ink3);
+  }
+
+  .folio-shot-quote {
+    color: var(--ink);
+    font-style: italic;
+  }
+
+  /* ↑ ↓ ✕ at the row's end. */
+  .folio-shot-tool {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--ink3);
+    font-size: var(--text-11);
+  }
+
+  .folio-shot-tool:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  .folio-shot-tool[data-remove]:hover:not(:disabled) {
+    color: var(--bad);
+  }
+
+  .folio-shot-tool:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+
+  /* A frame tile: 16:9 on the recessed ground; dashed when the frame could exist and does not. */
+  .folio-frame-tile {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .folio-frame-tile[data-dashed='true'] {
+    border-style: dashed;
+  }
+
+  .folio-frame-tile[data-tone='warn'] {
+    border-color: var(--warn);
+  }
+
+  .folio-frame-tile[data-tone='bad'] {
+    border-color: var(--bad);
+  }
+
+  .folio-frame-tile > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* The generating tile's glyph breathes. */
+  .folio-shimmer {
+    animation: folio-shimmer 1.6s ease-in-out infinite;
+  }
+
+  /* The progress bar under a generating tile; with no percentage to print it slides. */
+  .folio-frame-progress {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    height: 3px;
+    border-radius: 3px;
+    background: var(--s3);
+    overflow: hidden;
+  }
+
+  .folio-frame-progress > span {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent);
+  }
+
+  .folio-frame-progress[data-indeterminate='true'] > span {
+    width: 40%;
+    animation: folio-slide 1.6s ease-in-out infinite;
+  }
+
+  /* An accent action: `✦ Propose shots`, `Generate`, `Render`. Fills on hover. */
+  .folio-accent-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-bg);
+    border: 1px solid transparent;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: var(--text-12-5);
+    font-weight: 500;
+    color: var(--accent);
+    white-space: nowrap;
+    text-decoration: none;
+  }
+
+  .folio-accent-button:hover:not(:disabled):not([aria-disabled='true']) {
+    background: var(--accent);
+    color: var(--solid-ink);
+    text-decoration: none;
+  }
+
+  /* Drawn but not yet allowed: the mockup's `.55` opacity, still a button so its title can say why. */
+  .folio-accent-button[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .folio-accent-button:disabled {
+    cursor: not-allowed;
+    background: var(--s2);
+    color: var(--ink3);
+    opacity: 0.5;
+  }
+
+  .folio-accent-button[data-tone='ok'] {
+    background: var(--ok-bg);
+    color: var(--ok);
+  }
+
+  .folio-accent-button[data-tone='ok']:hover:not(:disabled) {
+    background: var(--ok-bg);
+    color: var(--ok);
+    opacity: 0.85;
+  }
+
+  /* A hairline secondary: `＋ Add shot`, `Finalize`, `Put them in Reel 1`. */
+  .folio-line-button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: transparent;
+    border: 1px solid var(--line2);
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: var(--text-12-5);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-line-button[data-line='strong'] {
+    border-color: var(--line);
+  }
+
+  .folio-line-button:hover:not(:disabled) {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-line-button:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  /* The clip-length segmented control: 5 · 8 · 10 · 15. */
+  .folio-len-tab {
+    min-width: 28px;
+    height: 24px;
+    padding: 0 6px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--text-11);
+    color: var(--ink3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .folio-len-tab:hover:not(:disabled) {
+    color: var(--ink);
+  }
+
+  .folio-len-tab[aria-pressed='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-len-tab:disabled {
+    cursor: default;
+  }
+
+  /* The episode table's row. */
+  .folio-ep-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line2);
+  }
+
+  .folio-ep-row:hover {
+    background: var(--s1);
+  }
+
+  /* A text glyph the mockup writes as a character (✦ ◐ ▶ ⚠ ◍ ⌖), kept as text. */
+  .folio-mark {
+    font-family: var(--font-glyph);
+    font-variant-emoji: text;
+    line-height: 1;
+  }
+}
+
+@keyframes folio-shimmer {
+  0% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes folio-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+/*
+ * The Characters route - `docs/ui design/Route - Characters v2.dc.html`,
+ * transcribed. The classes that repeat across the cast grid, the graph, the
+ * sheet, the sidebar's groups and the drawer; the geometry that is one
+ * element's stays at that element as Tailwind utilities (`_characters/`).
+ *
+ *   .folio-cast-mark      an identity mark: the mockup's two-stop gradient
+ *                         off the record's hue (`--cast-h`, set inline from
+ *                         `--chip-N-h`), white initials. The sidebar's 24px
+ *                         chip, the graph node's 26px disc, the drawer's
+ *                         `Shares scenes with` 22px chip.
+ *   .folio-cast-face      the three-stop face the drawer's 78×98 tile draws.
+ *   .folio-cast-card      a card: `--s1` on `--line2`, a 14px radius; the
+ *                         border is `--line` when hovered or selected and
+ *                         `--warn` while a conflict is open (README,
+ *                         "Conflict blocks").
+ *   .folio-cast-badge     the status badge over the face: `--bg` on
+ *                         `--line2`, a 6px radius, 10px, in the status tone.
+ *   .folio-cite           a citation chip (`_chrome/citation-chips.tsx`) -
+ *                         and the graph's edge label, the same mono badge.
+ *   .folio-cast-row       a sidebar row: `8px 10px`, a 10px radius, `--s2`
+ *                         and full ink while its record is the drawer's.
+ *   .folio-cast-ground    the graph's ground: `--sunk`, 16px radius, `--dot`
+ *                         every 22px.
+ *   .folio-cast-node      a graph node pill: `--bg` on `--line2`, 999px;
+ *                         `--accent` while selected.
+ *   .folio-sheet-row      a sheet row: `11px 16px`, `--s1` on hover, `--s2`
+ *                         while selected.
+ *   .folio-drawer         the edit panel: 400px, `--sunk`, one `--line` on
+ *                         the left; overlaid with the README's shadow below
+ *                         1200px (`data-in-flow`).
+ *   .folio-drawer-field   an input on `--s1`: `9px 12px`, a 10px radius.
+ *   .folio-status-tab     the drawer's status segmented control: the tone's
+ *                         `-bg` and ink while pressed, hairline otherwise.
+ *   .folio-warn-button    the conflict block's accept: `--warn` outline,
+ *                         filled on hover.
+ *   .folio-delete-button  `Delete` in the drawer's foot: `--live` only on
+ *                         hover, as the mockup draws it.
+ */
+@layer components {
+  .folio-cast-mark {
+    display: grid;
+    flex: none;
+    place-items: center;
+    background: linear-gradient(
+      150deg,
+      oklch(var(--cast-l1) var(--cast-c1) var(--cast-h)),
+      oklch(var(--cast-l2) var(--cast-c2) calc(var(--cast-h) + 18))
+    );
+    color: var(--chip-ink);
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .folio-cast-face {
+    display: grid;
+    flex: none;
+    place-items: center;
+    background: linear-gradient(
+      155deg,
+      oklch(var(--cast-l1) var(--cast-c1) var(--cast-h)),
+      oklch(var(--cast-l2) var(--cast-c2) calc(var(--cast-h) + 18)) 70%,
+      oklch(var(--cast-l3) var(--cast-c3) calc(var(--cast-h) + 34))
+    );
+    color: var(--chip-ink);
+  }
+
+  .folio-cast-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.14s;
+  }
+
+  .folio-cast-card:hover,
+  .folio-cast-card[aria-current='true'] {
+    border-color: var(--line);
+    text-decoration: none;
+  }
+
+  .folio-cast-card[data-conflict='true'] {
+    border-color: var(--warn);
+  }
+
+  .folio-cast-badge {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--line2);
+    font-size: var(--text-10);
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .folio-cite {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--line2);
+    font-family: var(--font-mono);
+    font-size: var(--text-10);
+    line-height: 1.4;
+    color: var(--ink3);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .folio-cast-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: none;
+    color: var(--ink2);
+  }
+
+  .folio-cast-row:hover {
+    background: var(--hover);
+    text-decoration: none;
+  }
+
+  .folio-cast-row[aria-current='page'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-cast-ground {
+    position: relative;
+    min-width: 700px;
+    height: 540px;
+    background-color: var(--sunk);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    border: 1px solid var(--line2);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .folio-cast-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 12px 8px 9px;
+    background: var(--bg);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    white-space: nowrap;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .folio-cast-node:hover {
+    border-color: var(--line);
+    text-decoration: none;
+  }
+
+  .folio-cast-node[aria-current='true'] {
+    border-color: var(--accent);
+  }
+
+  .folio-sheet-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 11px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--line2);
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .folio-sheet-row:hover {
+    background: var(--s1);
+    text-decoration: none;
+  }
+
+  .folio-sheet-row[aria-current='true'] {
+    background: var(--s2);
+  }
+
+  .folio-drawer {
+    width: 400px;
+    min-height: 0;
+    background: var(--sunk);
+    border-left: 1px solid var(--line);
+  }
+
+  .folio-drawer[data-in-flow='false'] {
+    width: min(400px, 92vw);
+    box-shadow: -24px 0 70px var(--shade);
+  }
+
+  .folio-drawer-field {
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 10px;
+    font-family: var(--font-sans);
+    font-size: var(--text-13);
+    color: var(--ink);
+    outline: none;
+  }
+
+  .folio-drawer-field::placeholder {
+    color: var(--ink3);
+  }
+
+  .folio-drawer-field[data-kind='prose'] {
+    min-height: 88px;
+    padding: 10px 12px;
+    font-size: var(--text-12-5);
+    line-height: 1.55;
+    resize: vertical;
+  }
+
+  .folio-drawer-field[data-kind='line'] {
+    font-size: var(--text-12-5);
+    line-height: 1.5;
+    resize: none;
+  }
+
+  .folio-status-tab {
+    flex: 1;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: transparent;
+    border: 1px solid var(--line2);
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: var(--text-12);
+    color: var(--ink2);
+  }
+
+  .folio-status-tab:hover {
+    border-color: var(--line);
+  }
+
+  .folio-status-tab[aria-pressed='true'][data-tone='warn'] {
+    background: var(--warn-bg);
+    border-color: transparent;
+    color: var(--warn);
+  }
+
+  .folio-status-tab[aria-pressed='true'][data-tone='ok'] {
+    background: var(--ok-bg);
+    border-color: transparent;
+    color: var(--ok);
+  }
+
+  .folio-status-tab[aria-pressed='true'][data-tone='accent'] {
+    background: var(--accent-bg);
+    border-color: transparent;
+    color: var(--accent);
+  }
+
+  .folio-warn-button {
+    background: transparent;
+    border: 1px solid var(--warn);
+    cursor: pointer;
+    color: var(--warn);
+    white-space: nowrap;
+  }
+
+  .folio-warn-button:hover:not(:disabled) {
+    background: var(--warn);
+    color: var(--solid-ink);
+  }
+
+  .folio-warn-button:disabled,
+  .folio-status-tab:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  .folio-delete-button {
+    background: transparent;
+    border: 1px solid var(--line2);
+    cursor: pointer;
+    color: var(--ink3);
+  }
+
+  .folio-delete-button:hover:not(:disabled) {
+    background: var(--live-bg);
+    color: var(--live);
+  }
+
+  .folio-delete-button:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+}
+
+/* The sheet's status pill: `3px 10px` at 11px, as `Route - Characters v2.dc.html` draws it. */
+@layer components {
+  .folio-tone-pill[data-size='sheet'] {
+    padding: 3px 10px;
+    font-size: var(--text-11);
+  }
+}
+
+/*
+ * The Locations route - `docs/ui design/Route - Locations v2.dc.html`,
+ * transcribed. Locations and Characters are one shape - a card grid, a
+ * sheet, a sidebar list, a drawer - so the route draws the Characters
+ * classes above (`.folio-cast-card`, `.folio-cast-badge`, `.folio-cast-row`,
+ * `.folio-sheet-row`, `.folio-drawer-*`, `.folio-status-tab`,
+ * `.folio-delete-button`) and adds only what is its own: the set gradient.
+ *
+ *   .folio-set-mark    the sheet's 26px square: the mockup's two-stop
+ *                      gradient off the record's hue (`--set-hue`, set inline;
+ *                      `--set-a` / `--set-b` in `palette.css`), an 8px
+ *                      radius, the `⌖` in `--set-mark-ink`.
+ */
+@layer components {
+  .folio-set-mark {
+    display: grid;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    place-items: center;
+    border-radius: 8px;
+    background: linear-gradient(150deg, var(--set-a), var(--set-b));
+    color: var(--set-mark-ink);
+    line-height: 1;
+  }
+}
+
+/*
+ * The Research route - `docs/ui design/Route - Research v2.dc.html`,
+ * transcribed. The two hue families are composed here and nowhere else: an
+ * element sets `--src-h` or `--coll-h` (`_research/kind.tsx`) and these
+ * classes read it against the theme's lightness and chroma (`palette.css`).
+ *
+ *   .folio-src-hue        ink in a source kind's hue - the badge glyph, the
+ *                         drawer's `Type` glyph.
+ *   .folio-src-bar        the 3px strip along a card's top, the same hue.
+ *   .folio-coll-dot       a collection's 6×6 dot in the sidebar.
+ *   .folio-coll-row       a sidebar collection row: `8px 10px`, a 10px
+ *                         radius, `--s2` and full ink while selected.
+ *   .folio-source-card    a library card: `--s1` on `--line2`, a 14px radius,
+ *                         `--line` when hovered or open.
+ *   .folio-add-card       the dashed `+ Add source` card at the grid's end.
+ *   .folio-clip-mark      a highlighted line in a source: `--mark`, a 3px
+ *                         radius, `1px 2px`.
+ *   .folio-filing-chip    where a clip was sent: `--accent-bg` on `--accent`,
+ *                         `3px 9px` at a 7px radius (the drawer's is `2px 8px`
+ *                         at 6px, `data-size='small'`).
+ *   .folio-dashed-button  `Send to…`: a dashed `--line` hairline, `--s2` on
+ *                         hover.
+ *   .folio-clip-card      a row of the clips list: `--s1` on `--line2`, a 12px
+ *                         radius, `--line` on hover.
+ *   .folio-clip-this      the pill that floats over a selection in a source.
+ */
+@layer components {
+  .folio-src-hue {
+    color: oklch(var(--src-l) var(--src-c) var(--src-h));
+  }
+
+  .folio-src-bar {
+    height: 3px;
+    flex: none;
+    background: oklch(var(--src-l) var(--src-c) var(--src-h));
+  }
+
+  .folio-coll-dot {
+    background: oklch(var(--coll-l) var(--coll-c) var(--coll-h));
+  }
+
+  .folio-coll-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--ink2);
+  }
+
+  .folio-coll-row:hover {
+    background: var(--hover);
+  }
+
+  .folio-coll-row[aria-current='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-source-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.14s;
+  }
+
+  .folio-source-card:hover,
+  .folio-source-card[aria-current='page'] {
+    border-color: var(--line);
+    text-decoration: none;
+  }
+
+  .folio-add-card {
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: transparent;
+    border: 1px dashed var(--line);
+    border-radius: 14px;
+    cursor: pointer;
+    font-size: var(--text-13);
+    color: var(--ink3);
+  }
+
+  .folio-add-card:hover {
+    background: var(--s1);
+    color: var(--ink2);
+  }
+
+  .folio-clip-mark {
+    background: var(--mark);
+    border-radius: 3px;
+    padding: 1px 2px;
+    cursor: pointer;
+    border: none;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+  }
+
+  .folio-clip-mark[aria-expanded='true'] {
+    outline: 1px solid var(--warn);
+    outline-offset: 1px;
+  }
+
+  .folio-filing-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 7px;
+    background: var(--accent-bg);
+    border: none;
+    font-family: var(--font-sans);
+    font-size: var(--text-11);
+    line-height: 1.4;
+    color: var(--accent);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .folio-filing-chip[data-size='small'] {
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: var(--text-10-5);
+  }
+
+  .folio-filing-chip:hover {
+    opacity: 0.85;
+  }
+
+  .folio-dashed-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: var(--text-11-5);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-dashed-button:hover:not(:disabled) {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-dashed-button:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  .folio-clip-card {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    min-width: 0;
+    padding: 14px 16px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+    transition: border-color 0.14s;
+  }
+
+  .folio-clip-card:hover {
+    border-color: var(--line);
+  }
+
+  .folio-clip-this {
+    position: absolute;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 11px;
+    background: var(--solid);
+    color: var(--solid-ink);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: var(--text-12);
+    font-weight: 500;
+    white-space: nowrap;
+    box-shadow: 0 8px 24px var(--panel-shadow);
+    transform: translate(-50%, 0);
+  }
+
+  .folio-clip-this:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+}

@@ -169,7 +169,8 @@ export const WRITING_MODE_TARGET: Record<WritingMode, WritingRoute> = {
 /**
  * README, "Shell": rail 56px, sidebar 236px, header 60px, panels 400px,
  * status bar 28px. The context columns the unrebuilt record routes still
- * draw keep their earlier widths until each route's own pass.
+ * draw keep their earlier widths until each route's own pass; Characters,
+ * Locations and Research have had theirs and draw the sidebar card.
  */
 export const RAIL_WIDTH = 56
 export const SIDEBAR_WIDTH = 236
@@ -180,11 +181,9 @@ export const CONTEXT_OVERLAY_WIDTH = 330
 /** @deprecated the sidebar replaced the episode nav; same number since the redesign. */
 export const EPISODE_NAV_WIDTH = SIDEBAR_WIDTH
 
-export const CONTEXT_PANEL_WIDTH: Record<Exclude<WorkspaceRoute, WritingRoute | 'characters'>, number> = {
+export const CONTEXT_PANEL_WIDTH: Record<Exclude<WorkspaceRoute, WritingRoute | 'characters' | 'locations' | 'research'>, number> = {
   production: 250,
-  locations: 256,
   timeline: 250,
-  research: 250,
 }
 
 /**

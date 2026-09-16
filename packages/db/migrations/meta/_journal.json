@@ -120,6 +120,27 @@
       "when": 1789502022003,
       "tag": "0016_redesign_share_assistant",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789544039114,
+      "tag": "0017_characters_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789545067277,
+      "tag": "0018_locations_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789546325520,
+      "tag": "0019_research_v2",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import type { ShellUser } from '../../../../../../lib/auth/session'
 import { useEphemeral } from '../../../../../../lib/state/ephemeral'
 import { useSession } from '../../../../../../lib/state/session'
 import { useViewport } from '../../../../../../lib/state/viewport'
+import { useDrawerOpen } from '../../../../../../lib/workspace/drawer'
 import type { WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
 import { PANEL_IN_FLOW_MIN, SIDEBAR_OPEN_MIN } from '../../../../../../lib/workspace/routes'
 import {
@@ -35,7 +36,8 @@ import { Rail } from './rail'
  * Solve it at the shell, not in the children." So:
  *
  *   navOpen    the session flag when someone has pressed the toggle, else
- *              width >= 1040 - and false regardless while the assistant is
+ *              width >= 1040 - and false regardless while the assistant or a
+ *              route's drawer (`lib/workspace/drawer.ts`) is
  *              open under 1200. Written to `html[data-nav-open]`, which is
  *              what hides the server-rendered sidebar (`globals.css`).
  *   assistant  the session flag, else closed. `⌘J` toggles it anywhere.
@@ -83,8 +85,10 @@ export const ProjectShell = ({
   const { contextOverlay, setContextOverlay } = useEphemeral()
 
   const assistantOpen = (mounted ? session.assistantOpen : null) ?? false
+  const drawerOpen = useDrawerOpen()
   const panelInFlow = width >= PANEL_IN_FLOW_MIN
-  const forcedClosed = assistantOpen && !panelInFlow
+  // A route's drawer counts as a panel too (`lib/workspace/drawer.ts`).
+  const forcedClosed = (assistantOpen || drawerOpen) && !panelInFlow
   const navOpen = !forcedClosed && ((mounted ? session.navOpen : null) ?? width >= SIDEBAR_OPEN_MIN)
 
   useEffect(() => {

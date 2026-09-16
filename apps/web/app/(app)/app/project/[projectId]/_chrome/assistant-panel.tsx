@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { listAssistantChats, openAssistantChat, startAssistantChat } from '../../../../../../lib/assistant/actions'
 import type { ChatRow, MessageRow } from '../../../../../../lib/assistant/result'
+import { useEphemeral } from '../../../../../../lib/state/ephemeral'
 import type { RailSection, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
 import { Orb } from './orb'
 
@@ -65,6 +66,94 @@ const OUTLINE_CHIPS: readonly Chip[] = [
   { label: 'Suggest a cold open', tone: 'ink3' },
 ]
 
+/**
+ * The Storyboard route's chips and subhead - `docs/ui design/Route -
+ * Storyboard v2.dc.html`, verbatim. The same ruling as the Outline's: the
+ * copy is the route's, the context is still the script, and a chip is a
+ * question typed for the writer - "Auto board Scene 02" asks for coverage in
+ * words; the board's own `Auto board` button is what writes proposals.
+ */
+const STORYBOARD_CHIPS: readonly Chip[] = [
+  { label: 'Auto board Scene 02', tone: 'live' },
+  { label: 'Suggest coverage for the turn', tone: 'warn' },
+  { label: 'Write shot descriptions', tone: 'accent' },
+  { label: 'Re-time the sequence', tone: 'ok' },
+]
+
+const STORYBOARD_SUBHEAD = 'Ask about the boards, or have me propose coverage for a scene.'
+
+/**
+ * The Production route's chips and subhead - `docs/ui design/Route -
+ * Production v2.dc.html`, verbatim. The same ruling again: the copy is
+ * the route's, the context is the script, and a chip is a question typed
+ * for the writer. "Rewrite shot 2 without violence" is also what a refused
+ * shot's `Suggest rewrite` asks, with the refusal in the writer's terms
+ * (`useEphemeral().assistantPrompt`).
+ */
+const PRODUCTION_CHIPS: readonly Chip[] = [
+  { label: 'Propose shots for Scene 1', tone: 'accent' },
+  { label: 'Tighten Reel 1 to 10 seconds', tone: 'warn' },
+  { label: 'Rewrite shot 2 without violence', tone: 'live' },
+]
+
+const PRODUCTION_SUBHEAD = 'Ask about this reel, or have me propose shots from the scene.'
+
+/**
+ * The Characters route's chips and subhead - `docs/ui design/Route -
+ * Characters v2.dc.html`. The mockup names the selected character
+ * ("Draft Meera's needs", "...what Meera wants and needs"); the panel is
+ * the shell's and cannot see the drawer's record, so the first chip and
+ * the subhead say "a character". The other two are verbatim.
+ */
+const CHARACTERS_CHIPS: readonly Chip[] = [
+  { label: "Draft a character's needs", tone: 'accent' },
+  { label: 'Who never shares a scene?', tone: 'warn' },
+  { label: 'Find characters with no description', tone: 'ok' },
+]
+
+const CHARACTERS_SUBHEAD = 'Ask about the cast, or have me draft what a character wants and needs.'
+
+/**
+ * The Locations route's chips and subhead - `docs/ui design/Route -
+ * Locations v2.dc.html`. The same shape as the Characters': the mockup
+ * names the selected place ("Describe Kamathi Chawl", "...describe Kamathi
+ * Chawl from its scenes"); the panel cannot see the drawer's record, so the
+ * first chip and the subhead say "a location". The other two are verbatim.
+ */
+const LOCATIONS_CHIPS: readonly Chip[] = [
+  { label: 'Describe a location from its scenes', tone: 'accent' },
+  { label: 'Find locations used only once', tone: 'warn' },
+  { label: 'Group night scenes by place', tone: 'ok' },
+]
+
+const LOCATIONS_SUBHEAD = 'Ask about the locations, or have me describe one from its scenes.'
+
+const chipsFor = (route: WorkspaceRoute | null): readonly Chip[] =>
+  route === 'outline'
+    ? OUTLINE_CHIPS
+    : route === 'storyboard'
+      ? STORYBOARD_CHIPS
+      : route === 'production'
+        ? PRODUCTION_CHIPS
+        : route === 'characters'
+          ? CHARACTERS_CHIPS
+          : route === 'locations'
+            ? LOCATIONS_CHIPS
+            : CHIPS
+
+const subheadFor = (route: WorkspaceRoute | null, section: RailSection | null): string =>
+  route === 'outline'
+    ? OUTLINE_SUBHEAD
+    : route === 'storyboard'
+      ? STORYBOARD_SUBHEAD
+      : route === 'production'
+        ? PRODUCTION_SUBHEAD
+        : route === 'characters'
+          ? CHARACTERS_SUBHEAD
+          : route === 'locations'
+            ? LOCATIONS_SUBHEAD
+            : SUBHEAD[section ?? 'writing']
+
 const TONE_CLASS: Record<Chip['tone'], string> = {
   live: 'bg-live',
   warn: 'bg-warn',
@@ -114,6 +203,15 @@ export const AssistantPanel = ({
   const scroller = useRef<HTMLDivElement>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
   const abort = useRef<AbortController | null>(null)
+  const { assistantPrompt, setAssistantPrompt } = useEphemeral()
+
+  // A route handed a question in (Production's `Suggest rewrite`): it becomes the draft, once.
+  useEffect(() => {
+    if (assistantPrompt === null) return
+    setDraft(assistantPrompt)
+    setAssistantPrompt(null)
+    composer.current?.focus()
+  }, [assistantPrompt, setAssistantPrompt])
 
   useEffect(() => {
     let cancelled = false
@@ -301,7 +399,7 @@ export const AssistantPanel = ({
           <Orb size={124} drift />
           <div className="flex flex-col gap-[7px] text-center">
             <span className="text-17 font-medium tracking-title">How can I help?</span>
-            <span className="text-13-5 leading-[1.55] text-ink2">{route === 'outline' ? OUTLINE_SUBHEAD : SUBHEAD[section ?? 'writing']}</span>
+            <span className="text-13-5 leading-[1.55] text-ink2">{subheadFor(route, section)}</span>
           </div>
         </div>
       ) : (
@@ -324,7 +422,7 @@ export const AssistantPanel = ({
 
       {empty ? (
         <div className="flex flex-none flex-col items-start gap-[7px] px-[20px] pb-[14px]">
-          {(route === 'outline' ? OUTLINE_CHIPS : CHIPS).map((chip) => (
+          {chipsFor(route).map((chip) => (
             <button
               key={chip.label}
               type="button"

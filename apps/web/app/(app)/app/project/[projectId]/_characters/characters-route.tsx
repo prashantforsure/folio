@@ -12,15 +12,19 @@ import { CharactersWorkspace } from './characters-workspace'
 /**
  * The Characters route, server side: one read, then the client workspace.
  *
- * `?view=` is `overview | relationships | casting` (`params.ts`), parsed as
- * every route's is; a value outside it is a 404. `/characters/:characterId`
- * opens that record's drawer over the Overview - the id is the record's
- * UUID, so the URL survives every rename. A record merged into another
- * redirects to the survivor - the loser's row is a tombstone that says
- * where it went - and an id that names nothing here is a 404.
+ * `?view=` is `cast | relationships | sheet` (`params.ts`, the v2
+ * mockup's tabs), parsed as every route's is; a value outside it is a
+ * 404. `/characters/:characterId` opens that record's drawer over the
+ * view - the id is the record's UUID, so the URL survives every rename.
+ * A record merged into another redirects to the survivor - the loser's
+ * row is a tombstone that says where it went - and an id that names
+ * nothing here is a 404.
  *
- * The `<main data-route data-sub-view>` contract the smoke test reads is
- * kept by the workspace exactly.
+ * `loadCharacters` is `cache()`d on the context; the layout beside this
+ * page (`_chrome/characters-layout.tsx`) makes the same call for the
+ * sidebar, so the two share one read per request. The `<main data-route
+ * data-sub-view>` contract the smoke test reads is kept by the workspace
+ * exactly.
  */
 export const CharactersRoute = async ({
   context,
@@ -47,13 +51,14 @@ export const CharactersRoute = async ({
   return (
     <CharactersWorkspace
       projectId={project.id}
-      view={selected === null ? parsed.params.view : 'overview'}
+      projectTitle={project.title}
+      view={parsed.params.view}
       baseHref={projectRouteHref(project.id, 'characters')}
       cast={load.cast}
+      index={load.index}
+      episodeOrdinals={episodes.map((episode) => episode.ordinal)}
       resolve={load.resolve}
       map={load.map}
-      cueCount={load.cueCount}
-      episodes={episodes.length}
       derivable={load.derivable}
       storage={load.storage}
       profile={profile}

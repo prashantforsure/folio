@@ -41,6 +41,7 @@ type ProjectPath = `/app/project/${string}`
 export type ProjectRoutePath = `${ProjectPath}/${ProjectRoute}`
 export type CharacterPath = `${ProjectPath}/characters/${string}`
 export type LocationPath = `${ProjectPath}/locations/${string}`
+export type ResearchSourcePath = `${ProjectPath}/research/${string}`
 type CollapsedEpisodePath = `${ProjectPath}/${EpisodeRoute}`
 type EpisodicEpisodePath = `${ProjectPath}/${string}/${EpisodeRoute}`
 
@@ -81,3 +82,12 @@ export const episodeRouteHref = (address: EpisodeAddress, route: EpisodeRoute): 
  */
 export const locationHref = (projectId: ProjectId, locationId: string): LocationPath =>
   `/app/project/${projectId}/locations/${locationId}`
+
+/**
+ * One research source: `/research/:sourceId`, the path the Research mockup's
+ * status bar writes (`/research/<id>`) beside `/research` and
+ * `/research?view=clips`. The record's UUID, as `characterHref` - a source
+ * is renamed freely and its URL never moves.
+ */
+export const researchSourceHref = (projectId: ProjectId, sourceId: string): ResearchSourcePath =>
+  `/app/project/${projectId}/research/${sourceId}`

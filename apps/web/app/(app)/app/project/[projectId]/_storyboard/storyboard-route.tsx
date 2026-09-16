@@ -8,13 +8,11 @@ import { parseSubViews } from '../../../../../../lib/workspace/params'
 import { StoryboardWorkspace } from './storyboard-workspace'
 
 /**
- * The Storyboard route, server side: one read, then the client workspace.
- *
- * Replaces `RouteShell` for this route the way Scenes does: the header
- * carries the live count, the view segment and the credit balance, and the
- * route has a subheader and a footer. The `<main data-route data-sub-view>`
- * contract the smoke test reads is kept exactly; `?view=` is parsed as every
- * route's is and a value outside `board | canvas | list` is a 404.
+ * The Storyboard route, server side: one read, then the client workspace
+ * inside the writing layout's surface card. The `<main data-route
+ * data-sub-view>` contract the smoke test reads is kept exactly; `?view=`
+ * is parsed as every route's is and a value outside `board | canvas | list`
+ * is a 404.
  *
  * `?selected=` is not read. The README writes it as `SCENE_xxx`, which is
  * the open id-shape contradiction (`docs/build-decisions.md`), and the
@@ -29,7 +27,7 @@ export const StoryboardRoute = async ({
 }) => {
   const parsed = parseSubViews('storyboard', await searchParams)
   if (!parsed.ok) notFound()
-  const { project, episode, address, shape } = context
+  const { project, episode, address } = context
 
   const load = await loadStoryboard(context)
 
@@ -37,11 +35,9 @@ export const StoryboardRoute = async ({
     <StoryboardWorkspace
       projectId={project.id}
       episode={episode.slug}
-      routeId={shape === 'collapsed' ? 'storyboard' : `${episode.slug}/storyboard`}
       view={parsed.params.view}
       baseHref={episodeRouteHref(address, 'storyboard')}
       scriptHref={episodeRouteHref(address, 'script')}
-      productionHref={episodeRouteHref(address, 'production')}
       state={load.state}
       scenes={load.state === 'script' ? load.scenes : []}
       labels={load.state === 'script' ? load.labels : []}

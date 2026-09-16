@@ -1,0 +1,125 @@
+'use client'
+
+import { Icon } from '@folio/ui'
+import type { ReactNode } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+
+import { useViewport } from '../../../../../../lib/state/viewport'
+import { publishDrawer } from '../../../../../../lib/workspace/drawer'
+import { PANEL_IN_FLOW_MIN } from '../../../../../../lib/workspace/routes'
+
+/**
+ * The drawer's frame - `docs/ui design/README.md`, "Panels (assistant and
+ * drawer)": 400px, `--sunk`, one left hairline; in flow above 1200px, over
+ * the content with the `-24px 0 70px` shadow below it, where an open panel
+ * forces the sidebar closed. The forcing is the shell's
+ * (`project-shell.tsx`) and it learns of this drawer through
+ * `lib/workspace/drawer.ts`, published while mounted.
+ *
+ * Head: the title at 15px/500 with a meta line, and ✕. Body: the scrolling
+ * column, `0 18px 20px`, 18px between sections. Foot: the caller's - the
+ * README's "destructive action on the left and Cancel / Save on the
+ * right". Escape closes.
+ *
+ * One frame for every record route's drawer. Rendered through a portal into
+ * the route layout's slot - `#<route>-drawer`, a sibling of the column
+ * (`characters-layout.tsx`, `locations-layout.tsx`, `research-layout.tsx`) - so it sits beside the
+ * column, full height, as the mockups draw it; a page renders inside the
+ * surface and could not otherwise reach that position. The slot exists
+ * only after hydration, so the drawer's first paint is a client paint.
+ * `data-<route>-drawer` carries the label, for the walks.
+ */
+export const DrawerShell = ({
+  route,
+  title,
+  meta,
+  label,
+  onClose,
+  footer,
+  children,
+}: {
+  /** Which route's slot to fill: `characters` portals into `#characters-drawer`. */
+  readonly route: 'characters' | 'locations' | 'research'
+  readonly title: string
+  readonly meta: string
+  /** The `aria-label`; `data-<route>-drawer` carries it too, for the walks. */
+  readonly label: string
+  readonly onClose: () => void
+  readonly footer: ReactNode
+  readonly children: ReactNode
+}) => {
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  const { width } = useViewport()
+  const inFlow = width >= PANEL_IN_FLOW_MIN
+
+  useEffect(() => {
+    setSlot(document.getElementById(`${route}-drawer`))
+  }, [route])
+
+  useEffect(() => {
+    publishDrawer(true)
+    return () => {
+      publishDrawer(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
+  if (slot === null) return null
+  return createPortal(
+    <aside
+      role="dialog"
+      aria-label={label}
+      {...{ [`data-${route}-drawer`]: label }}
+      data-drawer-route={route}
+      data-in-flow={inFlow ? 'true' : 'false'}
+      className={`folio-drawer ${inFlow ? 'relative' : 'absolute inset-y-0 right-0'} z-[7] flex min-h-0 flex-none flex-col`}
+    >
+      <div className="flex flex-none items-start gap-[10px] pb-[12px] pl-[18px] pr-[14px] pt-[16px]">
+        <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+          <span className="text-15 font-medium tracking-title">{title}</span>
+          <span className="text-11-5 text-ink3" data-drawer-meta>
+            {meta}
+          </span>
+        </div>
+        <button
+          type="button"
+          title="Close"
+          aria-label="Close"
+          data-drawer-close
+          onClick={onClose}
+          className="folio-ghost-button grid h-[28px] w-[28px] flex-none place-items-center rounded-[8px] text-ink3"
+        >
+          <Icon name="close" size={14} strokeWidth={1.5} />
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-[18px] pb-[20px]">{children}</div>
+      <div className="flex flex-none items-center gap-[8px] border-t border-line2 px-[18px] pb-[16px] pt-[12px]">{footer}</div>
+    </aside>,
+    slot,
+  )
+}
+
+/** A labelled field: the 11.5px `--ink2` label over the control. */
+export const Field = ({ label, children, className }: { readonly label: string; readonly children: ReactNode; readonly className?: string }) => (
+  <label className={`flex min-w-0 flex-col gap-[6px] ${className ?? ''}`}>
+    <span className="text-11-5 text-ink2">{label}</span>
+    {children}
+  </label>
+)
+
+/** A section under a hairline: `padding-top: 16px; border-top`. */
+export const Section = ({ children, gap = 9 }: { readonly children: ReactNode; readonly gap?: number }) => (
+  <div className="flex flex-col border-t border-line2 pt-[16px]" style={{ gap }}>
+    {children}
+  </div>
+)

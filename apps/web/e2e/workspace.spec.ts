@@ -248,6 +248,13 @@ for (const theme of THEMES) {
 
       if (row.column.kind === 'sidebar') {
         await expectSidebar(page, row.route)
+      } else if (row.column.kind === 'card') {
+        // The route's own card in the shared sidebar shape: 236px, no writing rows, no mode pill.
+        const card = page.locator('aside[data-sidebar]')
+        await expect(card).toBeVisible()
+        expect(await card.evaluate((el) => el.getBoundingClientRect().width)).toBe(row.column.width)
+        await expect(card.locator('a[data-episode-route]')).toHaveCount(0)
+        await expect(page.locator('[data-mode-pill]')).toHaveCount(0)
       } else {
         await expect(page.locator('aside[data-sidebar]')).toHaveCount(0)
         if (row.column.kind === 'context') {
@@ -313,7 +320,7 @@ test('a film routes without an episode segment while still having one episode', 
   await expect(page).toHaveURL(new RegExp(`/app/project/${filmId}/script$`))
   await page.goto(`/app/project/${filmId}/production`)
   await expect(page.locator('main[data-route="production"]')).toBeVisible()
-  await expect(page.locator('aside[data-context-column="production"]')).toBeVisible()
+  await expect(page.locator('aside[data-sidebar] [data-production-scenes]')).toBeVisible()
   await expectRail(page, 'production')
 
   // And the reverse: a collapsed URL on a series goes to its episode.

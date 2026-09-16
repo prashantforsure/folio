@@ -1,16 +1,11 @@
-import type {
-  BreakdownCell,
-  LocationCounts,
-  LocationEpisodeBar,
-  LocationPersonRow,
-  LocationRow,
-} from '@folio/contracts'
+import type { LocationCounts, LocationPersonRow } from '@folio/contracts'
 import type { SceneIndexRow } from '@folio/db'
 import type { CharacterId, InteriorExterior, LocationId, NodeId } from '@folio/script'
 
 /**
  * The figures the Locations route prints, each a pure function over the
- * derived rows. Tested in `tests/locations-figures.test.ts`.
+ * derived rows. Tested in `tests/locations-figures.test.ts`. The labels the
+ * v2 route prints are `view.ts`.
  *
  * Nothing here estimates and nothing here calls a model: an interior /
  * exterior label is read off the headings, a day-against-night split is a
@@ -24,8 +19,11 @@ import type { CharacterId, InteriorExterior, LocationId, NodeId } from '@folio/s
 // The tree
 // ---------------------------------------------------------------------------
 
-/** Most scenes first, then by name - how the nav, the breakdown and the sub-set strip order records. */
-const byWeight = (a: LocationRow, b: LocationRow): number =>
+/** What the tree walk reads of a row: its edge and its weight. */
+type TreeRow = { readonly id: LocationId; readonly parentId: LocationId | null; readonly name: string; readonly rollup: { readonly scenes: number } }
+
+/** Most scenes first, then by name - how the sidebar, the grid and the sheet order records. */
+const byWeight = (a: TreeRow, b: TreeRow): number =>
   b.rollup.scenes - a.rollup.scenes || a.name.localeCompare(b.name)
 
 /**
@@ -34,16 +32,16 @@ const byWeight = (a: LocationRow, b: LocationRow): number =>
  * list - merged away, or a cycle `derive` broke - is listed as a root, which
  * is where the pure core rolls it up too.
  */
-export const treeOrder = (rows: readonly LocationRow[]): readonly LocationRow[] => {
+export const treeOrder = <Row extends TreeRow>(rows: readonly Row[]): readonly Row[] => {
   const ids = new Set(rows.map((row) => row.id))
-  const childrenOf = new Map<LocationId | null, LocationRow[]>()
+  const childrenOf = new Map<LocationId | null, Row[]>()
   for (const row of rows) {
     const parent = row.parentId !== null && ids.has(row.parentId) ? row.parentId : null
     const list = childrenOf.get(parent) ?? []
     list.push(row)
     childrenOf.set(parent, list)
   }
-  const out: LocationRow[] = []
+  const out: Row[] = []
   const seen = new Set<LocationId>()
   const walk = (parent: LocationId | null): void => {
     for (const row of [...(childrenOf.get(parent) ?? [])].sort(byWeight)) {
@@ -88,7 +86,7 @@ export const wouldCycle = (id: LocationId, parent: LocationId | null, rows: read
 
 /**
  * `INT`, `EXT`, or `INT/EXT` when a set is both across its headings - the
- * breakdown's I/E column and the record head's chip. `EST` stays `EST` only
+ * sheet's Type column and the card's mono line. `EST` stays `EST` only
  * when every heading is one. `null` with no heading at all.
  */
 export const ieOf = (readings: readonly InteriorExterior[]): InteriorExterior | null => {
@@ -98,29 +96,6 @@ export const ieOf = (readings: readonly InteriorExterior[]): InteriorExterior | 
   if (kinds.has('INT') && !kinds.has('EXT') && !kinds.has('INT/EXT')) return 'INT'
   if (kinds.has('EXT') && !kinds.has('INT') && !kinds.has('INT/EXT')) return 'EXT'
   return 'INT/EXT'
-}
-
-const IE_WORD: Record<InteriorExterior, string> = {
-  INT: 'interior',
-  EXT: 'exterior',
-  'INT/EXT': 'set',
-  EST: 'establishing set',
-}
-
-/**
- * The kind line under a record's head: `Primary set · 5 sub-locations`,
- * `Sub-location`, `Recurring interior`. Read from the tree and the count,
- * as the bundle's fixture writes each.
- */
-export const kindOf = (row: LocationRow): string => {
-  if (row.presence === 'absent' && row.rollup.scenes === 0) return '0 scenes · record kept'
-  if (row.parentId !== null) return 'Sub-location'
-  if (row.children > 0) {
-    return `Primary set · ${String(row.children)} ${row.children === 1 ? 'sub-location' : 'sub-locations'}`
-  }
-  const word = row.ie === null ? 'set' : IE_WORD[row.ie]
-  if (row.rollup.scenes > 1) return `Recurring ${word}`
-  return `Single ${word}`
 }
 
 // ---------------------------------------------------------------------------
@@ -133,23 +108,6 @@ export const NO_LOCATION_COUNTS: LocationCounts = {
   dayScenes: 0,
   nightScenes: 0,
   shootingDays: 0,
-}
-
-/**
- * The day-against-night bar: three widths as fractions of the scene count.
- * A scene whose heading says `CONTINUOUS` is neither, and its share is the
- * bar's track - not folded into day, which is what a two-way split would
- * quietly do.
- */
-export const dayNightSplit = (counts: {
-  readonly scenes: number
-  readonly dayScenes: number
-  readonly nightScenes: number
-}): { readonly day: number; readonly night: number; readonly unspecified: number } => {
-  if (counts.scenes <= 0) return { day: 0, night: 0, unspecified: 0 }
-  const day = counts.dayScenes / counts.scenes
-  const night = counts.nightScenes / counts.scenes
-  return { day, night, unspecified: Math.max(0, 1 - day - night) }
 }
 
 /** Eighths summed over the scenes the measurement knows; `null` when it knows none of them. */
@@ -165,32 +123,19 @@ export const sumEighths = (scenes: Iterable<NodeId>, eighths: ReadonlyMap<NodeId
   return any ? total : null
 }
 
-const cellOf = (rows: readonly SceneIndexRow[], eighths: ReadonlyMap<NodeId, number>): BreakdownCell => ({
-  scenes: rows.length,
-  dayScenes: rows.filter((row) => row.light === 'day').length,
-  nightScenes: rows.filter((row) => row.light === 'night').length,
-  eighths: sumEighths(
-    rows.map((row) => row.sceneNodeId),
-    eighths,
-  ),
-})
-
 /**
- * One cell per episode in running order for a set of scenes - the record
- * panel's "Screen time by episode" and a breakdown row. Every episode gets
- * a cell, zero included: an episode a place is not in is a fact about the
- * story, and the bundle draws the bar at 2%.
+ * How many of a set's scenes fall in each episode, in running order - the
+ * README's episode bars. Every episode gets a slot, zero included: an
+ * episode a place is not in is a fact about the story and draws `--line2`.
  */
-export const perEpisodeCells = (
-  episodes: readonly { readonly slug: LocationEpisodeBar['episode']; readonly ordinal: number }[],
+export const perEpisodeCounts = (
+  episodes: readonly { readonly ordinal: number }[],
   index: readonly SceneIndexRow[],
   scenes: ReadonlySet<NodeId>,
-  eighths: ReadonlyMap<NodeId, number>,
-): readonly LocationEpisodeBar[] =>
-  episodes.map((episode) => {
-    const here = index.filter((row) => row.episodeOrdinal === episode.ordinal && scenes.has(row.sceneNodeId))
-    return { episode: episode.slug, ordinal: episode.ordinal, ...cellOf(here, eighths) }
-  })
+): readonly number[] =>
+  episodes.map(
+    (episode) => index.filter((row) => row.episodeOrdinal === episode.ordinal && scenes.has(row.sceneNodeId)).length,
+  )
 
 /** Who is here most: characters by scenes at this set, most first, top three. */
 export const peopleAt = (

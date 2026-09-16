@@ -3,13 +3,14 @@
 import type { Project } from '@folio/contracts'
 import type { ScriptFormat } from '@folio/script'
 import { Icon } from '@folio/ui'
-import type { MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react'
-import { memo, useEffect, useRef, useState } from 'react'
+import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react'
+import { memo, useRef, useState } from 'react'
 
 import type { RevisionRow } from '../../../../../../lib/script/panel'
 import type { ScriptStats } from '../../../../../../lib/script/stats'
 import { PAGINATION_CONTROLS, PAGINATION_CONTROL_COPY } from '../../../../../../lib/state/project-preferences'
 import type { PaginationControl } from '../../../../../../lib/state/project-preferences'
+import { useDismiss } from '../_chrome/use-dismiss'
 
 /**
  * The Script route's toolbar row - `docs/ui design/Route - Script v2.dc.html`:
@@ -44,24 +45,6 @@ const FORMATS: readonly { readonly id: ScriptFormat; readonly label: string; rea
 
 const keepCaret = (event: ReactMouseEvent): void => {
   event.preventDefault()
-}
-
-const useDismiss = (open: boolean, close: () => void, root: RefObject<HTMLDivElement | null>): void => {
-  useEffect(() => {
-    if (!open) return undefined
-    const onDown = (event: MouseEvent): void => {
-      if (root.current !== null && event.target instanceof Node && !root.current.contains(event.target)) close()
-    }
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') close()
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [close, open, root])
 }
 
 export const DocumentMenu = memo(

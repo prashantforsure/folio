@@ -1,4 +1,5 @@
 import type {
+  BoardCoverageRow,
   EpisodeId,
   FrameState,
   GenerationId,
@@ -288,6 +289,71 @@ export const listStoryboard = async (
       shots: rows,
     }
   })
+}
+
+/**
+ * The board's coverage per scene - what the writing sidebar's `Boards` group
+ * and `Boards drawn` widget print on every writing route. One statement:
+ * the present scenes of the episode's screenplay, each with its accepted
+ * shots, its proposals, and how many accepted shots have a drawn frame. A
+ * frame is drawn when the shot's kept-else-latest generation (the same
+ * precedence `readFrames` uses) has a picture and its job finished.
+ *
+ * The full board (`listStoryboard`) is three statements and the frames of
+ * every shot; the three routes that are not the Storyboard need only these
+ * counts, so this is what the sidebar seeds from.
+ */
+export const readBoardCoverage = async (scope: ProjectScope, episodeId: EpisodeId): Promise<readonly BoardCoverageRow[]> => {
+  const project = scope.projectId as string
+  const rows = await dbOf(scope).execute<{
+    readonly scene_node_id: string
+    readonly number: number
+    readonly heading: string
+    readonly ie: string | null
+    readonly set: string | null
+    readonly shots: number
+    readonly proposed: number
+    readonly drawn: number
+  }>(sql`
+    with scene as (
+      select d.scene_node_id, d.number, d.heading, d.reading->>'ie' as ie, d.reading->>'set' as set
+      from ${sceneDerivations} as d
+      join ${nodes} as n on n.id = d.scene_node_id
+      join ${documents} as doc on doc.id = n.document_id and doc.episode_id = ${episodeId} and doc.kind = 'screenplay'
+      where d.project_id = ${project} and d.presence = 'present'
+    ),
+    frame as (
+      select distinct on (g.shot_id) g.shot_id, g.frame_url, j.status
+      from ${frameGenerations} as g
+      join ${jobs} as j on j.id = g.job_id
+      where g.project_id = ${project}
+      order by g.shot_id, g.kept_at desc nulls last, g.created_at desc
+    )
+    select
+      scene.scene_node_id,
+      scene.number,
+      scene.heading,
+      scene.ie,
+      scene.set,
+      count(s.id) filter (where s.state = 'accepted')::int as shots,
+      count(s.id) filter (where s.state = 'proposed')::int as proposed,
+      count(s.id) filter (where s.state = 'accepted' and frame.status = 'finished' and frame.frame_url is not null)::int as drawn
+    from scene
+    left join ${shots} as s on s.scene_node_id = scene.scene_node_id and s.project_id = ${project}
+    left join frame on frame.shot_id = s.id
+    group by scene.scene_node_id, scene.number, scene.heading, scene.ie, scene.set
+    order by scene.number asc
+  `)
+  return rows.map((row) => ({
+    sceneNodeId: row.scene_node_id as NodeId,
+    number: row.number,
+    heading: row.heading,
+    ie: row.ie,
+    set: row.set ?? '',
+    shots: row.shots,
+    proposed: row.proposed,
+    drawn: row.drawn,
+  }))
 }
 
 /**

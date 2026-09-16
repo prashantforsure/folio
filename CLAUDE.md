@@ -10,8 +10,9 @@ history (`git show 7a541bd:docs/build-decisions.md`) and are not the reference f
 
 **The app is mid-redesign.** `docs/ui design/README.md` and the nine `Route - * v2.dc.html`
 mockups are the spec; routes are rebuilt to them one at a time. Done: the shell (rail, writing
-sidebar and header, assistant panel, Characters overlay), **Script** and **Outline**. The other
-route bodies still draw their pre-redesign chrome inside the new shell until their own pass.
+sidebar and header, assistant panel, Characters overlay), **Script**, **Outline**,
+**Storyboard**, **Production** and **Characters**. The other route bodies still draw their pre-redesign chrome
+inside the new shell until their own pass.
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -50,17 +51,20 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 - `packages/script` — the pure core, done, no dependencies: node model, operations, Fountain both
   ways, FDX import/export, derivation, pagination, the draft diff, and one read module per
   derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `rename.ts`).
-- `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, migrations
-  `0000`–`0016` (forward-only, all applied to the dev Supabase project), project-scoped
-  repositories. `packages/ui` — tokens as CSS custom properties, the inline SVG icon set
-  (`icons.tsx`), and five small components.
+- `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, forward-only
+  migrations `0000`–`0019` (which are applied to the dev Supabase project is tracked in
+  `packages/db/CLAUDE.md`), project-scoped repositories.
+  `packages/ui` — tokens as CSS custom properties, the inline SVG icon set (`icons.tsx`), and a
+  few small components (`src/index.ts` is the list).
 - `apps/web` — auth, the home shell, the workspace chrome, and the built route bodies: Script,
-  Outline, Storyboard, Scenes, Characters, Locations, Timeline — seven of the nine
+  Outline, Storyboard, Scenes, Characters, Locations, Timeline, Production — eight of the nine
   routes (AGENTS.md, Architecture). Each has an `app/(app)/app/project/[projectId]/_<route>/`
   directory and a `lib/<route>/` with its actions. `lib/workspace/routes.ts` is the route tree;
-  `_chrome/project-shell.tsx` is the shell. Research, Production and the `/settings` stub have
-  no route body yet; Production has its backend and server surface (`lib/production/`,
-  migration `0014`). The assistant (`lib/assistant/`, `app/api/assistant/route.ts`) and share
+  `_chrome/project-shell.tsx` is the shell. Research and the `/settings` stub have no route body
+  yet. Production (v2, 2026-09-16) is the first route outside the writing surface on the shell:
+  `_chrome/production-layout.tsx` renders the same `Sidebar` (with the route's `slots`) and
+  `WritingHeader` (with `route="production"`, so no mode pill) and the shared `_chrome/status-bar.tsx`
+  and `_chrome/view-pill.tsx`. The assistant (`lib/assistant/`, `app/api/assistant/route.ts`) and share
   links (`lib/share/`, `app/share/[token]/`) are cross-route features built with the redesign.
 - `apps/worker` — empty on purpose. Do not create `apps/sync/`.
 
@@ -68,19 +72,24 @@ Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
 `docs/build-decisions.md`):
 
 - **Dependencies approved in `apps/web`:** `@tiptap/{core,pm,react,suggestion}`,
-  `@floating-ui/dom` and `@anthropic-ai/sdk`, version-pinned — no other `@tiptap/*` extension
-  and no drop-cursor without asking (AGENTS.md, Adding a dependency). Boundary files are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`;
+  `@floating-ui/dom`, `@anthropic-ai/sdk`, `fast-xml-parser` (FDX, `lib/script/fdx-adapter.ts`)
+  and `aws4fetch` (R2), version-pinned — no other `@tiptap/*` extension and no drop-cursor
+  without asking (AGENTS.md, Adding a dependency). Boundary files are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`;
   the document lives in the editor, never in React state. See AGENTS.md, The node model, for the
   slash-menu / no-type-bar rule both editors follow.
-- **The Characters route is the client's laper.ai shape, not the repo's bundle** ("Characters
-  route, second pass" in `docs/build-decisions.md`). `Route - Characters.dc.html` and
-  `screenshots/characters.png` are the old design and are not this route's reference. No cast
-  column; `?view=overview | relationships | casting`; `/characters/:uuid` is the edit drawer over
-  the grid; unmatched cues are ghost cards, never a screen. Migration `0013` dropped the first
-  pass's drives, arc turns, voice rules and key lines. Portraits are on Cloudflare R2 through
-  `apps/web/lib/storage/r2.ts` (`aws4fetch`), gated on the optional `R2_*` env block.
-  `character_relationships` is kept as a derivation read and nothing writes it. Generate (the
-  look-sheet job) is not built.
+- **The Characters route is `Route - Characters v2.dc.html`** ("Redesign phase 4" in
+  `docs/build-decisions.md`); the laper.ai second pass and the older bundle are history.
+  `?view=cast | relationships | sheet`; `/characters/:uuid` is the edit drawer (a portal into
+  the layout's slot beside the column); the sidebar card is the cast list (groups computed in
+  `lib/characters/cast.ts`, `Defined N / M` widget); unmatched cues are the banner's queue and
+  a `--warn` conflict block on the card their proposal names. Migration `0013` dropped the
+  first pass's drives, arc turns, voice rules and key lines; `0017` brings back only `wants`,
+  `needs` and a writer-set `status` (`draft | defined | locked`). Portraits are on Cloudflare
+  R2 through `apps/web/lib/storage/r2.ts` (`aws4fetch`), gated on the optional `R2_*` env
+  block; the card's `Drop a reference` is a real drop. `character_relationships` is kept as a
+  derivation read and nothing writes it. Gender, the colour picker, appearance, the alias
+  table and merge have actions and no surface since the v2 pass. Generate (the look-sheet job)
+  is not built.
 - **`beats`, `revisions` and `comment_threads` are tables with no route above them** (AGENTS.md,
   Constraints — all three routes were built, then cut). `beats` was dropped in migration `0010`;
   `revisions` and `comment_threads` stay: the Script route draws threads inline under their
@@ -97,7 +106,7 @@ Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
 
 **Nothing needs a live database** to typecheck, lint, build or unit-test. The signed-in E2E
 walks (`apps/web/e2e/*-route.spec.ts`) need `E2E_EMAIL`/`E2E_PASSWORD` and skip without them;
-`E2E_PORT` points them at a running dev server.
+`E2E_PORT` points them at a running dev server (default 3210).
 
 ## Commands
 
@@ -106,9 +115,11 @@ pnpm typecheck   # 6 packages — also a test suite: @ts-expect-error guarantees
 pnpm lint        # eslint.config.mjs is AGENTS.md made executable; each ban error carries its reason
 pnpm test        # only @folio/script and web have test scripts
 pnpm build       # only web
+pnpm test:e2e    # Playwright, web only — see the E2E_* note above
 
 pnpm --filter @folio/script exec vitest run src/paginate.test.ts    # one file
 pnpm --filter @folio/script exec vitest run -t "the first id wins"  # one test
+pnpm --filter web exec vitest run tests/production-status.test.ts   # one web test (needs Node >=22.12)
 ```
 
 Package-specific commands are in that package's `CLAUDE.md`.

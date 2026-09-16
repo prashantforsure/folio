@@ -42,6 +42,16 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   workspace publishes to (`lib/outline/toc.ts`), seeded by a `cache()`d document read the page
   shares (`lib/outline/server.ts`). Handles, threads and the `@` combobox are the Script's pieces
   (`_script/editor/extensions/handles.ts`, `_script/comments/`, `mention-suggestion.ts`).
+- **The Storyboard route since the redesign:** `_storyboard/storyboard-workspace.tsx` is one
+  container (rows, selection, filter, display toggles, every write) over three layouts -
+  `board-view.tsx`, `canvas-view.tsx`, `list-view.tsx` - that share `shot-parts.tsx` and the
+  `ViewProps` in `handlers.ts`. The toolbar is the shared `_chrome/view-pill.tsx` (icon shape)
+  plus `storyboard-toolbar.tsx`'s filter and display menus; a shot is edited in place, a card
+  drags to reorder (`placeShot`). The sidebar's `Boards` group and `Boards drawn` widget
+  (`_chrome/sidebar-group.tsx`, `_chrome/sidebar-widget.tsx`) read the cell the workspace
+  publishes (`lib/storyboard/coverage.ts`), seeded by `readBoardCoverage`; every derived count
+  and colour is `lib/storyboard/board.ts`, pure and tested. Toolbar dropdowns share
+  `_chrome/use-dismiss.ts`. Details: `docs/build-decisions.md`, "Redesign phase 3".
 - **The Script autosave is a delta and every write it runs is one statement.** Over the
   transaction pooler a parameterised statement costs two round trips and cannot be pipelined
   (`packages/db/src/client.ts`), so on the request path the cost is statement count, not row

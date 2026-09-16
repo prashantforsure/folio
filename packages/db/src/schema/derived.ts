@@ -1,4 +1,4 @@
-import { CHARACTER_COLOR_IDS, CHARACTER_GENDERS } from '@folio/contracts'
+import { CHARACTER_COLOR_IDS, CHARACTER_GENDERS, CHARACTER_STATUSES, LOCATION_STATUSES } from '@folio/contracts'
 import { CONFIDENCES, INTERIOR_EXTERIOR, LIGHT_STATES, PRESENCE_STATES, RESOLVE_ROW_STATES } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import {
@@ -22,7 +22,7 @@ import {
   timestampColumn,
   updatedAtColumn,
 } from './columns'
-import { episodes, projects, users } from './tenancy'
+import { projects, users } from './tenancy'
 
 /**
  * The derived entity caches - and the authored rows they must never touch.
@@ -73,6 +73,8 @@ export const resolveVerdictEnum = pgEnum('resolve_verdict', ['accepted', 'reject
 export const interiorExteriorEnum = pgEnum('interior_exterior', INTERIOR_EXTERIOR)
 export const lightEnum = pgEnum('light', LIGHT_STATES)
 export const characterGenderEnum = pgEnum('character_gender', CHARACTER_GENDERS)
+export const characterStatusEnum = pgEnum('character_status', CHARACTER_STATUSES)
+export const locationStatusEnum = pgEnum('location_status', LOCATION_STATUSES)
 
 // ---------------------------------------------------------------------------
 // Characters
@@ -127,6 +129,15 @@ export const characters = pgTable(
     appearance: text('appearance'),
     /** The portrait's object key in storage. Null with no portrait. */
     portraitKey: text('portrait_key'),
+    /**
+     * The v2 pass (migration `0017`): the status the writer sets - `draft`
+     * until they say otherwise - and the two lines the drawer authors.
+     * `wants` / `needs` were dropped in `0013` and come back here alone, as
+     * the v2 mockup draws them; the sources and the flaw do not.
+     */
+    status: characterStatusEnum('status').notNull().default('draft'),
+    wants: text('wants'),
+    needs: text('needs'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
@@ -291,6 +302,12 @@ export const characterCueTallies = pgTable(
  * carries: set when the writer merged this record into another, kept rather
  * than deleted so a `@mention` or a scene still pointing at the loser can
  * follow it. Never derived.
+ *
+ * `status`, `address` and `photo_key` (the v2 pass, migration `0018`) are
+ * what `Route - Locations v2.dc.html` draws and the drawer edits: the
+ * scouting status - `pending` until the writer says otherwise - one line of
+ * address, and the photo's storage key, never a URL, on the portrait's
+ * pattern. All authored; a re-derive touches none of them.
  */
 export const locations = pgTable(
   'locations',
@@ -305,6 +322,12 @@ export const locations = pgTable(
     notes: jsonb('notes').notNull().default(sql`'{}'::jsonb`),
     /** Set when the writer merged this record into another. Never derived. */
     mergedInto: uuid('merged_into'),
+    /** The scouting status the writer sets. `pending` is what a pass mints. */
+    status: locationStatusEnum('status').notNull().default('pending'),
+    /** "Actual or fictional address…" - one authored line. */
+    address: text('address'),
+    /** The photo's object key in storage. Null with no photo. */
+    photoKey: text('photo_key'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
@@ -315,39 +338,6 @@ export const locations = pgTable(
     check('locations_not_own_parent', sql`${table.parentId} IS DISTINCT FROM ${table.id}`),
     check('locations_scheduled_days_not_negative', sql`${table.scheduledDays} >= 0`),
     check('locations_not_merged_into_self', sql`${table.mergedInto} IS DISTINCT FROM ${table.id}`),
-  ],
-)
-
-/**
- * The arc note a writer keeps on a location, one per episode. AUTHORED.
- *
- * The Locations spec's "an arc note per episode" - "How this place changes"
- * on the record view: `Introduced dry. The tap coughs; nobody panics yet.`
- * against E1. Keyed by the episode row, not its slug (ADR 0002), so a
- * reorder that rewrites `ordinal` leaves the note on the episode it was
- * written about. A note is a line of the writer's and nothing derived hangs
- * off it; a re-derive touches none of this, which the table split
- * guarantees rather than a comment. The pure core's `entities.ts` names
- * arc notes as "schema (`packages/db`)", and this is that schema.
- */
-export const locationArcNotes = pgTable(
-  'location_arc_notes',
-  {
-    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
-    locationId: uuid('location_id')
-      .notNull()
-      .references(() => locations.id, { onDelete: 'cascade' }),
-    episodeId: uuid('episode_id')
-      .notNull()
-      .references(() => episodes.id, { onDelete: 'cascade' }),
-    text: text('text').notNull(),
-    createdAt: createdAtColumn(),
-    updatedAt: updatedAtColumn(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.locationId, table.episodeId] }),
-    index('location_arc_notes_project_idx').on(table.projectId),
-    check('location_arc_notes_text_not_empty', sql`length(btrim(${table.text})) > 0`),
   ],
 )
 

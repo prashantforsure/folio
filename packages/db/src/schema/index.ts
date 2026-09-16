@@ -21,12 +21,13 @@
  *   versions                     immutable snapshots of authored data
  *   revisions
  *   locked_pages
- *   characters                   name, bio, notes, and the profile the Characters route authors
+ *   characters                   name, bio, notes, the profile the Characters route authors, and
+ *                                since 0017 its status and wants / needs
  *   character_bound_cues         the alias table's authored half
  *   character_relationships
- *   locations                    name, parent, scheduled days, description, the merge tombstone
+ *   locations                    name, parent, scheduled days, description, the merge tombstone, and
+ *                                since 0018 its scouting status, address and photo key
  *   location_bound_sluglines
- *   location_arc_notes           one note per location per episode - "how this place changes"
  *   scenes                       synopsis, story time (day, clock, flashback), beat links (opaque), thread links
  *   story_threads                a named, coloured storyline; the scenes it runs through are `scenes.threads`
  *   resolve_decisions            authored input, never derived output
@@ -39,6 +40,10 @@
  *   share_links                  the in-app invite: a token, a role, revocable (0016)
  *   assistant_chats              one conversation with the assistant about one episode's script (0016)
  *   assistant_messages           its turns, a person's and the model's
+ *   research_collections         a named, coloured folder of sources; dropped by the repository when its last source leaves (0019)
+ *   research_sources             an article, document, image set, interview or recording brought in from outside the script, with its text
+ *   research_clips               a highlighted line of a source
+ *   research_clip_filings        clip to character, location or scene - the scene by its heading node's id, no key, as `shots` does
  *
  * ## DERIVED CACHE - reproducible by re-running `derive` over the node list
  *
@@ -82,12 +87,13 @@
  *
  * ## What is deliberately absent
  *
- * Research sources, props, lenses, and any table for project
+ * Props, lenses, and any table for project
  * settings `transfer` or `keys`. The last of those is AGENTS.md open decision
  * 7 and was left open on purpose. The rest are out of scope so far. Jobs,
  * generations and storyboard shots were on this list until the Storyboard
  * phase, story threads until the Timeline phase, reels and renders until the
- * Production phase; `storyboard.ts`, `timeline.ts` and `production.ts` say
+ * Production phase, research sources until the Research v2 pass (2026-09-16);
+ * `storyboard.ts`, `timeline.ts`, `production.ts` and `research.ts` say
  * what each now is. Bible entries were also authored here, migration `0012`
  * to `0015` (`docs/build-decisions.md`, "Bible route removed") - the five
  * tables and their three enums are dropped, not orphaned.
@@ -106,3 +112,4 @@ export * from './production'
 export * from './timeline'
 export * from './share'
 export * from './assistant'
+export * from './research'

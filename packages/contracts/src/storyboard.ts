@@ -223,6 +223,33 @@ export const StoryboardSceneSchema = z.object({
 export type StoryboardScene = z.infer<typeof StoryboardSceneSchema>
 
 /**
+ * One scene's board coverage, as the writing sidebar's `Boards` group and
+ * its `Boards drawn` widget read it (`docs/ui design/Route - Storyboard
+ * v2.dc.html`). A count over the same rows `StoryboardScene` lists, read
+ * in one statement so the three other writing routes can seed the sidebar
+ * without the whole board:
+ *
+ *   `shots`     accepted shots. A proposal is not a shot until it is taken.
+ *   `proposed`  proposals waiting on a decision.
+ *   `drawn`     accepted shots whose frame - the kept generation, else the
+ *               latest - finished with a picture (`FrameState.kind ===
+ *               'drawn'`).
+ */
+export const BoardCoverageRowSchema = z.object({
+  sceneNodeId: NodeIdSchema,
+  number: z.int().min(1),
+  heading: z.string(),
+  /** The reading's `INT` / `EXT` and set, for the mono slug under `Scene NN`; empty when the heading did not read. */
+  ie: z.string().nullable(),
+  set: z.string(),
+  shots: z.int().min(0),
+  proposed: z.int().min(0),
+  drawn: z.int().min(0),
+})
+
+export type BoardCoverageRow = z.infer<typeof BoardCoverageRowSchema>
+
+/**
  * What a shot edit sends. Every field of the spec, whole - a shot is small
  * and "which of six fields did you mean" is a protocol nobody needs. The
  * description arrives as inline content: the client resolves `@Name` to a

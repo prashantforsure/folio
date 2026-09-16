@@ -36,10 +36,11 @@
  *
  * What is deliberately **not** here, and why:
  *
- *   - **Research sources, props, lenses.** Real entities, sketched in the
- *     design handoff's Appendix A, and out of scope so far - each brief names
- *     its tables and these are not among them. Story threads were on this
- *     list until the Timeline phase; `timeline.ts` says what they are now.
+ *   - **Props and lenses.** Real entities, sketched in the design handoff's
+ *     Appendix A, and out of scope so far - each brief names its tables and
+ *     these are not among them. Story threads were on this list until the
+ *     Timeline phase, research sources until the Research v2 pass
+ *     (2026-09-16); `timeline.ts` and `research.ts` say what each now is.
  *     Bible entries were on it too, until the Bible phase, then off it again
  *     when the route was cut (`docs/build-decisions.md`, "Bible route
  *     removed") - there is no `bible.ts` here any more.
@@ -73,6 +74,10 @@ export type {
   ProjectId,
   ReelId,
   ReelRenderId,
+  ResearchClipId,
+  ResearchCollectionId,
+  ResearchFilingId,
+  ResearchSourceId,
   ReservedProjectSegment,
   RevisionId,
   ShareLinkId,
@@ -102,6 +107,10 @@ export {
   RESERVED_PROJECT_SEGMENTS,
   ReelIdSchema,
   ReelRenderIdSchema,
+  ResearchClipIdSchema,
+  ResearchCollectionIdSchema,
+  ResearchFilingIdSchema,
+  ResearchSourceIdSchema,
   RevisionIdSchema,
   RunIdSchema,
   ShareLinkIdSchema,
@@ -126,6 +135,10 @@ export {
   projectId,
   reelId,
   reelRenderId,
+  researchClipId,
+  researchCollectionId,
+  researchFilingId,
+  researchSourceId,
   revisionId,
   shareLinkId,
   shotId,
@@ -290,6 +303,7 @@ export type {
   CharacterMap,
   CharacterProfile,
   CharacterProfileEdit,
+  CharacterStatus,
   CueVariantRow,
   MapColumn,
   NewCharacter,
@@ -303,9 +317,12 @@ export {
   CHARACTER_COLOR_IDS,
   CHARACTER_GENDERS,
   CHARACTER_GENDER_LABELS,
+  CHARACTER_STATUSES,
+  CHARACTER_STATUS_LABELS,
   CharacterColorSchema,
   CharacterGenderSchema,
   CharacterProfileEditSchema,
+  CharacterStatusSchema,
   DEFAULT_CHARACTER_COLOR,
   NewCharacterSchema,
   PORTRAIT_MAX_BYTES,
@@ -369,6 +386,7 @@ export type { CreditBalance, LedgerEntry } from './credits'
 export { CreditBalanceSchema, LedgerEntrySchema } from './credits'
 
 export type {
+  BoardCoverageRow,
   FrameGeneration,
   FrameState,
   Job,
@@ -378,6 +396,7 @@ export type {
   StoryboardScene,
 } from './storyboard'
 export {
+  BoardCoverageRowSchema,
   FRAME_GENERATION_COST,
   FrameGenerationSchema,
   FrameStateSchema,
@@ -446,24 +465,27 @@ export {
 } from './timeline'
 
 export type {
-  ArcNoteEdit,
-  BreakdownCell,
-  BreakdownRow,
-  LocationArcNoteRow,
   LocationCounts,
   LocationEdit,
-  LocationEpisodeBar,
+  LocationKind,
   LocationPersonRow,
-  LocationRecordView,
   LocationRow,
   LocationSceneRow,
+  LocationStatus,
   SluglineResolveItem,
   SluglineResolveProposal,
   SluglineVariantRow,
   StructureResolveItem,
   StructureResolveProposal,
 } from './locations'
-export { ArcNoteEditSchema, LocationEditSchema, ParentEditSchema } from './locations'
+export {
+  LOCATION_PHOTO_MAX_BYTES,
+  LOCATION_STATUSES,
+  LOCATION_STATUS_LABELS,
+  LocationEditSchema,
+  LocationStatusSchema,
+  ParentEditSchema,
+} from './locations'
 
 export type { ShareLink, ShareLinkRole } from './share'
 export { SHARE_LINK_ROLES, ShareLinkRoleSchema, ShareLinkSchema, ShareTokenSchema } from './share'
@@ -476,3 +498,38 @@ export {
   AssistantMessageSchema,
   AssistantRoleSchema,
 } from './assistant'
+
+export type {
+  ResearchClipEdit,
+  ResearchClipRow,
+  ResearchCollectionColour,
+  ResearchCollectionPick,
+  ResearchCollectionRow,
+  ResearchFilingKind,
+  ResearchFilingRow,
+  ResearchFilingTarget,
+  ResearchSource,
+  ResearchSourceEdit,
+  ResearchSourceKind,
+  ResearchSourceRow,
+} from './research'
+export {
+  RESEARCH_BODY_MAX,
+  RESEARCH_CLIP_MAX,
+  RESEARCH_COLLECTION_COLOURS,
+  RESEARCH_COLLECTION_NAME_MAX,
+  RESEARCH_FILING_KINDS,
+  RESEARCH_NOTE_MAX,
+  RESEARCH_ORIGIN_MAX,
+  RESEARCH_SOURCE_KINDS,
+  RESEARCH_SOURCE_KIND_GLYPHS,
+  RESEARCH_SOURCE_KIND_LABELS,
+  RESEARCH_TITLE_MAX,
+  ResearchClipEditSchema,
+  ResearchCollectionColourSchema,
+  ResearchCollectionPickSchema,
+  ResearchFilingKindSchema,
+  ResearchFilingTargetSchema,
+  ResearchSourceEditSchema,
+  ResearchSourceKindSchema,
+} from './research'

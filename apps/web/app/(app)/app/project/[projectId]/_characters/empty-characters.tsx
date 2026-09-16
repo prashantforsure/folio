@@ -4,34 +4,34 @@ import type { ProjectId } from '@folio/contracts'
 import { useRouter } from 'next/navigation'
 
 import { deriveNow } from '../../../../../../lib/characters/actions'
+import { setNewCharacterOpen } from '../../../../../../lib/characters/compose'
+import type { Derivable } from '../../../../../../lib/characters/server'
 import type { Run } from './characters-workspace'
 
 /**
- * The empty state: no character record at all. A centred card in the shape
- * of the grid's - a colour tile with the person glyph, `No characters
- * yet`, one line on where records come from - and the two ways out:
+ * The empty state - `docs/ui design/README.md`, "Empty states": "A single
+ * 440px card: heading, one paragraph of plain explanation, an accent AI
+ * action plus a manual alternative, and a one-line caveat. Never an
+ * illustration." `Route - Characters v2.dc.html` draws it with a mono
+ * block of the three busiest cues (`MEERA · 79 scenes`, `… 8 more`),
+ * `✦ Derive 11 characters` and `＋ By hand`, and the caveat `Deriving
+ * costs nothing and never changes the script.`
  *
- *   `✦ Derive N characters`  runs a project-wide pass, awaited. Derivation
- *                            runs on every save and import already, so this
- *                            state is reached only when nothing has been
- *                            written yet - or a deferred pass failed.
- *   `＋ New Character`       the header's modal, opened from here.
- *
- * With nothing derivable - no script, or a script with no cue - the first
- * button is not drawn; the copy says why. Same card, both themes.
+ * Every number is the speculative pass's (`loadCharacters`'s `derivable`).
+ * With nothing derivable - no script, or a script with no cue - the derive
+ * button is not drawn and the paragraph says why; the mono block goes too.
  */
 export const EmptyCharacters = ({
   projectId,
   derivable,
-  onCreate,
   run,
 }: {
   readonly projectId: ProjectId
-  readonly derivable: number
-  readonly onCreate: () => void
+  readonly derivable: Derivable
   readonly run: Run
 }) => {
   const router = useRouter()
+  const more = derivable.count - derivable.top.length
 
   const derive = (): void => {
     run(async () => {
@@ -43,50 +43,48 @@ export const EmptyCharacters = ({
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center px-[24px] py-[40px]" data-empty-characters>
-      <div className="flex w-full max-w-[420px] flex-col items-center gap-[18px] rounded-card border border-line bg-panel px-[28px] pb-[28px] pt-[28px] text-center">
-        <span
-          aria-hidden="true"
-          className="grid h-[96px] w-[72px] place-items-center rounded-[7px] text-[44px] leading-none"
-          style={{ background: 'var(--chip-3)', color: 'var(--chip-ink)', fontFamily: 'var(--font-glyph)', opacity: 0.85 }}
-        >
-          ◍
-        </span>
-        <div className="flex flex-col gap-[6px]">
-          <span className="font-serif text-[22px] font-medium leading-[1.15]">No characters yet</span>
-          <span className="text-12 leading-[1.55] text-ink2">
-            {derivable > 0
-              ? `Your script has ${String(derivable)} distinct character ${derivable === 1 ? 'cue' : 'cues'}. Derive them and each becomes a card: who they are, every scene they’re in, and every line they say.`
-              : 'Write a character cue in the script and it becomes a card here - or add one by hand.'}
+    <div data-empty-characters className="flex min-h-0 flex-1 items-center justify-center px-[20px] py-[32px]">
+      <div className="flex w-full max-w-[440px] flex-col gap-[16px] rounded-panel border border-line2 bg-s1 p-[24px]">
+        <div className="flex flex-col gap-[7px]">
+          <span className="text-17 font-medium tracking-title">No characters yet</span>
+          <span className="text-13 leading-[1.55] text-ink2" style={{ textWrap: 'pretty' }}>
+            {derivable.count > 0
+              ? `Your script has ${String(derivable.count)} distinct character ${derivable.count === 1 ? 'cue' : 'cues'}. Derive them and each becomes a record you can edit, connect and cast.`
+              : 'Write a character cue in the script and it becomes a record here - or add one by hand.'}
           </span>
         </div>
-        <div className="flex w-full gap-[8px]">
-          {derivable > 0 ? (
-            <button
-              type="button"
-              onClick={derive}
-              data-derive-now
-              className="flex flex-1 items-center justify-center gap-[6px] rounded-chrome border-none bg-accent px-[12px] py-[9px] text-12 font-semibold text-accent-ink hover:opacity-90"
-            >
-              <span aria-hidden="true" className="text-10" style={{ fontFamily: 'var(--font-glyph)' }}>
-                ✦
+        {derivable.top.length > 0 ? (
+          <div className="flex flex-col gap-[3px] rounded-[11px] border border-line2 bg-sunk px-[13px] py-[12px] font-mono text-11-5 leading-[1.6] text-ink2" data-derivable-top>
+            {derivable.top.map((entry) => (
+              <span key={entry.cue}>
+                {entry.cue}{' '}
+                <span className="text-ink3">
+                  {entry.scenes} {entry.scenes === 1 ? 'scene' : 'scenes'}
+                </span>
               </span>
-              Derive {derivable} {derivable === 1 ? 'character' : 'characters'}
+            ))}
+            {more > 0 ? <span className="text-ink3">… {more} more</span> : null}
+          </div>
+        ) : null}
+        <div className="flex gap-[8px]">
+          {derivable.count > 0 ? (
+            <button type="button" onClick={derive} data-derive-now className="folio-accent-button h-[36px] flex-1 justify-center rounded-[10px] text-13">
+              <span className="folio-mark">✦</span> Derive {derivable.count} {derivable.count === 1 ? 'character' : 'characters'}
             </button>
           ) : null}
           <button
             type="button"
-            onClick={onCreate}
             data-add-by-hand
-            className="flex flex-1 items-center justify-center gap-[6px] rounded-chrome border border-line bg-transparent px-[12px] py-[9px] text-12 text-ink2 hover:bg-hover hover:text-ink"
+            onClick={() => {
+              setNewCharacterOpen(true)
+            }}
+            className={`folio-line-button h-[36px] justify-center rounded-[10px] px-[15px] text-13 ${derivable.count > 0 ? 'flex-none' : 'flex-1'}`}
+            data-line="strong"
           >
-            <span aria-hidden="true" className="text-11 opacity-70" style={{ fontFamily: 'var(--font-glyph)' }}>
-              ＋
-            </span>
-            New Character
+            ＋ By hand
           </button>
         </div>
-        <span className="text-10-5 text-ink3">Cues in the script stay as written and point at the card.</span>
+        <span className="text-11-5 text-ink3">Deriving costs nothing and never changes the script.</span>
       </div>
     </div>
   )

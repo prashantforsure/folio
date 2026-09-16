@@ -30,3 +30,6 @@ export type DeleteResult = { readonly status: 'deleted' } | Failure
 export type ResolveResult = { readonly status: 'resolved'; readonly pending: number } | Failure
 
 export type DeriveResult = { readonly status: 'derived'; readonly locations: number } | Failure
+
+/** After an upload: the photo's public URL, so the card can show it before the page re-reads. */
+export type PhotoResult = { readonly status: 'saved'; readonly url: string | null } | Failure

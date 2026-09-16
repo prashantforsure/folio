@@ -3,13 +3,14 @@ import type { ReactNode } from 'react'
 import { CONTEXT_PANEL_WIDTH } from '../../../../../../lib/workspace/routes'
 import type { EpisodeNavRoute, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
 
-type ColumnRoute = Exclude<WorkspaceRoute, EpisodeNavRoute | 'characters'>
+type ColumnRoute = Exclude<WorkspaceRoute, EpisodeNavRoute | 'characters' | 'locations' | 'research'>
 
 /**
  * The record-list / filter column a project route owns. The episode nav's
- * sibling, at the route's own width from the README's table: 256px for
- * Locations, 250px for Timeline, Research and Production. Characters has
- * none since its second pass - the card grid is the list.
+ * sibling, at the route's own width from the README's table: 250px for
+ * Timeline and Production. Characters has none since its second
+ * pass - the card grid is the list - and Locations and Research none since
+ * their v2 passes: all three draw the sidebar card (`_chrome/sidebar.tsx`).
  *
  * Header row as in every bundle: the project title in Newsreader 15px/500.
  * Entity routes carry the find input on a `--sheet` ground with a `⌕` glyph

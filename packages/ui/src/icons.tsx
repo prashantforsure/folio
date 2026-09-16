@@ -80,6 +80,16 @@ export const ICONS = {
   import: P(16, 'M8 2.5v8M5 7.5l3 3 3-3', 'M3 12.5v1h10v-1'),
   /** Export - an arrow out of a tray. */
   export: P(16, 'M8 10.5v-8M5 5.5l3-3 3 3', 'M3 12.5v1h10v-1'),
+  /** Storyboard view pill: scene boards. Two columns. */
+  board: P(18, 'M3.7 3h2a1.2 1.2 0 0 1 1.2 1.2v9.6A1.2 1.2 0 0 1 5.7 15h-2a1.2 1.2 0 0 1-1.2-1.2V4.2A1.2 1.2 0 0 1 3.7 3z', 'M9.6 3h2a1.2 1.2 0 0 1 1.2 1.2v9.6a1.2 1.2 0 0 1-1.2 1.2h-2a1.2 1.2 0 0 1-1.2-1.2V4.2A1.2 1.2 0 0 1 9.6 3z'),
+  /** Storyboard view pill: shot canvas. Two nodes and the link between them. */
+  canvas: P(18, 'M3.6 4.5h3.2a1.1 1.1 0 0 1 1.1 1.1v2.2a1.1 1.1 0 0 1-1.1 1.1H3.6a1.1 1.1 0 0 1-1.1-1.1V5.6a1.1 1.1 0 0 1 1.1-1.1z', 'M11.2 9.1h3.2a1.1 1.1 0 0 1 1.1 1.1v2.2a1.1 1.1 0 0 1-1.1 1.1h-3.2a1.1 1.1 0 0 1-1.1-1.1v-2.2a1.1 1.1 0 0 1 1.1-1.1z', 'M7.9 6.7h2.2v4.6'),
+  /** Storyboard view pill: shot list. Three lines. */
+  list: P(18, 'M3 5h12M3 9h12M3 13h12'),
+  /** Storyboard toolbar: display options. Two sliders. */
+  sliders: P(18, 'M3 5.5h12M3 12.5h12', 'M8.9 5.5a1.9 1.9 0 1 1-3.8 0 1.9 1.9 0 0 1 3.8 0z', 'M13.5 12.5a1.9 1.9 0 1 1-3.8 0 1.9 1.9 0 0 1 3.8 0z'),
+  /** The sidebar's find field (`Route - Characters v2.dc.html`): a lens and its handle, 1.4 stroke on a 14 box. */
+  search: P(14, 'M10.1 6.2a3.9 3.9 0 1 1-7.8 0 3.9 3.9 0 0 1 7.8 0z', 'M9.2 9.2l2.6 2.6'),
 } as const
 
 export type IconName = keyof typeof ICONS

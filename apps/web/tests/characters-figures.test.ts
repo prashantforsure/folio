@@ -6,18 +6,10 @@ import { characterId, nodeId } from '@folio/script'
 import { describe, expect, it } from 'vitest'
 
 import { buildMap, factsLine, formatSceneRef, initialOf, sceneRefOf, sharedScenes } from '../lib/characters/figures'
-import {
-  arcPath,
-  bubbleBounds,
-  chordLayout,
-  edgesOf,
-  packBubbles,
-  ribbonPath,
-  ringLayout,
-} from '../lib/characters/graphs'
 
 /**
- * The Characters route's figures and the geometry behind its graphs. Every
+ * The Characters route's figures - the scene ref, the shared count, the map
+ * the v2 graph draws (`tests/characters-cast.test.ts` has that geometry). Every
  * one a pure function over derived rows; nothing here reads a node or
  * calls a model.
  */
@@ -102,82 +94,5 @@ describe('the map', () => {
       [2, 2, 0],
       [0, 0, 1],
     ])
-  })
-
-  it('lists every sharing pair once, strongest first', () => {
-    expect(edgesOf(map)).toEqual([{ a: 0, b: 1, shared: 2 }])
-  })
-})
-
-describe('the ring', () => {
-  it('puts one node at the centre and n nodes on the circle, the first at the top', () => {
-    expect(ringLayout(1, 50, 50, 20)).toEqual([{ index: 0, x: 50, y: 50 }])
-    const ring = ringLayout(4, 0, 0, 10)
-    expect(ring[0]?.x).toBeCloseTo(0)
-    expect(ring[0]?.y).toBeCloseTo(-10)
-    for (const point of ring) expect(Math.hypot(point.x, point.y)).toBeCloseTo(10)
-  })
-})
-
-describe('the bubbles', () => {
-  it('scales by the square root of lines with a floor, and never overlaps', () => {
-    const bubbles = packBubbles([100, 25, 0, 1, 50, 9], 100, 20)
-    expect(bubbles).toHaveLength(6)
-    const largest = bubbles.find((bubble) => bubble.index === 0)
-    expect(largest?.r).toBe(100)
-    expect(largest?.x).toBe(0)
-    expect(bubbles.find((bubble) => bubble.index === 1)?.r).toBeCloseTo(50)
-    expect(bubbles.find((bubble) => bubble.index === 2)?.r).toBe(20)
-    for (const a of bubbles) {
-      for (const b of bubbles) {
-        if (a === b) continue
-        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(a.r + b.r)
-      }
-    }
-    const box = bubbleBounds(bubbles)
-    expect(box.maxX - box.minX).toBeGreaterThan(200)
-  })
-
-  it('draws a cast with no lines at all as equal circles', () => {
-    const bubbles = packBubbles([0, 0, 0], 100, 30)
-    expect(bubbles.every((bubble) => bubble.r === 30)).toBe(true)
-  })
-})
-
-describe('the chord', () => {
-  it('gives every character an arc proportional to lines, with a sliver for silence', () => {
-    const layout = chordLayout(map, 0.1)
-    expect(layout.arcs).toHaveLength(3)
-    const spans = layout.arcs.map((arc) => arc.end - arc.start)
-    expect(spans.reduce((sum, span) => sum + span, 0)).toBeCloseTo(Math.PI * 2 - 0.3)
-    expect(spans[0]).toBeCloseTo((40 / 51) * (Math.PI * 2 - 0.3))
-    expect(spans[2]).toBeGreaterThan(0)
-    for (let i = 1; i < layout.arcs.length; i += 1) {
-      expect(layout.arcs[i]?.start).toBeGreaterThan(layout.arcs[i - 1]?.end ?? 0)
-    }
-  })
-
-  it('tiles each arc with its ribbons and never crosses an arc boundary', () => {
-    const layout = chordLayout(map)
-    expect(layout.ribbons).toHaveLength(1)
-    const ribbon = layout.ribbons[0]
-    const arcA = layout.arcs[0]
-    const arcB = layout.arcs[1]
-    expect(ribbon?.aStart).toBeCloseTo(arcA?.start ?? -1)
-    expect(ribbon?.aEnd).toBeCloseTo(arcA?.end ?? -1)
-    expect(ribbon?.bStart).toBeCloseTo(arcB?.start ?? -1)
-    expect(ribbon?.bEnd).toBeCloseTo(arcB?.end ?? -1)
-  })
-
-  it('writes closed SVG paths', () => {
-    const layout = chordLayout(map)
-    expect(arcPath(0, 0, 10, 20, 0, 1)).toMatch(/^M .* Z$/)
-    const ribbon = layout.ribbons[0]
-    expect(ribbon).toBeDefined()
-    if (ribbon !== undefined) expect(ribbonPath(0, 0, 10, ribbon)).toMatch(/^M .*Q 0 0 .* Z$/)
-  })
-
-  it('is empty for an empty cast', () => {
-    expect(chordLayout({ columns: [], cells: [] })).toEqual({ arcs: [], ribbons: [] })
   })
 })

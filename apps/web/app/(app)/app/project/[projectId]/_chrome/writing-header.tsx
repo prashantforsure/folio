@@ -11,8 +11,8 @@ import type { ShareLinkView } from '../../../../../../lib/share/result'
 import { defaultEpisodeTitle, episodeNumber } from '../../../../../../lib/workspace/format'
 import type { WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
 import { episodeRouteHref } from '../../../../../../lib/workspace/hrefs'
-import type { WritingRoute } from '../../../../../../lib/workspace/routes'
-import { WRITING_MODE_TARGET, isWritingRoute, writingModeOf } from '../../../../../../lib/workspace/routes'
+import type { EpisodeRoute, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
+import { ROUTE_TITLE, WRITING_MODE_TARGET, isEpisodeRoute, isWritingRoute, writingModeOf } from '../../../../../../lib/workspace/routes'
 import { EpisodeDeleteConfirm } from './episode-delete-confirm'
 import { EpisodeForm } from './episode-form'
 import { Orb } from './orb'
@@ -39,6 +39,20 @@ import { SharePopover } from './share-popover'
  *
  * Presence avatars and the Read button are not drawn - ruled 2026-09-16:
  * no presence (no realtime), Read left out.
+ *
+ * ## Production wears the same header, without the pill
+ *
+ * README, "Header": the mode pill "was removed from Characters, Locations,
+ * Timeline, Research and Production - those are outside the writing
+ * surface." Production's layout renders this header with `route:
+ * 'production'` (a layout that *is* the route knows it; the segment hook
+ * cannot see it from there), the pill is not drawn for a route outside
+ * `WRITING_ROUTES`, and the breadcrumb grows its third crumb, the route's
+ * title (`Route - Production v2.dc.html`: `Project / Episode 1 / Production`).
+ *
+ * Characters is project-scoped and passes no `current` episode: the crumb
+ * is `Project / Characters` (`Route - Characters v2.dc.html`), there is no
+ * episode menu and no pill - the pill needs an episode to link to.
  */
 export type EpisodeChoice = {
   readonly slug: EpisodeSlug
@@ -53,65 +67,80 @@ export const WritingHeader = ({
   episodes,
   current,
   share,
+  route: given,
 }: {
   readonly projectId: ProjectId
   readonly projectTitle: string
   readonly shape: WorkspaceShape
   readonly episodes: readonly EpisodeChoice[]
-  readonly current: EpisodeChoice
+  /** The episode in the breadcrumb. Absent on a project-scoped route (Characters): `Project / Characters`, no episode crumb. */
+  readonly current?: EpisodeChoice
   readonly share: ShareLinkView
+  /** The route, when the layout is the route (Production, Characters). Absent: read from the segment below `(writing)`. */
+  readonly route?: WorkspaceRoute
 }) => {
   // The route below the `(writing)` layout: `script`, `outline`, `storyboard`
   // or `scenes`. A layout cannot pass it; the segment hook can see it.
   const segment = useSelectedLayoutSegment()
-  const route: WritingRoute = segment !== null && isWritingRoute(segment) ? segment : 'script'
+  const route: WorkspaceRoute = given ?? (segment !== null && isWritingRoute(segment) ? segment : 'script')
+  const writing = isWritingRoute(route)
   const session = useSession()
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     setMounted(true)
   }, [])
   const assistantOpen = (mounted ? session.assistantOpen : null) ?? false
-  const mode = writingModeOf(route)
-  const address = { projectId, shape, episode: current.slug }
+  const mode = writing && current !== undefined ? writingModeOf(route) : null
+  const address = current === undefined ? null : { projectId, shape, episode: current.slug }
 
   return (
     <header data-writing-header className="relative flex h-[60px] flex-none items-center gap-[10px] pl-[4px] pr-[14px]">
       <div className="flex min-w-0 flex-1 items-center gap-[8px] text-13">
         <span className="min-w-0 truncate whitespace-nowrap text-ink3">{projectTitle}</span>
-        {shape === 'episodic' ? (
+        {shape === 'episodic' && current !== undefined && isEpisodeRoute(route) ? (
           <>
             <span className="text-ink3">/</span>
             <EpisodeMenu projectId={projectId} shape={shape} episodes={episodes} current={current} route={route} />
           </>
         ) : null}
+        {writing ? null : (
+          <>
+            <span className="flex-none text-ink3">/</span>
+            <span className="min-w-0 truncate whitespace-nowrap" data-route-crumb>
+              {ROUTE_TITLE[route]}
+            </span>
+          </>
+        )}
       </div>
 
-      <div className="flex flex-none items-center gap-[10px]">
-        <div role="tablist" aria-label="Mode" data-mode-pill className="flex items-center gap-[3px] rounded-pill border border-line2 bg-s1 p-[4px]">
-          <Link
-            href={episodeRouteHref(address, WRITING_MODE_TARGET.write)}
-            role="tab"
-            aria-selected={mode === 'write'}
-            aria-current={mode === 'write' ? 'page' : undefined}
-            data-mode="write"
-            className="folio-pill-tab"
-          >
-            <Icon name="write" size={15} className="opacity-75" />
-            Write
-          </Link>
-          <Link
-            href={episodeRouteHref(address, WRITING_MODE_TARGET.storyboard)}
-            role="tab"
-            aria-selected={mode === 'storyboard'}
-            aria-current={mode === 'storyboard' ? 'page' : undefined}
-            data-mode="storyboard"
-            className="folio-pill-tab"
-          >
-            <Icon name="storyboard" size={15} className="opacity-75" />
-            Storyboard
-          </Link>
+      {mode === null || address === null ? null : (
+        <div className="flex flex-none items-center gap-[10px]">
+          <div role="tablist" aria-label="Mode" data-mode-pill className="flex items-center gap-[3px] rounded-pill border border-line2 bg-s1 p-[4px]">
+            <Link
+              href={episodeRouteHref(address, WRITING_MODE_TARGET.write)}
+              role="tab"
+              aria-selected={mode === 'write'}
+              aria-current={mode === 'write' ? 'page' : undefined}
+              data-mode="write"
+              className="folio-pill-tab"
+            >
+              <Icon name="write" size={15} className="opacity-75" />
+              Write
+            </Link>
+            <Link
+              href={episodeRouteHref(address, WRITING_MODE_TARGET.storyboard)}
+              role="tab"
+              aria-selected={mode === 'storyboard'}
+              aria-current={mode === 'storyboard' ? 'page' : undefined}
+              data-mode="storyboard"
+              className="folio-pill-tab"
+            >
+              <Icon name="storyboard" size={15} className="opacity-75" />
+              Storyboard
+            </Link>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex min-w-0 flex-1 items-center justify-end gap-[8px]">
         <SharePopover projectId={projectId} initial={share} />
@@ -145,7 +174,7 @@ const EpisodeMenu = ({
   readonly shape: WorkspaceShape
   readonly episodes: readonly EpisodeChoice[]
   readonly current: EpisodeChoice
-  readonly route: WritingRoute
+  readonly route: EpisodeRoute
 }) => {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'list' | 'create' | 'rename' | 'delete'>('list')

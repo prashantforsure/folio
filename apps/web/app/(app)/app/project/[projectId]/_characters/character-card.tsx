@@ -1,150 +1,196 @@
 'use client'
 
-import type { CastRow, ProjectId } from '@folio/contracts'
-import { CHARACTER_GENDER_LABELS, PORTRAIT_TYPES } from '@folio/contracts'
-import Link from 'next/link'
-import { useRef } from 'react'
+import type { ProjectId, ResolveItem } from '@folio/contracts'
+import { CHARACTER_STATUS_LABELS, PORTRAIT_TYPES } from '@folio/contracts'
+import { EpisodeBars } from '@folio/ui'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
-import { uploadPortrait } from '../../../../../../lib/characters/actions'
-import { factsLine } from '../../../../../../lib/characters/figures'
+import { resolveCue, uploadPortrait } from '../../../../../../lib/characters/actions'
+import type { CastFigure } from '../../../../../../lib/characters/cast'
+import { sceneLabel, statusTone } from '../../../../../../lib/characters/cast'
+import { formatSceneRef } from '../../../../../../lib/characters/figures'
 import { characterHref } from '../../../../../../lib/workspace/hrefs'
+import { CitationChips } from '../_chrome/citation-chips'
+import { ConflictBlock } from '../_chrome/conflict-block'
 import type { Run } from './characters-workspace'
-import { PortraitTile } from './portrait-tile'
 
 /**
- * One character, as a card: the portrait tile (3:4, the colour until a
- * portrait is set) with the name and `Female · 17 y/o · student` over its
- * foot, the derived `N scenes` · `N lines` chips, three lines of bio, and
- * `✎ Edit` · `⇧ Upload` · `✦ Generate`.
+ * One character, as `Route - Characters v2.dc.html` draws the card: a
+ * `--s1` card at a 14px radius, the 4:5 face on `--sunk` - the portrait
+ * with a scrim and the name in white over its foot, or the dashed inset
+ * with the 42px/200 initial, `Drop a reference` and the name on `--bg` -
+ * the status badge top right; then the description (12.5px, three lines),
+ * and the foot: `79 scenes` in mono beside the episode bars (`@folio/ui`'s
+ * `EpisodeBars`, `E1 28 · E2 24 · E3 27` in its title).
  *
- * Edit is a link to `/characters/:id` - the drawer is the URL. Upload is a
- * file input behind a button; the bytes go through `uploadPortrait` and
- * never touch a storage credential in the browser. With storage not
- * configured the button is disabled and its title says so. Generate is
- * the look-sheet job that has no worker yet: drawn disabled, with the
- * reason as its title, and nothing behind it (`docs/build-decisions.md`,
- * "Not in this pass").
+ * The card is a link to `/characters/:id`, the drawer. `aria-current`
+ * while that record is the drawer's: the border is `--line`. A conflict -
+ * an open cue proposing this record - turns the border `--warn` and draws
+ * the README's amber block under the description with `It's <name>` /
+ * `It's deliberate` (`_chrome/conflict-block.tsx`).
+ *
+ * `Drop a reference` is real: a file dropped on the face uploads as the
+ * portrait, through `uploadPortrait`, with storage configured; without it
+ * the hint is not drawn and nothing accepts a drop.
  */
 export const CharacterCard = ({
   projectId,
-  row,
+  figure,
+  selected,
   storage,
   run,
 }: {
   readonly projectId: ProjectId
-  readonly row: CastRow
+  readonly figure: CastFigure
+  readonly selected: boolean
   readonly storage: boolean
   readonly run: Run
 }) => {
-  const picker = useRef<HTMLInputElement>(null)
-  const facts = factsLine({
-    gender: row.gender === null ? null : CHARACTER_GENDER_LABELS[row.gender],
-    age: row.age,
-    role: row.role,
-  })
-  const href = characterHref(projectId, row.id)
+  const router = useRouter()
+  const [over, setOver] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const href = characterHref(projectId, figure.id)
+  const portrait = figure.portraitUrl
+  const conflict = figure.conflicts[0]
+  const tone = statusTone(figure.status)
 
   const upload = (file: File): void => {
+    if (!PORTRAIT_TYPES.includes(file.type as (typeof PORTRAIT_TYPES)[number])) return
     run(async () => {
       const form = new FormData()
       form.set('portrait', file)
-      const result = await uploadPortrait(projectId, row.id, form)
+      const result = await uploadPortrait(projectId, figure.id, form)
       return result.status === 'saved' ? null : result.message
+    })
+  }
+
+  const decide = (item: ResolveItem, choice: { readonly kind: 'proposal' } | { readonly kind: 'not-this'; readonly id: string }): void => {
+    setBusy(true)
+    run(async () => {
+      const result = await resolveCue(projectId, item.key, choice)
+      setBusy(false)
+      return result.status === 'resolved' ? null : result.message
     })
   }
 
   return (
     <article
-      data-character-card={row.id}
-      data-presence={row.presence}
-      className="flex flex-col gap-[10px] rounded-card border border-line bg-panel p-[10px]"
+      data-character-card={figure.id}
+      data-status={figure.status}
+      data-group={figure.group}
+      data-conflict={conflict === undefined ? 'false' : 'true'}
+      aria-current={selected ? 'true' : undefined}
+      className="folio-cast-card"
+      onClick={() => {
+        router.push(href)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') router.push(href)
+      }}
+      role="link"
+      tabIndex={0}
+      aria-label={`Edit ${figure.name}`}
     >
-      <Link href={href} className="block no-underline hover:no-underline" aria-label={`Edit ${row.name}`}>
-        <PortraitTile hue={row.hue} portraitUrl={row.portraitUrl} name={row.name} className="aspect-[3/4] rounded-[7px]">
-          <div
-            className="absolute inset-x-0 bottom-0 flex flex-col gap-[3px] px-[14px] pb-[14px] pt-[40px]"
-            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.62), rgba(0,0,0,0))' }}
-          >
-            <span className="truncate text-16 font-semibold" style={{ color: 'var(--chip-ink)' }}>
-              {row.name}
-            </span>
-            {facts === '' ? null : (
-              <span className="line-clamp-2 text-11-5 leading-[1.4] opacity-90" style={{ color: 'var(--chip-ink)' }}>
-                {facts}
-              </span>
-            )}
-          </div>
-        </PortraitTile>
-      </Link>
-
-      <div className="flex flex-wrap gap-[6px]">
-        <Stat glyph="▤" value={row.appearances} unit="scenes" />
-        <Stat glyph="❝" value={row.lines} unit="lines" />
-        {row.presence === 'absent' ? (
-          <span className="rounded-full border border-dashed border-line px-[8px] py-[2px] text-10 text-ink3" title="Not in the script. The record is kept.">
-            record kept
+      <div
+        data-card-face
+        data-has-portrait={portrait === null ? 'false' : 'true'}
+        className="relative flex flex-none items-center justify-center overflow-hidden bg-sunk"
+        style={{ aspectRatio: '4 / 5' }}
+        onDragOver={(event) => {
+          if (!storage) return
+          event.preventDefault()
+          setOver(true)
+        }}
+        onDragLeave={() => {
+          setOver(false)
+        }}
+        onDrop={(event) => {
+          if (!storage) return
+          event.preventDefault()
+          setOver(false)
+          const file = event.dataTransfer.files[0]
+          if (file !== undefined) upload(file)
+        }}
+      >
+        {portrait === null ? (
+          <span
+            aria-hidden="true"
+            className="absolute inset-[10px] rounded-[9px] border border-dashed"
+            style={{ borderColor: over ? 'var(--accent)' : 'var(--line)' }}
+          />
+        ) : (
+          <img src={portrait} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        )}
+        {portrait === null ? (
+          <span className="relative flex flex-col items-center gap-[7px] pb-[22px]">
+            <span className="text-[42px] font-extralight leading-none tracking-[-.03em] text-ink3">{figure.initial}</span>
+            {storage ? <span className="text-11 text-ink3">Drop a reference</span> : null}
           </span>
         ) : null}
+        <span className="folio-cast-badge folio-tone-ink" data-tone={tone} data-card-status>
+          {CHARACTER_STATUS_LABELS[figure.status]}
+        </span>
+        <span
+          className="absolute inset-x-0 bottom-0 flex flex-col gap-[2px]"
+          style={
+            portrait === null
+              ? { padding: '9px 12px 10px', background: 'var(--bg)' }
+              : {
+                  padding: '28px 12px 11px',
+                  background: 'linear-gradient(to bottom, transparent, var(--cast-scrim-mid) 38%, var(--cast-scrim-end))',
+                }
+          }
+        >
+          <span
+            className="truncate text-15 font-medium tracking-title"
+            style={{ color: portrait === null ? 'var(--ink)' : 'var(--cast-face-name)' }}
+            data-card-name
+          >
+            {figure.name}
+          </span>
+          <span className="truncate text-11" style={{ color: portrait === null ? 'var(--ink3)' : 'var(--cast-face-sub)' }}>
+            {figure.role ?? 'No role yet'}
+          </span>
+        </span>
       </div>
 
-      <p className="m-0 line-clamp-3 min-h-[3em] text-11-5 leading-[1.5] text-ink2">
-        {row.bio === null || row.bio === '' ? <span className="text-ink3">No bio yet.</span> : row.bio}
-      </p>
-
-      <div className="grid grid-cols-2 gap-[6px]">
-        <Link href={href} data-card-edit className={`${BUTTON} no-underline hover:no-underline`}>
-          <Glyph>✎</Glyph> Edit
-        </Link>
-        <button
-          type="button"
-          disabled={!storage}
-          title={storage ? 'Upload a portrait' : 'Portrait storage is not set up on this server yet.'}
-          data-card-upload
-          onClick={() => {
-            picker.current?.click()
-          }}
-          className={BUTTON}
+      <div className="flex min-w-0 flex-1 flex-col gap-[11px] p-[12px]">
+        <p
+          className={`m-0 line-clamp-3 text-12-5 leading-[1.5] ${figure.bio === null ? 'text-ink3' : 'text-ink2'}`}
+          style={{ textWrap: 'pretty' }}
+          data-card-line
         >
-          <Glyph>⇧</Glyph> Upload
-        </button>
-        <input
-          ref={picker}
-          type="file"
-          accept={PORTRAIT_TYPES.join(',')}
-          aria-label={`Portrait for ${row.name}`}
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.target.value = ''
-            if (file !== undefined) upload(file)
-          }}
-        />
-        <button
-          type="button"
-          disabled
-          title="Generation needs a worker — not yet."
-          data-card-generate
-          className={`${BUTTON} col-span-2`}
-        >
-          <Glyph>✦</Glyph> Generate
-        </button>
+          {figure.bio ?? 'No description yet.'}
+        </p>
+        {conflict === undefined ? null : (
+          <ConflictBlock
+            title={`${conflict.cue} in the script reads like ${figure.short}.`}
+            detail={`${String(conflict.occurrences)} ${conflict.occurrences === 1 ? 'cue' : 'cues'} under that spelling point at no record. Binding it makes them ${figure.short}'s; the script is not changed.`}
+            accept={`It's ${figure.short}`}
+            busy={busy}
+            onAccept={() => {
+              decide(conflict, { kind: 'proposal' })
+            }}
+            onDeliberate={() => {
+              decide(conflict, { kind: 'not-this', id: figure.id })
+            }}
+          >
+            <CitationChips refs={conflict.scenes.map(formatSceneRef)} className="mt-[4px]" />
+            {figure.conflicts.length > 1 ? (
+              <span className="tabular mt-[4px] text-11 text-ink3" data-conflicts-more={figure.conflicts.length - 1}>
+                + {figure.conflicts.length - 1} more in the queue
+              </span>
+            ) : null}
+          </ConflictBlock>
+        )}
+        <div className="mt-auto flex items-center gap-[10px]">
+          <span className={`tabular min-w-0 flex-1 font-mono text-10-5 text-ink3`} data-card-scenes>
+            {sceneLabel(figure.appearances)}
+          </span>
+          <EpisodeBars counts={figure.perEpisode} />
+        </div>
       </div>
     </article>
   )
 }
-
-const BUTTON =
-  'flex items-center justify-center gap-[6px] rounded-chrome border border-line2 bg-transparent px-[10px] py-[7px] text-11-5 font-medium text-ink hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent'
-
-const Glyph = ({ children }: { readonly children: string }) => (
-  <span aria-hidden="true" className="text-10-5 opacity-70" style={{ fontFamily: 'var(--font-glyph)' }}>
-    {children}
-  </span>
-)
-
-const Stat = ({ glyph, value, unit }: { readonly glyph: string; readonly value: number; readonly unit: string }) => (
-  <span className="tabular inline-flex items-center gap-[5px] rounded-full border border-line2 bg-sheet px-[8px] py-[2px] text-10-5 text-ink2">
-    <Glyph>{glyph}</Glyph>
-    {value} {unit}
-  </span>
-)

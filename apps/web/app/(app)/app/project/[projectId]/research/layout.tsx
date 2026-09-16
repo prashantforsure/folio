@@ -1,13 +1,13 @@
-import { ProjectColumnLayout } from '../_chrome/project-column-layout'
+import { ResearchLayout } from '../_chrome/research-layout'
 
-/** The research column. See `_chrome/project-column-layout.tsx`. */
+/**
+ * The Research route's shell: the sidebar card with the collections, the
+ * header and the main surface - `_chrome/research-layout.tsx`, on the
+ * Characters pattern. Project-scoped: no episode in the URL, none in the crumb.
+ */
 const Layout = async ({ children, params }: LayoutProps<'/app/project/[projectId]/research'>) => {
   const { projectId } = await params
-  return (
-    <ProjectColumnLayout route="research" projectId={projectId}>
-      {children}
-    </ProjectColumnLayout>
-  )
+  return <ResearchLayout projectId={projectId}>{children}</ResearchLayout>
 }
 
 export default Layout

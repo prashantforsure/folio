@@ -25,6 +25,17 @@ import type { EpisodeSlug } from './ids'
  * migration `0013` on the client's ruling; `docs/build-decisions.md`,
  * "Characters route, second pass".
  *
+ * ## The v2 pass (2026-09-16)
+ *
+ * `docs/ui design/Route - Characters v2.dc.html` draws a status the writer
+ * sets (`Draft | Defined | Locked` - a segmented control in the drawer, a
+ * badge on the card, a pill in the sheet) and two authored lines, `Wants`
+ * and `Needs`. Migration `0017` adds the three columns. `wants` and `needs`
+ * were dropped in `0013` with the first profile; the v2 package brings the
+ * two lines back and nothing else of that profile - no sources, no flaw, no
+ * arc turns. `Principal | Supporting` is **not** a column again: the
+ * sidebar's groups are computed from scene counts (`lib/characters/cast.ts`).
+ *
  * ## Colour is a token name
  *
  * `color` is one of `CHARACTER_COLORS` - the name of a `--chip-N` custom
@@ -88,6 +99,26 @@ export const DEFAULT_CHARACTER_COLOR: CharacterColor = 'chip-1'
 export const hueOfColor = (color: string): number =>
   CHARACTER_COLORS.find((entry) => entry.id === color)?.hue ?? 1
 
+/**
+ * The status a writer gives a record. `draft` is what a derivation pass
+ * mints and what `New` creates; `defined` says the profile is written;
+ * `locked` says stop changing it. README, "Status as a dot plus a pill":
+ * amber for a draft (a decision waiting), green for defined (settled),
+ * accent for locked. The tone is the route's (`lib/characters/cast.ts`).
+ */
+export const CHARACTER_STATUSES = ['draft', 'defined', 'locked'] as const
+
+export type CharacterStatus = (typeof CHARACTER_STATUSES)[number]
+
+export const CharacterStatusSchema = z.enum(CHARACTER_STATUSES)
+
+/** How a status reads. Specified copy - the mockup's segmented control. */
+export const CHARACTER_STATUS_LABELS: Readonly<Record<CharacterStatus, string>> = {
+  draft: 'Draft',
+  defined: 'Defined',
+  locked: 'Locked',
+}
+
 // ---------------------------------------------------------------------------
 // Inputs
 // ---------------------------------------------------------------------------
@@ -109,6 +140,9 @@ export const CharacterProfileEditSchema = z
     role: line(200),
     bio: line(20_000),
     appearance: line(4_000),
+    status: CharacterStatusSchema,
+    wants: line(2_000),
+    needs: line(2_000),
   })
   .partial()
 
@@ -152,6 +186,9 @@ export type CastRow = {
   readonly age: string | null
   readonly role: string | null
   readonly bio: string | null
+  readonly status: CharacterStatus
+  readonly wants: string | null
+  readonly needs: string | null
   /** A public URL for the portrait, or null with none set or no storage. */
   readonly portraitUrl: string | null
   readonly presence: Presence

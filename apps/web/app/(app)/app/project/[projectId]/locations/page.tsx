@@ -2,8 +2,8 @@ import { LocationsRoute } from '../_locations/locations-route'
 import { loadProject } from '../../../../../../lib/workspace/context'
 
 /**
- * `/locations`. No record named: the record view shows the first in tree
- * order; the breakdown and resolve views are project-wide and name none.
+ * `/locations`. No record named, no drawer: the Places grid, or the Scenes
+ * here list or the Sheet by `?view=`.
  */
 const Page = async ({ params, searchParams }: PageProps<'/app/project/[projectId]/locations'>) => {
   const { projectId } = await params

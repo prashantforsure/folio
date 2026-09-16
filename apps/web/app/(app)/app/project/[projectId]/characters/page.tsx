@@ -2,8 +2,8 @@ import { CharactersRoute } from '../_characters/characters-route'
 import { loadProject } from '../../../../../../lib/workspace/context'
 
 /**
- * `/characters`. No record named, no drawer: the Overview grid, or the
- * Relationships graph or the Casting table by `?view=`.
+ * `/characters`. No record named, no drawer: the Cast grid, or the
+ * Relationships graph or the Sheet by `?view=`.
  */
 const Page = async ({ params, searchParams }: PageProps<'/app/project/[projectId]/characters'>) => {
   const { projectId } = await params

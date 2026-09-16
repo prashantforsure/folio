@@ -75,13 +75,22 @@ export const SUB_VIEW_SCHEMAS = {
   storyboard: z.object({ view: first(['board', 'canvas', 'list']) }),
   scenes: z.object({ view: first(['cards', 'index', 'list']) }),
   production: z.object({ view: first(['scene', 'episode']) }),
-  characters: z.object({ view: first(['overview', 'relationships', 'casting']) }),
-  locations: z.object({ view: first(['record', 'breakdown', 'resolve']) }),
+  characters: z.object({ view: first(['cast', 'relationships', 'sheet']) }),
+  locations: z.object({ view: first(['places', 'scenes', 'sheet']) }),
   timeline: z.object({ view: first(['story', 'chrono', 'continuity']) }),
   research: z.object({ view: first(['library', 'source', 'clips']) }),
 } as const satisfies Record<WorkspaceRoute, z.ZodObject>
 
 export type SubViews<R extends WorkspaceRoute> = z.infer<(typeof SUB_VIEW_SCHEMAS)[R]>
+
+/** Every `?view=` value any route accepts - what a view-switcher tab may link to. */
+export type AnySubView = WorkspaceRoute extends infer R
+  ? R extends WorkspaceRoute
+    ? SubViews<R> extends { readonly view: infer V extends string }
+      ? V
+      : never
+    : never
+  : never
 
 /** What Next hands a page. Repeated keys arrive as arrays; the first wins. */
 export type RawSearchParams = Record<string, string | string[] | undefined>

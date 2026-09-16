@@ -1,12 +1,10 @@
-import type { EpisodeId, Timestamp } from '@folio/contracts'
-import { episodeId as brandEpisodeId } from '@folio/contracts'
+import type { LocationStatus, Timestamp } from '@folio/contracts'
 import type { LocationId, NodeId, Presence, ScreenplayNode, ScriptFormat } from '@folio/script'
 import { locationId as brandLocationId } from '@folio/script'
 import { asc, eq, inArray, sql } from 'drizzle-orm'
 
 import {
   documents,
-  locationArcNotes,
   locationBoundSluglines,
   locationDerivations,
   locationSluglineTallies,
@@ -26,8 +24,8 @@ import { stamp } from './mapping'
  * The Locations route's reads, and every authored write it makes.
  *
  * The same split `characters.ts` describes, from the location side.
- * `locations`, `location_bound_sluglines` and `location_arc_notes` are
- * AUTHORED (`schema/derived.ts`); the route reads them beside the DERIVED
+ * `locations` and `location_bound_sluglines` are AUTHORED
+ * (`schema/derived.ts`); the route reads them beside the DERIVED
  * CACHE rows - `location_derivations`, `location_slugline_tallies`,
  * `scene_derivations`, `resolve_rows` - and joins by id in `apps/web`.
  * Nothing here writes a derived table.
@@ -63,6 +61,10 @@ export type LocationRecordRow = {
   readonly parentId: LocationId | null
   readonly scheduledDays: number
   readonly description: string | null
+  readonly status: LocationStatus
+  readonly address: string | null
+  /** The photo's object key in storage; the route turns it into a URL. */
+  readonly photoKey: string | null
   readonly createdAt: Timestamp
   /** Null until the first derivation pass after the record was made by hand. */
   readonly derived: {
@@ -102,6 +104,9 @@ export const listLocationRecords = async (
     parentId: record.parentId === null ? null : brandLocationId(record.parentId),
     scheduledDays: record.scheduledDays,
     description: record.description,
+    status: record.status,
+    address: record.address,
+    photoKey: record.photoKey,
     createdAt: stamp(record.createdAt),
     derived:
       derived === null
@@ -271,22 +276,6 @@ export const listSceneSynopses = async (scope: ProjectScope): Promise<ReadonlyMa
   )
 }
 
-export type ArcNoteRow = {
-  readonly episodeId: EpisodeId
-  readonly text: string
-}
-
-export const listLocationArcNotes = async (
-  scope: ProjectScope,
-  locationId: LocationId,
-): Promise<readonly ArcNoteRow[]> => {
-  const rows = await dbOf(scope)
-    .select({ episodeId: locationArcNotes.episodeId, text: locationArcNotes.text })
-    .from(locationArcNotes)
-    .where(scoped(scope, locationArcNotes, eq(locationArcNotes.locationId, locationId)))
-  return rows.map((row) => ({ episodeId: brandEpisodeId(row.episodeId), text: row.text }))
-}
-
 // ---------------------------------------------------------------------------
 // Writes - the record
 // ---------------------------------------------------------------------------
@@ -307,7 +296,8 @@ export const createLocationRecord = async (
 
 export type LocationRecordEdit = {
   readonly description?: string | null | undefined
-  readonly scheduledDays?: number | undefined
+  readonly address?: string | null | undefined
+  readonly status?: LocationStatus | undefined
 }
 
 /** Write the fields present in `edit`, whole. `false` when the record is not here. */
@@ -320,12 +310,39 @@ export const updateLocationRecord = async (
     .update(locations)
     .set({
       ...(edit.description === undefined ? {} : { description: edit.description === '' ? null : edit.description }),
-      ...(edit.scheduledDays === undefined ? {} : { scheduledDays: edit.scheduledDays }),
+      ...(edit.address === undefined ? {} : { address: edit.address === '' ? null : edit.address }),
+      ...(edit.status === undefined ? {} : { status: edit.status }),
       updatedAt: new Date(),
     })
     .where(scoped(scope, locations, eq(locations.id, id), sql`${locations.mergedInto} IS NULL`))
     .returning({ id: locations.id })
   return rows.length > 0
+}
+
+/**
+ * Point the record at a new photo object, or at none. Returns the key it
+ * replaced, so the caller can delete the old object after the row says the
+ * new one is the photo - never before. `setPortraitKey`, for a location.
+ */
+export const setLocationPhotoKey = async (
+  scope: ProjectScope,
+  id: LocationId,
+  key: string | null,
+): Promise<{ readonly found: boolean; readonly previous: string | null }> => {
+  const rows = await dbOf(scope).execute(sql`
+    with before as (
+      select ${locations.photoKey} as previous from ${locations}
+      where ${scoped(scope, locations, eq(locations.id, id))} and ${locations.mergedInto} is null
+    ),
+    written as (
+      update ${locations} set photo_key = ${key}, updated_at = now()
+      where ${scoped(scope, locations, eq(locations.id, id))} and ${locations.mergedInto} is null
+      returning id
+    )
+    select (select count(*)::int from written) as found, (select previous from before limit 1) as previous
+  `)
+  const row = rows[0] as { readonly found: number; readonly previous: string | null } | undefined
+  return { found: (row?.found ?? 0) > 0, previous: row?.previous ?? null }
 }
 
 /**
@@ -537,41 +554,13 @@ export const unbindSlugline = async (
 }
 
 // ---------------------------------------------------------------------------
-// Writes - arc notes, merge, delete
+// Writes - merge, delete
 // ---------------------------------------------------------------------------
-
-/** Write the note for one episode, or clear it with an empty text. */
-export const writeLocationArcNote = async (
-  scope: ProjectScope,
-  id: LocationId,
-  episodeId: EpisodeId,
-  text: string,
-): Promise<boolean> => {
-  const trimmed = text.trim()
-  if (trimmed === '') {
-    await dbOf(scope)
-      .delete(locationArcNotes)
-      .where(
-        scoped(scope, locationArcNotes, eq(locationArcNotes.locationId, id), eq(locationArcNotes.episodeId, episodeId)),
-      )
-    return true
-  }
-  const rows = await dbOf(scope).execute(sql`
-    insert into ${locationArcNotes} (project_id, location_id, episode_id, text)
-    select ${scope.projectId}, ${id}, ${episodeId}, ${trimmed}
-    where exists (select 1 from ${locations}
-      where ${scoped(scope, locations, eq(locations.id, id))} and ${locations.mergedInto} is null)
-    on conflict (location_id, episode_id) do update set text = excluded.text, updated_at = now()
-    returning location_id
-  `)
-  return rows.length > 0
-}
 
 /**
  * Merge `loser` into `winner`: the writer's decision that two records were
- * one place. One statement. The loser's bound sluglines and arc notes move
- * to the winner (a note the winner already has for that episode stays the
- * winner's); the loser's children hang off the winner; and if the winner
+ * one place. One statement. The loser's bound sluglines move to the
+ * winner; the loser's children hang off the winner; and if the winner
  * itself hung off the loser it takes the loser's parent, so no cycle is
  * written. The loser keeps its row with `merged_into` set, its parent
  * cleared. `false` when either record is not live here.
@@ -599,14 +588,6 @@ export const mergeLocationRecords = async (
       where ${scoped(scope, locationBoundSluglines, eq(locationBoundSluglines.locationId, loser))}
         and (select ok from ok)
       returning slugline
-    ),
-    notes_moved as (
-      insert into ${locationArcNotes} (project_id, location_id, episode_id, text)
-      select project_id, ${winner}, episode_id, text from ${locationArcNotes}
-      where ${scoped(scope, locationArcNotes, eq(locationArcNotes.locationId, loser))}
-        and (select ok from ok)
-      on conflict do nothing
-      returning episode_id
     ),
     winner_unhooked as (
       update ${locations} set parent_id = (select parent_id from loser_parent), updated_at = now()
@@ -637,7 +618,7 @@ export const mergeLocationRecords = async (
  * Delete a record the script no longer holds. Refused - `present` - while
  * it is: a record deleted under a live slugline would be minted again on the
  * next pass. Its children hang off its parent afterwards, so the tree keeps
- * its shape; the cascades take the bound sluglines, notes and derived rows.
+ * its shape; the cascades take the bound sluglines and derived rows.
  */
 export const deleteAbsentLocation = async (
   scope: ProjectScope,

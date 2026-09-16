@@ -1,5 +1,6 @@
 import { FRAME_GENERATION_COST } from '@folio/contracts'
-import { listEpisodeScenes, readBalance, readEpisodeNavMeta } from '@folio/db'
+import { listEpisodeScenes, readBalance, readBoardCoverage, readEpisodeNavMeta } from '@folio/db'
+import type { ReactNode } from 'react'
 
 import { loadOutlineToc } from '../../../../../../lib/outline/server'
 import type { EpisodeContext } from '../../../../../../lib/workspace/context'
@@ -9,6 +10,7 @@ import { SIDEBAR, SIDEBAR_WIDTH } from '../../../../../../lib/workspace/routes'
 import { EpisodeTitleRow } from './episode-title-row'
 import { SidebarGroup } from './sidebar-group'
 import { SidebarRows } from './sidebar-rows'
+import { SidebarWidget } from './sidebar-widget'
 
 /**
  * The writing sidebar. **236px**, a floating `--s1` card with a 16px radius
@@ -25,16 +27,20 @@ import { SidebarRows } from './sidebar-rows'
  * breadcrumb since the redesign; naming one is this card's title row
  * (`episode-title-row.tsx` - the name renames, `+` creates).
  *
- * ## The second group is the route's
+ * ## The second group and the widget are the route's
  *
  * The Outline mockup lists `In this outline` where the others list
- * `Scenes`. A layout cannot see which route renders below it, so the group
- * is a Client Component (`sidebar-group.tsx`) that reads the segment and
- * picks; both lists are read here and handed down. The outline's headings
+ * `Scenes`; the Storyboard mockup lists `Boards` and counts `Boards drawn`
+ * where the others count credits. A layout cannot see which route renders
+ * below it, so the group (`sidebar-group.tsx`) and the widget
+ * (`sidebar-widget.tsx`) are Client Components that read the segment and
+ * pick; every list is read here and handed down. The outline's headings
  * come through `loadOutlineToc`, whose document read is the one the
  * Outline page makes (`cache()`d in `lib/outline/server.ts`), so on that
  * route the list costs no second query; on the other three it is one
- * extra read of a page or two of blocks, in parallel with the rest.
+ * extra read of a page or two of blocks, in parallel with the rest. The
+ * board's coverage is `readBoardCoverage`, one statement of counts, in
+ * parallel too - not the whole board, which is three.
  *
  * ## Every value on this card is read, none is written
  *
@@ -44,6 +50,9 @@ import { SidebarRows } from './sidebar-rows'
  *                    `measurement_scenes.eighths`
  *   headings         `loadOutlineToc` - the outline's `h1` / `h2` / `h3`
  *                    blocks, live on the Outline route (`lib/outline/toc.ts`)
+ *   boards           `readBoardCoverage` - accepted, proposed and drawn per
+ *                    scene, live on the Storyboard route
+ *                    (`lib/storyboard/coverage.ts`)
  *   credits          `readBalance` - the ledger, summed; never stored
  *
  * ## A scene row is a link to its heading
@@ -60,14 +69,79 @@ import { SidebarRows } from './sidebar-rows'
  * build". The v2 design draws it on every writing route and the client ruled
  * for the design (2026-09-16). It is the same per-project balance the
  * Production header spends; the caption says what a credit buys today.
+ *
+ * ## Production wears the same card with its own two slots
+ *
+ * `Route - Production v2.dc.html` draws this sidebar without the three
+ * rows: the title row, then `Scenes from script` (one row per scene with
+ * a progress bar), then the `Episode frames` widget. A layout that *is*
+ * the route hands both in as `slots` and this card draws them in place of
+ * the segment-driven group and widget, reading nothing the route does not
+ * need - the rows' metas, the outline and the board stay unread there.
+ *
+ * Characters (project-scoped) takes the same two slots and two more:
+ * `title` - the project's name with `+ New character`, in place of the
+ * episode's row - and `find`, the README's "recessed search field" the
+ * Characters mockup draws under it (`Find a character`) and the writing
+ * mockups do not. `aria-label`s follow: the card is the route's list, not
+ * an episode's.
  */
-export const Sidebar = async ({ context }: { readonly context: EpisodeContext }) => {
+export const Sidebar = async ({
+  context,
+  slots,
+}: {
+  readonly context: EpisodeContext
+  /** A route's own group and widget, in place of the writing sidebar's. Production; Characters adds its title row and find field. */
+  readonly slots?: {
+    readonly group: ReactNode
+    readonly widget: ReactNode
+    readonly title?: ReactNode
+    readonly find?: ReactNode
+    /** The list's accessible name: `Cast`. Default `Episode scenes`. */
+    readonly label?: string
+  }
+}) => {
   const { scope, project, episode, address, shape } = context
-  const [meta, scenes, balance, toc] = await Promise.all([
+  const title = shape === 'episodic' ? (
+    <EpisodeTitleRow
+      projectId={project.id}
+      slug={episode.slug}
+      ordinal={episode.ordinal}
+      title={episode.title}
+      nextOrdinal={(context.episodes.at(-1)?.ordinal ?? 0) + 1}
+    />
+  ) : (
+    <div className="flex flex-none items-center gap-[6px] pb-[10px] pl-[12px] pr-[12px] pt-[14px]">
+      <span className="min-w-0 flex-1 truncate text-14 font-medium tracking-title">{project.title}</span>
+    </div>
+  )
+
+  if (slots !== undefined) {
+    return (
+      <aside
+        data-sidebar
+        aria-label={slots.title === undefined ? 'Episode' : project.title}
+        style={{ width: SIDEBAR_WIDTH }}
+        className="relative z-[2] flex min-h-0 flex-none flex-col pb-[10px] pr-[10px] pt-[10px]"
+      >
+        <div className="folio-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-panel">
+          {slots.title ?? title}
+          {slots.find}
+          <nav aria-label={slots.label ?? 'Episode scenes'} className="flex min-h-0 flex-1 flex-col gap-[4px] overflow-y-auto px-[8px] pb-[12px]">
+            {slots.group}
+          </nav>
+          <div className="flex-none px-[10px] pb-[12px] pt-[10px]">{slots.widget}</div>
+        </div>
+      </aside>
+    )
+  }
+
+  const [meta, scenes, balance, toc, coverage] = await Promise.all([
     readEpisodeNavMeta(scope, episode.id, project.format),
     listEpisodeScenes(scope, episode.id, project.format),
     readBalance(scope),
     loadOutlineToc(scope, episode),
+    readBoardCoverage(scope, episode.id),
   ])
 
   const rows = SIDEBAR.map((item) => ({
@@ -88,19 +162,7 @@ export const Sidebar = async ({ context }: { readonly context: EpisodeContext })
       className="relative z-[2] flex min-h-0 flex-none flex-col pb-[10px] pr-[10px] pt-[10px]"
     >
       <div className="folio-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-panel">
-        {shape === 'episodic' ? (
-          <EpisodeTitleRow
-            projectId={project.id}
-            slug={episode.slug}
-            ordinal={episode.ordinal}
-            title={episode.title}
-            nextOrdinal={(context.episodes.at(-1)?.ordinal ?? 0) + 1}
-          />
-        ) : (
-          <div className="flex flex-none items-center gap-[6px] pb-[10px] pl-[12px] pr-[12px] pt-[14px]">
-            <span className="min-w-0 flex-1 truncate text-14 font-medium tracking-title">{project.title}</span>
-          </div>
-        )}
+        {title}
 
         <nav aria-label="Episode routes" className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-[8px] pb-[12px]">
           <SidebarRows rows={rows} />
@@ -110,22 +172,12 @@ export const Sidebar = async ({ context }: { readonly context: EpisodeContext })
             scriptHref={scriptHref}
             title={episode.title}
             initialToc={toc === null ? null : toc.map((heading) => ({ id: heading.id as string, text: heading.text, level: heading.level }))}
+            initialCoverage={coverage}
           />
         </nav>
 
         <div className="flex-none px-[10px] pb-[12px] pt-[10px]">
-          <div data-credits-card className="flex flex-col gap-[7px] rounded-card border border-line2 bg-s1 px-[12px] py-[11px]">
-            <div className="flex items-baseline justify-between">
-              <span className="text-12 text-ink2">Credits</span>
-              <span className="tabular text-13 font-medium">{balance.available.toLocaleString('en-US')}</span>
-            </div>
-            <div className="h-[4px] overflow-hidden rounded-[3px] bg-s3">
-              <div className="h-full rounded-[3px] bg-accent" style={{ width: `${String(Math.round(share * 100))}%` }} />
-            </div>
-            <span className="text-11 text-ink3">
-              ≈ {frames.toLocaleString('en-US')} {frames === 1 ? 'frame' : 'frames'} · no expiry
-            </span>
-          </div>
+          <SidebarWidget credits={{ available: balance.available, share, frames }} initialCoverage={coverage} />
         </div>
       </div>
     </aside>

@@ -98,6 +98,14 @@ export type ShareLinkId = Branded<'ShareLinkId'>
 /** An assistant chat, per episode. See `assistant.ts`. */
 export type AssistantChatId = Branded<'AssistantChatId'>
 export type AssistantMessageId = Branded<'AssistantMessageId'>
+/** A research collection: a named, coloured group of sources. See `research.ts`. */
+export type ResearchCollectionId = Branded<'ResearchCollectionId'>
+/** A research source: an article, document, image set, interview or recording. See `research.ts`. */
+export type ResearchSourceId = Branded<'ResearchSourceId'>
+/** A clip: one highlighted line of a source. See `research.ts`. */
+export type ResearchClipId = Branded<'ResearchClipId'>
+/** A filing: a clip sent to a character, a location or a scene. See `research.ts`. */
+export type ResearchFilingId = Branded<'ResearchFilingId'>
 
 export const projectId = (raw: string): ProjectId => raw as ProjectId
 export const episodeId = (raw: string): EpisodeId => raw as EpisodeId
@@ -118,6 +126,10 @@ export const reelRenderId = (raw: string): ReelRenderId => raw as ReelRenderId
 export const shareLinkId = (raw: string): ShareLinkId => raw as ShareLinkId
 export const assistantChatId = (raw: string): AssistantChatId => raw as AssistantChatId
 export const assistantMessageId = (raw: string): AssistantMessageId => raw as AssistantMessageId
+export const researchCollectionId = (raw: string): ResearchCollectionId => raw as ResearchCollectionId
+export const researchSourceId = (raw: string): ResearchSourceId => raw as ResearchSourceId
+export const researchClipId = (raw: string): ResearchClipId => raw as ResearchClipId
+export const researchFilingId = (raw: string): ResearchFilingId => raw as ResearchFilingId
 
 // ---------------------------------------------------------------------------
 // The schemas
@@ -160,6 +172,10 @@ export const ReelRenderIdSchema = brandedUuid(reelRenderId)
 export const ShareLinkIdSchema = brandedUuid(shareLinkId)
 export const AssistantChatIdSchema = brandedUuid(assistantChatId)
 export const AssistantMessageIdSchema = brandedUuid(assistantMessageId)
+export const ResearchCollectionIdSchema = brandedUuid(researchCollectionId)
+export const ResearchSourceIdSchema = brandedUuid(researchSourceId)
+export const ResearchClipIdSchema = brandedUuid(researchClipId)
+export const ResearchFilingIdSchema = brandedUuid(researchFilingId)
 
 // The five brands the pure core owns must survive the round trip through Zod.
 // If one of these stops compiling, a schema has started minting its own brand

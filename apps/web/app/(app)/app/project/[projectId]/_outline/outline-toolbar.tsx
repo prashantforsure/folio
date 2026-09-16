@@ -1,10 +1,11 @@
 'use client'
 
 import { Icon } from '@folio/ui'
-import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
-import { memo, useEffect, useRef, useState } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
+import { memo, useRef, useState } from 'react'
 
 import type { RevisionRow } from '../../../../../../lib/script/panel'
+import { useDismiss } from '../_chrome/use-dismiss'
 
 /**
  * The Outline route's toolbar row - `docs/ui design/Route - Outline v2.dc.html`:
@@ -27,24 +28,6 @@ import type { RevisionRow } from '../../../../../../lib/script/panel'
 
 const keepCaret = (event: ReactMouseEvent): void => {
   event.preventDefault()
-}
-
-const useDismiss = (open: boolean, close: () => void, root: RefObject<HTMLDivElement | null>): void => {
-  useEffect(() => {
-    if (!open) return undefined
-    const onDown = (event: MouseEvent): void => {
-      if (root.current !== null && event.target instanceof Node && !root.current.contains(event.target)) close()
-    }
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') close()
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [close, open, root])
 }
 
 export const OutlineDocumentMenu = memo(

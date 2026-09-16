@@ -2,6 +2,7 @@ import type {
   CharacterColor,
   CharacterGender,
   CharacterProfileEdit,
+  CharacterStatus,
   EpisodeSlug,
   Timestamp,
 } from '@folio/contracts'
@@ -89,6 +90,9 @@ export type CharacterRecordRow = {
   readonly role: string | null
   readonly bio: string | null
   readonly appearance: string | null
+  readonly status: CharacterStatus
+  readonly wants: string | null
+  readonly needs: string | null
   readonly portraitKey: string | null
   readonly createdAt: Timestamp
   /** Null until the first derivation pass after the record was made by hand. */
@@ -125,6 +129,9 @@ export const listCharacterRecords = async (
     role: record.role,
     bio: record.bio,
     appearance: record.appearance,
+    status: record.status,
+    wants: record.wants,
+    needs: record.needs,
     portraitKey: record.portraitKey,
     createdAt: stamp(record.createdAt),
     derived:
@@ -345,6 +352,9 @@ const profileColumns = (edit: CharacterProfileEdit) => ({
   ...(edit.role === undefined ? {} : { role: blank(edit.role) }),
   ...(edit.bio === undefined ? {} : { bio: blank(edit.bio) }),
   ...(edit.appearance === undefined ? {} : { appearance: blank(edit.appearance) }),
+  ...(edit.status === undefined ? {} : { status: edit.status }),
+  ...(edit.wants === undefined ? {} : { wants: blank(edit.wants) }),
+  ...(edit.needs === undefined ? {} : { needs: blank(edit.needs) }),
 })
 
 /** Write the fields present in `edit`, whole. `false` when the record is not here. */

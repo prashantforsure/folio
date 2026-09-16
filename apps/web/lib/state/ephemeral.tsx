@@ -49,6 +49,14 @@ export const CONTEXT_OVERLAYS = ['characters'] as const
 
 export type ContextOverlay = (typeof CONTEXT_OVERLAYS)[number]
 
+/**
+ * A question handed to the assistant by a route - Production's `Suggest
+ * rewrite` on a refused shot writes the refusal here and opens the panel,
+ * which reads it into its composer once and clears it. Ephemeral for the
+ * overlay's reason: a prompt that survived a route change would land in a
+ * chat about something else. It widens nothing: the panel reads the script
+ * as before, and the writer still presses send.
+ */
 type EphemeralValue = {
   readonly paletteOpen: boolean
   readonly setPaletteOpen: (open: boolean) => void
@@ -57,6 +65,8 @@ type EphemeralValue = {
   readonly setAiScope: (scope: AiScope) => void
   readonly contextOverlay: ContextOverlay | null
   readonly setContextOverlay: (overlay: ContextOverlay | null) => void
+  readonly assistantPrompt: string | null
+  readonly setAssistantPrompt: (prompt: string | null) => void
 }
 
 const EphemeralContext = createContext<EphemeralValue | null>(null)
@@ -65,14 +75,25 @@ export const EphemeralProvider = ({ children }: { readonly children: ReactNode }
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [aiScope, setAiScope] = useState<AiScope>('scene')
   const [contextOverlay, setContextOverlay] = useState<ContextOverlay | null>(null)
+  const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null)
 
   const togglePalette = useCallback(() => {
     setPaletteOpen((open) => !open)
   }, [])
 
   const value = useMemo<EphemeralValue>(
-    () => ({ paletteOpen, setPaletteOpen, togglePalette, aiScope, setAiScope, contextOverlay, setContextOverlay }),
-    [paletteOpen, togglePalette, aiScope, contextOverlay],
+    () => ({
+      paletteOpen,
+      setPaletteOpen,
+      togglePalette,
+      aiScope,
+      setAiScope,
+      contextOverlay,
+      setContextOverlay,
+      assistantPrompt,
+      setAssistantPrompt,
+    }),
+    [paletteOpen, togglePalette, aiScope, contextOverlay, assistantPrompt],
   )
 
   return <EphemeralContext.Provider value={value}>{children}</EphemeralContext.Provider>

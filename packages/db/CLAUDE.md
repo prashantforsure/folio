@@ -18,7 +18,9 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0016` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0018` are applied to the dev Supabase project** and are forward-only;
+  `0019` is written and **not yet applied**. (`0017` and `0018` went in one `db:migrate` run on
+  2026-09-16: drizzle-kit applies every pending journal entry, there is no one-at-a-time.)
   `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
   `docs/build-decisions.md`); `0010` is the sanctioned `DROP TABLE beats`, alone in its file;
   `0013` is the sanctioned drop of the first Characters profile (nine columns, one table), on
@@ -27,7 +29,12 @@ authored / derived-cache / measurement. Touching `episodes` needs
   `shots.order_key` was; `0015` is the sanctioned drop of the five bible tables and their three
   enums, alone in its file, on the client's ruling ("Bible route removed" in git history);
   `0016` adds `share_links`, `assistant_chats` and `assistant_messages` for the v2 redesign's
-  first pass, RLS block hand-written on the `0014` pattern.
+  first pass, RLS block hand-written on the `0014` pattern; `0017` adds `characters.status`
+  (`character_status`: draft / defined / locked), `wants` and `needs` for the Characters v2 pass -
+  additive, generated with placeholder env values present (`generate` reads no socket); `0018`
+  adds `locations.status` (`location_status`: pending / scouted / locked), `address` and
+  `photo_key` for the Locations v2 pass and **drops `location_arc_notes`** - its only readers
+  were that route's own, so it goes the way `0015` went rather than the way `revisions` did.
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`
   when none is set. The only reader is `apps/web/lib/storage/r2.ts`. And `assistantEnv` -
   `ANTHROPIC_API_KEY`, optional, `null` when unset; the only reader is

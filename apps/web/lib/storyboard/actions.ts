@@ -292,6 +292,43 @@ export const moveShot = async (
   if (moved === null) return { status: 'error', message: await refusedWrite(scope, shot.id) }
   return sceneResult(scope, scene)
 }
+
+/**
+ * Put a shot at a place in its scene's list - the board card's drag
+ * (`cursor: grab` in the v2 mockup). `index` is where the shot lands among
+ * the scene's shots once it has been lifted out; past the end is the end.
+ * The same one-row write as `moveShot`, with the neighbours read from the
+ * list rather than from a direction.
+ */
+export const placeShot = async (
+  projectId: string,
+  episode: string,
+  rawShotId: string,
+  rawIndex: unknown,
+): Promise<SceneShotsResult> => {
+  const id = ShotIdSchema.safeParse(rawShotId)
+  const index = z.int().min(0).max(10_000).safeParse(rawIndex)
+  if (!id.success || !index.success) return { status: 'error', message: 'Place a shot at a position in its scene.' }
+  const gate = await openEpisode(projectId, episode)
+  if (isRefusal(gate)) return gate
+  const { scope } = gate
+
+  const shot = await readShot(scope, id.data)
+  if (shot === null) return { status: 'error', message: NOT_A_SHOT }
+  const scene = await readSceneHeader(scope, gate.episode.id, shot.sceneNodeId)
+  if (scene === null) return { status: 'error', message: NOT_A_SCENE }
+  const others = (await listSceneShots(scope, scene.sceneNodeId)).filter((entry) => entry.id !== shot.id)
+  const at = Math.min(index.data, others.length)
+  const before = others[at - 1]
+  const after = others[at]
+  const moved = await moveShotRow(scope, shot.id, {
+    before: before?.orderKey ?? null,
+    after: after?.orderKey ?? null,
+  })
+  if (moved === null) return { status: 'error', message: await refusedWrite(scope, shot.id) }
+  return sceneResult(scope, scene)
+}
+
 // ---------------------------------------------------------------------------
 // The frame
 // ---------------------------------------------------------------------------

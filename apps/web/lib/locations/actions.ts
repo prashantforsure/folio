@@ -1,6 +1,6 @@
 'use server'
 
-import { ArcNoteEditSchema, LocationEditSchema, LocationIdSchema, ParentEditSchema, TitleSchema } from '@folio/contracts'
+import { LOCATION_PHOTO_MAX_BYTES, LocationEditSchema, LocationIdSchema, ParentEditSchema, TitleSchema } from '@folio/contracts'
 import {
   bindSlugline,
   createLocationRecord,
@@ -16,10 +16,10 @@ import {
   renameLocationRecord,
   rewriteHeadingNodes,
   setLocationParent,
+  setLocationPhotoKey,
   snapshotVersion,
   unbindSlugline,
   updateLocationRecord,
-  writeLocationArcNote,
 } from '@folio/db'
 import type { HeadingNodeRewrite, ProjectScope } from '@folio/db'
 import type { LocationId, ProposalTarget, ResolveSubject } from '@folio/script'
@@ -29,6 +29,8 @@ import { z } from 'zod'
 
 import { isRefusal, openProject } from '../script/gate'
 import { rederiveProject } from '../script/server'
+import { readImage, IMAGE_EXTENSION } from '../storage/image'
+import { deleteObject, publicUrl, putObject, storageAvailable } from '../storage/r2'
 import { wouldCycle } from './figures'
 import type {
   BindResult,
@@ -36,6 +38,7 @@ import type {
   DeleteResult,
   DeriveResult,
   MergeResult,
+  PhotoResult,
   RenameResult,
   ResolveResult,
   SavedResult,
@@ -50,8 +53,9 @@ import type {
  *
  * ## Which writes re-derive, and which do not
  *
- * A description, an arc note: authored data on the record, and nothing
- * about the script or the tree changed, so nothing is re-derived.
+ * A description, an address, a status, a photo: authored data on the
+ * record, and nothing about the script or the tree changed, so nothing is
+ * re-derived.
  *
  * Binding a set text, a queue decision, a merge, a rename, **and the tree
  * edge**: each changes what the next pass resolves or rolls up - a parent
@@ -68,6 +72,14 @@ import type {
  * headings change, a `before_rename` version is taken of every document it
  * touches, the headings are rewritten in one statement, and the count comes
  * back as the diff.
+ *
+ * ## A photo goes through the action, not past it
+ *
+ * The portrait's pattern (`lib/characters/actions.ts`): the file arrives as
+ * `FormData`, is read as an image by its bytes (`lib/storage/image.ts`),
+ * is put under `projects/<id>/locations/<id>/`, and only then does the row
+ * point at it; the old object is deleted after the row says so. No signed
+ * upload URL: the client never talks to the bucket.
  *
  * ## The tree is written here, by a person
  *
@@ -219,8 +231,12 @@ export const mergeLocations = async (projectId: string, rawLoser: string, rawWin
   const gate = await openProject(projectId)
   if (isRefusal(gate)) return gate
 
+  const before = (await listLocationRecords(gate.scope)).find((entry) => entry.id === loser)
   const merged = await mergeLocationRecords(gate.scope, loser, winner)
   if (!merged) return { status: 'error', message: REFUSED_LOCATION }
+  // The loser's photo has no card to sit on any more. Best effort: a failed
+  // delete leaves an orphan object, never a broken row.
+  if (before?.photoKey !== undefined && before.photoKey !== null && storageAvailable()) await deleteObject(before.photoKey)
   await rederiveProject(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'merged', into: winner }
@@ -232,6 +248,7 @@ export const deleteLocation = async (projectId: string, rawId: string): Promise<
   const gate = await openProject(projectId)
   if (isRefusal(gate)) return gate
 
+  const before = (await listLocationRecords(gate.scope)).find((entry) => entry.id === id)
   const outcome = await deleteAbsentLocation(gate.scope, id)
   if (outcome === 'missing') return { status: 'error', message: REFUSED_LOCATION }
   if (outcome === 'present') {
@@ -240,9 +257,53 @@ export const deleteLocation = async (projectId: string, rawId: string): Promise<
       message: 'This location is still in the script. Change its headings first, or merge the record into another.',
     }
   }
+  if (before?.photoKey !== undefined && before.photoKey !== null && storageAvailable()) await deleteObject(before.photoKey)
   await rederiveProject(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'deleted' }
+}
+
+// ---------------------------------------------------------------------------
+// The photo
+// ---------------------------------------------------------------------------
+
+/**
+ * Store a photo for a record. The file is the `photo` entry of the form
+ * data. See the header for the order of operations.
+ */
+export const uploadLocationPhoto = async (projectId: string, rawId: string, form: FormData): Promise<PhotoResult> => {
+  const id = parseId(rawId)
+  if (id === null) return { status: 'error', message: REFUSED_LOCATION }
+  if (!storageAvailable()) return { status: 'refused', message: 'Photo storage is not set up on this server yet.' }
+  const image = await readImage(form.get('photo'), LOCATION_PHOTO_MAX_BYTES, 'photo')
+  if (!image.ok) return { status: image.status, message: image.message }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+
+  const key = `projects/${gate.project.id}/locations/${id}/photo-${crypto.randomUUID()}.${IMAGE_EXTENSION[image.type]}`
+  const put = await putObject(key, image.bytes, image.type)
+  if (!put.ok) return { status: 'error', message: put.message }
+  const pointed = await setLocationPhotoKey(gate.scope, id, key)
+  if (!pointed.found) {
+    await deleteObject(key)
+    return { status: 'error', message: REFUSED_LOCATION }
+  }
+  if (pointed.previous !== null && pointed.previous !== key) await deleteObject(pointed.previous)
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return { status: 'saved', url: publicUrl(key) }
+}
+
+export const removeLocationPhoto = async (projectId: string, rawId: string): Promise<PhotoResult> => {
+  const id = parseId(rawId)
+  if (id === null) return { status: 'error', message: REFUSED_LOCATION }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+
+  const pointed = await setLocationPhotoKey(gate.scope, id, null)
+  if (!pointed.found) return { status: 'error', message: REFUSED_LOCATION }
+  if (pointed.previous !== null && storageAvailable()) await deleteObject(pointed.previous)
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return { status: 'saved', url: null }
 }
 
 // ---------------------------------------------------------------------------
@@ -288,23 +349,6 @@ export const unbindSluglineAlias = async (projectId: string, rawId: string, rawS
     return { status: 'refused', message: 'That is the only set text bound to this record. Rename the record, or merge it, instead.' }
   }
   await rederiveProject(gate.scope)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
-}
-
-// ---------------------------------------------------------------------------
-// Arc notes
-// ---------------------------------------------------------------------------
-
-export const saveArcNote = async (projectId: string, rawId: string, rawEdit: unknown): Promise<SavedResult> => {
-  const id = parseId(rawId)
-  const edit = ArcNoteEditSchema.safeParse(rawEdit)
-  if (id === null || !edit.success) return { status: 'error', message: 'A note is a line of text, up to 2000 characters.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  const written = await writeLocationArcNote(gate.scope, id, edit.data.episodeId, edit.data.text)
-  if (!written) return { status: 'error', message: REFUSED_LOCATION }
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'saved' }
 }

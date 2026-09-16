@@ -179,7 +179,7 @@ describe('reelGates', () => {
     const gates = reelGates(reel(shots), input)
     expect(gates.status).toBe('generating')
     expect(gates.canGenerate).toBe(false)
-    expect(describeReason(gates.reason)).toBe("Frames are generating. You can keep editing shots that haven't started.")
+    expect(describeReason(gates.reason)).toBe("You can keep editing shots that haven't started.")
   })
 
   it("a refused frame blocks the reel with the refusal in the writer's terms, until the shot is rewritten", () => {
@@ -187,8 +187,10 @@ describe('reelGates', () => {
     const shots = [shot('01-01', { takes: [take(drawn())] }), shot('01-02', { takes: [take(refused, T1)], updatedAt: T0 }), shot('01-03')]
     const gates = reelGates(reel(shots), input)
     expect(gates.status).toBe('blocked')
-    expect(describeReason(gates.reason)).toBe(
-      "Shot 01-02 can't be rendered: It describes an injury. Fix it and the rest of the reel generates.",
+    expect(gates.reason).toEqual({ kind: 'blocked', shotNumber: '01-02', reason: 'It describes an injury.', remaining: 1 })
+    expect(describeReason(gates.reason)).toBe('Shot 01-02 is blocked. Rewrite it to generate the remaining 1 frame.')
+    expect(describeReason({ kind: 'blocked', shotNumber: '01-02', reason: 'It describes an injury.', remaining: 0 })).toBe(
+      'Shot 01-02 is blocked. Rewrite it to generate its frame.',
     )
     const rewritten = shots.map((entry) => (entry.number === '01-02' ? { ...entry, updatedAt: T2 } : entry))
     const after = reelGates(reel(rewritten), input)
@@ -244,7 +246,7 @@ describe('reelGates', () => {
     const gates = reelGates(reel(threeDrawn(), { finalizedAt: T1, clip }), input)
     expect(gates.status).toBe('rendered')
     expect(gates.canRender).toBe(true)
-    expect(describeReason(gates.reason)).toBe('Rendered at 720p · 40 credits spent.')
+    expect(describeReason(gates.reason)).toBe('All 3 frames kept. Reel rendered at 720p.')
   })
 
   it('a failed or refused render stays finalized and says so', () => {

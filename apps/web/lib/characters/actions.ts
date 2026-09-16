@@ -392,6 +392,12 @@ const ChoiceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('new-record') }),
   /** "Not a character": this cue is nobody. Never ask again. */
   z.object({ kind: z.literal('walk-on') }),
+  /**
+   * "It's deliberate" on a conflict block (README, "Conflict blocks"): the
+   * spelling is not this record. Only that candidate is rejected; the next
+   * pass proposes the next one, or a new record, and the cue stays open.
+   */
+  z.object({ kind: z.literal('not-this'), id: CharacterIdSchema }),
 ])
 
 const isCueSubject = (value: unknown): value is Extract<ResolveSubject, { kind: 'cue' }> =>
@@ -427,6 +433,10 @@ export const resolveCue = async (projectId: string, rawKey: string, rawChoice: u
         verdict: 'rejected' as const,
         target: { kind: 'character' as const, id: candidate.id },
       })),
+    ])
+  } else if (choice.data.kind === 'not-this') {
+    await recordResolveDecisions(scope, subject, [
+      { verdict: 'rejected', target: { kind: 'character', id: choice.data.id } },
     ])
   } else {
     const chosen: ProposalTarget | null =

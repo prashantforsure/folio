@@ -76,6 +76,25 @@
   --color-transparent: transparent;
   --color-current: currentColor;
 
+  /* The Storyboard's route tokens. See palette.css. */
+  --color-frame-ink: var(--frame-ink);
+  --color-frame-grid: var(--frame-grid);
+  --color-frame-badge: var(--frame-badge);
+  --color-frame-badge-ink: var(--frame-badge-ink);
+  --color-grid-dot: var(--grid-dot);
+  --color-shade: var(--shade);
+
+  /* The Production route's fifth hue. See palette.css. */
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --color-seg-1: var(--seg-1);
+  --color-seg-2: var(--seg-2);
+  --color-seg-3: var(--seg-3);
+  --color-seg-4: var(--seg-4);
+
+  /* The Research route's highlight wash. See palette.css. */
+  --color-mark: var(--mark);
+
   /* The aliases the unrebuilt routes still name. See palette.css. */
   --color-desk: var(--desk);
   --color-panel: var(--panel);
@@ -85,8 +104,6 @@
   --color-sheet-line: var(--sheet-line);
   --color-sheet-edge: var(--sheet-edge);
   --color-sel: var(--sel);
-  --color-frame-a: var(--frame-a);
-  --color-frame-b: var(--frame-b);
   --color-add: var(--add);
   --color-add-bg: var(--add-bg);
   --color-del: var(--del);
@@ -139,12 +156,16 @@
   --text-13: 13px;
   --text-13-5: 13.5px;
   --text-14: 14px;
+  /* 14.5px/500 is the Research library card's title (`Route - Research v2.dc.html`). */
+  --text-14-5: 14.5px;
   --text-15: 15px;
   --text-16: 16px;
   --text-17: 17px;
   --text-18: 18px;
   --text-20: 20px;
   --text-21: 21px;
+  /* 26px/300 is the Production route's stat tile figure (`Route - Production v2.dc.html`). */
+  --text-26: 26px;
   --text-27: 27px;
   /* 32px is the outline's title block (`Route - Outline v2.dc.html`), a step under the older 34. */
   --text-32: 32px;

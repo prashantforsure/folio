@@ -62,6 +62,9 @@ export const castRowOf = (record: CharacterRecordRow): CastRow => ({
   age: record.age,
   role: record.role,
   bio: record.bio,
+  status: record.status,
+  wants: record.wants,
+  needs: record.needs,
   portraitUrl: publicUrl(record.portraitKey),
   presence: record.derived?.presence ?? 'absent',
   appearances: record.derived?.appearances ?? 0,
@@ -90,10 +93,18 @@ export type CharactersLoad = {
   readonly map: CharacterMap
   /** Distinct counted spellings across every record - the footer's `N cues`. */
   readonly cueCount: number
-  /** Only with no record at all: how many a pass would derive. */
-  readonly derivable: number | null
+  /** Every scene heading as a ref - what the per-episode bars, `First` / `Last` and the arc join on. */
+  readonly index: readonly SceneRef[]
+  /** Only with no record at all: what a pass would derive - the count, and the three busiest cues. */
+  readonly derivable: Derivable | null
   /** Whether the five `R2_*` variables are set - whether Upload can be offered. */
   readonly storage: boolean
+}
+
+export type Derivable = {
+  readonly count: number
+  /** `MEERA · 79 scenes`, busiest first, at most three - the empty card's mono block. */
+  readonly top: readonly { readonly cue: string; readonly scenes: number }[]
 }
 
 export const loadCharacters = cache(async (context: ProjectContext): Promise<CharactersLoad> => {
@@ -151,17 +162,26 @@ export const loadCharacters = cache(async (context: ProjectContext): Promise<Cha
     resolve,
     map: buildMap(columns, scenesOf),
     cueCount: new Set(tallies.map((tally) => tally.cue)).size,
+    index: index.map(sceneRefOf),
     derivable,
     storage: storageAvailable(),
   }
 })
 
-/** With no record yet: how many a derivation pass over the script would mint. */
-const countDerivable = async (context: ProjectContext): Promise<number> => {
+/** With no record yet: what a derivation pass over the script would mint - the count and the busiest cues. */
+const countDerivable = async (context: ProjectContext): Promise<Derivable> => {
   const reads = await readDerivationReads(context.scope)
   const pass = deriveSpeculatively(reads)
-  if (pass === null) return 0
-  return pass.entities.characters.filter((record) => record.presence === 'present').length
+  if (pass === null) return { count: 0, top: [] }
+  const present = pass.entities.characters.filter((record) => record.presence === 'present')
+  const top = [...present]
+    .sort((a, b) => b.appearances - a.appearances || b.lines - a.lines)
+    .slice(0, 3)
+    .flatMap((record) => {
+      const cue = record.cues[0]?.cue ?? record.authored.name
+      return [{ cue, scenes: record.appearances }]
+    })
+  return { count: present.length, top }
 }
 
 export type ProfileLoad =

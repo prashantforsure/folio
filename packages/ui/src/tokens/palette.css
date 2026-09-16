@@ -136,6 +136,87 @@
 }
 
 /*
+ * The Storyboard's route tokens. `docs/ui design/Route - Storyboard v2.dc.html`
+ * declares six beyond the shared block, transcribed verbatim in the same
+ * three-block shape: the two stops of the placeholder frame gradient and the
+ * ink and grid drawn over it, the dot of the canvas ground, and the shadow
+ * under a canvas node and the zoom pill. They move with the theme.
+ */
+:root {
+  --frame-a: oklch(0.34 0.02 60);
+  --frame-b: oklch(0.16 0.01 60);
+  --frame-ink: rgba(255, 255, 255, 0.78);
+  --frame-grid: rgba(255, 255, 255, 0.08);
+  --grid-dot: rgba(255, 255, 255, 0.1);
+  --shade: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='light'] {
+  --frame-a: oklch(0.8 0.02 60);
+  --frame-b: oklch(0.58 0.02 60);
+  --frame-ink: rgba(255, 255, 255, 0.92);
+  --frame-grid: rgba(255, 255, 255, 0.22);
+  --grid-dot: rgba(20, 18, 14, 0.14);
+  --shade: rgba(20, 18, 14, 0.18);
+}
+
+/*
+ * The badge over a canvas node's frame (`WS · 24mm`). The mockup writes
+ * these two inline, once, with no light override - a dark scrim with light
+ * ink over a picture reads the same on either canvas - so they are named
+ * here rather than written in a component, and do not move with the theme.
+ */
+:root {
+  --frame-badge: rgba(0, 0, 0, 0.4);
+  --frame-badge-ink: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme='dark'] {
+  --frame-a: oklch(0.34 0.02 60);
+  --frame-b: oklch(0.16 0.01 60);
+  --frame-ink: rgba(255, 255, 255, 0.78);
+  --frame-grid: rgba(255, 255, 255, 0.08);
+  --grid-dot: rgba(255, 255, 255, 0.1);
+  --shade: rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * The Locations route's set gradient. `Route - Locations v2.dc.html` gives
+ * every place a hue and draws its tile, its sheet icon and its drawer tile as
+ * `linear-gradient(155deg, a, b 68%, c)` over three lightnesses that differ
+ * by theme (`grad(hue)` in its `renderVals`). The three stops are named
+ * here over `--set-hue`, which a component sets inline from the record; the
+ * lightness and chroma stay in this file, so the one value a component
+ * writes is an angle. The stops are a hair off the Characters mockup's
+ * (`--cast-l*`: 0.46 / 0.30 / 0.18 at +18 / +34), so they are their own
+ * tokens rather than a reuse that rounds. The scrim and the ink over a
+ * photo are the same values in both mockups and are the Characters tokens
+ * (`--cast-scrim-*`, `--cast-face-name`, `--cast-face-sub`); `--set-glyph`
+ * is the `⌖` over a photo, white at .55, and `--set-mark-ink` the `⌖` on the
+ * sheet's gradient square, white at .85; neither has a light override.
+ */
+:root {
+  --set-hue: 60;
+  --set-a: oklch(0.44 0.07 var(--set-hue));
+  --set-b: oklch(0.28 0.055 calc(var(--set-hue) + 16));
+  --set-c: oklch(0.16 0.04 calc(var(--set-hue) + 30));
+  --set-glyph: rgba(255, 255, 255, 0.55);
+  --set-mark-ink: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme='light'] {
+  --set-a: oklch(0.62 0.07 var(--set-hue));
+  --set-b: oklch(0.48 0.055 calc(var(--set-hue) + 16));
+  --set-c: oklch(0.38 0.04 calc(var(--set-hue) + 30));
+}
+
+[data-theme='dark'] {
+  --set-a: oklch(0.44 0.07 var(--set-hue));
+  --set-b: oklch(0.28 0.055 calc(var(--set-hue) + 16));
+  --set-c: oklch(0.16 0.04 calc(var(--set-hue) + 30));
+}
+
+/*
  * Derived tints. `color-mix` over the semantic colour, so a theme block above
  * moves them without repeating them - and so nobody writes a fifth hue by
  * hand when they need "a little of the warning colour behind a banner".
@@ -162,8 +243,6 @@
   --sheet-line: var(--line);
   --sheet-edge: var(--line2);
   --sel: var(--s2);
-  --frame-a: oklch(0.28 0.01 250);
-  --frame-b: oklch(0.14 0.005 250);
   --add: var(--ok);
   --add-bg: var(--ok-bg);
   --del: var(--live);
@@ -300,4 +379,160 @@
   --thread-ochre: oklch(0.78 0.09 75);
   --thread-violet: oklch(0.74 0.1 300);
   --thread-teal: oklch(0.74 0.09 200);
+}
+
+/*
+ * The Production route's tokens. `docs/ui design/Route - Production v2.dc.html`
+ * is the one mockup that declares a fifth hue beyond the README's four:
+ * `--bad`, red, for a refused shot, the frame it cannot have, and a reel
+ * that runs over its clip - things that are neither a decision waiting
+ * (amber) nor destructive or live (orange). Transcribed verbatim in the
+ * three-block shape; the README's "No other hues" and this mockup disagree,
+ * and the mockup is the spec for its route (recorded in
+ * `docs/build-decisions.md`, the Production phase). Nothing outside that
+ * route may reach for it.
+ */
+:root {
+  --bad: oklch(0.7 0.16 25);
+  --bad-bg: oklch(0.7 0.16 25 / 0.13);
+}
+
+[data-theme='light'] {
+  --bad: oklch(0.52 0.17 25);
+  --bad-bg: oklch(0.52 0.17 25 / 0.09);
+}
+
+[data-theme='dark'] {
+  --bad: oklch(0.7 0.16 25);
+  --bad-bg: oklch(0.7 0.16 25 / 0.13);
+}
+
+/*
+ * The four segment colours of a reel's timing bar - one per shot, cycling -
+ * as `Route - Production v2.dc.html` writes them inline (`segColors`), with
+ * no light override in the mockup. Named here so the bar reads a token.
+ */
+:root {
+  --seg-1: oklch(0.7 0.11 250);
+  --seg-2: oklch(0.74 0.11 150);
+  --seg-3: oklch(0.78 0.1 75);
+  --seg-4: oklch(0.7 0.12 300);
+}
+
+/*
+ * The Characters route's tokens. `docs/ui design/Route - Characters v2.dc.html`
+ * draws every identity mark - the sidebar chip, the graph node, the card's
+ * face with no portrait, the drawer's tile - as a gradient off one hue
+ * (`grad(hue)` in `renderVals`): three oklch stops whose lightness and
+ * chroma the theme sets and whose hue is the record's, at `+0`, `+18` and
+ * `+34`. The hue comes from the record's authored colour: `--chip-N-h` is
+ * the hue angle written in `--chip-N` above, so a record keeps one colour
+ * across the flat chip the other routes draw and the gradient this one
+ * does. `--cast-l*` / `--cast-c*` are the stops, transcribed verbatim;
+ * `--cast-h` is set per element and is not a palette colour.
+ *
+ * `--cast-face-ink` / `--cast-face-sub` / `--cast-scrim` are the ink and
+ * scrim over a real portrait - white on a picture, on either canvas, so no
+ * light override, like `--frame-badge`.
+ */
+:root {
+  --chip-1-h: 27;
+  --chip-2-h: 300;
+  --chip-3-h: 250;
+  --chip-4-h: 150;
+  --chip-5-h: 75;
+  --chip-6-h: 260;
+  --chip-7-h: 262;
+  --chip-8-h: 85;
+  --chip-9-h: 355;
+  --chip-10-h: 120;
+  --cast-l1: 0.46;
+  --cast-c1: 0.09;
+  --cast-l2: 0.3;
+  --cast-c2: 0.07;
+  --cast-l3: 0.18;
+  --cast-c3: 0.05;
+  --cast-face-ink: rgba(255, 255, 255, 0.88);
+  --cast-face-name: #fff;
+  --cast-face-sub: rgba(255, 255, 255, 0.72);
+  --cast-scrim-mid: rgba(0, 0, 0, 0.3);
+  --cast-scrim-end: rgba(0, 0, 0, 0.82);
+}
+
+[data-theme='light'] {
+  --cast-l1: 0.62;
+  --cast-l2: 0.48;
+  --cast-l3: 0.38;
+}
+
+[data-theme='dark'] {
+  --cast-l1: 0.46;
+  --cast-l2: 0.3;
+  --cast-l3: 0.18;
+}
+
+/*
+ * `--dot` is the dotted ground under the Characters relationships graph, as
+ * `Route - Characters v2.dc.html` declares it in its `:root` block - a
+ * fainter dot than the Storyboard canvas's `--grid-dot`, and a different
+ * token in the two mockups, so two tokens here.
+ */
+:root {
+  --dot: rgba(255, 255, 255, 0.055);
+}
+
+[data-theme='light'] {
+  --dot: rgba(20, 18, 14, 0.07);
+}
+
+[data-theme='dark'] {
+  --dot: rgba(255, 255, 255, 0.055);
+}
+
+/*
+ * The Research route's tokens. `docs/ui design/Route - Research v2.dc.html`
+ * declares one beyond the shared block - `--mark`, the amber wash behind a
+ * highlighted line in a source - and writes two families of hue inline in
+ * `renderVals`: a source *kind* is `oklch(L C H)` with `L`/`C` set by the
+ * theme (`.72 .11` dark, `.52 .14` light) and `H` per kind (`hueOf`), and a
+ * *collection* dot is the same shape at `.70 .10` / `.52 .10` with `H` per
+ * collection (`collHue`). The hues are transcribed verbatim; the lightness
+ * and chroma pairs move with the theme; `--src-h` / `--coll-h` are set per
+ * element from one of these and are not palette colours.
+ *
+ * `--src-media-h` is the mockup's `clip` kind ("Audio / video"), renamed with
+ * the contract so a source kind and a research clip are never one word.
+ */
+:root {
+  --mark: oklch(0.8 0.11 75 / 0.2);
+  --src-l: 0.72;
+  --src-c: 0.11;
+  --src-article-h: 60;
+  --src-document-h: 250;
+  --src-image-h: 150;
+  --src-interview-h: 300;
+  --src-media-h: 30;
+  --coll-l: 0.7;
+  --coll-c: 0.1;
+  --coll-sky-h: 210;
+  --coll-violet-h: 300;
+  --coll-cobalt-h: 250;
+  --coll-terracotta-h: 30;
+  --coll-moss-h: 150;
+}
+
+[data-theme='light'] {
+  --mark: oklch(0.78 0.13 80 / 0.32);
+  --src-l: 0.52;
+  --src-c: 0.14;
+  --coll-l: 0.52;
+  --coll-c: 0.1;
+}
+
+[data-theme='dark'] {
+  --mark: oklch(0.8 0.11 75 / 0.2);
+  --src-l: 0.72;
+  --src-c: 0.11;
+  --coll-l: 0.7;
+  --coll-c: 0.1;
 }
