@@ -83,6 +83,11 @@
   --color-frame-badge-ink: var(--frame-badge-ink);
   --color-grid-dot: var(--grid-dot);
   --color-shade: var(--shade);
+  --color-shot-scrim: var(--shot-scrim);
+  --color-shot-scrim-ink: var(--shot-scrim-ink);
+  --color-shot-over-ink: var(--shot-over-ink);
+  --color-shot-over-sub: var(--shot-over-sub);
+  --color-shot-chip: var(--shot-chip);
 
   /* The Production route's fifth hue. See palette.css. */
   --color-bad: var(--bad);

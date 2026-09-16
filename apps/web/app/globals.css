@@ -1568,8 +1568,22 @@ html[data-nav-open='false'] [data-context-column] {
  *                         on the current tab, `--ink2` otherwise, ink on hover.
  *   .folio-board-row      a scene row in the sidebar's `Boards` group: 8px
  *                         10px, a 10px radius, `--s2` while selected.
- *   .folio-shot-card      a board card: `--s1` on `--line2`, a 12px radius,
- *                         `--s2` on `--line` when hovered, `cursor: grab`.
+ *   .folio-shot-card      a board card (2026-09-17, frame-first): a link to
+ *                         the canvas drawn as the card - the column's width
+ *                         at 16:9, `--s1` on `--line2`, a 12px radius,
+ *                         `cursor: grab`; `flex-shrink: 0` so the scrolling
+ *                         column cannot crush its aspect height. Its layers
+ *                         sit in `.folio-shot-clip` (the clip, so the drop
+ *                         line above can still draw outside): `.folio-shot-
+ *                         media` full-bleed, `.folio-shot-pill` the number
+ *                         and `.folio-shot-mark` the text mark on `--shot-
+ *                         scrim`, `.folio-shot-over` the detail overlay -
+ *                         description, `.folio-shot-chip`s, `.folio-shot-
+ *                         camera`. Hover is CSS alone: the media scales and
+ *                         blurs, the overlay fades up, the mark fades out,
+ *                         the card lifts 1px onto `--line`; 300ms ease-in-out
+ *                         on transform, filter, opacity and border-color only.
+ *                         `:focus-visible` reveals the same, for the keyboard.
  *   .folio-drop-before    the accent line a dragged card will land at.
  *   .folio-shot-node      a canvas node: 306px, `--sunk`, a 14px radius and
  *                         the `--shade` shadow.
@@ -1657,21 +1671,137 @@ html[data-nav-open='false'] [data-context-column] {
   }
 
   .folio-shot-card {
+    position: relative;
+    display: block;
+    flex-shrink: 0;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    padding: 0;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-card);
     cursor: grab;
     text-align: left;
+    color: var(--ink);
+    text-decoration: none;
+    transition:
+      transform 300ms ease-in-out,
+      border-color 300ms ease-in-out;
   }
 
-  .folio-shot-card:hover {
-    background: var(--s2);
+  .folio-shot-card:hover,
+  .folio-shot-card:focus-visible {
+    transform: translateY(-1px);
     border-color: var(--line);
+    color: var(--ink);
+    text-decoration: none;
   }
 
-  .folio-shot-card[data-shot-state='proposed']:hover {
+  .folio-shot-card[data-shot-state='proposed'] {
+    border-style: dashed;
     border-color: var(--warn);
   }
 
   .folio-shot-card:active {
     cursor: grabbing;
+  }
+
+  .folio-shot-clip {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: calc(var(--radius-card) - 1px);
+  }
+
+  .folio-shot-media {
+    position: absolute;
+    inset: 0;
+    transition:
+      transform 300ms ease-in-out,
+      filter 300ms ease-in-out;
+  }
+
+  .folio-shot-card:hover .folio-shot-media,
+  .folio-shot-card:focus-visible .folio-shot-media {
+    transform: scale(1.03);
+    filter: blur(2px) brightness(0.5);
+  }
+
+  .folio-shot-pill,
+  .folio-shot-mark {
+    position: absolute;
+    top: 9px;
+    background: var(--shot-scrim);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+
+  .folio-shot-pill {
+    left: 9px;
+    padding: 3px 8px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-size: var(--text-10-5);
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    color: var(--shot-scrim-ink);
+  }
+
+  .folio-shot-mark {
+    right: 9px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    color: var(--frame-badge-ink);
+    transition: opacity 300ms ease-in-out;
+  }
+
+  .folio-shot-card:hover .folio-shot-mark,
+  .folio-shot-card:focus-visible .folio-shot-mark {
+    opacity: 0;
+  }
+
+  .folio-shot-over {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px;
+    pointer-events: none;
+    background: linear-gradient(to top, var(--shot-over-a), var(--shot-over-b) 55%, var(--shot-over-c));
+    opacity: 0;
+    transform: translateY(6px);
+    transition:
+      opacity 300ms ease-in-out,
+      transform 300ms ease-in-out;
+  }
+
+  .folio-shot-card:hover .folio-shot-over,
+  .folio-shot-card:focus-visible .folio-shot-over {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .folio-shot-chip {
+    padding: 2px 7px;
+    border-radius: var(--radius-pill);
+    background: var(--shot-chip);
+    font-size: var(--text-10-5);
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--shot-scrim-ink);
+  }
+
+  .folio-shot-camera {
+    font-family: var(--font-mono);
+    font-size: var(--text-10);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--shot-over-sub);
   }
 
   .folio-drop-before::before,

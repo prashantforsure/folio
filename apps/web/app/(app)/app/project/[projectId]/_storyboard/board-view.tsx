@@ -1,16 +1,17 @@
 'use client'
 
 import type { ShotRow, StoryboardScene } from '@folio/contracts'
+import { SHOT_MOVEMENT_LABEL } from '@folio/script'
 import { Icon } from '@folio/ui'
 import Link from 'next/link'
 import type { DragEvent } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { dayNight, sceneNo, sceneSlug, sceneTone } from '../../../../../../lib/storyboard/board'
+import { dayNight, isDrawn, sceneNo, sceneSlug, sceneTone, shotStateLabel, shotTone } from '../../../../../../lib/storyboard/board'
 import { count } from '../../../../../../lib/workspace/format'
 import type { EpisodeRoutePath } from '../../../../../../lib/workspace/hrefs'
 import type { ViewProps } from './handlers'
-import { BLANK_SHOT, Description, FrameTile, NoShots, ShotEditor, TONE_DOT, editorActionsFor, frameNotice, lensLabel, sizeShort } from './shot-parts'
+import { BLANK_SHOT, Description, NoShots, ShotEditor, TONE_DOT, TONE_INK, frameNotice, lensLabel, mentionChips, sizeShort } from './shot-parts'
 
 /**
  * The board: one column per scene, scrolled sideways - `docs/ui design/Route -
@@ -20,15 +21,31 @@ import { BLANK_SHOT, Description, FrameTile, NoShots, ShotEditor, TONE_DOT, edit
  * `slug · DN`, and the count pill; the list scrolls inside the column; the
  * foot is `+ New shot`. After the last column, a dashed `+ New scene`.
  *
- * ## A card is a shot, and a shot is edited where it is
+ * ## A card is a shot, and a click opens it on the canvas
  *
  * The mockup draws no drawer and no buttons on a card - the card is
- * `cursor: grab`. So: dragging a card reorders it in its scene (the drop
- * lands it before the card under the pointer, or at the end); clicking one
- * turns it into the editor in place, whose footer holds every other action
- * (Remove / Discard on the left; Draw frame · N cr, Cancel frame or Accept
- * beside Save). A proposal is a card with an amber dashed tile and its
- * state in the eyebrow, so a decision waiting is visible without opening it.
+ * `cursor: grab`. Dragging a card reorders it in its scene (the drop lands
+ * it before the card under the pointer, or at the end). Clicking one is a
+ * link to the canvas view on its scene (ruled 2026-09-17; it opened the
+ * editor in place until then), where the shot is authored - the inline
+ * description, the `Lens` tab, `Generate`, `⋯ → Edit / Remove`. The board
+ * keeps one editor: `+ New shot`. A proposal is a card with an amber
+ * dashed border and `proposed` in its tile, so a decision waiting is
+ * visible without opening it.
+ *
+ * ## The card is the frame (2026-09-17)
+ *
+ * Ruled off the mockup's text card (label, number, size · lens, a 104×59
+ * thumbnail and two lines of description, all at once): the card is the
+ * frame at the column's width, 16:9, and its text is under the pointer.
+ * Three layers - the media, full bleed (the picture, or the dashed `no
+ * frame` tile with the job's state and any notice); the number pill and,
+ * when the shot says anything, a three-lines mark, always on top; and the
+ * detail overlay - description, `@` chips, `WS · 24MM · STATIC` - that the
+ * hover fades up while the media blurs and the mark fades out. The hover is
+ * CSS (`.folio-shot-card` in `globals.css`), never state: nothing
+ * re-renders on a mouseover. The overlay's text is in the DOM at rest, so
+ * the walk reads it without hovering.
  *
  * `+ New shot` opens the same editor as a new card at the foot of the list;
  * `+ New scene` links to the script, because a scene is a heading there and
@@ -79,7 +96,6 @@ const SceneColumn = ({ scene, view }: { readonly scene: StoryboardScene; readonl
   const selected = scene.sceneNodeId === view.selected
   const [collapsed, setCollapsed] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<string | null>(null)
   const [dropAt, setDropAt] = useState<number | null>(null)
   const shown = scene.shots.filter(view.visible)
   const proposals = scene.shots.filter((shot) => shot.state === 'proposed')
@@ -208,34 +224,12 @@ const SceneColumn = ({ scene, view }: { readonly scene: StoryboardScene; readonl
           ) : (
             shown.map((shot) => {
               const index = scene.shots.indexOf(shot)
-              return editing === shot.id ? (
-                <div key={shot.id} data-shot={shot.id} data-shot-state={shot.state} className="rounded-card border border-line bg-s1">
-                  <ShotEditor
-                    shot={shot}
-                    title={`Shot ${shot.number}`}
-                    labels={view.labels}
-                    book={view.book}
-                    pending={view.pending}
-                    {...editorActionsFor(shot, view)}
-                    onCancel={() => {
-                      setEditing(null)
-                    }}
-                    onSave={(edit) => {
-                      view.handlers.onSave(shot.id, edit)
-                      setEditing(null)
-                    }}
-                  />
-                </div>
-              ) : (
+              return (
                 <ShotCard
                   key={shot.id}
                   shot={shot}
-                  heading={scene.heading}
                   view={view}
                   dropBefore={dropAt === index}
-                  onOpen={() => {
-                    setEditing(shot.id)
-                  }}
                   onDragOver={(event) => {
                     if (!event.dataTransfer.types.includes(DRAG_TYPE)) return
                     event.stopPropagation()
@@ -313,39 +307,37 @@ const SceneColumn = ({ scene, view }: { readonly scene: StoryboardScene; readonl
 
 const ShotCard = ({
   shot,
-  heading,
   view,
   dropBefore,
-  onOpen,
   onDragOver,
   onDrop,
 }: {
   readonly shot: ShotRow
-  readonly heading: string
   readonly view: ViewProps
   readonly dropBefore: boolean
-  readonly onOpen: () => void
   readonly onDragOver: (event: DragEvent) => void
   readonly onDrop: (event: DragEvent) => void
 }) => {
-  const proposed = shot.state === 'proposed'
+  const { frame } = shot
+  // `Frames` off in Display hides the picture; the tile then says `drawn`.
+  const picture = view.display.frames && isDrawn(shot)
+  const label = shotStateLabel(shot)
+  const tone = shotTone(shot)
   const notice = frameNotice(shot)
+  const said = view.display.descriptions && shot.description.length > 0
+  const chips = mentionChips(shot.description, view.book)
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    // The canvas, on this shot's scene: the selection is state and survives the `?view=` change, as the column's `Open`.
+    <Link
+      href={view.canvasHref}
       data-shot={shot.id}
       data-shot-state={shot.state}
       data-shot-number={shot.number}
       draggable={!view.pending}
-      aria-label={`Shot ${shot.number}`}
-      className={`folio-shot-card relative flex flex-col gap-[9px] rounded-card border p-[12px] ${proposed ? 'border-dashed border-warn' : 'border-line2'} bg-s1 ${dropBefore ? 'folio-drop-before' : ''}`}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onOpen()
-        }
+      aria-label={`Shot ${shot.number} · open on the canvas`}
+      className={`folio-shot-card ${dropBefore ? 'folio-drop-before' : ''}`}
+      onClick={() => {
+        view.onSelect(shot.sceneNodeId)
       }}
       onDragStart={(event) => {
         event.dataTransfer.setData(DRAG_TYPE, shot.id)
@@ -354,30 +346,60 @@ const ShotCard = ({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <div className="flex gap-[11px]">
-        <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-          <span className="truncate text-10-5 font-medium uppercase tracking-[.09em] text-ink3">
-            {proposed ? 'Proposed · ' : ''}
-            {heading === '' ? 'No heading yet' : heading}
+      <div className="folio-shot-clip">
+        {/* Layer 1 - the media. */}
+        {picture && (frame.kind === 'drawn' || frame.kind === 'uploaded') ? (
+          <span data-frame={frame.kind} className="folio-shot-media folio-frame">
+            <span aria-hidden className="folio-frame-grid absolute inset-0" />
+            {/* A plain img: the frame is at a URL the worker or the upload wrote, not an asset Next can optimise. */}
+            <img src={frame.url} alt={`Frame for shot ${shot.number}`} className="absolute inset-0 h-full w-full object-cover" />
           </span>
-          <span className="text-14 font-medium text-ink">{shot.number}</span>
-          <span className="font-mono text-10-5 text-ink3">
-            {sizeShort(shot)} · {lensLabel(shot.lensMm)}
+        ) : (
+          <span data-frame={picture ? frame.kind : label} className="folio-shot-media">
+            <span className="absolute inset-[6px] flex flex-col items-center justify-center gap-[6px] rounded-[8px] border border-dashed border-line bg-s1 px-[16px]">
+              <span className={`font-mono text-10 tracking-[.06em] ${TONE_INK[tone]}`}>{label}</span>
+              {/* Why a frame failed or was refused is never hidden in a hover - it sits under the state. */}
+              {notice === null ? null : (
+                <span
+                  className={`folio-clamp-2 text-center text-11-5 leading-[1.45] ${frame.kind === 'failed' || frame.kind === 'blocked' ? 'text-live' : 'text-ink3'}`}
+                  data-frame-notice
+                >
+                  {notice}
+                </span>
+              )}
+            </span>
           </span>
-        </span>
-        {view.display.frames ? <FrameTile shot={shot} size="card" /> : null}
+        )}
+
+        {/* Layer 2 - what is always readable: the number, and that there is text. */}
+        <span className="folio-shot-pill">{shot.number}</span>
+        {said ? (
+          <span className="folio-shot-mark" data-shot-mark title="Has a description">
+            <Icon name="list" size={11} strokeWidth={1.7} />
+          </span>
+        ) : null}
+
+        {/* Layer 3 - the detail, under the pointer. */}
+        <div className="folio-shot-over" data-shot-detail>
+          {said ? (
+            <p className="folio-clamp-3 m-0 text-12-5 leading-[1.5] text-shot-over-ink" data-shot-description>
+              <Description content={shot.description} book={view.book} />
+            </p>
+          ) : null}
+          {chips.length > 0 ? (
+            <span className="flex flex-wrap gap-[6px]" data-shot-chips>
+              {chips.map((chip) => (
+                <span key={chip} className="folio-shot-chip">
+                  {chip}
+                </span>
+              ))}
+            </span>
+          ) : null}
+          <span className="folio-shot-camera" data-shot-camera>
+            {sizeShort(shot)} · {lensLabel(shot.lensMm)} · {SHOT_MOVEMENT_LABEL[shot.movement]}
+          </span>
+        </div>
       </div>
-      {view.display.descriptions && shot.description.length > 0 ? (
-        <p className="folio-clamp-2 m-0 text-13 leading-[1.5] text-ink2" data-shot-description>
-          <Description content={shot.description} book={view.book} />
-        </p>
-      ) : null}
-      {notice === null ? null : (
-        <p className={`m-0 text-11-5 leading-[1.45] ${shot.frame.kind === 'failed' || shot.frame.kind === 'blocked' ? 'text-live' : 'text-ink3'}`} data-frame-notice>
-          {notice}
-        </p>
-      )}
-    </div>
+    </Link>
   )
 }
-

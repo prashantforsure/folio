@@ -23,15 +23,20 @@ import type { WalkOptions } from '../playwright.config'
  *      characters the cues bound to. Nothing is counted until accepted; then
  *      the toolbar and the sidebar widget agree, and a reload reads
  *      the same rows back.
- *   3. **A shot is authored, in place.** A card opens into its editor: edit
- *      (lens, a description with an `@mention` resolved through the label
- *      book), drag to reorder, add by hand at the column's foot, remove from
- *      the editor's footer; the filter hides what has no frame.
+ *   3. **A card opens its canvas; the shot is authored there.** A click on
+ *      a board card lands on the canvas view with its scene selected
+ *      (2026-09-17 - until then the card became its editor in place); the
+ *      node's `⋯ → Edit` takes the lens and a description with an
+ *      `@mention` resolved through the label book, and the board card
+ *      reads it back in its overlay; drag to reorder on the board, add by
+ *      hand at the column's foot, remove from the node's `⋯`; the filter
+ *      hides what has no frame.
  *   4. **The frame names its cost, reserves it, and can be released.** The
- *      editor's draw button says the cost and, in its title, the balance;
+ *      node's `Generate` says the cost and, in its title, the balance;
  *      with no credits the server refuses with the numbers; with a grant on
  *      the ledger a click writes a queued job; a reload still shows it
- *      queued; cancelling releases it.
+ *      queued, on the canvas and on the board card's tile; cancelling
+ *      releases it.
  *   5. **Canvas and list draw the same rows.** The node's `⋯` moves it in
  *      the sequence; the zoom pill scales the world; a card dragged by its
  *      grip keeps its position across a reload while its number does not
@@ -272,22 +277,38 @@ test('a script is columns; Auto board proposes real mentions; accepting boards t
   }
 })
 
-test('a shot is authored: edit with an @mention, drag to reorder, add, remove, filter', async ({ page, account }) => {
+test('a card opens its canvas; a shot is authored: edit with an @mention, drag to reorder, add, remove, filter', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(storyboardUrl)
   await waitMounted(page)
+  const main = page.locator('main[data-route="storyboard"]')
   const column = page.locator('[data-scene-column]').nth(0)
   const shots = column.locator('[data-shot]')
+  const nodes = page.locator('[data-shot-node]')
+  const toBoard = async (): Promise<void> => {
+    await page.locator('[data-view-tab="board"]').click()
+    await expect(main).toHaveAttribute('data-sub-view', 'board')
+  }
   await expect(shots).toHaveCount(4)
 
-  // Edit: the lens and a description typed with @Meera, resolved through the label book.
+  // A card is a link to the canvas on its scene.
   await shots.nth(0).click()
-  const editor = column.locator('[data-shot-editor]')
+  await expect(main).toHaveAttribute('data-sub-view', 'canvas')
+  await expect(page.locator('[data-shot-count]')).toHaveText('Scene 01 · 4 shots')
+  await expect(nodes).toHaveCount(4)
+
+  // Edit there: the lens and a description typed with @Meera, resolved through the label book.
+  await nodes.nth(0).locator('[data-node-menu]').click()
+  await page.locator('[data-edit-shot]').click()
+  const editor = nodes.nth(0).locator('[data-shot-editor]')
   await expect(editor).toBeVisible()
   await editor.locator('[data-field="lens"]').fill('35')
   await editor.locator('[data-field="description"]').fill('Wide on @Meera by the kettle. @Nobody is not a record.')
   await editor.locator('[data-save-shot]').click()
   await waitSaved(page)
+
+  // The board card reads the same row: the lens in its camera line, the mention once, the text in its overlay.
+  await toBoard()
   await expect(shots.nth(0)).toContainText('35mm')
   await expect(shots.nth(0).locator('[data-mention="character"]')).toHaveCount(1)
   await expect(shots.nth(0).locator('[data-shot-description]')).toContainText('@Nobody is not a record.')
@@ -296,6 +317,7 @@ test('a shot is authored: edit with an @mention, drag to reorder, add, remove, f
   const secondId = await shots.nth(1).getAttribute('data-shot')
   await shots.nth(1).dragTo(shots.nth(0))
   await waitSaved(page)
+  await expect(main).toHaveAttribute('data-sub-view', 'board')
   await expect(shots.nth(0)).toHaveAttribute('data-shot', secondId ?? '')
   await expect(shots.nth(0)).toHaveAttribute('data-shot-number', '01-01')
   await expect(shots.nth(1)).toHaveAttribute('data-shot-number', '01-02')
@@ -313,10 +335,14 @@ test('a shot is authored: edit with an @mention, drag to reorder, add, remove, f
   await expect(shots.nth(4)).toContainText('CU ·')
   await expect(page.locator('[data-shot-count]')).toHaveText('5 shots')
 
-  // Remove it again, from its editor's footer.
+  // Remove it again: its card opens the canvas, and the node's `⋯ → Remove` takes it away.
   await shots.nth(4).click()
-  await column.locator('[data-shot-editor] [data-delete-shot]').click()
+  await expect(main).toHaveAttribute('data-sub-view', 'canvas')
+  await expect(nodes).toHaveCount(5)
+  await nodes.nth(4).locator('[data-node-menu]').click()
+  await page.locator('[data-delete-shot]').click()
   await waitSaved(page)
+  await toBoard()
   await expect(shots).toHaveCount(4)
   await expect(page.locator('[data-shot-count]')).toHaveText('4 shots')
 
@@ -332,27 +358,22 @@ test('a shot is authored: edit with an @mention, drag to reorder, add, remove, f
 
 test('the frame names its cost, refuses without credits, reserves with them, and releases on cancel', async ({ page, account }) => {
   await signIn(page, account)
-  await page.goto(storyboardUrl)
+  await page.goto(`${storyboardUrl}?view=canvas`)
   await waitMounted(page)
-  const column = page.locator('[data-scene-column]').nth(0)
-  const shots = column.locator('[data-shot]')
-  const editor = column.locator('[data-shot-editor]')
-  const draw = editor.locator('[data-draw-frame]')
-  const closeEditor = async (): Promise<void> => {
-    await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
-  }
+  const main = page.locator('main[data-route="storyboard"]')
+  const nodes = page.locator('[data-shot-node]')
+  const generate = (index: number) => nodes.nth(index).locator('[data-generate-frame]')
+  await expect(nodes).toHaveCount(4)
 
-  await shots.nth(0).click()
-  cost = Number((await draw.getAttribute('data-cost')) ?? '0')
+  cost = Number((await generate(0).getAttribute('data-cost')) ?? '0')
   expect(cost).toBeGreaterThan(0)
-  await expect(draw).toContainText(`Draw frame · ${String(cost)} cr`)
-  await expect(draw).toHaveAttribute('title', `0 credits available · ${String(cost)} needed`)
+  await expect(generate(0)).toContainText(`Generate · ${String(cost)} cr`)
+  await expect(generate(0)).toHaveAttribute('title', `0 credits available · ${String(cost)} needed`)
 
   // No credits: the server refuses with the numbers; nothing is written.
-  await draw.click()
+  await generate(0).click()
   await expect(page.locator('[data-storyboard-error]')).toContainText(`Not enough credits: 0 available, ${String(cost)} needed`, { timeout: 60_000 })
-  await closeEditor()
-  await expect(shots.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
+  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
 
   // A grant on the ledger, as a purchase would leave one. Twice the cost.
   grantCredits(test.info().config.rootDir, projectId, cost * 2)
@@ -360,45 +381,43 @@ test('the frame names its cost, refuses without credits, reserves with them, and
   await waitMounted(page)
 
   // Reserve then execute: the job is queued and the balance drops by exactly the cost.
-  await shots.nth(0).click()
-  await expect(draw).toHaveAttribute('title', `Reserves ${String(cost)} credits · ${String(cost * 2)} available`)
-  await draw.click()
+  await expect(generate(0)).toHaveAttribute('title', `Reserves ${String(cost)} credits · ${String(cost * 2)} available`)
+  await generate(0).click()
   await waitSaved(page)
-  await expect(editor.locator('[data-cancel-frame]')).toBeVisible()
-  await closeEditor()
-  await expect(shots.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await expect(shots.nth(0)).toContainText(`Queued · ${String(cost)} credits reserved`)
+  await expect(nodes.nth(0).locator('[data-cancel-frame]')).toBeVisible()
+  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
+  await expect(nodes.nth(0)).toContainText(`Queued · ${String(cost)} credits reserved`)
 
-  // Survives a closed tab: the job row is the truth.
+  // Survives a closed tab: the job row is the truth - on the canvas, and in the board card's tile.
   await page.reload()
   await waitMounted(page)
+  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
+  await page.locator('[data-view-tab="board"]').click()
+  await expect(main).toHaveAttribute('data-sub-view', 'board')
+  const shots = page.locator('[data-scene-column]').nth(0).locator('[data-shot]')
   await expect(shots.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
+  await expect(shots.nth(0).locator('[data-frame-notice]')).toContainText(`Queued · ${String(cost)} credits reserved`)
+  // And the card opens its canvas.
+  await shots.nth(0).click()
+  await expect(main).toHaveAttribute('data-sub-view', 'canvas')
 
   // Cancel a queued job: released, and the balance comes back.
-  await shots.nth(0).click()
-  await editor.locator('[data-cancel-frame]').click()
+  await nodes.nth(0).locator('[data-cancel-frame]').click()
   await waitSaved(page)
-  await expect(draw).toHaveAttribute('title', `Reserves ${String(cost)} credits · ${String(cost * 2)} available`)
-  await closeEditor()
-  await expect(shots.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'cancelled')
+  await expect(generate(0)).toHaveAttribute('title', `Reserves ${String(cost)} credits · ${String(cost * 2)} available`)
+  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'cancelled')
 
   // Two more reservations exhaust the grant; a third is refused with the numbers.
-  await shots.nth(0).click()
-  await draw.click()
+  await generate(0).click()
   await waitSaved(page)
-  await closeEditor()
-  await expect(shots.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await shots.nth(1).click()
-  await draw.click()
+  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
+  await generate(1).click()
   await waitSaved(page)
-  await closeEditor()
-  await expect(shots.nth(1).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await shots.nth(2).click()
-  await expect(draw).toHaveAttribute('title', `0 credits available · ${String(cost)} needed`)
-  await draw.click()
+  await expect(nodes.nth(1).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
+  await expect(generate(2)).toHaveAttribute('title', `0 credits available · ${String(cost)} needed`)
+  await generate(2).click()
   await expect(page.locator('[data-storyboard-error]')).toContainText(`Not enough credits: 0 available, ${String(cost)} needed`, { timeout: 60_000 })
-  await closeEditor()
-  await expect(shots.nth(2).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
+  await expect(nodes.nth(2).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
 })
 
 test('canvas and list draw the same rows', async ({ page, account }) => {

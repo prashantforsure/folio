@@ -241,6 +241,68 @@ the board, the canvas (Storyboard and Lens tabs, the `⋯` menu) and the list's 
 
 ---
 
+## Redesign phase 3, third pass - the board card is the frame (2026-09-17)
+
+One component: the shot card inside a Boards-view scene column (`_storyboard/board-view.tsx`,
+`ShotCard`). The mockup's card is text-first - the scene heading as an eyebrow, the number,
+`WS · 24mm`, a 104×59 thumbnail beside them and two lines of description, all at once - and the
+client ruled it cluttered and replaced it with a frame-first card that reveals its text under the
+pointer. The canvas node, the list row, the column header and `FrameTile` are untouched; the
+card simply stops calling `FrameTile` and draws its own full-bleed media layer.
+
+The card is the column's width at 16:9, 12px radius on `--line2` over `--s1`, `cursor: grab`,
+`flex-shrink: 0` - the column is a scrolling flex column and without it the aspect height
+collapses to ~83px. Three layers: the media (the picture over the `--frame-a → --frame-b`
+gradient and the 3×3 grid, or the dashed tile with the job's state in mono - `no frame`,
+`queued`, `drawing`, `refused` - and, under it, the notice `frameNotice` gives, since a refusal's
+reason is never hidden in a hover); the number pill and, when the shot has a description, a
+three-lines mark (the icon set's `list`, at 11px), both on a blurred `--shot-scrim`; and the
+detail overlay - description clamped to three lines, `@` chips from `mentionChips`, and
+`WS · 24MM · STATIC` (size short · lens · movement) in mono. Hover is CSS alone
+(`.folio-shot-card` in `globals.css`): the media scales 1.03 and blurs 2px at half brightness,
+the overlay fades and rises 6px, the mark fades out, the card lifts 1px onto `--line`, all
+300ms ease-in-out on transform, filter, opacity and border-color only. `:focus-visible` reveals
+the same for the keyboard. Nothing re-renders on a mouseover.
+
+Three things settled on the way:
+
+- **The colours are tokens.** The brief wrote eight rgba values; AGENTS.md, Conventions puts every
+  colour in `packages/ui/src/tokens/`, so they are `--shot-scrim`, `--shot-scrim-ink`,
+  `--shot-over-a/b/c`, `--shot-over-ink`, `--shot-over-sub`, `--shot-chip` in `palette.css`,
+  beside `--frame-badge` and with the same argument for having no light override: light ink on
+  a dark scrim over a picture reads the same on either canvas. The mark's ink is
+  `--frame-badge-ink`, the same value.
+- **Chips are the label book's `@Name`, and there is no technique tag.** The brief named
+  `@ADE, @MAYA` plus a tag like `Handheld`. A shot has no tag field; movement is the closest real
+  thing and is already the camera line's third word, so it is not also a chip. The chips keep
+  the book's casing rather than upper-casing - the book is the one source for a label.
+- **The clip is an inner box.** `.folio-drop-before` draws its accent line 5px above the card;
+  `overflow: hidden` on the card itself would clip it, so the card stays visible-overflow and a
+  `.folio-shot-clip` at `inset: 0` clips the layers at the radius less the border.
+
+`Frames` off in Display hides the picture and the tile says `drawn`; `Descriptions` off hides
+the description and the mark together, since a mark for text the overlay will not show would
+mislead. The walk's selectors (`[data-shot]`, `[data-shot-number]`, `[data-frame]`,
+`[data-shot-description]`, `[data-mention]`, `[data-frame-notice]`) are all still on the card,
+and Playwright's `toContainText` reads `textContent`, so the overlay's `35mm` and `CU ·` match
+without a hover.
+
+**A click opens the canvas, not the editor** (ruled the same day, second ask). The card is a
+`Link` to `view.canvasHref` that selects its scene on the way - the column's `Open`, on every
+card - so a click lands on the canvas view with that scene fitted, where the shot is authored
+(the inline description, the `Lens` tab, `Generate`, `⋯ → Edit / Remove`). The board's in-place
+editor for an existing shot is gone with it (`editing` state, `editorActionsFor` import); `+ New
+shot` still opens one for a new card. Drag-reorder is unchanged - an `<a draggable>` carries the
+custom type as the `div` did. The walk's third and fourth tests now author from the canvas: a
+card click asserts `data-sub-view="canvas"` and `Scene 01 · 4 shots`, the lens and the `@Meera`
+description go in through the node's `⋯ → Edit` and are read back on the board card, Remove is
+the node's `⋯`, and the credits walk drives the node's `Generate` / `Cancel` (same `data-cost`
+and `title`) with the board card's tile checked once after the reload. Not landed on the
+specific shot: the canvas fits the scene, as `Open` does; centring on the clicked card would
+need a focus-shot state in the workspace and was not asked for.
+
+---
+
 ## Redesign phase 5, second pass - Characters: the rail is a link, the views are state (2026-09-16)
 
 Two client rulings on the built Characters route, both about where the address moves and where it

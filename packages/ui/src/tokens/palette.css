@@ -171,6 +171,25 @@
   --frame-badge-ink: rgba(255, 255, 255, 0.85);
 }
 
+/*
+ * The board card's layers over its frame (2026-09-17, ruled off the mockup's
+ * text card - `docs/build-decisions.md`, "Redesign phase 3"): the scrim
+ * under the number pill and the text mark, the three stops of the detail
+ * overlay's gradient, the ink and sub-ink on it, and the chip's wash. Light
+ * ink on a dark scrim over a picture, on either canvas - no light override,
+ * like `--frame-badge`; the mark's ink is `--frame-badge-ink`.
+ */
+:root {
+  --shot-scrim: rgba(8, 10, 13, 0.62);
+  --shot-scrim-ink: #fff;
+  --shot-over-a: rgba(8, 10, 13, 0.92);
+  --shot-over-b: rgba(8, 10, 13, 0.72);
+  --shot-over-c: rgba(8, 10, 13, 0.45);
+  --shot-over-ink: rgba(255, 255, 255, 0.92);
+  --shot-over-sub: rgba(255, 255, 255, 0.62);
+  --shot-chip: rgba(255, 255, 255, 0.14);
+}
+
 [data-theme='dark'] {
   --frame-a: oklch(0.34 0.02 60);
   --frame-b: oklch(0.16 0.01 60);
