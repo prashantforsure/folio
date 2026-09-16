@@ -11,8 +11,9 @@ history (`git show 7a541bd:docs/build-decisions.md`) and are not the reference f
 **The app is mid-redesign.** `docs/ui design/README.md` and the nine `Route - * v2.dc.html`
 mockups are the spec; routes are rebuilt to them one at a time. Done: the shell (rail, writing
 sidebar and header, assistant panel, Characters overlay), **Script**, **Outline**,
-**Storyboard**, **Production** and **Characters**. The other route bodies still draw their pre-redesign chrome
-inside the new shell until their own pass.
+**Storyboard**, **Production**, **Characters** and **Research** (the first built from nothing: no body,
+table or contract existed before its pass). The other route bodies still draw their pre-redesign
+chrome inside the new shell until their own pass.
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -57,11 +58,11 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   `packages/ui` — tokens as CSS custom properties, the inline SVG icon set (`icons.tsx`), and a
   few small components (`src/index.ts` is the list).
 - `apps/web` — auth, the home shell, the workspace chrome, and the built route bodies: Script,
-  Outline, Storyboard, Scenes, Characters, Locations, Timeline, Production — eight of the nine
-  routes (AGENTS.md, Architecture). Each has an `app/(app)/app/project/[projectId]/_<route>/`
+  Outline, Storyboard, Scenes, Characters, Locations, Timeline, Research, Production — all nine
+  (AGENTS.md, Architecture). Each has an `app/(app)/app/project/[projectId]/_<route>/`
   directory and a `lib/<route>/` with its actions. `lib/workspace/routes.ts` is the route tree;
-  `_chrome/project-shell.tsx` is the shell. Research and the `/settings` stub have no route body
-  yet. Production (v2, 2026-09-16) is the first route outside the writing surface on the shell:
+  `_chrome/project-shell.tsx` is the shell. The `/settings` stub has no route body. Production
+  (v2, 2026-09-16) is the first route outside the writing surface on the shell:
   `_chrome/production-layout.tsx` renders the same `Sidebar` (with the route's `slots`) and
   `WritingHeader` (with `route="production"`, so no mode pill) and the shared `_chrome/status-bar.tsx`
   and `_chrome/view-pill.tsx`. The assistant (`lib/assistant/`, `app/api/assistant/route.ts`) and share

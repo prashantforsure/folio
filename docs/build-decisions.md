@@ -28,6 +28,140 @@ at in the code today.
 
 ---
 
+## Redesign phase 7 - the Research route (2026-09-16)
+
+The seventh route rebuilt to the v2 package, and the first built from nothing: `docs/ui
+design/Route - Research v2.dc.html` on the shell phase 1 built, with no route body, no table and
+no contract before it (`schema/index.ts` listed "research sources" as deliberately absent). Three
+views - Library, Source, Clips - behind the toolbar's text pill; a source read at
+`/research/:uuid`; one drawer to add and edit. Built beside the Characters (phase 5) and
+Locations (phase 6) passes in the same working tree, on their shared pieces where those existed
+by the time this pass reached them. The mockup's `data()` was read for the shape the UI needs;
+every derived field it authors (`snippet`, `byline`, the `src · meta` line, `clips`, the highlight
+spans, the widget) is a pure function in `lib/research/view.ts`, tested, over the real rows.
+
+### Rulings taken this phase
+
+| Question | Ruling |
+| --- | --- |
+| The brief and the README's table say `Library · Source`; the mockup's `view` prop is `library \| source \| clips`, its pill has three tabs, the Source footer links `All clips →` and the widget counts filed clips | **The mockup.** Three views; `params.ts` already accepted the three. The same reading phases 5 and 6 took |
+| The mockup files clips to `Bible · Water · rule 3` and its empty copy says "file to the Bible, a character or a scene"; the Bible was removed (`0015`) | **Three targets: a character, a location, a scene.** `research_filing_kind` has no Bible value and the empty card's sentence reads "a character, a location or a scene" - specified copy, edited because it named a route that does not exist. Flagged |
+| How a source links to a scene; the README's citation pattern runs script → record | **Reversed, on purpose, and authored.** A clip comes from outside the script and cannot be derived, so its link is a filing on the clip's side: `research_clip_filings.scene_node_id`, the heading node's id with **no foreign key**, exactly `shots.scene_node_id` - a heading that leaves and returns by undo keeps its clips. Character and location filings are real keys and cascade. Nothing on the script side refers to a clip; the reverse read is one index (`research_clip_filings_scene_idx`) for a later route |
+| The route had no `:id` segment; the mockup's status bar writes `/research/<id>` | **`/research/:sourceId`**, the `/characters/:uuid` precedent, added on the brief's authority (AGENTS.md, When to ask first - a route segment). `?view=source` on the bare path goes to the first source, else back to the library; on a source's path the view is the source whatever the param says |
+| Conflict blocks and `Not on the page yet`: the brief names both; the mockup draws neither | **Not drawn.** A clip cannot disagree with the script; the mockup's equivalents are the drawer's `Not filed yet` and the dashed `Send to…`, and both are drawn. `citation-chips.tsx` and `conflict-block.tsx` are imported nowhere on this route |
+| The drawer's fields are Title · Type · Collection · Origin · Note; the brief expects a status control; the transcript the Source view reads arrives from nowhere | **The mockup's five, plus `Text`.** No status - the mockup has none and a source has no lifecycle to name. `Text` is the body: there is no file ingestion or page fetcher in this repository (either is a dependency and a product call), so the copy is typed or pasted. Flagged |
+| The card's snippet, the source's byline and the `src · meta` line are fixture text | **Derived.** Snippet = the body's first paragraph cut to a line (else the note); byline = the note (else the origin); the mono line = `origin · N words` (else the kind). AGENTS.md, "nothing is stored that can be computed" |
+| Collections: the mockup lists five with a hue each; it draws no way to make or delete one | **Made by naming, dropped by leaving.** The drawer's Collection select offers the project's, `No collection` and `New collection…` (a name, created with the save, coloured with the least-used of five closed names → `--coll-<name>-h`); the repository prunes a collection when its last source leaves it, in the same transaction. No standalone collection UI |
+| `Send to…` has no picker in the mockup; filings are plain spans; nothing unfiles or deletes a clip | **One popover, `_research/clip-menu.tsx`**, from three doors - a washed line in the source, a clip card's `Send to…` or chip, the drawer's clip row: `Filed to` chips with `×`, a find field over present scenes, live characters and live locations (a place already filed is not offered), `Remove clip`. The one addition past the mockup; a clip would otherwise be write-only. Flagged |
+| The mockup's `Clips` tab shows `Send to…` only while unfiled | **Kept.** A filed clip's chips open the same menu, so a second filing and unfiling are reachable without a second button |
+| The type button cycles the five kinds on click | **A menu** (`FilterMenu`, the shared piece), one click per kind - the shape phases 5 and 6 gave the same control |
+| The assistant's Research chips (`Pull clips from this source`, `Which clips aren't filed?`) need the assistant to read sources | **Not added.** "Widen what the AI can read" is an ask-first; the panel keeps its subhead, "Research sources are not readable yet". When that ruling comes, `research_sources.readable` is the per-source gate AGENTS.md already names - not added ahead of it |
+
+### Where the mockup disagrees with the shell
+
+- The mockup's sidebar title is the project's with `+` for `Add source`, and it draws the README's
+  search field (`Search sources and clips`). **The mockup's**, through the `Sidebar` slots; the
+  field narrows the library (title, origin, note, body) and the clips list (the line), and is not
+  drawn while the library is empty.
+- The mockup's view pill is a 2px-gap `--s1` pill; the shared text pill (`view-pill.tsx`, from
+  the Production mockup) has a 3px gap. **The shared component.**
+- The mockup's breadcrumb is `Monsoon Line / Research`, no episode. **`WritingHeader` with
+  `route="research"` and no `current`.**
+- The source page's title is the mockup's `h1`; the toolbar already carries the route's `h1`.
+  **An `h2` at the same 26px/400**, so the smoke test's one-`h1` contract holds.
+
+### What was built
+
+**Shared** - `_chrome/drawer-shell.tsx` (moved from `_characters/`, a `route` prop names the slot;
+the Characters copy is a one-line wrapper; the Locations pass took it up the same hour),
+`_chrome/find-field.tsx` (`FindProvider`, `FindField`, `useFind`), `_chrome/use-run.ts` (the
+save-indicator hook - written by both passes within minutes, one API). Reused from phases 5 and
+6 as they stand: `record-sidebar.tsx` (`RecordGroup` gains `empty` and `countAttr`),
+`record-toolbar.tsx` (`RecordToolbar.total` takes the mockup's worded chip; `NewButton` takes a
+label), `empty-card.tsx`, `view-pill.tsx`, `status-bar.tsx`, `use-dismiss.ts`, the
+`folio-drawer-*`, `folio-delete-button`, `folio-line-button`, `folio-menu` classes.
+
+**Tokens** - `--mark` (the mockup's own); `--src-l/c` with `--src-<kind>-h` and `--coll-l/c` with
+`--coll-<name>-h`, the two inline hue families transcribed as theme pairs and hue angles;
+`--text-14-5` (the card title). Composed in `globals.css` (`.folio-src-hue`, `.folio-src-bar`,
+`.folio-coll-dot`) and nowhere else.
+
+**Data** - migration `0019`: `research_collections`, `research_sources`, `research_clips`,
+`research_clip_filings`, three enums, RLS on the `0016` pattern. `@folio/contracts` `research.ts`:
+the kinds and their labels and glyphs, the five collection colours, `ResearchSourceEditSchema`
+(with `ResearchCollectionPickSchema`), `ResearchClipEditSchema`, `ResearchFilingTargetSchema`, and
+the read model (`ResearchSourceRow`, `ResearchClipRow`, `ResearchFilingRow`,
+`ResearchCollectionRow`); four id brands. `@folio/db` `repositories/research.ts`: every count is
+`count(*)`; a scene filing comes back as its node id (`StoredFiling`) and `lib/research/server.ts`
+joins it to the scene index. `lib/research/actions.ts`: `addSource`, `saveSource`,
+`removeSource`, `clipLine`, `removeClip`, `sendClip`, `unsendClip` - gate → repository → result,
+each revalidating the workspace layout. Nothing re-derives; nothing writes a node.
+
+**Body** - `_research/research-workspace.tsx` (toolbar, one of three views or the empty card,
+the status bar), `research-toolbar.tsx`, `library-view.tsx` (`minmax(268px, 1fr)`, the 3px hue
+strip, the kind badge, `❝ N`, two clamped lines each, the mono line and the collection pill, the
+dashed `+ Add source`), `source-view.tsx` (720px; the selection → `❝ Clip this line` pill →
+`clipLine`; a washed line is a button to the clip menu), `clips-view.tsx` (860px), `clip-menu.tsx`,
+`source-drawer.tsx` (add and edit), `research-sidebar.tsx`, `kind.tsx`, `empty-research.tsx`.
+`_chrome/research-layout.tsx` on the Characters layout's pattern; `research/layout.tsx`,
+`research/page.tsx`, `research/[sourceId]/page.tsx`. `lib/research/compose.ts` holds the drawer
+target and the collection filter as cells the layout and the page share.
+
+**Removed** - `_chrome/project-column-layout.tsx` and `_chrome/project-route-page.tsx` (Research
+was their only caller - checked); `CONTEXT_PANEL_WIDTH.research` and the research entry in
+`ContextColumn`'s route type; the walk's `column: context` row for the route.
+
+### Judgement calls, flagged
+
+- **A source's kind hue and a collection's dot** are `oklch(L C H)` with `L`/`C` from the theme
+  and `H` from the row, composed in three CSS classes. The mockup computes the same string in
+  `renderVals`; here the row names a hue token and the stylesheet does the arithmetic.
+- **`Paste a link` reads the clipboard** (`navigator.clipboard.readText`) and prefills the origin
+  when the browser allows it and the text is an `http(s)` URL; otherwise the drawer opens with
+  the origin focused. No fetch of the page.
+- **A clip is found again by text**, first occurrence, once per clip, overlapping later clips
+  losing. An edited body that no longer holds the line keeps the clip in the list without a
+  wash. Offsets were not stored: they go stale on the first edit and the text does not.
+- **`_characters/cast-sidebar.tsx`, `characters-toolbar.tsx`, `empty-characters.tsx`** still
+  carry their own copies of `find-field.tsx`, `record-sidebar.tsx`, `record-toolbar.tsx` and
+  `empty-card.tsx`. Not edited here: that directory was under the Characters pass's hand in the
+  same tree. Each is a one-import change.
+- **`lib/research/compose.ts` is a typed cell, not `createOpenCell`** - the drawer target carries
+  a payload (`new` with an origin, `edit` with an id) and the collection filter is an id. The
+  factory could grow a type parameter; left for whichever pass touches it next.
+- **A clip filed to a scene that later leaves the script** keeps its filing and reads
+  `Scene · not in the script`; the picker offers only present headings. Unfiling it is the
+  writer's, through the chip's `×`.
+
+### Not built, by ruling or by absence
+
+- File upload and page fetching for sources; the assistant reading a source (and with it the
+  `readable` gate); a per-source status; assistant chips for this route.
+- Renaming or recolouring a collection; a collection with no source in it.
+- A scene, character or location page listing the clips filed to it (the reverse read).
+
+### Verification
+
+- `pnpm typecheck` (all six), `pnpm lint` (all seven tasks) - clean.
+- `pnpm --filter @folio/db db:check` - journal clean with `0019` (generated with placeholder env
+  values present; `generate` opens no socket). **Applied** to the dev project with `db:migrate`
+  after the Characters pass had applied `0017` and `0018`; recorded in `packages/db/CLAUDE.md`.
+- `vitest run tests/research-view.test.ts` - 13 pass; `--environment node
+  tests/workspace-routes.test.ts` - 17 pass (jsdom does not start on local Node 22.5.1; the
+  known trap).
+- `pnpm --filter web build` - clean, both research routes in the manifest, the secret scan clean.
+- **`e2e/research-route.spec.ts` - 4 of 4 pass** against the user's `:3000` dev server with a
+  throwaway `e2e-research@example.com` account (made through the admin API; password not kept):
+  the shell and the empty card in both themes, `?view=grid` a 404, `?view=source` back to the
+  library; add a source through the drawer with a new collection and land on its page; the type
+  filter; a selection cuts a clip that washes the line, counts `❝ 1 clip` and `0 / 1`, lists in
+  Clips with `Send to…`, reads `Not filed yet` in the drawer, and is removed from the mark's
+  menu; delete takes the source and prunes its collection; the old URL is a 404. Screenshots in
+  `test-results/research-*.png`. Filing itself is not walked - the project has no script, cast or
+  set to file to; the menu's empty copy is what the walk checks.
+
+---
+
 ## Redesign phase 6 - the Locations route (2026-09-16)
 
 The sixth route rebuilt to the v2 package: `docs/ui design/Route - Locations v2.dc.html` on the

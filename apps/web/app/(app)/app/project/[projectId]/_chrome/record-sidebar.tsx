@@ -57,19 +57,27 @@ export const RecordGroup = ({
   label,
   total,
   attr,
+  countAttr,
+  empty,
   children,
 }: {
   readonly label: string
   readonly total: number
   readonly attr?: Record<`data-${string}`, string>
-  readonly children: ReactNode
+  /** The count's own data attribute, for a walk that reads it alone. */
+  readonly countAttr?: `data-${string}`
+  /** Drawn in place of the list when there is nothing to list - a `SidebarNote`. */
+  readonly empty?: ReactNode
+  readonly children?: ReactNode
 }) => (
   <div className="flex flex-col gap-[2px]" {...attr}>
     <div className="flex items-center pb-[6px] pl-[10px] pr-[10px]">
       <span className="folio-eyebrow flex-1">{label}</span>
-      <span className="tabular text-11 text-ink3">{count(total)}</span>
+      <span className="tabular text-11 text-ink3" {...(countAttr === undefined ? {} : { [countAttr]: '' })}>
+        {count(total)}
+      </span>
     </div>
-    <ul className="m-0 flex list-none flex-col gap-[2px] p-0">{children}</ul>
+    {empty ?? <ul className="m-0 flex list-none flex-col gap-[2px] p-0">{children}</ul>}
   </div>
 )
 

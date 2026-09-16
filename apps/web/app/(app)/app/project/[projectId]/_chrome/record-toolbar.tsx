@@ -31,7 +31,8 @@ export const RecordToolbar = ({
   children,
 }: {
   readonly title: string
-  readonly total: number
+  /** The count chip: a number, or the worded form a mockup writes (`8 sources`, `7 clips`). */
+  readonly total: number | string
   readonly countAttr: `data-${string}`
   readonly pill: ReactNode
   readonly attr: `data-${string}`
@@ -108,13 +109,22 @@ export const FilterMenu = <T extends string>({
   )
 }
 
-export const NewButton = ({ attr, onClick }: { readonly attr: `data-${string}`; readonly onClick: () => void }) => (
+export const NewButton = ({
+  attr,
+  label = '＋ New',
+  onClick,
+}: {
+  readonly attr: `data-${string}`
+  /** The mockup's label when it is not `＋ New`: `＋ Add source`. */
+  readonly label?: string
+  readonly onClick: () => void
+}) => (
   <button
     type="button"
     {...{ [attr]: '' }}
     onClick={onClick}
     className="folio-solid-button flex h-[34px] items-center gap-[7px] whitespace-nowrap rounded-[10px] px-[14px] text-12-5 font-medium"
   >
-    ＋ New
+    {label}
   </button>
 )

@@ -18,9 +18,9 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0018` are applied to the dev Supabase project** and are forward-only;
-  `0019` is written and **not yet applied**. (`0017` and `0018` went in one `db:migrate` run on
-  2026-09-16: drizzle-kit applies every pending journal entry, there is no one-at-a-time.)
+- **Migrations `0000`–`0019` are applied to the dev Supabase project** and are forward-only.
+  (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
+  pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
   `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
   `docs/build-decisions.md`); `0010` is the sanctioned `DROP TABLE beats`, alone in its file;
   `0013` is the sanctioned drop of the first Characters profile (nine columns, one table), on
@@ -34,7 +34,11 @@ authored / derived-cache / measurement. Touching `episodes` needs
   additive, generated with placeholder env values present (`generate` reads no socket); `0018`
   adds `locations.status` (`location_status`: pending / scouted / locked), `address` and
   `photo_key` for the Locations v2 pass and **drops `location_arc_notes`** - its only readers
-  were that route's own, so it goes the way `0015` went rather than the way `revisions` did.
+  were that route's own, so it goes the way `0015` went rather than the way `revisions` did;
+  `0019` adds the four Research tables (`research_collections`, `research_sources`,
+  `research_clips`, `research_clip_filings`) and three enums for the Research v2 pass - additive,
+  RLS block hand-written on the `0016` pattern; `research_clip_filings.scene_node_id` has no key,
+  as `shots.scene_node_id` (`schema/research.ts` says why).
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`
   when none is set. The only reader is `apps/web/lib/storage/r2.ts`. And `assistantEnv` -
   `ANTHROPIC_API_KEY`, optional, `null` when unset; the only reader is

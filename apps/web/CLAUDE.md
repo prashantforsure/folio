@@ -52,6 +52,16 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   publishes (`lib/storyboard/coverage.ts`), seeded by `readBoardCoverage`; every derived count
   and colour is `lib/storyboard/board.ts`, pure and tested. Toolbar dropdowns share
   `_chrome/use-dismiss.ts`. Details: `docs/build-decisions.md`, "Redesign phase 3".
+- **The Research route (v2, 2026-09-16):** `_research/research-workspace.tsx` is the body -
+  toolbar (the shared `_chrome/record-toolbar.tsx` pieces and `view-pill.tsx`), one of Library /
+  Source / Clips or the empty card, the status bar - and `_chrome/research-layout.tsx` the shell
+  on the Characters pattern, with the drawer (`_research/source-drawer.tsx`, the shared
+  `_chrome/drawer-shell.tsx` portalled into `#research-drawer`) mounted once in the layout and
+  opened through the cells in `lib/research/compose.ts`. The source being read is the path
+  (`/research/:sourceId`); a clip is cut from a text selection in `source-view.tsx` and found
+  again by text (`lib/research/view.ts`, `highlightParagraphs`); a filing points at a scene by
+  its heading node id with no key. Everything the route reads is one `cache()`d `loadResearch`.
+  Details: `docs/build-decisions.md`, "Redesign phase 7".
 - **The Script autosave is a delta and every write it runs is one statement.** Over the
   transaction pooler a parameterised statement costs two round trips and cannot be pipelined
   (`packages/db/src/client.ts`), so on the request path the cost is statement count, not row
