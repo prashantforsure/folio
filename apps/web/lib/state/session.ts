@@ -5,7 +5,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import type { StateStorage } from 'zustand/middleware'
 
 /**
- * Session flags. Four of them, per tab, in sessionStorage.
+ * Session flags. Five of them, per tab, in sessionStorage.
  *
  * AGENTS.md, Tech stack: "Client state | URL first, then React state | **Zustand
  * only for the agent window rect and session flags.**" This is the second half
@@ -14,8 +14,8 @@ import type { StateStorage } from 'zustand/middleware'
  *
  * ## What is in here, and what is deliberately not
  *
- * In: `zoom`, `navOpen`, `sideOpen`, `sideTab`. All four describe the geometry
- * of one window. They must survive a route change - AGENTS.md's shell brief is
+ * In: `zoom`, `navOpen`, `sideOpen`, `sideTab`, `assistantOpen`. All five
+ * describe the geometry of one window. They must survive a route change - AGENTS.md's shell brief is
  * explicit that "Panel show/hide and theme live HERE and persist across route
  * changes" - and they must not survive the tab, because a panel someone closed
  * three days ago is not a preference they were expressing.
@@ -54,10 +54,17 @@ type SessionState = {
   readonly navOpen: PanelState
   readonly sideOpen: PanelState
   readonly sideTab: SideTab
+  /**
+   * The 400px assistant panel (`docs/ui design/README.md`, "Panels"). Opened
+   * by the orb in every header and by `⌘J`; it is the same panel on every
+   * route, so whether it is open belongs to the window, like the sidebar.
+   */
+  readonly assistantOpen: PanelState
   readonly setZoom: (zoom: Zoom) => void
   readonly setNavOpen: (open: PanelState) => void
   readonly setSideOpen: (open: PanelState) => void
   readonly setSideTab: (tab: SideTab) => void
+  readonly setAssistantOpen: (open: PanelState) => void
   readonly toggleNav: () => void
   readonly toggleSide: () => void
 }
@@ -93,6 +100,7 @@ export const useSession = create<SessionState>()(
       navOpen: null,
       sideOpen: null,
       sideTab: 'info',
+      assistantOpen: null,
       setZoom: (zoom) => {
         set({ zoom })
       },
@@ -104,6 +112,9 @@ export const useSession = create<SessionState>()(
       },
       setSideTab: (sideTab) => {
         set({ sideTab })
+      },
+      setAssistantOpen: (assistantOpen) => {
+        set({ assistantOpen })
       },
       toggleNav: () => {
         set((state) => ({ navOpen: flip(state.navOpen) }))
@@ -137,6 +148,7 @@ export const useSession = create<SessionState>()(
         navOpen: state.navOpen,
         sideOpen: state.sideOpen,
         sideTab: state.sideTab,
+        assistantOpen: state.assistantOpen,
       }),
     },
   ),

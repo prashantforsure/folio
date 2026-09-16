@@ -11,11 +11,9 @@ import type { Anchor } from '../editor-store'
 /**
  * Where every floating surface is drawn, and how it is placed.
  *
- * One portal, on `document.body`, *outside* the desk. The desk is zoomed
- * with CSS `zoom`, and a menu rendered inside it would be scaled twice:
- * once by the zoom, once by the viewport rectangle it was placed from,
- * which is already in zoomed pixels. Out here `position: fixed` and the
- * rectangle agree.
+ * One portal, on `document.body`, *outside* the page's scroll container,
+ * so a menu is never clipped by the surface card's `overflow: hidden` and
+ * `position: fixed` and the viewport rectangle it was placed from agree.
  *
  * `Floating` takes an `Anchor` - a function returning the viewport rect
  * of the query, the segment or the caret, as the Suggestion plugin and
@@ -51,6 +49,7 @@ export const Floating = ({
   readonly 'data-picker'?: string
   readonly 'data-mode'?: string
   readonly 'data-mention-menu'?: string
+  readonly 'data-handle-menu'?: string
 }) => {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {

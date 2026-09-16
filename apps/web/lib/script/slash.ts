@@ -36,19 +36,19 @@ const ENTRY: Readonly<Record<ScreenplayNodeType, Omit<SlashEntry, 'type' | 'shor
   scene: {
     label: 'Scene heading',
     detail: 'INT./EXT. LOCATION - DAY',
-    glyph: '⌖',
+    glyph: '▤',
     keywords: ['scene', 'heading', 'slug', 'slugline', 'int', 'ext', 'location'],
   },
   action: {
     label: 'Action',
     detail: 'What we see and hear',
-    glyph: '¶',
+    glyph: 'T',
     keywords: ['action', 'description', 'text', 'prose', 'p'],
   },
   character: {
     label: 'Character',
     detail: 'Who speaks next',
-    glyph: '◍',
+    glyph: 'Aa',
     keywords: ['character', 'cue', 'name', 'speaker', 'cast'],
   },
   paren: {
@@ -60,25 +60,25 @@ const ENTRY: Readonly<Record<ScreenplayNodeType, Omit<SlashEntry, 'type' | 'shor
   dialogue: {
     label: 'Dialogue',
     detail: 'What they say',
-    glyph: '❝',
+    glyph: '❞',
     keywords: ['dialogue', 'dialog', 'line', 'speech', 'say'],
   },
   transition: {
     label: 'Transition',
     detail: 'CUT TO:',
-    glyph: '⇄',
+    glyph: '▥',
     keywords: ['transition', 'cut', 'fade', 'dissolve', 'smash', 'match'],
   },
   comment: {
     label: 'Comment',
     detail: 'A note - not exported, not paginated',
-    glyph: '✎',
+    glyph: '//',
     keywords: ['comment', 'note', 'todo', 'remark'],
   },
   subtitle: {
     label: 'Subtitle',
     detail: 'A caption or a translated line',
-    glyph: '▤',
+    glyph: '≡',
     keywords: ['subtitle', 'caption', 'title', 'super', 'translation'],
   },
 }

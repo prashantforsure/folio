@@ -10,9 +10,11 @@ import { describe, expect, it } from 'vitest'
 /**
  * The glyph set, checked against AGENTS.md rather than against itself.
  *
- * AGENTS.md, UI fidelity writes the set out:
+ * AGENTS.md, UI fidelity writes the set the unrebuilt routes still draw:
  *
- *     ✎ ◍ ⌖ ◷ ◈ ▧ ◎ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝
+ *     ✎ ◍ ⌖ ◷ ▧ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝
+ *
+ * (`◈` left with the Bible route, `◎` with Insights.)
  *
  * That line is transcribed below, in order, and compared. A test that iterated
  * `GLYPHS` and asserted things about whatever it found would keep passing after
@@ -28,9 +30,7 @@ const SPECIFIED = [
   '◍',
   '⌖',
   '◷',
-  '◈',
   '▧',
-  '◎',
   '▶',
   '☾',
   '☀',
@@ -44,7 +44,7 @@ const SPECIFIED = [
 ]
 
 describe('the glyph set', () => {
-  it('is exactly the seventeen characters AGENTS.md lists, in that order', () => {
+  it('is exactly the fifteen characters AGENTS.md lists, in that order', () => {
     expect(Object.values(GLYPHS)).toEqual(SPECIFIED)
   })
 
@@ -66,8 +66,8 @@ describe('the glyph set', () => {
 
   it('leaves every codepoint above U+2000, which is why --font-glyph has to exist', () => {
     // Not decoration. The `latin` and `latin-ext` subsets we self-host stop at
-    // U+2000-206F plus strays, so none of these is in Instrument Sans,
-    // Newsreader or Courier Prime. If a glyph ever falls inside that range the
+    // U+2000-206F plus strays, so none of these is in Geist, Geist Mono or
+    // Courier Prime. If a glyph ever falls inside that range the
     // note in `type.css` becomes wrong and should be corrected, not deleted.
     for (const glyph of SPECIFIED) {
       expect(glyph.codePointAt(0) ?? 0).toBeGreaterThan(0x2000)
@@ -77,7 +77,7 @@ describe('the glyph set', () => {
 
 describe('text presentation', () => {
   /*
-   * From Unicode's emoji-variation-sequences: of the seventeen, exactly U+25B6,
+   * From Unicode's emoji-variation-sequences: of the set, exactly U+25B6,
    * U+2600 and U+2699 have an emoji presentation. `☾` U+263E does NOT - the
    * confusable is U+263A, which is not in our set.
    */

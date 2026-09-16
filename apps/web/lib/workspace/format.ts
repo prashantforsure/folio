@@ -91,9 +91,20 @@ export const projectInitials = (title: string): string => {
   return `${(chars[0] ?? '').toUpperCase()}${chars[1] ?? ''}`
 }
 
-/** `E1`, `E12`. The episode board's number column. */
+/** `E1`, `E12`. The episode menu's number column. */
 export const episodeNumber = (ordinal: number): string => `E${String(ordinal)}`
 
-/** `Ep 1 · Standpipe`. The group label above the six rows. */
-export const episodeGroupLabel = (ordinal: number, title: string): string =>
-  `Ep ${String(ordinal)} · ${title}`
+/** `Episode 3` - what an episode is called until someone names it. */
+export const defaultEpisodeTitle = (ordinal: number): string => `Episode ${String(ordinal)}`
+
+/** Whether a title is the default for its ordinal, so the label need not say it twice. */
+export const isDefaultEpisodeTitle = (ordinal: number, title: string): boolean =>
+  title.trim().toLowerCase() === defaultEpisodeTitle(ordinal).toLowerCase()
+
+/**
+ * `Episode 1 · Standpipe`, as the Script mockup's sidebar title reads - or
+ * plain `Episode 1` while the episode has only its default name, rather
+ * than `Episode 1 · Episode 1`.
+ */
+export const episodeLabel = (ordinal: number, title: string): string =>
+  isDefaultEpisodeTitle(ordinal, title) ? defaultEpisodeTitle(ordinal) : `${defaultEpisodeTitle(ordinal)} · ${title.trim()}`

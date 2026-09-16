@@ -1,13 +1,15 @@
-import { GLYPHS } from '@folio/ui'
+import { ICONS } from '@folio/ui'
 import { projectId, episodeSlug } from '@folio/contracts'
 import { describe, expect, it } from 'vitest'
 
 import type { EpisodeNavMeta } from '@folio/contracts'
 
 import {
+  defaultEpisodeTitle,
   eighths,
-  episodeGroupLabel,
+  episodeLabel,
   episodeNumber,
+  isDefaultEpisodeTitle,
   navMeta,
   projectInitials,
 } from '../lib/workspace/format'
@@ -15,12 +17,16 @@ import { episodeRouteHref, projectHref, projectRouteHref } from '../lib/workspac
 import { parseSubViews, SUB_VIEW_SCHEMAS } from '../lib/workspace/params'
 import {
   CONTEXT_PANEL_WIDTH,
-  EPISODE_NAV,
-  EPISODE_NAV_WIDTH,
+  PANEL_WIDTH,
   RAIL,
+  RAIL_WIDTH,
+  SIDEBAR,
+  SIDEBAR_WIDTH,
   WORKSPACE_ROUTES,
   WORKSPACE_ROUTE_COUNT,
+  WRITING_ROUTES,
   railSectionOf,
+  writingModeOf,
 } from '../lib/workspace/routes'
 
 /**
@@ -30,7 +36,7 @@ import {
  */
 
 describe('the route tree', () => {
-  it('is ten routes under the rulings on decisions 5, 6 and assets', () => {
+  it('is nine routes under the rulings on decisions 5, 6, assets and the redesign', () => {
     expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
     expect(WORKSPACE_ROUTES).toEqual([
       'script',
@@ -42,64 +48,67 @@ describe('the route tree', () => {
       'locations',
       'timeline',
       'research',
-      'insights',
     ])
+    // Insights was removed with the v2 redesign (2026-09-16). Not one of the nine.
+    expect(WORKSPACE_ROUTES).not.toContain('insights')
     // Decision 6: cut. Not routes.
     expect(WORKSPACE_ROUTES).not.toContain('build')
     expect(WORKSPACE_ROUTES).not.toContain('search')
     // assets: reserved, no route.
     expect(WORKSPACE_ROUTES).not.toContain('assets')
-    // Settings is a stub, not one of the ten.
+    // Settings is a stub, not one of the nine.
     expect(WORKSPACE_ROUTES).not.toContain('settings')
-    // Bible was built, then cut 2026-09-15 - not one of the ten.
+    // Bible was built, then cut 2026-09-15 - not one of the nine.
     expect(WORKSPACE_ROUTES).not.toContain('bible')
   })
 })
 
 describe('the rail', () => {
-  it('is seven items, exactly this order, each with its specified glyph', () => {
-    expect(RAIL.map((item) => `${item.label} ${GLYPHS[item.glyph]}`)).toEqual([
-      'Writing ✎',
-      'Characters ◍',
-      'Locations ⌖',
-      'Timeline ◷',
-      'Research ▧',
-      'Insights ◎',
-      'Production ▶',
+  it('is six items in the README order, each with an icon in the set, and 56px', () => {
+    expect(RAIL.map((item) => `${item.label} ${item.icon}`)).toEqual([
+      'Writing writing',
+      'Characters characters',
+      'Locations locations',
+      'Timeline timeline',
+      'Research research',
+      'Production production',
     ])
+    for (const item of RAIL) expect(ICONS[item.icon]).toBeDefined()
+    expect(RAIL_WIDTH).toBe(56)
   })
 
-  it('lights Writing for all four episode nav routes and itself for the rest', () => {
-    for (const item of EPISODE_NAV) expect(railSectionOf(item.route)).toBe('writing')
+  it('lights Writing for all four writing routes and itself for the rest', () => {
+    for (const route of WRITING_ROUTES) expect(railSectionOf(route)).toBe('writing')
     expect(railSectionOf('production')).toBe('production')
     expect(railSectionOf('timeline')).toBe('timeline')
   })
 })
 
-describe('the episode nav', () => {
-  it('is four rows with Storyboard above Scenes, and 238px', () => {
-    expect(EPISODE_NAV.map((item) => `${item.label} ${GLYPHS[item.glyph]}`)).toEqual([
-      'Script ▤',
-      'Outline ⋮',
-      'Storyboard ▥',
-      'Scenes ▢',
-    ])
-    expect(EPISODE_NAV_WIDTH).toBe(238)
+describe('the writing sidebar and the mode pill', () => {
+  it('is three rows - Script, Outline, Scenes - and 236px', () => {
+    expect(SIDEBAR.map((item) => `${item.route} ${item.label}`)).toEqual(['script Script', 'outline Outline', 'scenes Scenes'])
+    expect(SIDEBAR_WIDTH).toBe(236)
   })
 
-  it('keeps the README widths for the other columns', () => {
+  it('puts Storyboard in the header pill, not the sidebar', () => {
+    expect(SIDEBAR.map((item) => item.route)).not.toContain('storyboard')
+    expect(writingModeOf('storyboard')).toBe('storyboard')
+    for (const route of ['script', 'outline', 'scenes'] as const) expect(writingModeOf(route)).toBe('write')
+  })
+
+  it('keeps the README widths for the panels and the unrebuilt columns', () => {
+    expect(PANEL_WIDTH).toBe(400)
     expect(CONTEXT_PANEL_WIDTH).toEqual({
       production: 250,
       locations: 256,
       timeline: 250,
       research: 250,
-      insights: 250,
     })
   })
 })
 
 describe('sub-view params', () => {
-  it('has a schema for every one of the ten', () => {
+  it('has a schema for every one of the nine', () => {
     expect(Object.keys(SUB_VIEW_SCHEMAS).sort()).toEqual([...WORKSPACE_ROUTES].sort())
   })
 
@@ -121,37 +130,15 @@ describe('sub-view params', () => {
     expect(parseSubViews('script', { doc: 'grid', panel: 'composer' })).toEqual({ ok: true, params: {} })
   })
 
-  it('gives insights two params, report and lens, never one', () => {
-    expect(parseSubViews('insights', {})).toEqual({
-      ok: true,
-      params: { report: 'pacing', lens: 'showrunner' },
-    })
-    expect(parseSubViews('insights', { report: 'presence', lens: 'producer' })).toEqual({
-      ok: true,
-      params: { report: 'presence', lens: 'producer' },
-    })
-  })
-
-  it('accepts both candidate lens spellings until decision 4 is ruled', () => {
-    expect(parseSubViews('insights', { lens: 'lens/viewer' })).toEqual({
-      ok: true,
-      params: { report: 'pacing', lens: 'viewer' },
-    })
-    expect(parseSubViews('insights', { lens: 'viewer' })).toEqual({
-      ok: true,
-      params: { report: 'pacing', lens: 'viewer' },
-    })
-  })
-
   it('refuses a value that is not one of the views, naming the param', () => {
     expect(parseSubViews('scenes', { view: 'grid' })).toEqual({
       ok: false,
       param: 'view',
       value: 'grid',
     })
-    expect(parseSubViews('insights', { lens: 'lens/nobody' })).toEqual({
+    expect(parseSubViews('timeline', { view: 'lens/nobody' })).toEqual({
       ok: false,
-      param: 'lens',
+      param: 'view',
       value: 'lens/nobody',
     })
   })
@@ -204,7 +191,8 @@ describe('the meta convention', () => {
   }
 
   it('prints a new project as the brief specifies', () => {
-    expect(EPISODE_NAV.map((item) => navMeta(item.route, empty))).toEqual(['empty', '—', '—', '0'])
+    expect(WRITING_ROUTES.map((route) => navMeta(route, empty))).toEqual(['empty', '—', '—', '0'])
+    expect(SIDEBAR.map((item) => navMeta(item.route, empty))).toEqual(['empty', '—', '0'])
   })
 
   it('prints a populated episode as the bundle does', () => {
@@ -214,7 +202,7 @@ describe('the meta convention', () => {
       shots: 38,
       scenes: 34,
     }
-    expect(EPISODE_NAV.map((item) => navMeta(item.route, populated))).toEqual([
+    expect(WRITING_ROUTES.map((route) => navMeta(route, populated))).toEqual([
       '104pp',
       '3 acts',
       '38 shots',
@@ -241,6 +229,15 @@ describe('the meta convention', () => {
     expect(projectInitials('Folio')).toBe('Fo')
     expect(projectInitials('the sound before rain')).toBe('TS')
     expect(episodeNumber(1)).toBe('E1')
-    expect(episodeGroupLabel(1, 'Standpipe')).toBe('Ep 1 · Standpipe')
+  })
+
+  it('labels an episode as the Script mockup does, and never as "Episode 1 · Episode 1"', () => {
+    expect(defaultEpisodeTitle(3)).toBe('Episode 3')
+    expect(episodeLabel(1, 'Standpipe')).toBe('Episode 1 · Standpipe')
+    expect(episodeLabel(1, 'Episode 1')).toBe('Episode 1')
+    expect(episodeLabel(2, '  episode 2 ')).toBe('Episode 2')
+    expect(episodeLabel(2, 'Episode 1')).toBe('Episode 2 · Episode 1')
+    expect(isDefaultEpisodeTitle(4, 'Episode 4')).toBe(true)
+    expect(isDefaultEpisodeTitle(4, 'Episode 40')).toBe(false)
   })
 })

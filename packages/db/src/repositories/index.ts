@@ -77,3 +77,5 @@ export {
 export * from './episode-slug'
 export * from './workspace'
 export * from './locked-pages'
+export * from './share'
+export * from './assistant'

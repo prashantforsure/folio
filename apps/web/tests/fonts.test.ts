@@ -11,11 +11,11 @@ import { describe, expect, it } from 'vitest'
  * on trust:
  *
  * **1. Nothing is fetched from a CDN.** AGENTS.md, Tech stack: "Self-hosted
- * Inter, Courier Prime." The design bundles link `fonts.googleapis.com` in
- * their `<helmet>` and it would be easy for that to survive a copy-paste.
- * Every `src` here must be a path on this origin.
+ * Geist, Geist Mono, Courier Prime." The design mockups link
+ * `fonts.googleapis.com` in their `<helmet>` and it would be easy for that to
+ * survive a copy-paste. Every `src` here must be a path on this origin.
  *
- * **2. None of AGENTS.md's eighteen glyphs is in either family.**
+ * **2. None of the Unicode glyphs the older routes draw is in any family.**
  * That claim is why `--font-glyph` exists, why `glyph.tsx` forces text
  * presentation, and why the phase report says all eighteen render from a system
  * font. It is checked here from the `unicode-range` descriptors, which is a
@@ -61,8 +61,8 @@ const faces: Face[] = [...rules.matchAll(/@font-face\s*\{([\s\S]*?)\}/g)].map((m
 })
 
 describe('the font declarations', () => {
-  it('declares the two families AGENTS.md names, and no others', () => {
-    expect([...new Set(faces.map((face) => face.family))].sort()).toEqual(['Courier Prime', 'Inter'])
+  it('declares the three families AGENTS.md names, and no others', () => {
+    expect([...new Set(faces.map((face) => face.family))].sort()).toEqual(['Courier Prime', 'Geist', 'Geist Mono'])
   })
 
   it('serves every face from this origin', () => {
@@ -96,8 +96,8 @@ describe('glyph coverage', () => {
   const covers = (face: Face, codePoint: number): boolean =>
     face.ranges.some(([start, end]) => codePoint >= start && codePoint <= end)
 
-  it('has none of the eighteen glyphs in any self-hosted face', () => {
-    // The finding this test exists to protect. All eighteen therefore render
+  it('has none of the glyph set in any self-hosted face', () => {
+    // The finding this test exists to protect. Every glyph therefore renders
     // from a system symbol font - see `--font-glyph` in packages/ui/src/tokens.
     for (const [name, glyph] of Object.entries(GLYPHS)) {
       const codePoint = glyph.codePointAt(0) ?? 0

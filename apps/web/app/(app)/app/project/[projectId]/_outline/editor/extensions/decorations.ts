@@ -1,3 +1,4 @@
+import type { OutlineHeading } from '@folio/script'
 import { BEAT_HEADLINE_SEPARATOR } from '@folio/script'
 import { Extension, getChangedRanges } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
@@ -6,17 +7,21 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 
 import type { OutlineShape } from '../../../../../../../../lib/outline/pm-model'
-import { blockAttrsOf, mentionAttrsOf, sameShape, shapeOf } from '../../../../../../../../lib/outline/pm-model'
+import { blockAttrsOf, blockText, mentionAttrsOf, sameShape, shapeOf } from '../../../../../../../../lib/outline/pm-model'
 import type { LabelFor } from '../../../../../../../../lib/script/inline'
-import { UNRESOLVED_LABEL } from '../../../_script/editor/extensions/mention'
+import type { HandleMenuRequest, OnHandleMenu } from '../../../_script/editor/extensions/handles'
+import { handleDecorationFor } from '../../../_script/editor/extensions/handles'
 import { isStructural } from '../../../_script/editor/extensions/identity'
+import { UNRESOLVED_LABEL } from '../../../_script/editor/extensions/mention'
+import type { HostRegistry } from '../../../_script/editor/extensions/sheet-decorations'
+import { COMPOSER_HOST } from '../../../_script/editor/extensions/sheet-decorations'
+import { sameHeadings } from '../outline-store'
 
 /**
- * Everything the outline sheet draws that is not the text, as ProseMirror
+ * Everything the outline draws that is not the text, as ProseMirror
  * decorations - maintained incrementally, so a keystroke touches the block
  * it landed in and nothing else. The Script route's `sheet-decorations.ts`,
- * with three sets instead of four and no layout engine, because the
- * outline is not paginated.
+ * with no layout engine, because the outline is not paginated.
  *
  *   beats     a beat's number, as a widget at the head of the block, and
  *             its bold lead - an inline decoration from the block's start
@@ -26,32 +31,56 @@ import { isStructural } from '../../../_script/editor/extensions/identity'
  *             set is rebuilt whole on a structural transaction (tens of
  *             blocks) and, for a keystroke inside a beat, only that beat's
  *             lead is replaced.
- *   ghost     the caret line's promise - "Type, or press / for a block" -
- *             inside the last block when it is an empty Body. Inside the
- *             block's own inset, after the text position, not in a margin.
+ *   handles   the `+` / `⠿` pair at every block's left (`handles.ts`,
+ *             shared with the Script), drawn at the caret block and on
+ *             hover (CSS). `+` opens the block menu through the store.
+ *   caret     `data-caret` on the caret block - what shows its handles -
+ *             and the ghost of the caret line's promise inside an empty
+ *             last block: "Type, or press / for a block", or the empty
+ *             state's "Start typing, or type '/' to add a block" when the
+ *             block is the only one (`docs/ui design/Route - Outline
+ *             v2.dc.html`, `content: empty`).
  *   labels    a node decoration on every mention carrying its current
  *             label, which is what makes `mention.ts`'s node view redraw
  *             when the label book changes.
+ *   threads   a host element after every block that carries a comment
+ *             thread, and one for the new-thread composer, into which React
+ *             portals the cards (`_script/comments/thread-cards.tsx`).
  *
- * The label book arrives by an `outlineDecorationsKey` meta transaction
- * and rebuilds the labels once. The counts the chrome prints - blocks,
- * acts, beats, words - are read here too, after every change, and go to
- * React through `onShape` only when one of them moved.
+ * The inputs arrive by an `outlineDecorationsKey` meta transaction: the
+ * label book, the thread map, and where the composer is open. The counts
+ * the chrome prints - blocks, acts, beats, words - and the heading list the
+ * sidebar draws are read here too, after every change, and go to React
+ * through `onShape` / `onHeadings` only when one of them moved.
  */
 
-export type OutlineDecorationsOptions = {
+export type OutlineInputs = {
   readonly labelFor: LabelFor
+  /** Thread ids by the node id they anchor to. */
+  readonly threadsByNode: ReadonlyMap<string, readonly string[]>
+  /** The node a new-thread composer is open under, or null. */
+  readonly composerAt: string | null
+}
+
+export type OutlineDecorationsOptions = {
+  readonly inputs: OutlineInputs | null
+  readonly hosts: HostRegistry | null
+  readonly onHandleMenu: OnHandleMenu
   readonly onShape?: ((shape: OutlineShape) => void) | undefined
+  readonly onHeadings?: ((headings: readonly OutlineHeading[]) => void) | undefined
 }
 
 type DecorationsState = {
-  readonly labelFor: LabelFor
+  readonly inputs: OutlineInputs
   readonly beats: DecorationSet
-  readonly ghost: DecorationSet
+  readonly handles: DecorationSet
+  readonly caret: DecorationSet
   readonly labels: DecorationSet
-  /** `${id}` of the block the ghost sits in, or `''`. */
-  readonly ghostKey: string
+  readonly threads: DecorationSet
+  /** `${id}:${count}` of the caret block and the block count as last drawn, or `''`. */
+  readonly caretKey: string
   readonly shape: OutlineShape
+  readonly headings: readonly OutlineHeading[]
 }
 
 export const outlineDecorationsKey = new PluginKey<DecorationsState>('outlineDecorations')
@@ -83,25 +112,43 @@ const beatDecorationsFor = (block: ProseMirrorNode, pos: number, ordinal: number
   return out
 }
 
-const ghostElement = (): HTMLElement => {
+/** The caret line's promise. `alone` is the empty state: the one blank block a new outline starts with. */
+const ghostElement = (alone: boolean): HTMLElement => {
   const ghost = document.createElement('span')
   ghost.className = 'folio-outline-ghost'
   ghost.setAttribute('aria-hidden', 'true')
+  if (alone) {
+    const caret = document.createElement('i')
+    ghost.append(caret, document.createTextNode("Start typing, or type '/' to add a block"))
+    return ghost
+  }
   ghost.append(document.createTextNode('Type, or press '))
   const key = document.createElement('b')
   key.textContent = '/'
   ghost.append(key, document.createTextNode(' for a block'))
   const caret = document.createElement('i')
-  caret.textContent = '|'
   ghost.append(caret)
   return ghost
 }
 
-const ghostFor = (doc: ProseMirrorNode): { readonly key: string; readonly decorations: readonly Decoration[] } => {
+const caretDecorationsFor = (state: EditorState): { readonly key: string; readonly decorations: readonly Decoration[] } => {
+  const { doc } = state
+  const out: Decoration[] = []
+  const $from = state.selection.$from
+  let key = ''
+  if ($from.depth >= 1) {
+    const block = $from.node(1)
+    const pos = $from.before(1)
+    key = `${idOf(block)}:${String(doc.childCount)}`
+    out.push(Decoration.node(pos, pos + block.nodeSize, { 'data-caret': 'true' }))
+  }
   const last = doc.lastChild
-  if (last === null || last.type.name !== 'body' || last.content.size !== 0) return { key: '', decorations: [] }
-  const pos = doc.content.size - last.nodeSize
-  return { key: idOf(last), decorations: [Decoration.widget(pos + 1, ghostElement, { side: -1, key: 'ghost' })] }
+  if (last !== null && last.type.name === 'body' && last.content.size === 0) {
+    const pos = doc.content.size - last.nodeSize
+    const alone = doc.childCount === 1
+    out.push(Decoration.widget(pos + 1, () => ghostElement(alone), { side: -1, key: alone ? 'ghost:alone' : 'ghost' }))
+  }
+  return { key, decorations: out }
 }
 
 const labelDecorationsFor = (block: ProseMirrorNode, pos: number, labelFor: LabelFor): readonly Decoration[] => {
@@ -112,6 +159,43 @@ const labelDecorationsFor = (block: ProseMirrorNode, pos: number, labelFor: Labe
     const at = pos + 1 + offset
     out.push(Decoration.node(at, at + child.nodeSize, { 'data-label': labelFor(mention.entity, mention.id) ?? UNRESOLVED_LABEL }))
   })
+  return out
+}
+
+const hostElement = (key: string, kind: 'thread' | 'composer', hosts: HostRegistry | null): HTMLElement => {
+  const host = document.createElement('div')
+  host.className = 'folio-thread-host'
+  host.dataset['host'] = kind
+  host.dataset['hostKey'] = key
+  host.setAttribute('contenteditable', 'false')
+  hosts?.mount(key, host)
+  return host
+}
+
+const threadDecorationsFor = (
+  block: ProseMirrorNode,
+  pos: number,
+  inputs: OutlineInputs,
+  hosts: HostRegistry | null,
+): readonly Decoration[] => {
+  const id = idOf(block)
+  const out: Decoration[] = []
+  const after = pos + block.nodeSize
+  const spec = (key: string) => ({
+    side: 1,
+    key: `host:${key}`,
+    stopEvent: () => true,
+    ignoreSelection: true,
+    destroy: () => {
+      hosts?.unmount(key)
+    },
+  })
+  for (const threadId of inputs.threadsByNode.get(id) ?? []) {
+    out.push(Decoration.widget(after, () => hostElement(threadId, 'thread', hosts), spec(threadId)))
+  }
+  if (inputs.composerAt === id) {
+    out.push(Decoration.widget(after, () => hostElement(COMPOSER_HOST, 'composer', hosts), spec(COMPOSER_HOST)))
+  }
   return out
 }
 
@@ -139,24 +223,44 @@ const beatsOf = (doc: ProseMirrorNode): DecorationSet => {
   return DecorationSet.create(doc, out)
 }
 
-const labelsOf = (doc: ProseMirrorNode, labelFor: LabelFor): DecorationSet => {
-  const out: Decoration[] = []
-  doc.forEach((block, pos) => {
-    out.push(...labelDecorationsFor(block, pos, labelFor))
+const headingsOf = (doc: ProseMirrorNode, labelFor: LabelFor): readonly OutlineHeading[] => {
+  const out: OutlineHeading[] = []
+  doc.forEach((block) => {
+    const type = block.type.name
+    if (type !== 'h1' && type !== 'h2' && type !== 'h3') return
+    const id = blockAttrsOf(block).id
+    if (id === null) return
+    out.push({ id, level: type === 'h1' ? 1 : type === 'h2' ? 2 : 3, text: blockText(block, labelFor) })
   })
-  return DecorationSet.create(doc, out)
+  return out
 }
 
-const build = (state: EditorState, labelFor: LabelFor): DecorationsState => {
+type BuildContext = {
+  readonly hosts: HostRegistry | null
+  readonly onHandleMenu: OnHandleMenu
+}
+
+const build = (state: EditorState, inputs: OutlineInputs, context: BuildContext): DecorationsState => {
   const { doc } = state
-  const ghost = ghostFor(doc)
+  const handles: Decoration[] = []
+  const labels: Decoration[] = []
+  const threads: Decoration[] = []
+  doc.forEach((block, pos) => {
+    handles.push(handleDecorationFor(block, pos, idOf, context.onHandleMenu))
+    labels.push(...labelDecorationsFor(block, pos, inputs.labelFor))
+    threads.push(...threadDecorationsFor(block, pos, inputs, context.hosts))
+  })
+  const caret = caretDecorationsFor(state)
   return {
-    labelFor,
+    inputs,
     beats: beatsOf(doc),
-    ghost: DecorationSet.create(doc, [...ghost.decorations]),
-    labels: labelsOf(doc, labelFor),
-    ghostKey: ghost.key,
-    shape: shapeOf(doc, labelFor),
+    handles: DecorationSet.create(doc, handles),
+    caret: DecorationSet.create(doc, [...caret.decorations]),
+    labels: DecorationSet.create(doc, labels),
+    threads: DecorationSet.create(doc, threads),
+    caretKey: caret.key,
+    shape: shapeOf(doc, inputs.labelFor),
+    headings: headingsOf(doc, inputs.labelFor),
   }
 }
 
@@ -174,37 +278,60 @@ const touchedBlocks = (tr: Transaction, doc: ProseMirrorNode): ReadonlySet<numbe
   return out
 }
 
-const apply = (tr: Transaction, previous: DecorationsState, state: EditorState): DecorationsState => {
-  const meta = tr.getMeta(outlineDecorationsKey) as { readonly labelFor?: LabelFor } | undefined
-  if (meta?.labelFor !== undefined) return build(state, meta.labelFor)
-  if (!tr.docChanged) return previous
+const apply = (tr: Transaction, previous: DecorationsState, state: EditorState, context: BuildContext): DecorationsState => {
+  const meta = tr.getMeta(outlineDecorationsKey) as Partial<OutlineInputs> | undefined
+  if (!tr.docChanged && !tr.selectionSet && meta === undefined) return previous
+  const inputs = meta === undefined ? previous.inputs : { ...previous.inputs, ...meta }
+  if (meta !== undefined) return build(state, inputs, context)
 
   const { doc } = state
-  const { labelFor } = previous
-  const structural = isStructural(tr)
-  const touched = touchedBlocks(tr, doc)
+  const { labelFor } = inputs
+  const structural = tr.docChanged && isStructural(tr)
+  const touched = tr.docChanged ? touchedBlocks(tr, doc) : new Set<number>()
 
-  let beats = structural ? beatsOf(doc) : previous.beats.map(tr.mapping, doc)
-  let labels = structural ? labelsOf(doc, labelFor) : previous.labels.map(tr.mapping, doc)
-  if (!structural) {
-    // A keystroke: the block it landed in has a new lead or a new mention, and nothing was renumbered.
+  let beats = structural ? beatsOf(doc) : tr.docChanged ? previous.beats.map(tr.mapping, doc) : previous.beats
+  let handles = tr.docChanged ? previous.handles.map(tr.mapping, doc) : previous.handles
+  let labels = tr.docChanged ? previous.labels.map(tr.mapping, doc) : previous.labels
+  let threads = tr.docChanged ? previous.threads.map(tr.mapping, doc) : previous.threads
+  if (tr.docChanged) {
+    // A keystroke: the block it landed in has a new lead, a new mention or a
+    // new handle key; nothing else was renumbered unless the change was structural.
     let ordinal = 0
     doc.forEach((block, pos) => {
       if (block.type.name === 'beat') ordinal += 1
       if (!touched.has(pos)) return
-      if (block.type.name === 'beat') beats = replaceWithin(beats, doc, pos, pos + block.nodeSize, beatDecorationsFor(block, pos, ordinal))
-      labels = replaceWithin(labels, doc, pos + 1, pos + block.nodeSize - 1, labelDecorationsFor(block, pos, labelFor))
+      const end = pos + block.nodeSize
+      if (!structural && block.type.name === 'beat') beats = replaceWithin(beats, doc, pos, end, beatDecorationsFor(block, pos, ordinal))
+      handles = replaceWithin(handles, doc, pos, end, [handleDecorationFor(block, pos, idOf, context.onHandleMenu)])
+      labels = replaceWithin(labels, doc, pos + 1, end - 1, labelDecorationsFor(block, pos, labelFor))
+      threads = replaceWithin(threads, doc, end, end, threadDecorationsFor(block, pos, inputs, context.hosts))
     })
   }
 
-  const next = ghostFor(doc)
-  const ghost = next.key === previous.ghostKey && !structural ? previous.ghost.map(tr.mapping, doc) : DecorationSet.create(doc, [...next.decorations])
+  let caret = tr.docChanged ? previous.caret.map(tr.mapping, doc) : previous.caret
+  let caretKey = previous.caretKey
+  const next = caretDecorationsFor(state)
+  if (next.key !== previous.caretKey || touched.size > 0) {
+    caret = DecorationSet.create(doc, [...next.decorations])
+    caretKey = next.key
+  }
 
-  const shape = shapeOf(doc, labelFor)
-  return { labelFor, beats, ghost, labels, ghostKey: next.key, shape: sameShape(shape, previous.shape) ? previous.shape : shape }
+  const shape = tr.docChanged ? shapeOf(doc, labelFor) : previous.shape
+  const headings = tr.docChanged ? headingsOf(doc, labelFor) : previous.headings
+  return {
+    inputs,
+    beats,
+    handles,
+    caret,
+    labels,
+    threads,
+    caretKey,
+    shape: sameShape(shape, previous.shape) ? previous.shape : shape,
+    headings: sameHeadings(headings, previous.headings) ? previous.headings : headings,
+  }
 }
 
-/** One of the three sets, presented to ProseMirror as its own plugin so the sets are never merged by hand. */
+/** One of the sets, presented to ProseMirror as its own plugin so the sets are never merged by hand. */
 const presenter = (name: string, pick: (state: DecorationsState) => DecorationSet): Plugin =>
   new Plugin({
     key: new PluginKey(name),
@@ -216,31 +343,39 @@ const presenter = (name: string, pick: (state: DecorationsState) => DecorationSe
     },
   })
 
+const blankInputs = (): OutlineInputs => ({ labelFor: () => undefined, threadsByNode: new Map(), composerAt: null })
+
 export const OutlineDecorations = Extension.create<OutlineDecorationsOptions>({
   name: 'outlineDecorations',
   addOptions() {
-    return { labelFor: () => undefined, onShape: undefined }
+    return { inputs: null, hosts: null, onHandleMenu: null, onShape: undefined, onHeadings: undefined }
   },
   addProseMirrorPlugins() {
-    const { labelFor, onShape } = this.options
+    const inputs = this.options.inputs ?? blankInputs()
+    const { onShape, onHeadings } = this.options
+    const context: BuildContext = { hosts: this.options.hosts, onHandleMenu: this.options.onHandleMenu }
     return [
       new Plugin<DecorationsState>({
         key: outlineDecorationsKey,
         state: {
-          init: (_config, state) => build(state, labelFor),
-          apply: (tr, previous, _old, state) => apply(tr, previous, state),
+          init: (_config, state) => build(state, inputs, context),
+          apply: (tr, previous, _old, state) => apply(tr, previous, state, context),
         },
         view: () => ({
           update: (view, previous) => {
-            const now = outlineDecorationsKey.getState(view.state)?.shape
-            const before = outlineDecorationsKey.getState(previous)?.shape
-            if (now !== undefined && now !== before) onShape?.(now)
+            const now = outlineDecorationsKey.getState(view.state)
+            const before = outlineDecorationsKey.getState(previous)
+            if (now === undefined) return
+            if (now.shape !== before?.shape) onShape?.(now.shape)
+            if (now.headings !== before?.headings) onHeadings?.(now.headings)
           },
         }),
       }),
       presenter('outlineBeats', (current) => current.beats),
-      presenter('outlineGhost', (current) => current.ghost),
+      presenter('outlineHandles', (current) => current.handles),
+      presenter('outlineCaret', (current) => current.caret),
       presenter('outlineLabels', (current) => current.labels),
+      presenter('outlineThreads', (current) => current.threads),
     ]
   },
 })
@@ -248,6 +383,16 @@ export const OutlineDecorations = Extension.create<OutlineDecorationsOptions>({
 /** The plugin's current counts. */
 export const outlineShapeOf = (state: EditorState): OutlineShape | undefined => outlineDecorationsKey.getState(state)?.shape
 
-/** Hand the sheet a new label book: every label and count is redrawn once, outside history. */
+/** The plugin's current heading list. */
+export const outlineHeadingsOf = (state: EditorState): readonly OutlineHeading[] | undefined =>
+  outlineDecorationsKey.getState(state)?.headings
+
+/** Hand the editor new inputs - a label book, a thread map, where the composer is. Every set is redrawn once, outside history. */
+export const outlineInputsTransaction = (state: EditorState, inputs: Partial<OutlineInputs>): Transaction =>
+  state.tr.setMeta(outlineDecorationsKey, inputs).setMeta('addToHistory', false)
+
+/** Kept for the callers that only change the label book. */
 export const labelBookTransaction = (state: EditorState, labelFor: LabelFor): Transaction =>
-  state.tr.setMeta(outlineDecorationsKey, { labelFor }).setMeta('addToHistory', false)
+  outlineInputsTransaction(state, { labelFor })
+
+export type { HandleMenuRequest }

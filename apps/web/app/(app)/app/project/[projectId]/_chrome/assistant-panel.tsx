@@ -1,0 +1,409 @@
+'use client'
+
+import type { EpisodeSlug, ProjectId } from '@folio/contracts'
+import { Icon } from '@folio/ui'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { listAssistantChats, openAssistantChat, startAssistantChat } from '../../../../../../lib/assistant/actions'
+import type { ChatRow, MessageRow } from '../../../../../../lib/assistant/result'
+import type { RailSection, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
+import { Orb } from './orb'
+
+/**
+ * The assistant panel. 400px, `--sunk`, one left hairline - `docs/ui
+ * design/README.md`, "Assistant": "`New chat` dropdown and a close ✕; a
+ * 124px orb with a slow drift animation; 'How can I help?' and a
+ * route-specific subhead; three suggestion chips, each with a small semantic
+ * square; then the composer - 'Ask, or @ to add context…', an attach `+`,
+ * dictate, and a solid send button."
+ *
+ * ## What is real and what is drawn
+ *
+ * Chats are rows (`assistant_chats`), the answer streams from
+ * `POST /api/assistant`, and every turn is kept. The `+` attach and dictate
+ * buttons are drawn as the mockup draws them but do nothing yet - no
+ * attachment model and no speech path exist - so each is disabled with its
+ * title saying so rather than omitted; the composer's `@` mention is a
+ * hint the mockup writes and this pass does not parse. All three flagged.
+ *
+ * ## Not connected
+ *
+ * With no `ANTHROPIC_API_KEY` the composer is disabled and the panel says
+ * why, in the writer's terms. The chips still prefill so the shape can be
+ * seen; sending is what is off.
+ *
+ * ## In flow or over
+ *
+ * Above 1200px the panel is a flex sibling and the layout shrinks; below it
+ * is absolutely positioned over the content with the README's shadow. The
+ * shell decides which and forces the sidebar closed in the second case.
+ */
+
+type Chip = { readonly label: string; readonly tone: 'live' | 'warn' | 'accent' | 'ok' | 'ink3' }
+
+const CHIPS: readonly Chip[] = [
+  { label: 'Punch up this scene', tone: 'live' },
+  { label: 'Break the act into beats', tone: 'warn' },
+  { label: 'Find continuity gaps', tone: 'accent' },
+  { label: 'Draft a character from the cue', tone: 'ok' },
+  { label: 'What changed since the last revision', tone: 'ink3' },
+]
+
+/**
+ * The Outline route's chips and subhead - `docs/ui design/Route - Outline
+ * v2.dc.html`, verbatim. The copy is the route's; what the model reads is
+ * still the episode's script (the 2026-09-16 ruling), so "expand a beat"
+ * is answered from the script and the writer's question, not from the
+ * outline blocks. Widening the context to the outline is AGENTS.md's "ask
+ * first" and is flagged in the phase record, not taken here.
+ */
+const OUTLINE_CHIPS: readonly Chip[] = [
+  { label: 'Expand the synopsis', tone: 'live' },
+  { label: 'Split beats into scenes', tone: 'warn' },
+  { label: 'Tighten the logline', tone: 'accent' },
+  { label: 'Check the act turns', tone: 'ok' },
+  { label: 'Suggest a cold open', tone: 'ink3' },
+]
+
+const TONE_CLASS: Record<Chip['tone'], string> = {
+  live: 'bg-live',
+  warn: 'bg-warn',
+  accent: 'bg-accent',
+  ok: 'bg-ok',
+  ink3: 'bg-ink3',
+}
+
+const SUBHEAD: Record<RailSection, string> = {
+  writing: 'Ask about the draft, or have me rough out a scene, a beat or a character.',
+  characters: 'Ask about the cast, who shares scenes with whom, or a character who needs a record.',
+  locations: 'Ask about the sets, what happens where, or a slugline that needs a home.',
+  timeline: 'Ask how the story sits in time, or where a thread goes quiet.',
+  research: 'Ask about the draft. Research sources are not readable yet.',
+  production: 'Ask about the shots and reels, or what a scene needs to shoot.',
+}
+
+const OUTLINE_SUBHEAD = 'Ask about the outline, or have me expand a beat, a synopsis or an act turn.'
+
+type Turn = MessageRow | { readonly id: 'pending'; readonly role: 'assistant'; readonly body: string; readonly createdAt: '' }
+
+export const AssistantPanel = ({
+  projectId,
+  episode,
+  section,
+  route,
+  connected,
+  inFlow,
+  onClose,
+}: {
+  readonly projectId: ProjectId
+  readonly episode: EpisodeSlug
+  readonly section: RailSection | null
+  /** The route under the section, when the URL names one: the Outline has its own copy. */
+  readonly route: WorkspaceRoute | null
+  readonly connected: boolean
+  readonly inFlow: boolean
+  readonly onClose: () => void
+}) => {
+  const [chats, setChats] = useState<readonly ChatRow[]>([])
+  const [chat, setChat] = useState<ChatRow | null>(null)
+  const [turns, setTurns] = useState<readonly Turn[]>([])
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [listOpen, setListOpen] = useState(false)
+  const scroller = useRef<HTMLDivElement>(null)
+  const composer = useRef<HTMLTextAreaElement>(null)
+  const abort = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void listAssistantChats(projectId, episode).then((result) => {
+      if (cancelled || result.status !== 'ok') return
+      setChats(result.chats)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [episode, projectId])
+
+  useEffect(() => {
+    const node = scroller.current
+    if (node !== null) node.scrollTop = node.scrollHeight
+  }, [turns])
+
+  useEffect(
+    () => () => {
+      abort.current?.abort()
+    },
+    [],
+  )
+
+  const open = useCallback(
+    async (row: ChatRow) => {
+      setListOpen(false)
+      const result = await openAssistantChat(projectId, episode, row.id)
+      if (result.status !== 'ok') {
+        setNotice(result.message)
+        return
+      }
+      setChat(result.chat)
+      setTurns(result.messages)
+      setNotice(null)
+    },
+    [episode, projectId],
+  )
+
+  const fresh = useCallback(() => {
+    setListOpen(false)
+    setChat(null)
+    setTurns([])
+    setNotice(null)
+    composer.current?.focus()
+  }, [])
+
+  const send = useCallback(async () => {
+    const message = draft.trim()
+    if (message.length === 0 || busy || !connected) return
+    setBusy(true)
+    setNotice(null)
+    let current = chat
+    if (current === null) {
+      const started = await startAssistantChat(projectId, episode)
+      if (started.status !== 'ok') {
+        setNotice(started.message)
+        setBusy(false)
+        return
+      }
+      current = started.chat
+      setChat(current)
+      setChats((existing) => [started.chat, ...existing])
+    }
+    const chatId = current.id
+    const stamp = new Date().toISOString()
+    setDraft('')
+    setTurns((existing) => [
+      ...existing,
+      { id: `user:${stamp}`, role: 'user', body: message, createdAt: stamp },
+      { id: 'pending', role: 'assistant', body: '', createdAt: '' },
+    ])
+    const controller = new AbortController()
+    abort.current = controller
+    try {
+      const response = await fetch('/api/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, episode, chatId, message }),
+        signal: controller.signal,
+      })
+      if (!response.ok || response.body === null) {
+        const failed = (await response.json().catch(() => null)) as { readonly message?: string } | null
+        throw new Error(failed?.message ?? 'The assistant could not answer.')
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let answer = ''
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) break
+        answer += decoder.decode(value, { stream: true })
+        const shown = answer
+        setTurns((existing) => existing.map((turn) => (turn.id === 'pending' ? { ...turn, body: shown } : turn)))
+      }
+      answer += decoder.decode()
+      const finished = answer
+      setTurns((existing) =>
+        existing.map((turn) =>
+          turn.id === 'pending' ? { id: `assistant:${stamp}`, role: 'assistant', body: finished, createdAt: new Date().toISOString() } : turn,
+        ),
+      )
+      setChats((existing) =>
+        existing.map((row) => (row.id === chatId && row.title === null ? { ...row, title: message.split('\n')[0] ?? message } : row)),
+      )
+      setChat((existing) => (existing !== null && existing.title === null ? { ...existing, title: message.split('\n')[0] ?? message } : existing))
+    } catch (cause) {
+      if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
+        setNotice(cause instanceof Error ? cause.message : 'The assistant could not answer.')
+        setTurns((existing) => existing.filter((turn) => turn.id !== 'pending'))
+      }
+    } finally {
+      abort.current = null
+      setBusy(false)
+    }
+  }, [busy, chat, connected, draft, episode, projectId])
+
+  const empty = turns.length === 0
+
+  return (
+    <aside
+      data-assistant-panel
+      data-in-flow={inFlow ? 'true' : 'false'}
+      aria-label="Assistant"
+      className={`folio-assistant-panel ${inFlow ? 'relative' : 'absolute inset-y-0 right-0'} z-[3] flex flex-none flex-col`}
+    >
+      <div className="flex h-[60px] flex-none items-center gap-[8px] pl-[16px] pr-[12px]">
+        <Orb size={20} />
+        <div className="relative">
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={listOpen}
+            onClick={() => {
+              setListOpen((value) => !value)
+            }}
+            className="folio-ghost-button flex items-center gap-[6px] rounded-[8px] px-[8px] py-[5px] text-13-5 font-medium text-ink"
+          >
+            <span className="max-w-[200px] truncate">{chat?.title ?? 'New chat'}</span>
+            <Icon name="chevron" size={11} strokeWidth={1.5} className="opacity-50" />
+          </button>
+          {listOpen ? (
+            <div role="menu" data-chat-list className="folio-menu absolute left-0 top-[34px] w-[280px]">
+              <button type="button" role="menuitem" className="folio-menu-item" onClick={fresh}>
+                New chat
+              </button>
+              {chats.length === 0 ? (
+                <p className="m-0 px-[10px] pb-[6px] pt-[4px] text-12 text-ink3">No chats on this episode yet.</p>
+              ) : (
+                chats.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    role="menuitem"
+                    className="folio-menu-item"
+                    aria-current={chat?.id === row.id ? 'true' : undefined}
+                    onClick={() => {
+                      void open(row)
+                    }}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{row.title ?? 'Untitled chat'}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
+        </div>
+        <div className="flex-1" />
+        <button type="button" onClick={fresh} className="folio-ghost-button rounded-[8px] px-[10px] py-[6px] text-12-5 text-ink2">
+          + New
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          title="Close"
+          aria-label="Close the assistant"
+          className="folio-ghost-button grid h-[28px] w-[28px] place-items-center rounded-[8px] text-ink3"
+        >
+          <Icon name="close" size={14} strokeWidth={1.5} />
+        </button>
+      </div>
+
+      {empty ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[16px] px-[28px] py-[20px]">
+          <Orb size={124} drift />
+          <div className="flex flex-col gap-[7px] text-center">
+            <span className="text-17 font-medium tracking-title">How can I help?</span>
+            <span className="text-13-5 leading-[1.55] text-ink2">{route === 'outline' ? OUTLINE_SUBHEAD : SUBHEAD[section ?? 'writing']}</span>
+          </div>
+        </div>
+      ) : (
+        <div ref={scroller} data-assistant-turns className="flex min-h-0 flex-1 flex-col gap-[14px] overflow-y-auto px-[16px] py-[16px]">
+          {turns.map((turn) => (
+            <div
+              key={turn.id}
+              data-turn={turn.role}
+              className={
+                turn.role === 'user'
+                  ? 'max-w-[86%] self-end whitespace-pre-wrap rounded-[14px] rounded-br-[4px] bg-s2 px-[12px] py-[8px] text-13-5 leading-[1.55] text-ink'
+                  : 'whitespace-pre-wrap text-13-5 leading-[1.65] text-read'
+              }
+            >
+              {turn.body.length === 0 && turn.id === 'pending' ? <span className="folio-thinking">Thinking</span> : turn.body}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {empty ? (
+        <div className="flex flex-none flex-col items-start gap-[7px] px-[20px] pb-[14px]">
+          {(route === 'outline' ? OUTLINE_CHIPS : CHIPS).map((chip) => (
+            <button
+              key={chip.label}
+              type="button"
+              className="folio-chip-button"
+              onClick={() => {
+                setDraft(chip.label)
+                composer.current?.focus()
+              }}
+            >
+              <span className={`h-[7px] w-[7px] flex-none rounded-[2px] ${TONE_CLASS[chip.tone]}`} />
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="flex-none px-[16px] pb-[16px]">
+        {notice === null ? null : (
+          <p role="status" className="m-0 mb-[8px] text-12 text-live">
+            {notice}
+          </p>
+        )}
+        {connected ? null : (
+          <p role="status" data-assistant-disconnected className="m-0 mb-[8px] text-12 leading-[1.5] text-ink3">
+            The assistant is not connected. Set <span className="font-mono">ANTHROPIC_API_KEY</span> on the server to switch it on.
+          </p>
+        )}
+        <div className="flex flex-col gap-[10px] rounded-panel border border-line bg-s1 px-[14px] pb-[10px] pt-[12px]">
+          <textarea
+            ref={composer}
+            value={draft}
+            rows={1}
+            disabled={!connected || busy}
+            placeholder="Ask, or @ to add context…"
+            aria-label="Ask the assistant"
+            onChange={(event) => {
+              setDraft(event.target.value)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                void send()
+              }
+            }}
+            className="folio-composer"
+          />
+          <div className="flex items-center gap-[8px]">
+            <button
+              type="button"
+              disabled
+              title="Attachments are not built yet"
+              className="grid h-[30px] w-[30px] cursor-default place-items-center rounded-full border border-line2 bg-transparent text-15 leading-none text-ink3 opacity-60"
+            >
+              +
+            </button>
+            <div className="flex-1" />
+            <button
+              type="button"
+              disabled
+              title="Dictation is not built yet"
+              className="grid h-[30px] w-[30px] cursor-default place-items-center rounded-full border-none bg-transparent text-ink3 opacity-60"
+            >
+              <Icon name="mic" size={15} strokeWidth={1.4} />
+            </button>
+            <button
+              type="button"
+              title="Send"
+              aria-label="Send"
+              disabled={!connected || busy || draft.trim().length === 0}
+              onClick={() => {
+                void send()
+              }}
+              className="folio-solid-button grid h-[30px] w-[30px] place-items-center rounded-full p-0"
+            >
+              <Icon name="send" size={15} strokeWidth={1.6} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  )
+}

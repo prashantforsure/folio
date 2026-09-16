@@ -1,18 +1,18 @@
 import { readRailBadges } from '@folio/db'
 import type { ReactNode } from 'react'
 
+import { assistantConnected } from '../../../../../lib/assistant/server'
 import { loadProject, rememberedOrFirstEpisode } from '../../../../../lib/workspace/context'
-import { projectInitials } from '../../../../../lib/workspace/format'
-import { Rail } from './_chrome/rail'
+import { ProjectShell } from './_chrome/project-shell'
 
 /**
- * The project workspace: the rail, and a column for whatever is below.
+ * The project workspace: the shell, and a column for whatever is below.
  *
- * AGENTS.md, Architecture: "`app/(app)/project/` Project workspace: rail,
- * episode nav, the fourteen routes." This layout is the rail. The episode nav
- * is `[episodeId]/(writing)/layout.tsx` (and its film-shaped twin under
- * `(film)/`), and each project route with a record list or filter column
- * draws it in its own layout.
+ * `docs/ui design/README.md`, "Shell": rail, sidebar, header, main surface,
+ * and the panels that float over every route. This layout draws the parts
+ * that are the same on every route - the rail, the assistant panel and the
+ * Characters overlay, through `ProjectShell` - and the writing layout one
+ * level down draws the sidebar and header for the four writing routes.
  *
  * ## What is read here, and where it comes from
  *
@@ -22,9 +22,11 @@ import { Rail } from './_chrome/rail'
  * and are read on every render of the layout, which is every navigation
  * inside the project, so they are never staler than the page beside them.
  *
- * The rail needs an episode to link Writing and Production to when the URL
- * has none (a project route). That is the same "last opened, else first"
- * the index redirect uses, from the same function.
+ * The shell needs an episode to link Writing and Production to, and to open
+ * the assistant on, when the URL has none (a project route). That is the
+ * same "last opened, else first" the index redirect uses, from the same
+ * function. Whether the assistant is connected is an environment fact
+ * (`ANTHROPIC_API_KEY`), read once here and handed down as a boolean.
  */
 const ProjectLayout = async ({
   children,
@@ -41,18 +43,17 @@ const ProjectLayout = async ({
   ])
 
   return (
-    <>
-      <Rail
-        projectId={context.project.id}
-        initials={projectInitials(context.project.title)}
-        title={context.project.title}
-        shape={context.shape}
-        fallbackEpisode={fallback.slug}
-        badges={badges}
-        user={context.user}
-      />
-      <div className="flex min-w-0 flex-1 overflow-hidden">{children}</div>
-    </>
+    <ProjectShell
+      projectId={context.project.id}
+      title={context.project.title}
+      shape={context.shape}
+      fallbackEpisode={fallback.slug}
+      badges={badges}
+      user={context.user}
+      assistantConnected={assistantConnected()}
+    >
+      {children}
+    </ProjectShell>
   )
 }
 

@@ -22,33 +22,408 @@
 @source '../../../packages/ui/src';
 
 /*
- * Chrome patterns that repeat across the shell and would otherwise be a long
- * arbitrary-value string at every call site. Deliberately few: the design is
- * specific enough that most geometry belongs at the element, and a component
- * class layer is where a design system starts drifting from its bundles.
+ * The shell - `docs/ui design/README.md`, "Shell" and "Patterns to reuse".
+ * The classes that repeat across the rail, the sidebar, the header, the
+ * panels and every menu; the geometry that is one element's stays at that
+ * element as Tailwind utilities.
+ *
+ * Everything sits on `--bg` with the two ambient glows behind it. Depth is
+ * translucent surfaces (`--s1` / `--s2` / `--s3`) with a hairline (`--line2`)
+ * and a backdrop blur - never an opaque bar, never a hard divider.
  */
 @layer components {
+  /* The two radial washes behind everything. README: "two large ambient radial glows". */
+  .folio-ambient {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(900px 620px at 88% -8%, var(--glow-cool), transparent 70%),
+      radial-gradient(1100px 700px at 42% 108%, var(--glow-warm), transparent 72%);
+  }
+
+  /* A floating card: the sidebar, the overlay. */
+  .folio-card {
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    backdrop-filter: blur(12px);
+  }
+
+  /* The main surface: one card, 18px on its top-left corner only. */
+  .folio-surface {
+    position: relative;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-surface) 0 0 0;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+  }
+
   /*
-   * The sidebar button. A 14px glyph above an 8px/600 uppercase label at .08em
-   * tracking - the README is explicit that the rail is "labelled, not
-   * icon-only", which is what makes it 46px tall rather than square.
-   *
-   * **78px wide, not the project rail's 56px, and that is a deliberate
-   * divergence.** The rail's labels are one short word - Writing, Timeline,
-   * Scenes. This sidebar's are given by the brief and include SCREENWRITING,
-   * which at 8px/600 with .08em tracking measures about 70px. At 56px it
-   * overflows the 66px rail on both sides; it did, and the screenshot is how it
-   * was found.
-   *
-   * The three ways out were: wrap the label to two lines, shrink the type below
-   * the 8px the README sets as the floor, or widen the column. The first two
-   * change the specified design to preserve a measurement that was never
-   * specified for *this* sidebar - the 66px belongs to the in-project rail,
-   * which has its own bundle. Widening keeps every specified value and moves
-   * the one that was borrowed. Flagged in the phase report.
+   * A rail button. Active is `--s2` and full ink, inactive `--ink3`; hover
+   * is `--hover`. Driven by `aria-current` for a route and `data-lit` for
+   * the overlay trigger, so the visible and accessible states agree.
    */
-  .folio-nav-item,
-  .folio-rail-item {
+  .folio-rail-button {
+    position: relative;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--ink3);
+    text-decoration: none;
+  }
+
+  .folio-rail-button:hover {
+    background: var(--hover);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .folio-rail-button[aria-current='page'],
+  .folio-rail-button[data-lit='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-rail-button[aria-current='page']:hover,
+  .folio-rail-button[data-lit='true']:hover {
+    background: var(--s3);
+  }
+
+  /* A live count on a rail button. Amber - a decision waits. */
+  .folio-rail-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
+    border-radius: var(--radius-pill);
+    background: var(--warn);
+    color: var(--bg);
+    font-size: var(--text-9);
+    font-weight: 600;
+    display: grid;
+    place-items: center;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  /* A sidebar row. Selected: `--s2`, full ink, weight 500. */
+  .folio-sidebar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: var(--text-13);
+    color: var(--ink2);
+    text-align: left;
+    text-decoration: none;
+  }
+
+  .folio-sidebar-row:hover {
+    background: var(--hover);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .folio-sidebar-row[aria-current='page'] {
+    background: var(--s2);
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* An eyebrow label: 10.5px/500, uppercase, .1em, `--ink3`. */
+  .folio-eyebrow {
+    font-size: var(--text-10-5);
+    font-weight: 500;
+    letter-spacing: var(--tracking-eyebrow);
+    text-transform: uppercase;
+    color: var(--ink3);
+  }
+
+  /* A button with no chrome until hovered. */
+  .folio-ghost-button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .folio-ghost-button:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  /* A secondary button: `--s1` ground, hairline, `--s2` on hover. */
+  .folio-pill-button {
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    cursor: pointer;
+    color: var(--ink2);
+    text-decoration: none;
+  }
+
+  .folio-pill-button:hover:not(:disabled) {
+    background: var(--s2);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  /* The header's Write / Storyboard segmented pill. */
+  .folio-pill-tab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 15px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: var(--text-13);
+    font-weight: 500;
+    color: var(--ink2);
+    text-decoration: none;
+  }
+
+  .folio-pill-tab:hover {
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .folio-pill-tab[aria-selected='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  /* The one solid primary: inverted, `--solid` on `--solid-ink`. */
+  .folio-solid-button {
+    background: var(--solid);
+    color: var(--solid-ink);
+    border: none;
+    cursor: pointer;
+  }
+
+  .folio-solid-button:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+
+  .folio-solid-button:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  /* A menu or popover: `--sunk`, a hairline, 14px radius, a deep shadow. */
+  .folio-menu {
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 22px 60px var(--panel-shadow);
+    font-family: var(--font-sans);
+    text-transform: none;
+    white-space: normal;
+  }
+
+  .folio-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 8px 9px;
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: var(--text-13);
+    color: var(--ink2);
+    text-align: left;
+    text-decoration: none;
+  }
+
+  .folio-menu-item:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .folio-menu-item[aria-current='true'],
+  .folio-menu-item[aria-selected='true'] {
+    background: var(--s2);
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .folio-menu-item:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  /* An input on a recessed ground. */
+  .folio-field {
+    padding: 7px 10px;
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    border-radius: 9px;
+    color: var(--ink);
+    font-size: var(--text-13);
+  }
+
+  .folio-field::placeholder {
+    color: var(--ink3);
+  }
+
+  /* A suggestion chip in the assistant panel. */
+  .folio-chip-button {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 14px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: var(--text-13);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-chip-button:hover {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  /* The composer's textarea: no chrome of its own; the card around it is the field. */
+  .folio-composer {
+    width: 100%;
+    min-height: 22px;
+    max-height: 160px;
+    resize: none;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: var(--text-13-5);
+    line-height: 1.5;
+    color: var(--ink);
+  }
+
+  .folio-composer::placeholder {
+    color: var(--ink3);
+  }
+
+  .folio-composer:focus-visible {
+    box-shadow: none;
+  }
+
+  /*
+   * The assistant panel. 400px, `--sunk`, one left hairline. In flow above
+   * 1200px; below it, over the content with the README's shadow at
+   * `min(400px, 92vw)`.
+   */
+  .folio-assistant-panel {
+    width: 400px;
+    min-height: 0;
+    background: var(--sunk);
+    border-left: 1px solid var(--line2);
+  }
+
+  .folio-assistant-panel[data-in-flow='false'] {
+    width: min(400px, 92vw);
+    box-shadow: -24px 0 70px var(--panel-shadow);
+  }
+
+  /* The Characters overlay's card. */
+  .folio-overlay {
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    box-shadow: 0 24px 70px var(--panel-shadow);
+    overflow: hidden;
+  }
+
+  /* The orb. Small in the header and the panel's title; large, drifting, in the empty panel. */
+  .folio-orb {
+    display: inline-block;
+    flex: none;
+    border-radius: 50%;
+    background: radial-gradient(circle at 33% 28%, var(--orb-1) 0%, var(--orb-2) 22%, var(--orb-3) 58%, var(--orb-4) 100%);
+    box-shadow: 0 0 14px var(--orb-glow);
+  }
+
+  .folio-orb[data-size='large'] {
+    background: radial-gradient(
+      circle at 34% 26%,
+      var(--orb-1-large) 0%,
+      var(--orb-2-large) 18%,
+      var(--orb-3-large) 48%,
+      var(--orb-4-large) 76%,
+      var(--orb-5-large) 100%
+    );
+    box-shadow:
+      0 0 90px var(--orb-glow-large),
+      0 0 26px var(--orb-glow-soft);
+  }
+
+  .folio-orb-drift {
+    animation: folio-orbdrift 9s ease-in-out infinite;
+  }
+
+  /* "Thinking" while the first token is on its way. */
+  .folio-thinking {
+    color: var(--ink3);
+    animation: folio-blink 1.4s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .folio-orb-drift,
+    .folio-thinking {
+      animation: none;
+    }
+  }
+}
+
+@keyframes folio-orbdrift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-4px, 4px) scale(1.03);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes folio-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/*
+ * The old shell's rail and nav-row classes, kept for the home sidebar
+ * (`app/(app)/_shell/sidebar.tsx`) until that shell has its own pass.
+ */
+@layer components {
+  .folio-nav-item {
     position: relative;
     width: 78px;
     height: 46px;
@@ -59,80 +434,23 @@
     gap: 4px;
     background: transparent;
     border: none;
-    border-radius: var(--radius-chrome);
+    border-radius: 10px;
     cursor: pointer;
     color: var(--ink2);
     text-decoration: none;
   }
 
-  /*
-   * The project rail's button is the same control at the bundle's own width:
-   * 56x46 inside a 66px column (`Route - Script.dc.html`). Its labels are one
-   * short word each, so the widening the home sidebar needed does not apply.
-   */
-  .folio-rail-item {
-    width: 56px;
-  }
-
-  .folio-nav-item:hover,
-  .folio-rail-item:hover {
+  .folio-nav-item:hover {
     background: var(--hover);
     color: var(--ink);
     text-decoration: none;
   }
 
-  /*
-   * "Rail active state is a 2px `-accent` bar at `left:-5px` **plus** the
-   * `-sel` background. Not a colour change alone." - AGENTS.md, UI fidelity.
-   * The bar is a pseudo-element so the markup carries no decorative span, and
-   * it is driven by `aria-current`, so the accessible state and the visible
-   * state cannot disagree.
-   */
-  .folio-nav-item[aria-current='page'],
-  .folio-rail-item[aria-current='page'] {
-    background: var(--sel);
+  .folio-nav-item[aria-current='page'] {
+    background: var(--s2);
     color: var(--ink);
   }
 
-  .folio-nav-item[aria-current='page']::before,
-  .folio-rail-item[aria-current='page']::before {
-    content: '';
-    position: absolute;
-    left: -5px;
-    top: 13px;
-    bottom: 13px;
-    width: 2px;
-    border-radius: var(--radius-bar);
-    background: var(--accent);
-  }
-
-  /*
-   * A badge on a rail button: `top:4px; right:6px`, 13px tall, `--note` on
-   * `--rail`, 8.5px/700. Rendered only when the count is non-zero - the empty
-   * state shows no badge (design README, Icon rail).
-   */
-  .folio-rail-badge {
-    position: absolute;
-    top: 4px;
-    right: 6px;
-    min-width: 13px;
-    height: 13px;
-    padding: 0 3px;
-    border-radius: var(--radius-chrome);
-    background: var(--note);
-    color: var(--rail);
-    font-size: 8.5px;
-    font-weight: 700;
-    display: grid;
-    place-items: center;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /*
-   * A row in the episode nav: the seven routes, the episode board's entries
-   * and the scenes group all share the selected treatment - `--sel` behind
-   * the row, driven by `aria-current` for the same reason as the rail.
-   */
   .folio-nav-row {
     display: flex;
     align-items: center;
@@ -166,50 +484,31 @@
 }
 
 /*
- * The script sheet. `Route - Script.dc.html`, the sheet element and its
- * children, transcribed: every inset is the bundle's own pixel figure at the
- * 816px width (96px = 1in), and `@folio/script`'s `sheet.ts` reads the same
- * numbers into the pagination engine - the two must agree or the page count
- * on screen stops being the page count in print.
+ * The script. `docs/ui design/Route - Script v2.dc.html`, transcribed: text
+ * on the app background, no paper. Geist 17px at 1.85 in `--script`, a
+ * reading column capped at 818px with a 58px gutter on the left for the
+ * block handles, 26px between elements and 2px inside a speech. Ruled
+ * 2026-09-16: the body is proportional and wraps on its own; the
+ * pagination engine still measures in Courier, and what the screen draws of
+ * that is the `Page N` divider (`lib/script/pages.ts`).
  *
- * The line is 16px (Courier Prime 12pt at 96dpi on six lines to the inch -
- * the ruling recorded in `docs/build-decisions.md`, Script route phase) and
- * every vertical measure on the sheet is a whole number of lines. Blocks are
- * `white-space: pre` and never wrap on their own: the line ends are the
- * engine's, drawn by `.folio-line-end::after` (see `lib/script/lines.ts`).
- *
- * Colours are the sheet tokens - `--sheet`, `--sheet-ink`, `--sheet-line`,
- * `--sheet-edge` - which the theme switches: in dark mode the sheet is
- * tinted, never white, never black. No `dark:` anywhere; the cascade under
- * `data-theme` is what makes a light sheet inside a dark desk possible.
+ * Blocks are `pre-wrap`: the model keeps whitespace verbatim (a dialogue
+ * run holds `\n`) and the page must show it, but a line longer than the
+ * column wraps at the column, not at the engine's measure.
  */
 @layer components {
-  .folio-desk {
+  .folio-script-column {
+    width: 100%;
+    max-width: 818px;
+    padding-left: 58px;
+  }
+
+  .folio-script {
     position: relative;
-    width: 816px;
-    flex: none;
-  }
-
-  .folio-page {
-    position: absolute;
-    left: 0;
-    width: 816px;
-    height: 1056px;
-    background: var(--sheet);
-    border: 1px solid var(--sheet-edge);
-    border-radius: var(--radius-sheet);
-    pointer-events: none;
-  }
-
-  .folio-page-number {
-    position: absolute;
-    top: 48px;
-    right: 96px;
-    color: var(--ink3);
-    font-family: var(--font-mono);
-    font-size: 16px;
-    line-height: 16px;
-    user-select: none;
+    font-family: var(--font-sans);
+    font-size: var(--text-17);
+    line-height: 1.85;
+    color: var(--script);
   }
 
   .folio-editable {
@@ -217,20 +516,15 @@
     outline: none;
     box-shadow: none;
     border: none;
-    font-family: var(--font-mono);
-    font-size: 16px;
-    line-height: 16px;
-    color: var(--sheet-ink);
-    caret-color: var(--accent);
+    caret-color: var(--caret);
   }
 
   /*
-   * The sheet never wears a focus ring. Tiptap's core Tabindex extension sets
+   * The page never wears a focus ring. Tiptap's core Tabindex extension sets
    * `tabindex="0"` on the editable, so `@folio/ui`'s base-layer
-   * `:where([tabindex]):focus-visible` ring (2px `--focus`, coral) would frame
-   * the whole page the moment it is clicked. These sit in `components`, above
-   * `base`, so they win without `!important`; the ProseMirror class names are
-   * covered too in case the `folio-editable` attribute ever stops being set.
+   * `:where([tabindex]):focus-visible` ring would frame the whole script the
+   * moment it is clicked. These sit in `components`, above `base`, so they
+   * win without `!important`.
    */
   .folio-editable:focus,
   .folio-editable:focus-visible,
@@ -251,107 +545,114 @@
     background: var(--accent-bg);
   }
 
+  /* A node-selected block (the drag handle was pressed): a soft ring. */
+  .folio-editable .ProseMirror-selectednode {
+    box-shadow: 0 0 0 2px var(--accent-bg);
+    border-radius: 6px;
+  }
+
   .folio-block {
     position: relative;
-    white-space: pre;
-    padding: 0 96px 0 144px;
-    min-height: 16px;
+    margin-top: 26px;
+    min-height: 1.85em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
+
+  .folio-editable > .folio-block:first-child,
+  .folio-editable > .folio-page-break:first-child + .folio-block {
+    margin-top: 0;
   }
 
   .folio-block[data-type='scene'] {
+    letter-spacing: 0.06em;
     text-transform: uppercase;
+    color: var(--ink);
   }
 
   .folio-block[data-type='character'] {
-    padding-left: 355px;
+    padding: 0 90px;
+    text-align: center;
+    letter-spacing: 0.07em;
     text-transform: uppercase;
+    color: var(--ink);
   }
 
   .folio-block[data-type='paren'] {
-    padding-left: 298px;
-    padding-right: 278px;
+    margin-top: 2px;
+    padding: 0 90px;
+    text-align: center;
+    font-size: var(--text-15);
+    color: var(--ink3);
   }
 
   .folio-block[data-type='dialogue'] {
-    padding-left: 240px;
-    padding-right: 240px;
+    margin-top: 2px;
+    padding: 0 90px;
+    text-align: center;
   }
 
   .folio-block[data-type='subtitle'] {
-    padding-left: 240px;
-    padding-right: 240px;
+    margin-top: 4px;
+    padding: 0 90px;
+    text-align: center;
+    font-size: var(--text-15);
     font-style: italic;
-    color: var(--ink2);
+    color: var(--ink3);
   }
 
   .folio-block[data-type='transition'] {
-    padding-left: 576px;
+    text-align: right;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--ink2);
+    color: var(--ink3);
   }
 
   /*
-   * The comment block: an amber note inset to the action measure, labelled
-   * COMMENT with "not exported - not paginated". Zero page space: its drawn
-   * height is subtracted from the next block's margin by `lib/script/layout.ts`,
-   * which is why the vertical chrome here is fixed - 8px above, 4px and 4px
-   * inside, a 16px label line - and must not change without changing it there.
+   * A note (the `comment` node): a card, as the mockup draws a comment,
+   * labelled `Note · not exported`. It takes no page space in the record
+   * and the label says why.
    */
   .folio-block[data-type='comment'] {
-    margin: 8px 96px 0 144px;
-    padding: 4px 10px;
-    border-left: 2px solid var(--note);
-    background: var(--note-bg);
-    border-radius: 0 4px 4px 0;
+    padding: 12px 14px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-card);
+    font-size: var(--text-14);
+    line-height: 1.55;
+    color: var(--ink2);
   }
 
   .folio-comment-label {
     display: flex;
     align-items: center;
-    gap: 6px;
-    height: 16px;
+    gap: 8px;
+    margin-bottom: 3px;
     font-family: var(--font-sans);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    color: var(--note);
+    font-size: var(--text-12);
+    color: var(--ink3);
     user-select: none;
   }
 
-  .folio-comment-label > span {
-    font-weight: 400;
-    letter-spacing: 0.02em;
-    text-transform: none;
-    opacity: 0.85;
+  .folio-comment-label > span::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 3px;
+    margin: 0 8px 3px 0;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.6;
   }
 
-  /* An engine line end. The break is a rendered newline, not a DOM node. */
-  .folio-line-end::after {
-    content: '\A';
-    white-space: pre;
-  }
-
-  /* The caret line's element chip: 9px, accent, at the sheet's inner margin. */
-  .folio-chip {
-    position: absolute;
-    left: 96px;
-    top: -1px;
-    font-family: var(--font-sans);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--accent);
-    user-select: none;
-    pointer-events: none;
-  }
-
-  /* An @mention: accent ground, accent underline, as the bundle draws MEERA. */
+  /* An @mention: an accent chip, as the mockup draws MEERA. */
   .folio-mention {
+    padding: 1px 5px;
+    margin: 0 -1px;
     background: var(--accent-bg);
-    border-bottom: 1px solid var(--accent-line);
-    border-radius: 2px;
+    border-radius: 6px;
+    color: var(--ink);
   }
 
   .folio-mention[data-selected='true'] {
@@ -361,22 +662,15 @@
   /*
    * The ghost: what the caret block promises before it is written - the
    * heading's three segments, CHARACTER, CUT TO:, the parenthetical's cue.
-   * Flows after the text when there is text; placed at the block's own inset
-   * when there is none, because an empty Slate block ends in a <br>. Never
-   * selectable, never a click target, so Slate never sees it as a point.
+   * Inline after the text; never selectable, never a click target.
    */
   .folio-ghost {
     color: var(--ink3);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
     white-space: pre;
     user-select: none;
     pointer-events: none;
-  }
-
-  .folio-ghost[data-placed='true'] {
-    position: absolute;
-    top: 0;
-    left: 0;
-    padding-left: inherit;
   }
 
   .folio-ghost > b {
@@ -386,10 +680,377 @@
   }
 
   /*
-   * The block selector, under the segment it completes: a prompt, the two
-   * key hints as keycaps, a two-line list. Same chrome as the slash menu and
-   * the mention combobox; the editable keeps focus throughout. Reopened from
-   * a pill it is the same box (`data-mode='edit'`).
+   * The block handles: `+` and `⠿` at `left: -58px`, drawn at the caret
+   * block and on hover, as the mockup does. A widget inside the block, so
+   * it moves with it; absolutely placed, so it takes no room.
+   */
+  .folio-handles {
+    position: absolute;
+    left: -58px;
+    top: 4px;
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.14s;
+    user-select: none;
+  }
+
+  .folio-block:hover > .folio-handles,
+  .folio-block[data-caret='true'] > .folio-handles {
+    opacity: 0.5;
+  }
+
+  .folio-handles:hover {
+    opacity: 1;
+  }
+
+  .folio-handle {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: var(--text-14);
+    line-height: 1;
+    color: var(--ink3);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .folio-handle[data-handle='drag'] {
+    cursor: grab;
+    font-size: var(--text-12);
+  }
+
+  .folio-handle:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  /* `Page 2` - an eyebrow and a hairline where the record says a page begins. */
+  .folio-page-break {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 26px;
+    padding: 2px 0;
+    font-family: var(--font-sans);
+    letter-spacing: 0;
+    text-transform: none;
+    text-align: left;
+    user-select: none;
+  }
+
+  /* Inside a block the engine split: a block-level box in the inline flow. */
+  span.folio-page-break {
+    margin: 12px 0;
+  }
+
+  .folio-page-break-label {
+    flex: none;
+    font-size: var(--text-10-5);
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink3);
+  }
+
+  .folio-page-break-rule {
+    flex: 1;
+    height: 1px;
+    background: var(--line2);
+  }
+
+  .folio-page-break-artefact {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: var(--text-10-5);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink3);
+  }
+
+  .folio-page-break[data-page-locked='true'] > .folio-page-break-label {
+    color: var(--warn);
+  }
+
+  /*
+   * A pill: a segment of a finished heading, cue or transition - INT., the
+   * set, the time, the cue's name, the cut - drawn on an accent ground so it
+   * reads as a thing that can be clicked, which it can: a click reopens that
+   * segment's selector. A decoration on the text, so it is the text.
+   */
+  .folio-pill {
+    background: var(--accent-bg);
+    border-bottom: 1px solid var(--accent-line);
+    cursor: pointer;
+  }
+
+  .folio-pill:hover {
+    border-bottom-color: var(--accent);
+  }
+
+  /* A thread card's host, and the card. Between the blocks, in the flow. */
+  .folio-thread-host {
+    display: block;
+  }
+
+  .folio-thread-card {
+    display: flex;
+    flex-direction: column;
+    margin-top: 26px;
+    padding: 12px 14px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-card);
+    font-family: var(--font-sans);
+    font-size: var(--text-14);
+    line-height: 1.55;
+    letter-spacing: 0;
+    text-transform: none;
+    text-align: left;
+    color: var(--ink2);
+    white-space: normal;
+  }
+
+  .folio-thread-chip {
+    width: 24px;
+    height: 24px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--avatar-bg);
+    color: var(--avatar-ink);
+    font-size: var(--text-9-5);
+    font-weight: 600;
+  }
+
+  /* The 3px separator dot between metas: `Rukmini · 14:02 · not exported`. */
+  .folio-dot {
+    display: inline-block;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.6;
+  }
+
+  /* The empty state's caret. */
+  .folio-caret {
+    display: inline-block;
+    width: 2px;
+    height: 19px;
+    margin-right: 3px;
+    vertical-align: -4px;
+    background: var(--caret);
+    animation: folio-caret-blink 1.1s steps(1) infinite;
+  }
+
+  /* A banner under the toolbar: a conflict, a defect, a refusal. */
+  .folio-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 20px 6px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    font-size: var(--text-12);
+    line-height: 1.5;
+  }
+
+  .folio-banner[data-tone='warn'] {
+    background: var(--warn-bg);
+    color: var(--ink);
+  }
+
+  .folio-banner[data-tone='live'] {
+    background: var(--live-bg);
+    color: var(--live);
+  }
+
+  /*
+   * The title page: the export's geometry on the script's ground. Courier,
+   * the measured face, in one hairline card at the column's width.
+   */
+  .folio-cover {
+    padding: 40px 96px 32px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-card);
+    font-family: var(--font-courier);
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+
+  .folio-cover-field {
+    display: block;
+    width: 100%;
+    resize: none;
+    padding: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    font: inherit;
+    color: inherit;
+    text-align: center;
+  }
+
+  .folio-cover-field::placeholder {
+    color: var(--ink3);
+  }
+
+  .folio-cover-field:focus-visible {
+    box-shadow: none;
+  }
+
+  /*
+   * The slash menu, the `@` combobox and the `+` handle's menu share one
+   * card: 254px, `--sunk`, 14px radius, the deep shadow, an eyebrow, rows
+   * of a mono glyph and a name, `↵` on the lit row. The search line -
+   * "Type to search" after a bare slash - is the Suggestion plugin's
+   * empty-query decoration, drawn as text after the slash.
+   */
+  .folio-slash-query-empty::after {
+    content: 'Type to search';
+    color: var(--ink3);
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: pre;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .folio-slash-query {
+    color: var(--caret);
+  }
+
+  .folio-slash {
+    position: fixed;
+    z-index: 30;
+    width: 254px;
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 22px 60px var(--panel-shadow);
+    font-family: var(--font-sans);
+    font-size: var(--text-13-5);
+    color: var(--ink);
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: normal;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  .folio-slash-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+
+  .folio-slash-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .folio-slash-section + .folio-slash-section {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--line2);
+  }
+
+  .folio-slash-title {
+    padding: 4px 8px 6px;
+    font-size: var(--text-11);
+    letter-spacing: 0.06em;
+    color: var(--ink3);
+  }
+
+  .folio-slash-empty {
+    padding: 8px;
+    font-size: var(--text-12);
+    color: var(--ink3);
+  }
+
+  .folio-slash-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 8px 9px;
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: var(--text-13-5);
+    font-weight: 500;
+    color: var(--ink2);
+    text-align: left;
+  }
+
+  .folio-slash-row[aria-selected='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-slash-row:disabled {
+    opacity: 0.6;
+  }
+
+  .folio-slash-glyph {
+    flex: none;
+    width: 19px;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: var(--text-13);
+    line-height: 20px;
+    white-space: nowrap;
+    color: var(--ink2);
+  }
+
+  .folio-slash-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folio-slash-enter {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    background: var(--s2);
+    font-size: var(--text-10);
+    color: var(--ink3);
+  }
+
+  .folio-slash-row > kbd {
+    flex: none;
+    font-family: var(--font-sans);
+    font-size: var(--text-10-5);
+    color: var(--ink3);
+  }
+
+  /*
+   * The block selector, under the segment it completes: the same card, with
+   * a prompt, the two key hints as keycaps, and a two-line list. Reopened
+   * from a pill it is the same box (`data-mode='edit'`).
    */
   .folio-picker {
     position: fixed;
@@ -397,13 +1058,15 @@
     width: 264px;
     display: flex;
     flex-direction: column;
-    padding: 4px;
-    background: var(--panel);
+    padding: 8px;
+    background: var(--sunk);
     border: 1px solid var(--line);
-    border-radius: var(--radius-chrome);
+    border-radius: 14px;
+    box-shadow: 0 22px 60px var(--panel-shadow);
     font-family: var(--font-sans);
-    font-size: var(--text-11-5);
+    font-size: var(--text-13);
     color: var(--ink);
+    letter-spacing: 0;
     text-transform: none;
     white-space: normal;
     user-select: none;
@@ -411,7 +1074,8 @@
 
   .folio-picker-prompt {
     padding: 4px 8px 2px;
-    font-size: var(--text-10-5);
+    font-size: var(--text-11);
+    letter-spacing: 0.06em;
     color: var(--ink3);
   }
 
@@ -420,7 +1084,7 @@
     flex-direction: column;
     gap: 3px;
     padding: 2px 8px 6px;
-    font-size: var(--text-10-5);
+    font-size: var(--text-11);
     color: var(--ink3);
   }
 
@@ -433,11 +1097,11 @@
   .folio-picker-hints kbd {
     min-width: 34px;
     padding: 1px 5px;
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    background: var(--sel);
+    border: 1px solid var(--line2);
+    border-radius: 6px;
+    background: var(--s1);
     font-family: var(--font-mono);
-    font-size: var(--text-9-5);
+    font-size: var(--text-10);
     color: var(--ink2);
     text-align: center;
   }
@@ -445,11 +1109,11 @@
   .folio-picker-list {
     display: flex;
     flex-direction: column;
-    gap: 1px;
-    max-height: 208px;
+    gap: 2px;
+    max-height: 240px;
     overflow-y: auto;
     border-top: 1px solid var(--line2);
-    padding-top: 3px;
+    padding-top: 4px;
   }
 
   .folio-picker-choice {
@@ -457,27 +1121,27 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 1px;
-    padding: 5px 8px;
+    padding: 7px 9px;
     background: transparent;
     border: none;
-    border-radius: var(--radius-chrome);
+    border-radius: 9px;
     cursor: pointer;
     color: var(--ink2);
     text-align: left;
   }
 
   .folio-picker-choice[aria-selected='true'] {
-    background: var(--sel);
+    background: var(--s2);
     color: var(--ink);
   }
 
   .folio-picker-choice-text {
-    font-weight: 600;
-    font-size: var(--text-11-5);
+    font-weight: 500;
+    font-size: var(--text-13);
   }
 
   .folio-picker-choice-detail {
-    font-size: var(--text-10-5);
+    font-size: var(--text-11);
     color: var(--ink3);
   }
 
@@ -486,10 +1150,10 @@
   }
 
   .folio-picker-foot {
-    margin-top: 2px;
+    margin-top: 4px;
     border-top: 1px solid var(--line2);
-    padding: 4px 8px 2px;
-    font-size: var(--text-9-5);
+    padding: 6px 8px 2px;
+    font-size: var(--text-11);
     color: var(--ink3);
   }
 
@@ -501,208 +1165,7 @@
     cursor: pointer;
   }
 
-  /*
-   * A pill: a segment of a finished heading, cue or transition - INT., the
-   * set, the time, the cue's name, the cut - drawn on an accent ground so it
-   * reads as a thing that can be clicked, which it can: a click reopens that
-   * segment's selector (`_script/editor/extensions/pickers.ts`). A decoration on the text, so it
-   * is the text; the caret moves through it and typing edits it.
-   */
-  .folio-pill {
-    background: var(--accent-bg);
-    border-bottom: 1px solid var(--accent-line);
-    cursor: pointer;
-  }
-
-  /* No ring and no radius: a line end or a page gap splits a pill into two spans, which must tile without a seam. */
-  .folio-pill:hover {
-    border-bottom-color: var(--accent);
-  }
-
-  .folio-block[data-type='transition'] .folio-pill {
-    color: var(--sheet-ink);
-  }
-
-  /*
-   * The slash menu, under the `/` that opened it: sections with a title,
-   * rows of a glyph box, a label with its detail, and the ⌘N the row also
-   * answers to; a foot that closes it. The search line is the placeholder
-   * after the slash while nothing has been typed - the Suggestion plugin's
-   * empty-query decoration, drawn as text after the slash. Same chrome as
-   * the block selector, wider and taller, and the editable keeps focus
-   * throughout. The menu itself is drawn in the floating layer on
-   * `document.body` (`_script/editor/floating/floating-layer.tsx`), outside
-   * the zoomed desk, at `position: fixed`.
-   */
-  .folio-slash-query-empty::after {
-    content: 'Type to search';
-    color: var(--ink3);
-    text-transform: none;
-    white-space: pre;
-    user-select: none;
-    pointer-events: none;
-  }
-
-  .folio-slash {
-    position: fixed;
-    z-index: 30;
-    width: 312px;
-    display: flex;
-    flex-direction: column;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-toggle);
-    font-family: var(--font-sans);
-    font-size: var(--text-12);
-    color: var(--ink);
-    text-transform: none;
-    white-space: normal;
-    user-select: none;
-    overflow: hidden;
-  }
-
-  .folio-slash-list {
-    display: flex;
-    flex-direction: column;
-    max-height: 296px;
-    overflow-y: auto;
-    padding: 6px;
-  }
-
-  .folio-slash-section {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .folio-slash-section + .folio-slash-section {
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px solid var(--line2);
-  }
-
-  .folio-slash-title {
-    padding: 4px 8px 5px;
-    font-size: var(--text-10-5);
-    font-weight: 500;
-    color: var(--ink3);
-  }
-
-  .folio-slash-empty {
-    padding: 8px;
-    font-size: var(--text-11);
-    color: var(--ink3);
-  }
-
-  .folio-slash-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 5px 8px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-chrome);
-    cursor: pointer;
-    color: var(--ink);
-    text-align: left;
-  }
-
-  .folio-slash-row[aria-selected='true'] {
-    background: var(--sel);
-  }
-
-  .folio-slash-glyph {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    background: var(--hover);
-    font-family: var(--font-glyph);
-    font-size: var(--text-12-5);
-    color: var(--ink2);
-  }
-
-  .folio-slash-label {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 500;
-  }
-
-  .folio-slash-detail {
-    font-weight: 400;
-    color: var(--ink3);
-  }
-
-  .folio-slash-row > kbd {
-    flex: none;
-    font-family: var(--font-sans);
-    font-size: var(--text-10-5);
-    color: var(--ink3);
-  }
-
-  .folio-slash-foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 14px;
-    border-top: 1px solid var(--line2);
-    font-size: var(--text-12);
-    color: var(--ink);
-  }
-
-  .folio-slash-foot > button {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
-  }
-
-  .folio-slash-foot > span {
-    font-size: var(--text-10-5);
-    color: var(--ink3);
-  }
-
-  /*
-   * A page gap inside a split block: the rest of the page, the desk between
-   * sheets, and the next page's top margin, with (MORE) at its head and the
-   * continued cue at its foot. A block box inside the inline flow, so the
-   * lines after it continue on the next sheet.
-   */
-  .folio-page-gap {
-    display: block;
-    position: relative;
-    user-select: none;
-  }
-
-  .folio-page-gap-more {
-    position: absolute;
-    top: 0;
-    left: 0;
-  }
-
-  .folio-page-gap-continued {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    text-transform: uppercase;
-  }
-
-  .folio-ghost {
-    text-transform: uppercase;
-    color: var(--ink3);
-    letter-spacing: 0.02em;
-  }
-
-  /* The right panel's segmented control and its rows. Bundle geometry. */
+  /* The controls the routes built before the redesign still use. */
   .folio-segment {
     display: flex;
     padding: 2px;
@@ -812,49 +1275,94 @@
   }
 }
 
+@keyframes folio-caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
 /*
- * The prose sheet - the Outline. `Route - Outline.dc.html`, transcribed: the
- * same 816px sheet as the script, a 14px ruler above it, `56px 0 88px`
- * inside, Courier Prime 16px at 1.95 for prose and Inter (`--font-serif`,
- * the prose/heading role) for the title and headings. Not paginated - the
- * panel says so - so blocks wrap on their
- * own (`pre-wrap`) and there is no line engine here.
+ * The Outline - `docs/ui design/Route - Outline v2.dc.html`, transcribed.
+ * The same column as the script (`.folio-script-column`: 818px, 58px of
+ * gutter for the handles), Geist 17px at 1.85 in `--script`, blocks 26px
+ * apart. The title block is the episode's title at 32px over the mono
+ * date; a heading is 20px/500 with 8px more above it; a quote is an accent
+ * hairline at its left, italic, `--ink2`; a rule is one `--line2` line; a
+ * beat is its mono number in an 18px column and a 600-weight lead in
+ * `--ink`, consecutive beats 10px apart. Not paginated: blocks wrap on
+ * their own (`pre-wrap`) and there is no line engine here.
  *
- * Nothing is drawn in the left margin: no ring, no handle, no label. The
- * first Outline phase carried a 7px ring per block at `left: 74px`; it went
- * with the Plate editor (docs/build-decisions.md, "Outline route, second
- * pass"), as the Script route's sheet has nothing beside a block either. A
- * beat's number sits inside the block's own 30px inset.
+ * Only the H1 is drawn in the mockup. H2 at 18px and H3 at 17px are an
+ * inference under it - a step each, the smallest still above the body -
+ * flagged in the phase record.
+ *
+ * The handles (`.folio-handles`, shared with the script) sit at `left:
+ * -58px` on the caret block and on hover. The empty state is the same
+ * column with `data-empty-state`: the title in `--ink3`, 30px between the
+ * groups and 26px above the first.
  */
 @layer components {
-  .folio-prose-ruler {
-    width: 816px;
-    height: 14px;
+  /*
+   * Margins, not a flex gap: the editor host is in the flow before the
+   * editor exists (the static column is drawn beside it until then), and a
+   * gap would count the empty host as a row and shift the page on mount.
+   */
+  .folio-outline {
+    position: relative;
+    font-family: var(--font-sans);
+    font-size: var(--text-17);
+    line-height: 1.85;
+    color: var(--script);
+  }
+
+  .folio-outline[data-empty-state] {
+    padding-top: 26px;
+  }
+
+  .folio-outline-title {
+    position: relative;
     display: flex;
-    align-items: flex-end;
-    background: var(--panel);
-    border: 1px solid var(--sheet-edge);
-    border-bottom: none;
-    padding: 0 96px;
-    overflow: hidden;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 26px;
   }
 
-  .folio-prose-ruler > div {
-    flex: 1;
-    height: 5px;
-    background-image: repeating-linear-gradient(to right, var(--line) 0 1px, transparent 1px 24px);
+  .folio-outline[data-empty-state] .folio-outline-title {
+    margin-bottom: 30px;
   }
 
-  .folio-prose-sheet {
-    width: 816px;
-    flex: none;
-    background: var(--sheet);
-    border: 1px solid var(--sheet-edge);
-    border-radius: 0 0 var(--radius-sheet) var(--radius-sheet);
-    padding: 56px 0 88px;
-    min-height: 1000px;
-    font-family: var(--font-mono);
-    color: var(--sheet-ink);
+  .folio-outline[data-empty-state] [data-empty-note] {
+    margin-top: 30px;
+  }
+
+  /* The empty state's one blank block wears no handles; there is nothing to insert below or move. */
+  .folio-outline[data-empty-state] .folio-handles {
+    display: none;
+  }
+
+  .folio-outline-title-text {
+    font-size: var(--text-32);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: var(--tracking-page);
+    color: var(--ink);
+    text-wrap: pretty;
+  }
+
+  .folio-outline[data-empty-state] .folio-outline-title-text {
+    color: var(--ink3);
+  }
+
+  .folio-outline-footnote {
+    margin: 26px 0 0;
+    font-size: var(--text-13);
+    line-height: 1.6;
+    color: var(--ink3);
   }
 
   .folio-outline-editable {
@@ -862,99 +1370,106 @@
     outline: none;
     box-shadow: none;
     border: none;
-    caret-color: var(--accent);
+    caret-color: var(--caret);
   }
 
   .folio-outline-editable ::selection {
     background: var(--accent-bg);
   }
 
-  /* One block. The vertical rhythm is the bundle's `pad` per kind. */
-  .folio-outline-block {
-    position: relative;
-    margin: 0 96px;
-    padding-top: 12px;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    font-size: 16px;
-    line-height: 1.95;
+  /* A node-selected block (the drag handle was pressed): a soft ring. */
+  .folio-outline-editable .ProseMirror-selectednode {
+    box-shadow: 0 0 0 2px var(--accent-bg);
+    border-radius: 6px;
   }
 
-  .folio-outline-block:first-child {
-    padding-top: 0;
+  /* One block. 26px above every block but the first; the beats and the headings adjust below. */
+  .folio-outline-block {
+    position: relative;
+    margin-top: 26px;
+    min-height: 1.85em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
+
+  .folio-outline-editable > .folio-outline-block:first-child {
+    margin-top: 0;
   }
 
   .folio-outline-block[data-type='h1'],
   .folio-outline-block[data-type='h2'],
   .folio-outline-block[data-type='h3'] {
-    font-family: var(--font-serif);
+    margin-top: 34px;
     font-weight: 500;
-    line-height: 1.25;
+    line-height: 1.3;
     letter-spacing: var(--tracking-title);
+    color: var(--ink);
+  }
+
+  /* A heading straight after a rule sits at the rhythm, as the mockup's `Story Beats`. */
+  .folio-outline-block[data-type='rule'] + .folio-outline-block[data-type='h1'],
+  .folio-outline-block[data-type='rule'] + .folio-outline-block[data-type='h2'],
+  .folio-outline-block[data-type='rule'] + .folio-outline-block[data-type='h3'] {
+    margin-top: 26px;
   }
 
   .folio-outline-block[data-type='h1'] {
-    padding-top: 30px;
     font-size: var(--text-20);
   }
 
   .folio-outline-block[data-type='h2'] {
-    padding-top: 24px;
     font-size: var(--text-18);
   }
 
   .folio-outline-block[data-type='h3'] {
-    padding-top: 18px;
-    font-size: var(--text-16);
-  }
-
-  .folio-outline-block[data-type='h1']:first-child,
-  .folio-outline-block[data-type='h2']:first-child,
-  .folio-outline-block[data-type='h3']:first-child {
-    padding-top: 0;
-  }
-
-  /* Prose straight after a heading sits closer to it, as the bundle's `10px` pad. */
-  .folio-outline-block[data-type='h1'] + .folio-outline-block,
-  .folio-outline-block[data-type='h2'] + .folio-outline-block,
-  .folio-outline-block[data-type='h3'] + .folio-outline-block {
-    padding-top: 10px;
+    font-size: var(--text-17);
   }
 
   .folio-outline-block[data-type='quote'] > .folio-outline-quote {
-    padding: 2px 0 2px 16px;
-    border-left: 2px solid var(--accent-line);
-    color: var(--ink2);
+    padding: 2px 0 2px 20px;
+    border-left: 2px solid var(--accent);
     font-style: italic;
+    color: var(--ink2);
   }
 
+  /* The rule block is its hairline; the block's own height keeps it selectable. */
   .folio-outline-block[data-type='rule'] {
-    padding-top: 26px;
+    min-height: 0;
+    padding: 6px 0;
   }
 
   .folio-outline-rule {
     display: block;
     height: 1px;
-    background: var(--sheet-line);
+    background: var(--line2);
+  }
+
+  .folio-outline-block[data-type='rule'].ProseMirror-selectednode {
+    box-shadow: none;
   }
 
   .folio-outline-block[data-type='rule'].ProseMirror-selectednode > .folio-outline-rule {
-    box-shadow: 0 0 0 2px var(--focus);
+    box-shadow: 0 0 0 2px var(--accent-bg);
   }
 
-  /* A numbered beat: the number inside the block's own inset, consecutive beats 4px apart. */
+  /* A numbered beat: the number in an 18px column with a 14px gap; consecutive beats 10px apart. */
   .folio-outline-block[data-type='beat'] {
-    padding-left: 30px;
+    padding-left: 32px;
   }
 
   .folio-outline-block[data-type='beat'] + .folio-outline-block[data-type='beat'] {
-    padding-top: 4px;
+    margin-top: 10px;
   }
 
   .folio-outline-marker {
     position: absolute;
     left: 0;
+    top: 4px;
     width: 18px;
+    font-family: var(--font-mono);
+    font-size: var(--text-13);
+    line-height: 1.85;
     color: var(--ink3);
     user-select: none;
     pointer-events: none;
@@ -962,31 +1477,102 @@
   }
 
   .folio-outline-lead {
-    font-weight: 700;
+    font-weight: 600;
+    color: var(--ink);
   }
 
-  /* The caret line's promise, drawn inside an empty last block. */
+  /* The handles show at the caret block and on hover, as on the script. */
+  .folio-outline-block:hover > .folio-handles,
+  .folio-outline-block[data-caret='true'] > .folio-handles {
+    opacity: 0.5;
+  }
+
+  .folio-outline-block > .folio-handles:hover {
+    opacity: 1;
+  }
+
+  /*
+   * The caret line's promise, drawn inside an empty last block: "Type, or
+   * press / for a block" with the slash in mono `--caret` and a blinking
+   * caret bar after it; the empty state's "Start typing, or type '/' to add
+   * a block" with the bar before it.
+   */
   .folio-outline-ghost {
     position: absolute;
     left: 0;
+    top: 0;
     color: var(--ink3);
     pointer-events: none;
     user-select: none;
     white-space: nowrap;
   }
 
+  .folio-outline-block[data-type='beat'] > .folio-outline-ghost {
+    left: 32px;
+  }
+
   .folio-outline-ghost b {
-    color: var(--ink2);
+    font-family: var(--font-mono);
+    font-size: var(--text-15);
+    font-weight: 400;
+    color: var(--caret);
   }
 
   .folio-outline-ghost i {
-    font-style: normal;
-    color: var(--accent);
+    display: inline-block;
+    width: 2px;
+    height: 19px;
+    margin-left: 2px;
+    vertical-align: -4px;
+    background: var(--caret);
+    animation: folio-caret-blink 1.1s steps(1) infinite;
+  }
+
+  .folio-outline-ghost i:first-child {
+    margin-left: 0;
+    margin-right: 3px;
+  }
+
+  /* A thread card under an outline block keeps the column's rhythm. */
+  .folio-outline-editable .folio-thread-card {
+    margin-top: 26px;
+  }
+
+  /*
+   * "In this outline" - the sidebar's row for a heading: 7px 10px, a 10px
+   * radius, the level as a mono chip at the right; the lit row is `--s2`
+   * and full ink.
+   */
+  .folio-toc-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--ink2);
+    text-align: left;
+  }
+
+  .folio-toc-row:hover {
+    background: var(--hover);
+  }
+
+  .folio-toc-row[aria-current='true'] {
+    background: var(--s2);
+    color: var(--ink);
   }
 }
 
-/* The status bar's "Hide nav": the episode nav is server-rendered in the layout, so the flag rides on <html>. */
-html[data-nav-open='false'] [data-episode-nav],
+/*
+ * The sidebar toggle: the sidebar and the record routes' context columns are
+ * server-rendered in a layout, so the flag rides on <html>, written by the
+ * shell (`_chrome/project-shell.tsx`).
+ */
+html[data-nav-open='false'] [data-sidebar],
 html[data-nav-open='false'] [data-context-column] {
   display: none;
 }

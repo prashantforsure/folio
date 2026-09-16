@@ -28,13 +28,13 @@ import './globals.css'
  * ## Fonts are preloaded, and only the face that paints chrome
  *
  * `font-display: swap` means text is visible immediately in a fallback face and
- * reflows when the real one arrives. Preloading Inter's latin file removes that
- * reflow for the frame most likely to be seen - it now carries both the UI role
- * and the prose/heading role Newsreader used to own (`--font-sans` and
- * `--font-serif` both resolve to it; see `packages/ui/src/tokens/type.css`).
- * Courier Prime is deliberately not preloaded: nothing on a sign-in page or the
- * shell is set in it, and preloading a face nothing uses is a wasted request
- * that the browser also warns about.
+ * reflows when the real one arrives. Preloading Geist's latin file removes that
+ * reflow for the frame most likely to be seen - it carries every chrome role
+ * and, since the v2 redesign, the script body (`--font-sans`; see
+ * `packages/ui/src/tokens/type.css`). Geist Mono and Courier Prime are
+ * deliberately not preloaded: nothing on a sign-in page is set in either, and
+ * preloading a face nothing uses is a wasted request the browser also warns
+ * about.
  */
 
 export const metadata = {
@@ -47,7 +47,7 @@ const RootLayout = ({ children }: { readonly children: ReactNode }) => (
     <head>
       <link
         rel="preload"
-        href="/fonts/inter-400-700-latin.woff2"
+        href="/fonts/geist-300-600-latin.woff2"
         as="font"
         type="font/woff2"
         crossOrigin="anonymous"

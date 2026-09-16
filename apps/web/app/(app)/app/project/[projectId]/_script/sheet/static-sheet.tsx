@@ -1,106 +1,83 @@
-import type { InlineContent, MeasurementRecord, ScreenplayNode, SheetSpec } from '@folio/script'
+import type { InlineContent, MeasurementRecord, ScreenplayNode } from '@folio/script'
 import type { ReactNode } from 'react'
 
-import type { LabelFor, ScriptInline } from '../../../../../../../lib/script/inline'
-import { MENTION_TYPE, isMentionElement } from '../../../../../../../lib/script/inline'
-import { charsPerLineFor, layoutSheet } from '../../../../../../../lib/script/layout'
-import type { SheetLayout } from '../../../../../../../lib/script/layout'
-import { lineCountOf, lineEndsOf } from '../../../../../../../lib/script/lines'
+import type { LabelFor } from '../../../../../../../lib/script/inline'
+import type { PageBreak } from '../../../../../../../lib/script/pages'
+import { pageBreaksByNode, pageBreaksOf } from '../../../../../../../lib/script/pages'
 
 /**
- * The sheet before the editor exists: the same blocks, at the same
- * geometry, as plain HTML.
+ * The page before the editor exists: the same blocks, in the same DOM, as
+ * plain HTML.
  *
  * Tiptap is created after hydration (`immediatelyRender: false`), so the
- * server would otherwise send an empty desk and a hundred-page draft would
- * paint blank. This renders the node list the way the editor will - the
- * `div.folio-block[data-type]` DOM, the engine's line ends, the margins
- * from the measurement record - so the first paint is the script and the
- * editor's arrival changes nothing on screen. Read-only; no handler, no
- * state. It goes away the moment the editor mounts.
+ * server would otherwise send an empty surface and a hundred-page draft
+ * would paint blank. This renders the node list the way the editor will -
+ * `div.folio-block[data-type][id]`, the mention labels, the comment label,
+ * and a `Page N` divider before each block the record says begins a page -
+ * so the first paint is the script and the editor's arrival changes little
+ * on screen. Read-only; no handler, no state. It goes away the moment the
+ * editor mounts.
+ *
+ * A page that begins *inside* a block is drawn here at the block's start;
+ * the editor places it at the engine's offset once it mounts. One divider
+ * moving by a few lines on hydration is the cost of not wrapping text on
+ * the server.
  */
 
-const inlineOf = (content: InlineContent): readonly ScriptInline[] =>
-  content.map((run) => (run.kind === 'text' ? { text: run.text } : { type: MENTION_TYPE, entity: run.target.entity, id: run.target.id }))
-
-export const staticLayout = (
-  nodes: readonly ScreenplayNode[],
-  record: MeasurementRecord | null,
-  sheet: SheetSpec,
-  paged: boolean,
-  labelFor: LabelFor,
-): SheetLayout =>
-  layoutSheet(
-    nodes.map((node) => ({
-      id: node.id,
-      type: node.type,
-      lines: lineCountOf(lineEndsOf(inlineOf(node.content), labelFor, charsPerLineFor(sheet, node.type))),
-    })),
-    record,
-    sheet,
-    paged,
-  )
-
-/** A block's children with the engine's line ends drawn as `.folio-line-end` on the last character of each line. */
-const Children = ({ children, labelFor, charsPerLine }: { readonly children: readonly ScriptInline[]; readonly labelFor: LabelFor; readonly charsPerLine: number }) => {
-  const ends = lineEndsOf(children, labelFor, charsPerLine)
+const Runs = ({ content, labelFor }: { readonly content: InlineContent; readonly labelFor: LabelFor }) => {
   const out: ReactNode[] = []
-  children.forEach((child, index) => {
-    if (isMentionElement(child)) {
-      out.push(
-        <span key={index} className="folio-mention" data-entity={child.entity} data-id={child.id}>
-          {labelFor(child.entity, child.id) ?? '?'}
-        </span>,
-      )
+  content.forEach((run, index) => {
+    if (run.kind === 'text') {
+      out.push(<span key={index}>{run.text}</span>)
       return
     }
-    const breaks = ends.filter((end) => end.child === index).map((end) => end.offset)
-    let at = 0
-    breaks.forEach((offset, which) => {
-      if (offset - 1 > at) out.push(<span key={`${String(index)}:${String(which)}:t`}>{child.text.slice(at, offset - 1)}</span>)
-      out.push(
-        <span key={`${String(index)}:${String(which)}:e`} className="folio-line-end">
-          {child.text.slice(Math.max(at, offset - 1), offset)}
-        </span>,
-      )
-      at = offset
-    })
-    if (at < child.text.length) out.push(<span key={`${String(index)}:rest`}>{child.text.slice(at)}</span>)
+    out.push(
+      <span key={index} className="folio-mention" data-entity={run.target.entity} data-id={run.target.id}>
+        {labelFor(run.target.entity, run.target.id) ?? '?'}
+      </span>,
+    )
   })
   return <>{out}</>
 }
 
+const Divider = ({ entry }: { readonly entry: PageBreak }) => (
+  <div className="folio-page-break" data-page-break={entry.ordinal} data-page-label={entry.label} data-page-locked={entry.locked ? 'true' : 'false'}>
+    {entry.more === null ? null : <span className="folio-page-break-artefact">{entry.more}</span>}
+    <span className="folio-page-break-label">Page {entry.label}</span>
+    <span className="folio-page-break-rule" />
+    {entry.continued === null ? null : <span className="folio-page-break-artefact">{entry.continued}</span>}
+  </div>
+)
+
 export const StaticSheet = ({
   nodes,
-  layout,
-  sheet,
+  record,
+  paged,
   labelFor,
 }: {
   readonly nodes: readonly ScreenplayNode[]
-  readonly layout: SheetLayout
-  readonly sheet: SheetSpec
+  readonly record: MeasurementRecord | null
+  readonly paged: boolean
   readonly labelFor: LabelFor
-}) => (
-  <div className="folio-editable" data-static-sheet="" aria-hidden="true">
-    {nodes.map((node) => {
-      const placed = layout.blocks.get(node.id)
-      return (
-        <div
-          key={node.id}
-          className="folio-block"
-          data-type={node.type}
-          data-static-id={node.id}
-          data-measured={placed?.measured === true ? 'true' : 'false'}
-          style={{ marginTop: placed?.marginTopPx ?? 0 }}
-        >
-          {node.type === 'comment' ? (
-            <div className="folio-comment-label">
-              Comment<span>not exported · not paginated</span>
-            </div>
-          ) : null}
-          <Children children={inlineOf(node.content)} labelFor={labelFor} charsPerLine={charsPerLineFor(sheet, node.type)} />
+}) => {
+  const breaks = paged ? pageBreaksByNode(pageBreaksOf(record)) : new Map<string, readonly PageBreak[]>()
+  return (
+    <div className="folio-editable" data-static-sheet="" aria-hidden="true">
+      {nodes.map((node) => (
+        <div key={node.id} className="contents">
+          {(breaks.get(node.id) ?? []).map((entry) => (
+            <Divider key={entry.ordinal} entry={entry} />
+          ))}
+          <div className="folio-block" data-type={node.type} data-static-id={node.id} id={`n-${node.id}`}>
+            {node.type === 'comment' ? (
+              <div className="folio-comment-label">
+                Note<span>not exported</span>
+              </div>
+            ) : null}
+            <Runs content={node.content} labelFor={labelFor} />
+          </div>
         </div>
-      )
-    })}
-  </div>
-)
+      ))}
+    </div>
+  )
+}

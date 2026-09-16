@@ -49,11 +49,11 @@ days.
 | Storage | Supabase Storage | Signed URLs for everything |
 | Jobs | BullMQ + Redis on a long-running Railway service | |
 | Payments | Dodo Payments | Merchant of record; webhooks reconciled idempotently |
-| AI | Anthropic API with tool use | Streaming over SSE |
+| AI | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script today (ruled 2026-09-16); tool use and proposals are its next life |
 | PDF | `pdf-lib` or `pdfkit` on our own layout engine | |
 | FDX | `fast-xml-parser` + custom mapping | |
 | Fountain | Custom, in `packages/script` | |
-| Fonts | Self-hosted Inter, Courier Prime | Courier Prime version-pinned; Inter covers both the UI and prose/heading roles (ruled 2026-09-13, replacing Instrument Sans + Newsreader) |
+| Fonts | Self-hosted Geist, Geist Mono, Courier Prime | Courier Prime version-pinned - it is the *measured* face (the engine, the cover, the export). Geist is chrome **and** the script body, Geist Mono the counts and refs (the v2 redesign, ruled 2026-09-16, replacing Inter) |
 | Tests | Vitest · fast-check · Testing Library · Playwright | |
 | Errors / analytics / logs | Sentry · PostHog · pino | |
 | Deploy | Railway — `web`, `worker`, `redis` | Private networking between services |
@@ -70,10 +70,13 @@ silently destroy the product.
 
 - **Headless Chrome for PDF.** Its text metrics won't match the on-screen sheet, and export must
   agree with pagination exactly.
-- **Tailwind's `dark:` variant.** Routes nest a light sheet inside a dark page. Use `data-theme`.
-- **Tailwind's default `gray` or `slate`.** Cool-toned. The palette is warm neutral with a
-  terracotta accent, and substituting will destroy the look.
-- **Any icon library.** Every glyph is a Unicode character rendered as text.
+- **Tailwind's `dark:` variant.** Theme is the cascade under `data-theme`, and islands nest. Use `data-theme`.
+- **Tailwind's default `gray` or `slate`.** The palette is one near-black canvas, translucent
+  surfaces and a single blue accent, all declared in `packages/ui/src/tokens/palette.css` from
+  `docs/ui design/README.md`; a second grey scale beside it is how the look drifts.
+- **Any icon library.** Icons are inline stroke SVGs hand-written in `packages/ui/src/icons.tsx` from
+  the design package, and nothing else. (The routes built before the v2 redesign still print the
+  older Unicode glyph set as text until each is rebuilt.)
 - **A component library with opinions** (MUI, Chakra, Ant, shadcn). The design system is written
   and specific; a themed library fights it.
 - **Serverless functions as queue consumers.** Jobs are long-running and stateful.
@@ -144,7 +147,7 @@ Stop and ask before you:
 | 1 | ~~Which node id survives a split, and what happens on merge and paste~~ **Ruled, by delegation: [ADR 0001](docs/adr/0001-node-identity.md)** — each position is reversible; Q3's id-shape ruling is the one flagged for a human look | — |
 | 2 | The numeric thresholds separating review tiers 1 / 2 / 3 | The whole agent review flow |
 | 3 | Whether rename rewrites unlinked prose mentions in action, or only cues, sluglines and `@mentions` | Rename blast radius |
-| 4 | The `?lens=` value shape — `lens/<id>` as written, or just `<id>` | Insights routing |
+| 4 | ~~The `?lens=` value shape — `lens/<id>` as written, or just `<id>`~~ Moot: Insights was removed with the v2 redesign (2026-09-16). Reopens if a report route returns | — |
 | 5 | ~~Whether `/production` is project- or episode-scoped~~ **Ruled: episode-scoped** (`docs/build-decisions.md`, Workspace shell phase) | — |
 | 6 | ~~Whether `/build` and `/search` are cut or merely undesigned~~ **Ruled: cut** (`docs/build-decisions.md`, Workspace shell phase) | — |
 | 7 | Where project settings `transfer`, `keys` and `episodes` went | Settings |
@@ -153,6 +156,7 @@ Stop and ask before you:
 | 10 | Whether `SCENE_xxx` is a node id or the derived scene record's id. ADR 0001 ruled the latter, in a separate id space — but `packages/script`'s `SceneRecord.id` is implemented as the heading node's own id, so the ADR and the code contradict each other | `?selected=`, any URL naming a scene |
 | 11 | The revision colour sequence past green (`nextRevisionColour` refuses at green) | Issuing a sixth revision |
 | 12 | Locked-page numbering past the last lock — a judgement call is implemented (the sequence continues unprotected), not ruled | Export, revision compare |
+| 13 | Whether an assistant message costs credits, and how much. The panel is real and read-only (2026-09-16) and writes no ledger row | Charging the assistant; "cost named before it is spent" on its send button |
 
 ---
 
@@ -161,7 +165,7 @@ Stop and ask before you:
 ```
 apps/web/                    Next.js app. UI and server actions only — no logic that belongs in packages/script.
   app/(app)/                 Signed-in shell: sidebar, theme, avatar. Everything user-facing lives under /app.
-  app/(app)/project/         Project workspace: rail, episode nav, the ten routes.
+  app/(app)/project/         Project workspace: rail, writing sidebar and header, the assistant panel, the nine routes.
   lib/                       Web-only glue: auth session, server action helpers, query client. Not domain logic.
 apps/worker/                 BullMQ consumers. Long-running. Generation, export, agent runs. Never a serverless fn.
 apps/sync/                   Deferred. Do not create this directory until realtime is actually scheduled.
@@ -255,19 +259,33 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   tree by accident; do not rely on it.
 - `projectType: 'film'` **hides** the episode segment. The database still stores one episode row.
   The router special-cases the shape; the schema never does.
-- Rail order is fixed: Writing `✎` · Characters `◍` · Locations `⌖` · Timeline `◷` · Research `▧` ·
-  Insights `◎` · Production `▶`. Writing stays lit across all four episode routes.
-- Episode nav order deliberately differs from the rail: **Storyboard sits above Scenes.**
+- Rail order is fixed (`docs/ui design/README.md`, "Rail"): Writing · Characters · Locations ·
+  Timeline · Research · Production. Writing stays lit across all four writing routes. Insights
+  was removed with the v2 redesign (2026-09-16); its name stays reserved.
+- The writing sidebar lists **Script · Outline · Scenes**. Storyboard is not a row: it is the
+  other half of the header's Write / Storyboard mode pill (ruled 2026-09-16).
+- On the writing routes the rail's Characters icon opens a 330px peek overlay, with the full
+  route linked inside it; on the record routes it navigates.
 
 ### UI fidelity
 
-- **Every glyph is a Unicode character rendered as text.** The known set:
-  `✎ ◍ ⌖ ◷ ▧ ◎ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝` (`⧗` left with the Beats route, removed 2026-09-12; `◈` left
-  with the Bible route, removed 2026-09-15 — `docs/build-decisions.md`, "Beats route removed" and
-  "Bible route removed")
-- Rail active state is a 2px `-accent` bar at `left:-5px` **plus** the `-sel` background. Not a
-  colour change alone.
-- Episode nav column is **238px**. Not "about 240".
+- **The design package is the spec.** `docs/ui design/README.md` and the nine `Route - * v2.dc.html`
+  mockups (2026-09-16). Its `:root` token block is `packages/ui/src/tokens/palette.css`, copied
+  verbatim; the older token names alias onto it until every route is rebuilt.
+- **Icons are inline stroke SVGs** from `packages/ui/src/icons.tsx` - 18px, 1.35 stroke, the
+  mockups' own paths. The routes built before the redesign still print the older Unicode glyph
+  set as text: `✎ ◍ ⌖ ◷ ▧ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝` (`⧗` left with Beats, `◈` with Bible, `◎` with
+  Insights). Substituting a lookalike is refused in either set.
+- The shell is one shape on every route: rail **56px**, writing sidebar **236px** (a floating
+  card), header **60px**, panels **400px** in flow at ≥1200px and over the content below it,
+  where an open panel forces the sidebar closed - solved in the shell, never in a child. Rail
+  active state is the `--s2` fill with full ink; the older accent bar is gone.
+- The writing routes have **no status bar**; the record routes' 28px bar is per their mockups.
+- **The script body is Geist, not paper.** Text on the canvas in a column capped at 818px, page
+  breaks drawn as `Page N` dividers from the measurement record (`lib/script/pages.ts`). The
+  engine still measures in Courier; the screen no longer wraps where it wraps, by ruling
+  (2026-09-16) - counts, eighths and export are the engine's, the divider is where a page
+  begins.
 - Badges are **live counts**, never placeholders: Characters = unresolved cues · Locations =
   unmatched sluglines. A third badge, Bible = open canon conflicts, existed while the Bible route
   did (`docs/build-decisions.md`, "Bible route removed").
@@ -277,14 +295,18 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   never a placeholder string. If a project has no script, the card says so.
 - Theme is `dark` by default, via `data-theme`. Revision colours (White → Blue → Pink → Yellow →
   Green) are industry artefacts, not palette tokens, and must survive a theme switch intact.
-- Specified copy is specified. Insights headers read *"computed from Draft 5 · nothing here is an
-  opinion"* and *"N notes on Episode 1 · every note cites what it read."* Paraphrasing breaks the
-  argument the route is making.
+- Specified copy is specified. The design README's tone: "Plain, specific, lower-case-leaning.
+  Labels say what happens: 'Draft from the script', 'It's deliberate', 'Not on the page yet'. No
+  exclamation marks, no emoji, no feature marketing." Paraphrasing a specified label breaks the
+  argument the screen is making.
 
 ### The AI agent
 
-- One agent, reachable everywhere. A **floating window** — draggable, resizable, persists across
-  route changes, minimises to a chip, `⌘J`. It is not a route.
+- One assistant, reachable everywhere. The orb in every header opens a **400px panel** (the
+  README's; in flow at ≥1200px, over the content below), `⌘J` toggles it, and it persists across
+  route changes. It is not a route. Today it is a **read-only chat** over the episode's script
+  (`apps/web/lib/assistant/`, `assistant_chats` / `assistant_messages`, migration `0016`): it
+  reads, it answers, it writes nothing. The lifecycle below is where it goes next.
 - Lifecycle: **Brief → Plan → Run → Review → Commit.** One run produces one revision entry.
 - **Every write returns a proposal, never a mutation.** Proposals are anchored to node ids and
   rendered as hunks against current node state.
@@ -397,6 +419,8 @@ share a file.
 | `script.content=empty` | A data state, not a switch | Derive it from whether a script exists |
 | `production.state` | The generation job's status | Drive it from the job row. All six states get built |
 | theme, zoom, panels, palette, aiScope | Per user or per session | localStorage or session state |
+| the assistant panel, the Characters overlay | The same panel on every route; a peek that must not survive a navigation | `assistantOpen` is session state; the overlay is ephemeral React state |
+| which document the Script shows, the title-page or the script | Component state (ruled 2026-09-11); a scene the sidebar scrolls to is a `#n-<node id>` fragment, never `?selected=` | Not a param |
 
 ### The agent may write anywhere — except
 
@@ -425,17 +449,19 @@ There is no case where an empty state is optional. A new project is entirely emp
     digest, no reminder, no failure alert.
   - **Job completion is in-app only.** A closed tab means you find out when you come back.
   - **Team invites are share links** generated in-app and copied by the inviter, never sent by
-    Folio.
+    Folio. Built 2026-09-16: `share_links` (migration `0016`), the header's Share popover, and
+    `/share/:token`, which writes a membership with `invited_via: share_link`.
   - **No magic links** — passwordless sign-in over email would make the rate-limited sender
     load-bearing for *every* sign-in, not just the rare recovery.
 
   Adding a real provider unlocks the notification surface above, so it is a dependency decision
   *and* a product decision — When to ask first applies twice over.
-- **No Beats, Revisions, Notes or Bible route.** All four were built, then cut on the client's
-  instruction (Beats 2026-09-12, Revisions and Notes 2026-09-14, Bible 2026-09-15) — do not
-  rebuild any of them. A beat is still an outline `beat` block. The `revisions` and
-  `comment_threads` tables stay and are still read independently by the Script route's right
-  panel; `beats` was dropped in migration `0010`, and `scenes.beats` stays as an opaque column.
+- **No Beats, Revisions, Notes, Bible or Insights route.** The first four were built, then cut on
+  the client's instruction (Beats 2026-09-12, Revisions and Notes 2026-09-14, Bible 2026-09-15);
+  Insights was removed with the v2 redesign (2026-09-16) — do not rebuild any of them. A beat is
+  still an outline `beat` block. The `revisions` and `comment_threads` tables stay: the Script
+  route draws threads inline under their blocks and the revision list in its title menu; `beats`
+  was dropped in migration `0010`, and `scenes.beats` stays as an opaque column.
   Bible's five tables and three enums were dropped outright in migration `0015` — nothing was
   left reading them once the rail badge stopped calling into `bible.ts`.
 - **No realtime collaboration.** Last-write-wins with a conflict banner. Loro CRDT and
@@ -444,8 +470,12 @@ There is no case where an empty state is optional. A new project is entirely emp
   first. A project with no Writing section is a generation surface with no script behind it, and
   "the screenplay is the source of truth" stops holding.
 - **Project `/settings` is a stub.** No design exists.
-- **Cut, do not build:** Community, writing leaderboard, activity heatmap, sidebar credits card.
-  Credits appear in the Production header, where they are spent.
+- **Cut, do not build:** Community, writing leaderboard, activity heatmap. The sidebar credits
+  card, once on this list, is built (2026-09-16, the v2 design draws it): the same per-project
+  balance the Production header spends, read from the ledger.
+- **Presence and the Read button are not built.** The v2 mockups draw presence avatars and a
+  `Read` (read-through) button in the writing header; presence needs the realtime that is cut,
+  and Read was left out by ruling (2026-09-16).
 - **No `short` project type.** `film` and `series` only.
 
 ---
@@ -490,7 +520,7 @@ pnpm --filter @folio/db drizzle-kit check
 pnpm --filter web test:e2e
 ```
 
-The E2E smoke test walks all ten routes in both themes and both states. It is not optional
+The E2E smoke test walks all nine routes in both themes and both states. It is not optional
 coverage — it is the thing that catches a route shipped without its empty state.
 
 ---

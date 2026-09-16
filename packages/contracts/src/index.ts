@@ -60,6 +60,8 @@ export type { Equals, Extends } from './equality'
 export { assertExact } from './equality'
 
 export type {
+  AssistantChatId,
+  AssistantMessageId,
   EpisodeId,
   EpisodeSegmentResult,
   EpisodeSlug,
@@ -73,6 +75,7 @@ export type {
   ReelRenderId,
   ReservedProjectSegment,
   RevisionId,
+  ShareLinkId,
   ShotId,
   StoryThreadId,
   ThreadCommentId,
@@ -81,6 +84,8 @@ export type {
   VersionId,
 } from './ids'
 export {
+  AssistantChatIdSchema,
+  AssistantMessageIdSchema,
   CharacterIdSchema,
   DocumentIdSchema,
   EPISODE_SLUG_PATTERN,
@@ -99,12 +104,15 @@ export {
   ReelRenderIdSchema,
   RevisionIdSchema,
   RunIdSchema,
+  ShareLinkIdSchema,
   ShotIdSchema,
   StoryThreadIdSchema,
   ThreadCommentIdSchema,
   ThreadIdSchema,
   UserIdSchema,
   VersionIdSchema,
+  assistantChatId,
+  assistantMessageId,
   episodeId,
   episodeSlug,
   formatEpisodeSlug,
@@ -119,6 +127,7 @@ export {
   reelId,
   reelRenderId,
   revisionId,
+  shareLinkId,
   shotId,
   storyThreadId,
   threadCommentId,
@@ -455,3 +464,15 @@ export type {
   StructureResolveProposal,
 } from './locations'
 export { ArcNoteEditSchema, LocationEditSchema, ParentEditSchema } from './locations'
+
+export type { ShareLink, ShareLinkRole } from './share'
+export { SHARE_LINK_ROLES, ShareLinkRoleSchema, ShareLinkSchema, ShareTokenSchema } from './share'
+
+export type { AssistantChat, AssistantMessage, AssistantRole } from './assistant'
+export {
+  ASSISTANT_MESSAGE_MAX,
+  ASSISTANT_ROLES,
+  AssistantChatSchema,
+  AssistantMessageSchema,
+  AssistantRoleSchema,
+} from './assistant'

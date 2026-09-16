@@ -1,57 +1,50 @@
 /*
- * Type. Families, the scale, and the numerals.
+ * Type. Families, tracking, and the numerals.
  *
  * ## Families are named here; the files are served by the app
  *
  * This package is presentational and has no idea where it is mounted, so it
  * cannot know a URL. `@font-face` therefore lives in `apps/web/app/fonts.css`,
  * next to the `.woff2` files it points at, and this file only names the stacks.
- * AGENTS.md, Tech stack: "Self-hosted Inter, Courier Prime. Courier Prime
- * version-pinned" - the pin, and the reason for it, are in that file's header.
+ * AGENTS.md, Tech stack: "Self-hosted Geist, Geist Mono, Courier Prime. Courier
+ * Prime version-pinned" - the pin, and the reason for it, are in that file.
  *
- * ## One family, two roles
+ * ## Three faces, three roles (ruled 2026-09-16, the v2 redesign)
  *
- * Instrument Sans and Newsreader were retired 2026-09-13: Inter now covers
- * both the UI role (`--font-sans`) and the prose/heading role that Newsreader
- * used to own (`--font-serif`, kept as an alias so call sites naming it don't
- * need to change). There is no serif face left in the stack - naming it
- * `--font-serif` records where it is used, not what it looks like.
+ *   --font-sans     Geist. Every chrome role, headings, and the script body
+ *                   itself - the README's "Dark canvas, no paper" set the
+ *                   screenplay in the same face as the page around it.
+ *   --font-mono     Geist Mono. "Mono for scene refs, IDs, timecodes, counts,
+ *                   paths - always tabular-nums."
+ *   --font-courier  Courier Prime. The *measured* face: what the pagination
+ *                   engine's character grid assumes, what the cover sheet
+ *                   is set in, and what an export will use. Not a chrome face.
  *
- * ## --font-glyph is not one of the two, and that is a finding
+ * `--font-serif` stays as an alias of `--font-sans` for the routes built before
+ * the redesign, which name it for their headings. There is no serif face.
  *
- * AGENTS.md, UI fidelity: "Every glyph is a Unicode character rendered as
- * text", and lists eighteen. **None of the eighteen exist in Inter or Courier
- * Prime.** Both ship Latin only - Google's subset ranges for the exact files we
- * self-host stop at U+2000-206F plus a handful of strays, and every glyph in
- * the set is U+21C4 or above.
+ * ## --font-glyph is kept for the routes not yet rebuilt
  *
- * So the glyphs render out of a system font whatever we do. The honest response
- * is to say which one rather than to let each OS pick: this stack names the
- * symbol faces explicitly, and deliberately does NOT name an emoji face, which
- * is the other half of the problem - see `glyph.tsx` for the three characters
- * that have colour-emoji forms and how they are forced back to text.
+ * The redesigned chrome draws inline stroke SVGs (`../icons.tsx`) and needs no
+ * symbol face. The older routes still print AGENTS.md's Unicode glyph set as
+ * text, and none of those characters exist in the three self-hosted families
+ * (they are all U+21C4 or above; the subsets stop at U+2000-206F). This stack
+ * names which system symbol face draws them rather than letting each OS pick,
+ * and deliberately names no emoji face - see `glyph.tsx` for the three
+ * characters that have colour-emoji forms and how they are forced to text.
  *
- * Substituting a lookalike from a Latin font was the alternative and it is
- * refused: AGENTS.md treats the glyph set as specified, and a "close enough"
- * ▸ for ▶ is exactly the kind of quiet improvement the spec warns against.
+ * ## Tracking
  *
- * ## The scale is the bundles' scale, named by its own value
- *
- * The design README lists the sizes in use: 8, 9, 9.5, 10, 10.5, 11, 11.5, 12,
- * 12.5, 13, 14, 15, 21. They are deliberately dense - "font sizes of 11-13px in
- * chrome are intentional; do not bump them to a 14/16px web default."
- *
- * The steps are named after their own values (`--text-11-5`) rather than
- * given semantic names (`--text-row`). A semantic name is a claim about where a
- * size is allowed to be used, and the bundles do not make that claim: 11.5px is
- * a nav row, a search placeholder, a segment button and a credit label. Naming
- * the value keeps this file a transcription instead of an interpretation.
+ * From the README's "Type": page title -.02em, section heading -.01em,
+ * eyebrow labels .1em uppercase. The older rail label tracking is kept for
+ * the routes that still draw it.
  */
 
 :root {
-  --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif;
   --font-serif: var(--font-sans);
-  --font-mono: 'Courier Prime', 'Courier Screenplay', monospace;
+  --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-courier: 'Courier Prime', 'Courier Screenplay', 'Courier New', monospace;
 
   /*
    * Symbol faces, in the order they should be tried. No emoji face is named:
@@ -60,9 +53,11 @@
   --font-glyph: 'Segoe UI Symbol', 'Apple Symbols', 'Noto Sans Symbols 2', 'Noto Sans Symbols',
     'DejaVu Sans', 'Segoe UI', sans-serif;
 
-  /* Headings, per the README: letter-spacing -.01em. */
+  /* Page title: -.02em. Section headings: -.01em. Eyebrows: .1em. */
+  --tracking-page: -0.02em;
   --tracking-title: -0.01em;
-  /* Uppercase group labels: .09em. Rail labels: .08em. */
+  --tracking-eyebrow: 0.1em;
+  /* Kept for the unrebuilt routes' uppercase group and rail labels. */
   --tracking-label: 0.09em;
   --tracking-rail: 0.08em;
 }

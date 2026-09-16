@@ -128,13 +128,8 @@ export const LocationsWorkspace = ({
     }
   }, [])
   const navOpen = (mounted ? session.navOpen : null) ?? viewport >= 1000
-  useEffect(() => {
-    const root = document.documentElement
-    root.dataset['navOpen'] = navOpen ? 'true' : 'false'
-    return () => {
-      delete root.dataset['navOpen']
-    }
-  }, [navOpen])
+  // `html[data-nav-open]` is written by the shell (`_chrome/project-shell.tsx`)
+  // since the redesign; this route only reads the flag for its own geometry.
 
   const [saveState, setSaveState] = useState<SaveState>({ kind: 'idle' })
   const pending = useRef(0)

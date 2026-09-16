@@ -7,7 +7,8 @@ Loads when you work in this directory. Root `CLAUDE.md` still applies.
 Before touching auth or reaching for a Supabase client, read
 [lib/auth/NO-BROWSER-CLIENT.md](lib/auth/NO-BROWSER-CLIENT.md). Before putting anything in a
 client store, read [lib/state/README.md](lib/state/README.md). Before building a route, read
-[docs/ui design/CLAUDE.md](../../docs/ui%20design/CLAUDE.md), then that one route's bundle.
+[docs/ui design/README.md](../../docs/ui%20design/README.md), then that route's
+`Route - <name> v2.dc.html`.
 
 - **State:** Google OAuth **and** email + password (AGENTS.md Constraints was rewritten for this —
   `docs/build-decisions.md`), session in Server Components, route protection in two places. Two
@@ -15,15 +16,32 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   the frame; [app/(app)/app/(home)/layout.tsx](app/(app)/app/(home)/layout.tsx) draws the
   four-item sidebar for the six list routes (three views over one query in `_projects/`, plus
   `new`, `trash`, `settings`); [app/(app)/app/project/[projectId]/layout.tsx](app/(app)/app/project/[projectId]/layout.tsx)
-  draws the 66px rail for the workspace. Nine of the thirteen workspace routes have bodies
-  (root `CLAUDE.md`, Repository map); each route's phase in `docs/build-decisions.md` records
-  what it reads and writes, table by table.
+  draws the workspace shell through `_chrome/project-shell.tsx` (56px rail, the assistant panel,
+  the Characters overlay), and `_chrome/writing-layout.tsx` the 236px sidebar, 60px header and
+  main-surface card for the four writing routes. Seven of the nine workspace routes have bodies
+  (root `CLAUDE.md`, Repository map).
+- **The shell owns `html[data-nav-open]`.** Route bodies read `useSession().navOpen` for their own
+  geometry and never write the attribute; `useViewport()` (`lib/state/viewport.ts`) is the one
+  resize listener. Below 1200px an open assistant panel forces the sidebar closed there.
 - **The workspace, in one directory:** [lib/workspace/](lib/workspace/). `routes.ts` is the route
   tree and both orders (rail, episode nav); `params.ts` the sub-view params; `hrefs.ts` every
   workspace URL and the film/series shape; `context.ts` the membership gate and the `cache()`d
   loaders; `format.ts` the `104pp` / `—` / `empty` / `0` convention. The film shape is a
   second static tree under `project/[projectId]/(film)/` — Next has no optional segment — and
   each page canonicalises the URL for the project's type.
+- **The Script route since the redesign:** `_script/script-workspace.tsx` is the body inside the
+  surface card - toolbar (title menu, `⋯` actions menu), banners, the scrolling column. Threads
+  are widget hosts in the editor DOM that React portals cards into (`_script/comments/`); the
+  `+` handle's menu inserts blocks or opens a thread composer; the `⠿` handle node-selects and
+  ProseMirror's own drag moves the block (`clipboard.ts` keeps its id on a move). Page breaks
+  are widget dividers from `lib/script/pages.ts`.
+- **The Outline route since the redesign:** `_outline/outline-workspace.tsx` is the same shape -
+  toolbar (`Outline · Draft N` menu over the snapshots, `⋯` with snapshot, Markdown export, undo,
+  statistics), banners, the column - with no sheet, panel or status bar. The sidebar's second
+  group is the route's (`_chrome/sidebar-group.tsx`): `In this outline` reads the cell the
+  workspace publishes to (`lib/outline/toc.ts`), seeded by a `cache()`d document read the page
+  shares (`lib/outline/server.ts`). Handles, threads and the `@` combobox are the Script's pieces
+  (`_script/editor/extensions/handles.ts`, `_script/comments/`, `mention-suggestion.ts`).
 - **The Script autosave is a delta and every write it runs is one statement.** Over the
   transaction pooler a parameterised statement costs two round trips and cannot be pipelined
   (`packages/db/src/client.ts`), so on the request path the cost is statement count, not row
@@ -33,9 +51,9 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   `_outline/editor/` hold the extensions; `lib/script/pm-model.ts` and `lib/outline/pm-model.ts` are
   the one boundary each to its node list; the chrome reads store slices (`editor-store.ts`,
   `outline-store.ts`), never the editor value. The Outline reuses the Script's framework pieces -
-  the `@mention` atom, the identity plugin, the floating layer, the slice cell - and shares no
-  block node with it. Details: `docs/build-decisions.md`, "Script route, fifth pass" and "Outline
-  route, second pass".
+  the `@mention` atom and its combobox, the identity plugin, the handles, the floating layer, the
+  slice cell, the thread cards - and shares no block node with it. Details: `docs/build-decisions.md`,
+  "Redesign phase 1" and "Redesign phase 2".
 - **Every episode segment goes through `parseEpisodeSegment`** (`@folio/contracts`) in
   `[episodeId]/layout.tsx` before any lookup. Do not add a route that reads `params.episodeId`
   without it.

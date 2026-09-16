@@ -21,6 +21,14 @@ import { blockAttrsOf, blockTypeOf, idsOf, toBlock } from '../../../../../../../
  *
  * `origin` is cleared on the way through and never reaches the model.
  *
+ * A **drag** inside the editor - the `⠿` handle, since the redesign - comes
+ * through the same hook with `view.dragging.move` set: the slice is the live
+ * block, `origin` unset, and ProseMirror deletes the original in the same
+ * transaction it inserts the copy. That is a move, and a move keeps its id
+ * (ADR 0001: reorder is one of the operations an id survives), so a moving
+ * block is left alone even though its id is, at that instant, still in the
+ * document.
+ *
  * Plain text with a newline is parsed as Fountain - parser parity with the
  * import path - with ids minted here for every node the parser will need,
  * and inserted as blocks. A single line is inserted as text by ProseMirror.
@@ -34,7 +42,12 @@ export type ClipboardOptions = {
 
 export const clipboardKey = new PluginKey('screenplayClipboard')
 
-const withIdsSettled = (slice: Slice, documentId: string, present: ReadonlySet<string>): Slice => {
+const withIdsSettled = (
+  slice: Slice,
+  documentId: string,
+  present: ReadonlySet<string>,
+  moving: boolean,
+): Slice => {
   let changed = false
   const nodes: ProseMirrorNode[] = []
   slice.content.forEach((node) => {
@@ -43,6 +56,10 @@ const withIdsSettled = (slice: Slice, documentId: string, present: ReadonlySet<s
       return
     }
     const attrs = blockAttrsOf(node)
+    if (moving && attrs.origin === null && attrs.id !== null) {
+      nodes.push(node)
+      return
+    }
     const keep = attrs.origin === documentId && attrs.id !== null && !present.has(attrs.id)
     const id = keep ? attrs.id : null
     if (id === attrs.id && attrs.origin === null) {
@@ -66,7 +83,8 @@ export const ScreenplayClipboard = Extension.create<ClipboardOptions>({
       new Plugin({
         key: clipboardKey,
         props: {
-          transformPasted: (slice, view) => withIdsSettled(slice, documentId, new Set(idsOf(view.state.doc))),
+          transformPasted: (slice, view) =>
+            withIdsSettled(slice, documentId, new Set(idsOf(view.state.doc)), view.dragging?.move === true),
           handlePaste: (view, event) => {
             const data = event.clipboardData
             if (data === null) return false

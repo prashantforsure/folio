@@ -23,15 +23,11 @@ import type { WorkspaceRoute } from './routes'
  * `sideTab` (session), `format` and `projectType` (the project row), and the
  * `empty` flag on the entity routes (a data state).
  *
- * ## `insights.lens`
+ * ## Insights had two params, and is gone
  *
- * Insights takes two params - `report` and `lens` - and they are never
- * collapsed into one. `lens` defaults to the first built-in, per the rule
- * above. Its *value shape* is AGENTS.md open decision 4 (`lens/<id>` or
- * `<id>`), which is not resolved here: the parser accepts either spelling and
- * yields the id, so whichever is ruled canonical later already works and the
- * other can be redirected. The built-in ids are the bundle's; authored lenses
- * have no table yet, so nothing else parses.
+ * `report` and `lens` (open decision 4, the `lens/<id>` shape) parsed here
+ * until the route was removed with the v2 redesign (2026-09-16). The decision
+ * stays open in AGENTS.md; nothing here guesses at it.
  *
  * ## Script has no sub-view params - ruled 2026-09-11
  *
@@ -65,24 +61,12 @@ import type { WorkspaceRoute } from './routes'
  * and wiring the param would pick a side. Left for that ruling.
  */
 
-const INSIGHT_LENSES = ['showrunner', 'viewer', 'snp', 'producer'] as const
-
-/**
- * Accept `showrunner` and `lens/showrunner` alike; see the header. The prefix
- * is stripped before the enum check so a wrong id fails the same way in
- * either spelling.
- */
-const LensSchema = z
-  .string()
-  .transform((raw) => (raw.startsWith('lens/') ? raw.slice('lens/'.length) : raw))
-  .pipe(z.enum(INSIGHT_LENSES))
-
 const first = <const T extends readonly [string, ...string[]]>(values: T) =>
   z.enum(values).default(values[0])
 
 /**
  * One schema per route. A route with no sub-view has an empty object, so
- * `parseSubViews` is total over the ten and a page cannot forget to call
+ * `parseSubViews` is total over the nine and a page cannot forget to call
  * it.
  */
 export const SUB_VIEW_SCHEMAS = {
@@ -95,10 +79,6 @@ export const SUB_VIEW_SCHEMAS = {
   locations: z.object({ view: first(['record', 'breakdown', 'resolve']) }),
   timeline: z.object({ view: first(['story', 'chrono', 'continuity']) }),
   research: z.object({ view: first(['library', 'source', 'clips']) }),
-  insights: z.object({
-    report: first(['pacing', 'presence']),
-    lens: LensSchema.default(INSIGHT_LENSES[0]),
-  }),
 } as const satisfies Record<WorkspaceRoute, z.ZodObject>
 
 export type SubViews<R extends WorkspaceRoute> = z.infer<(typeof SUB_VIEW_SCHEMAS)[R]>

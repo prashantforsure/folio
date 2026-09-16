@@ -8,14 +8,16 @@ import type { WalkOptions } from '../playwright.config'
  *
  * What this proves, in order:
  *
- *   1. **The empty state, both themes.** No outline; the nav's Outline row
- *      prints `—`.
+ *   1. **The empty state, both themes.** No outline; the sidebar's Outline
+ *      row prints `—`, its `In this outline` group has nothing to list, the
+ *      title reads `Untitled outline` and the toolbar `Empty · New outline`.
  *   2. **The outline is a document, created by the first save.** There is
  *      no Start button: the caret line is the editor over one blank block.
  *      Typing a heading (`⌘1`), prose and a numbered beat through the slash
  *      menu autosaves - the first save creates the `kind = 'outline'`
- *      document - and a reload reads it back block for block; the nav's
- *      Outline row prints `1 act` and the panel counts the beat.
+ *      document - and a reload reads it back block for block; the sidebar's
+ *      Outline row prints `1 act`, its `In this outline` group lists the
+ *      heading, and the `⋯` menu's statistics count the beat.
  *
  * The Beats route this walk once continued into was removed
  * (`docs/build-decisions.md`, "Beats route removed"); a beat is still one of
@@ -88,9 +90,15 @@ test('the empty state, both themes', async ({ page, account }) => {
   await expect(page.locator('main[data-route="outline"]')).toHaveAttribute('data-outline-state', 'empty')
   await expect(page.locator('[data-empty-state]')).toBeVisible()
   await expect(page.locator('[data-empty-note]')).toBeVisible()
+  await expect(page.locator('[data-outline-title]')).toHaveText('Untitled outline')
+  await expect(page.locator('[data-document-menu]')).toContainText('Untitled outline')
+  await expect(page.locator('[data-word-count]')).toHaveText('Empty')
+  await expect(page.locator('[data-save-state]')).toHaveAttribute('data-save-state', 'new')
   await expect(page.locator('[data-start-outline]')).toHaveCount(0)
   await expect(page.locator('[data-nav-meta="outline"]')).toHaveText('—')
-  await expect(page.locator('[data-nav-meta="beats"]')).toHaveCount(0)
+  await expect(page.locator('[data-toc-group] [data-toc-count]')).toHaveText('0')
+  await expect(page.locator('[data-toc-empty]')).toBeVisible()
+  await expect(page.locator('[data-scenes-group]')).toHaveCount(0)
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
     await page.screenshot({ path: `test-results/outline-empty-${theme}.png`, fullPage: false })
@@ -113,8 +121,13 @@ test('starting the outline and typing blocks saves them, and a reload reads them
   // A heading by shortcut, prose under it, then a beat through the slash menu.
   await page.keyboard.press(`${modifier}+1`)
   await expect(blocks.first()).toHaveAttribute('data-type', 'h1')
-  await expect(page.locator('[data-caret-block]')).toContainText('Heading 1')
+  await expect(blocks.first()).toHaveAttribute('data-caret', 'true')
   await page.keyboard.type('Logline', { delay: 20 })
+  // The sidebar's list follows the keystroke: the title row and the heading, the heading lit.
+  await expect(page.locator('[data-toc-row]')).toHaveCount(2)
+  await expect(page.locator('[data-toc-row]').nth(1)).toHaveText(/Logline/)
+  await expect(page.locator('[data-toc-row]').nth(1)).toHaveAttribute('aria-current', 'true')
+  await expect(page.locator('[data-toc-count]')).toHaveText('2')
   await page.keyboard.press('Enter')
   await expect(blocks).toHaveCount(2)
   await expect(blocks.nth(1)).toHaveAttribute('data-type', 'body')
@@ -133,13 +146,17 @@ test('starting the outline and typing blocks saves them, and a reload reads them
   await expect(blocks.nth(2).locator('.folio-outline-lead')).toHaveText('Opening Image:')
   await waitSaved(page)
 
-  // The first save created the document: the route is a draft now and the note is gone.
+  // The first save created the document: the route is a draft now, the hints are gone, the title is the episode's.
   await expect(page.locator('main[data-route="outline"]')).toHaveAttribute('data-outline-state', 'draft')
   await expect(page.locator('[data-empty-note]')).toHaveCount(0)
+  await expect(page.locator('[data-outline-title]')).not.toHaveText('Untitled outline')
+  await expect(page.locator('[data-document-menu]')).toContainText('Outline · Draft 1')
+  await expect(page.locator('[data-word-count]')).toHaveText(/\d+ words/)
   await expect(page.locator('[data-nav-meta="outline"]')).toHaveText('1 act')
-  await expect(page.locator('[data-block-count]')).toHaveText('3')
-  await expect(page.locator('[data-outline-blocks]')).toHaveText('3')
+  await page.locator('[data-actions-menu]').click()
+  await expect(page.locator('[data-stat="blocks"]')).toHaveText('3')
   await expect(page.locator('[data-stat="beats"]')).toHaveText('1')
+  await page.keyboard.press('Escape')
 
   await page.reload()
   await expect(page.locator('main[data-route="outline"]')).toHaveAttribute('data-outline-state', 'draft')
@@ -150,6 +167,7 @@ test('starting the outline and typing blocks saves them, and a reload reads them
     ['beat', '1Opening Image: empty pitch, Ade training alone.'],
   ])
   await expect(page.locator('[data-nav-meta="outline"]')).toHaveText('1 act')
+  await expect(page.locator('[data-toc-row]')).toHaveCount(2)
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
     await page.screenshot({ path: `test-results/outline-draft-${theme}.png`, fullPage: false })

@@ -5,6 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Only what applies to every task lives here. `packages/script`, `packages/db` and `apps/web` each
 have a `CLAUDE.md` that loads when you work there — do not read them ahead of time. Route history
 lives in `docs/build-decisions.md`, one section per phase — read the phase for the route you touch.
+That file was restarted on 2026-09-16 with the v2 redesign; the phases before it are in git
+history (`git show 7a541bd:docs/build-decisions.md`) and are not the reference for a rebuilt route.
+
+**The app is mid-redesign.** `docs/ui design/README.md` and the nine `Route - * v2.dc.html`
+mockups are the spec; routes are rebuilt to them one at a time. Done: the shell (rail, writing
+sidebar and header, assistant panel, Characters overlay), **Script** and **Outline**. The other
+route bodies still draw their pre-redesign chrome inside the new shell until their own pass.
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -30,7 +37,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 
 | Before you… | Read |
 | --- | --- |
-| build a route or touch UI | [docs/ui design/CLAUDE.md](docs/ui%20design/CLAUDE.md), then that one route's bundle |
+| build a route or touch UI | [docs/ui design/README.md](docs/ui%20design/README.md), then that route's `Route - <name> v2.dc.html` |
 | change a built route | its phase in [docs/build-decisions.md](docs/build-decisions.md) — `grep -n '^## ' docs/build-decisions.md` |
 | change node identity or the id shape | [ADR 0001](docs/adr/0001-node-identity.md) — preamble first; both rulings are reversible |
 | touch `episodes` or join on one | [ADR 0002](docs/adr/0002-episode-identity.md) — `ep_NNN` is a slug over an opaque key |
@@ -44,23 +51,25 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   ways, FDX import/export, derivation, pagination, the draft diff, and one read module per
   derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `rename.ts`).
 - `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, migrations
-  `0000`–`0015` (forward-only, all applied to the dev Supabase project), project-scoped
-  repositories. `packages/ui` — tokens as CSS custom properties plus five small components.
+  `0000`–`0016` (forward-only, all applied to the dev Supabase project), project-scoped
+  repositories. `packages/ui` — tokens as CSS custom properties, the inline SVG icon set
+  (`icons.tsx`), and five small components.
 - `apps/web` — auth, the home shell, the workspace chrome, and the built route bodies: Script,
-  Outline, Storyboard, Scenes, Characters, Locations, Timeline — seven of the ten
+  Outline, Storyboard, Scenes, Characters, Locations, Timeline — seven of the nine
   routes (AGENTS.md, Architecture). Each has an `app/(app)/app/project/[projectId]/_<route>/`
-  directory and a `lib/<route>/` with its actions. `lib/workspace/routes.ts` is the route tree.
-  Research, Insights, Production and the `/settings` stub have no route body yet. Production
-  has its backend and server surface (`lib/production/`, migration `0014`, "Production route
-  phase, backend" in `docs/build-decisions.md`); its body waits on the UI redesign.
+  directory and a `lib/<route>/` with its actions. `lib/workspace/routes.ts` is the route tree;
+  `_chrome/project-shell.tsx` is the shell. Research, Production and the `/settings` stub have
+  no route body yet; Production has its backend and server surface (`lib/production/`,
+  migration `0014`). The assistant (`lib/assistant/`, `app/api/assistant/route.ts`) and share
+  links (`lib/share/`, `app/share/[token]/`) are cross-route features built with the redesign.
 - `apps/worker` — empty on purpose. Do not create `apps/sync/`.
 
 Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
 `docs/build-decisions.md`):
 
-- **Editor packages approved in `apps/web`:** `@tiptap/{core,pm,react,suggestion}` and
-  `@floating-ui/dom`, version-pinned — no other `@tiptap/*` extension without asking (AGENTS.md,
-  Adding a dependency). Boundary files are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`;
+- **Dependencies approved in `apps/web`:** `@tiptap/{core,pm,react,suggestion}`,
+  `@floating-ui/dom` and `@anthropic-ai/sdk`, version-pinned — no other `@tiptap/*` extension
+  and no drop-cursor without asking (AGENTS.md, Adding a dependency). Boundary files are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`;
   the document lives in the editor, never in React state. See AGENTS.md, The node model, for the
   slash-menu / no-type-bar rule both editors follow.
 - **The Characters route is the client's laper.ai shape, not the repo's bundle** ("Characters
@@ -74,7 +83,14 @@ Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
   look-sheet job) is not built.
 - **`beats`, `revisions` and `comment_threads` are tables with no route above them** (AGENTS.md,
   Constraints — all three routes were built, then cut). `beats` was dropped in migration `0010`;
-  `revisions` and `comment_threads` stay, and the Script route's right panel reads both directly.
+  `revisions` and `comment_threads` stay: the Script route draws threads inline under their
+  blocks (`_script/comments/`) and the revision list in its title menu.
+- **The Script body is Geist on the canvas, not a Courier sheet** (ruled 2026-09-16). The engine
+  still paginates in Courier; `lib/script/pages.ts` turns the record into `Page N` dividers and
+  the E2E golden diff still reads `[data-page-map]`. The Outline still draws its old prose sheet
+  until its pass.
+- **The assistant needs `ANTHROPIC_API_KEY`** (optional, like the `R2_*` block): unset, the panel
+  draws its composer disabled and says so. Model id is `lib/assistant/model.ts`, not env.
   Bible was a fourth cut route, but unlike these its five tables had no other reader once the
   rail badge query stopped calling into them — `0015` drops them outright rather than orphaning
   them ("Bible route removed" in `docs/build-decisions.md`).

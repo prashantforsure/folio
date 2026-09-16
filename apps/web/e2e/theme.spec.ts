@@ -152,21 +152,18 @@ test('the page is dark by default and the palette moves with data-theme', async 
   expect(dark.accent).not.toBe(light.accent)
 
   /*
-   * The accent is terracotta in both themes. AGENTS.md, Deliberately not using
-   * bans cool-toned substitutes, and the design README retires the violet
-   * `oklch(0.52 0.13 285)` that both superseded shell bundles use. A terracotta
-   * is red-dominant and blue-poor; the violet it replaced is the opposite, so
-   * `r > g > b` is enough to tell them apart and would fail loudly if the stale
-   * accent were ever pasted back in.
+   * The accent is blue in both themes. `docs/ui design/README.md`, "Tokens":
+   * `--accent oklch(.72 .12 245)` dark, `oklch(.52 .15 250)` light - "Accent
+   * blue is for links, selection and AI actions only." The terracotta it
+   * replaced (2026-09-16) was red-dominant and blue-poor; this is the
+   * opposite, so `b > r` is enough to tell them apart and would fail loudly
+   * if the old accent were ever pasted back in.
    */
   for (const [theme, channels] of [
     ['dark', dark.accentChannels],
     ['light', light.accentChannels],
   ] as const) {
-    expect({ theme, warm: channels.r > channels.g && channels.g > channels.b }).toEqual({
-      theme,
-      warm: true,
-    })
+    expect({ theme, cool: channels.b > channels.r }).toEqual({ theme, cool: true })
   }
 })
 

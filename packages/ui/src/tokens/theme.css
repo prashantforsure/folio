@@ -4,7 +4,7 @@
  * AGENTS.md, Tech stack: "Tailwind + CSS variables. Tokens as variables;
  * theming via `data-theme`." This file is the join between those two halves: it
  * republishes the custom properties in `palette.css` and `type.css` as Tailwind
- * v4 theme keys, so `bg-desk`, `text-ink2`, `border-line` and `text-11-5` exist
+ * v4 theme keys, so `bg-s1`, `text-ink2`, `border-line` and `text-13-5` exist
  * as utilities and resolve through the same variables the cascade is already
  * switching.
  *
@@ -12,26 +12,24 @@
  *
  * Without `inline`, Tailwind resolves a theme key to its *value* at build time
  * and emits that value into the utility - which would bake the dark palette
- * into `bg-desk` and leave `[data-theme='light']` with nothing to override.
- * `inline` emits `background-color: var(--desk)` instead, so the utility is a
+ * into `bg-bg` and leave `[data-theme='light']` with nothing to override.
+ * `inline` emits `background-color: var(--bg)` instead, so the utility is a
  * pointer and the cascade still decides. Dropping the keyword is a silent
  * break: every colour utility keeps working and the light theme stops.
  *
  * ## The `initial` resets are the real content of this file
  *
  * `--color-*: initial` deletes Tailwind's entire default colour palette before
- * ours is defined. That is not tidiness. AGENTS.md, Deliberately not using:
- * "Tailwind's default `gray` or `slate`. Cool-toned. The palette is warm
- * neutral with a terracotta accent, and substituting will destroy the look."
- * eslint bans those two scales by name, but a ban catches a habit only after
- * someone has already written the class. Deleting the namespace means
- * `bg-slate-800` is not a banned utility, it is not a utility - it emits
- * nothing and the element renders unstyled, which is noticed immediately.
+ * ours is defined. That is not tidiness. The README: "Semantic colour is
+ * strict... No other hues." eslint bans the `gray` / `slate` scales by name,
+ * but a ban catches a habit only after someone has already written the class.
+ * Deleting the namespace means `bg-slate-800` is not a banned utility, it is
+ * not a utility - it emits nothing and the element renders unstyled, which is
+ * noticed immediately.
  *
  * The same reset runs on `--font-*`, `--text-*` and `--radius-*`, for the same
  * reason: Tailwind's 14px/16px defaults and 0.25rem radius scale are a
- * different design system, and the README is explicit that the density is
- * deliberate and must not drift to "a 14/16px web default".
+ * different design system.
  *
  * **Revision colours are deliberately absent from this file.** See
  * `revision.css`: minting `bg-rev-pink` is what turns an industry artefact into
@@ -46,24 +44,47 @@
 }
 
 @theme inline {
-  --color-desk: var(--desk);
-  --color-panel: var(--panel);
-  --color-rail: var(--rail);
+  /* The v2 palette. */
+  --color-bg: var(--bg);
+  --color-sunk: var(--sunk);
+  --color-s1: var(--s1);
+  --color-s2: var(--s2);
+  --color-s3: var(--s3);
   --color-line: var(--line);
   --color-line2: var(--line2);
   --color-ink: var(--ink);
   --color-ink2: var(--ink2);
   --color-ink3: var(--ink3);
-  --color-sheet: var(--sheet);
-  --color-sheet-ink: var(--sheet-ink);
-  --color-sheet-line: var(--sheet-line);
-  --color-sheet-edge: var(--sheet-edge);
   --color-hover: var(--hover);
-  --color-sel: var(--sel);
   --color-accent: var(--accent);
   --color-accent-bg: var(--accent-bg);
   --color-accent-line: var(--accent-line);
   --color-accent-ink: var(--accent-ink);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-live: var(--live);
+  --color-live-bg: var(--live-bg);
+  --color-solid: var(--solid);
+  --color-solid-ink: var(--solid-ink);
+  --color-caret: var(--caret);
+  --color-script: var(--script);
+  --color-read: var(--read);
+  --color-focus: var(--focus);
+  --color-scrim: var(--scrim);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* The aliases the unrebuilt routes still name. See palette.css. */
+  --color-desk: var(--desk);
+  --color-panel: var(--panel);
+  --color-rail: var(--rail);
+  --color-sheet: var(--sheet);
+  --color-sheet-ink: var(--sheet-ink);
+  --color-sheet-line: var(--sheet-line);
+  --color-sheet-edge: var(--sheet-edge);
+  --color-sel: var(--sel);
   --color-frame-a: var(--frame-a);
   --color-frame-b: var(--frame-b);
   --color-add: var(--add);
@@ -72,39 +93,40 @@
   --color-del-bg: var(--del-bg);
   --color-note: var(--note);
   --color-note-bg: var(--note-bg);
-  --color-focus: var(--focus);
   --color-grid: var(--grid);
   --color-slate: var(--slate);
   --color-slate-ink: var(--slate-ink);
-  --color-transparent: transparent;
-  --color-current: currentColor;
-  --color-scrim: var(--scrim);
   --color-day: var(--day);
   --color-night: var(--night);
 
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
   --font-mono: var(--font-mono);
+  --font-courier: var(--font-courier);
   --font-glyph: var(--font-glyph);
 
+  --tracking-page: var(--tracking-page);
   --tracking-title: var(--tracking-title);
+  --tracking-eyebrow: var(--tracking-eyebrow);
   --tracking-label: var(--tracking-label);
   --tracking-rail: var(--tracking-rail);
 }
 
 /*
- * The scale, in px because the bundles are in px and half-pixel steps do not
- * survive a rem conversion at an arbitrary root size. Line heights are left
- * to the utility that sets them; the bundles set `line-height:1` on glyphs and
- * labels and leave prose to the default.
+ * The scale, in px because the design is in px and half-pixel steps do not
+ * survive a rem conversion at an arbitrary root size. Named by value rather
+ * than by role: 13px is a nav row, a button, a breadcrumb and a chip, and a
+ * semantic name would be a claim the design does not make. Line heights are
+ * left to the utility that sets them.
+ *
+ * The README's "Type": page title 27, section heading 14-17, body 13-15,
+ * meta 11-12.5, eyebrow 10.5-11. The steps below that list are the ones the
+ * older routes still use.
  */
 @theme {
+  --text-6-5: 6.5px;
+  --text-7: 7px;
   --text-8: 8px;
-  /*
-   * 8.5px is the I/E label on a location row and sub-location card and the
-   * letter inside a 20px identity chip (`Route - Locations.dc.html`,
-   * `Route - Characters.dc.html`). Named by value like the rest.
-   */
   --text-8-5: 8.5px;
   --text-9: 9px;
   --text-9-5: 9.5px;
@@ -115,46 +137,37 @@
   --text-12: 12px;
   --text-12-5: 12.5px;
   --text-13: 13px;
+  --text-13-5: 13.5px;
   --text-14: 14px;
   --text-15: 15px;
-  --text-21: 21px;
-
-  /*
-   * Four steps from `Route - Scenes.dc.html` that the README's list does not
-   * name: 6.5px and 7px are the miniature sheet on a scene card (a preview of
-   * the page, not chrome type), 16px is the index card's and list row's scene
-   * number, 20px the card's. Named by value like the rest.
-   */
-  --text-6-5: 6.5px;
-  --text-7: 7px;
   --text-16: 16px;
-  --text-20: 20px;
-
-  /*
-   * Two more from `Route - Outline.dc.html`: 34px
-   * is the document title on the prose sheet (Newsreader), 18px the H2 step
-   * between the bundle's 20px H1 and its 16px body - the bundle draws only H1
-   * and gives H2 / H3 no size, so 18 is an inference and 16 (H3) reuses a
-   * step that exists. Named by value like the rest.
-   */
+  --text-17: 17px;
   --text-18: 18px;
+  --text-20: 20px;
+  --text-21: 21px;
+  --text-27: 27px;
+  /* 32px is the outline's title block (`Route - Outline v2.dc.html`), a step under the older 34. */
+  --text-32: 32px;
   --text-34: 34px;
 
   /*
-   * "Radii are flat and small" - 3px almost everywhere, 2px for the sheet and
-   * progress bars, 1px for the rail's active bar. The 5/6/7/8/9-10/12px scale
-   * belongs to the superseded shell; the one 7px survivor is Research's toggle.
+   * README, "Shape and motion": "Radii: 7-10px controls, 12-13px cards, 16px
+   * panels, 18px on the main surface's top-left only, 999px pills."
+   */
+  --radius-control: 9px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+  --radius-surface: 18px;
+  --radius-pill: 999px;
+  --radius-full: 9999px;
+
+  /*
+   * The previous scale's names, moved to the new geometry so the unrebuilt
+   * routes soften with the rest of the app: `chrome` was 3px, `toggle` 7px,
+   * `sheet` 2px. `bar` stays 1px - it is the rail's old active mark.
    */
   --radius-bar: 1px;
-  --radius-sheet: 2px;
-  --radius-chrome: 3px;
-  --radius-toggle: 7px;
-  /*
-   * The Characters route's second pass (2026-09-14) draws cards, a modal and
-   * a drawer to the client's reference, which is rounder than the shell: one
-   * radius for all three, so the route has one shape and the rest of the
-   * chrome keeps its 3px.
-   */
-  --radius-card: 10px;
-  --radius-full: 9999px;
+  --radius-sheet: 12px;
+  --radius-chrome: 8px;
+  --radius-toggle: 9px;
 }

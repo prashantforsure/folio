@@ -4,13 +4,15 @@ import type { Locator, Page } from '@playwright/test'
 import type { WalkOptions } from '../playwright.config'
 import {
   EMPTY_NAV_META,
-  EPISODE_NAV_ORDER,
-  EPISODE_NAV_WIDTH,
   RAIL_LABELS,
   RAIL_ORDER,
+  RAIL_WIDTH,
+  SIDEBAR_ORDER,
+  SIDEBAR_WIDTH,
   THEMES,
   WORKSPACE_ROUTES,
   WORKSPACE_ROUTE_COUNT,
+  WRITING_ORDER,
 } from './workspace-routes'
 
 /**
@@ -20,13 +22,13 @@ import {
  * a later phase adds to a row what its route must show and the walk picks it
  * up. What this phase asserts, per AGENTS.md and the brief:
  *
- *   - the rail is eight items, in order, and its active state is both the
- *     2px bar at `left:-5px` and the `--sel` background;
- *   - Writing stays lit across all four episode routes, and Production
+ *   - the rail is six items, in order, 56px, and its active state is the
+ *     `--s2` fill with full ink (the redesign's; no accent bar);
+ *   - Writing stays lit across all four writing routes, and Production
  *     lights its own item;
- *   - the episode nav measures exactly 238px, in the order Script · Outline
- *     · Storyboard · Scenes;
- *   - every nav meta on a new episode prints the empty convention;
+ *   - the sidebar measures exactly 236px, in the order Script · Outline ·
+ *     Scenes, and Storyboard is the header pill's other half;
+ *   - every sidebar meta on a new episode prints the empty convention;
  *   - every sub-view param resolves to its first value, and a value that is
  *     not a view is a 404;
  *   - an episode id of `characters` is rejected - so are `assets`, an unknown
@@ -86,10 +88,9 @@ const setTheme = async (page: Page, theme: (typeof THEMES)[number]): Promise<voi
 }
 
 /**
- * The two halves of the active state, read from the cascade rather than
- * from a class name. A probe element painted with `var(--accent)` and one
- * with `var(--sel)` give the resolved colours to compare against, so the
- * assertion holds in either theme without knowing the palette.
+ * The active state, read from the cascade rather than from a class name. A
+ * probe element painted with `var(--s2)` gives the resolved fill to compare
+ * against, so the assertion holds in either theme without knowing the palette.
  */
 const activeState = async (item: Locator) =>
   item.evaluate((el) => {
@@ -101,64 +102,56 @@ const activeState = async (item: Locator) =>
       span.remove()
       return colour
     }
-    const bar = getComputedStyle(el, '::before')
     return {
-      barWidth: bar.width,
-      barLeft: bar.left,
-      barColour: bar.backgroundColor,
-      accent: probe('--accent'),
       background: getComputedStyle(el).backgroundColor,
-      sel: probe('--sel'),
+      s2: probe('--s2'),
     }
   })
 
 const expectRail = async (page: Page, active: string): Promise<void> => {
   const rail = page.locator('nav[data-rail]')
-  await expect(rail).toHaveCSS('width', '66px')
-  const items = rail.locator('a[data-rail-item]')
+  await expect(rail).toHaveCSS('width', `${RAIL_WIDTH}px`)
+  const items = rail.locator('[data-rail-item]')
   await expect(items).toHaveCount(RAIL_ORDER.length)
-  expect(await items.evaluateAll((els) => els.map((el) => el.getAttribute('data-rail-item')))).toEqual(
-    RAIL_ORDER,
-  )
-  expect(await items.evaluateAll((els) => els.map((el) => el.querySelector('.folio-nav-label')?.textContent))).toEqual(
-    RAIL_LABELS,
-  )
+  expect(await items.evaluateAll((els) => els.map((el) => el.getAttribute('data-rail-item')))).toEqual(RAIL_ORDER)
+  expect(await items.evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))).toEqual(RAIL_LABELS)
 
-  const lit = rail.locator('a[aria-current="page"]')
+  const lit = rail.locator('[data-rail-item][aria-current="page"]')
   await expect(lit).toHaveCount(1)
   await expect(lit).toHaveAttribute('data-rail-item', active)
 
   const state = await activeState(lit)
-  expect(state.barWidth).toBe('2px')
-  expect(state.barLeft).toBe('-5px')
-  expect(state.barColour).toBe(state.accent)
-  expect(state.background).toBe(state.sel)
+  expect(state.background).toBe(state.s2)
 
-  // And the unlit ones carry neither half.
-  const unlit = rail.locator('a[data-rail-item]:not([aria-current="page"])').first()
+  // And an unlit one carries no fill.
+  const unlit = rail.locator('[data-rail-item]:not([aria-current="page"]):not([data-lit="true"])').first()
   const off = await activeState(unlit)
-  expect(off.barWidth).not.toBe('2px')
-  expect(off.background).not.toBe(off.sel)
+  expect(off.background).not.toBe(off.s2)
 }
 
-const expectEpisodeNav = async (page: Page, activeRoute: string): Promise<void> => {
-  const nav = page.locator('aside[data-episode-nav]')
+const expectSidebar = async (page: Page, activeRoute: string): Promise<void> => {
+  const nav = page.locator('aside[data-sidebar]')
   await expect(nav).toBeVisible()
   const width = await nav.evaluate((el) => el.getBoundingClientRect().width)
-  expect(width).toBe(EPISODE_NAV_WIDTH)
+  expect(width).toBe(SIDEBAR_WIDTH)
 
   const rows = nav.locator('a[data-episode-route]')
-  expect(await rows.evaluateAll((els) => els.map((el) => el.getAttribute('data-episode-route')))).toEqual(
-    EPISODE_NAV_ORDER,
-  )
-  await expect(nav.locator('a[data-episode-route][aria-current="page"]')).toHaveAttribute(
-    'data-episode-route',
-    activeRoute,
-  )
+  expect(await rows.evaluateAll((els) => els.map((el) => el.getAttribute('data-episode-route')))).toEqual(SIDEBAR_ORDER)
+  if (activeRoute !== 'storyboard') {
+    await expect(nav.locator('a[data-episode-route][aria-current="page"]')).toHaveAttribute('data-episode-route', activeRoute)
+  }
   for (const [route, meta] of Object.entries(EMPTY_NAV_META)) {
     await expect(nav.locator(`[data-nav-meta="${route}"]`)).toHaveText(meta)
   }
   await expect(nav.getByText('Scenes appear here as you write headings. Nothing to list yet.')).toBeVisible()
+  await expect(nav.locator('[data-credits-card]')).toBeVisible()
+
+  // The header's mode pill: Write lit on Script, Outline, Scenes; Storyboard on Storyboard.
+  const pill = page.locator('[data-mode-pill]')
+  await expect(pill.locator('[data-mode][aria-selected="true"]')).toHaveAttribute(
+    'data-mode',
+    activeRoute === 'storyboard' ? 'storyboard' : 'write',
+  )
 }
 
 const hrefFor = (projectId: string, episode: string | null, route: string, scope: 'episode' | 'project') =>
@@ -170,10 +163,10 @@ let seriesId = ''
 let filmId = ''
 const RUN = Date.now().toString(36)
 
-test('the contract is ten routes', () => {
+test('the contract is nine routes', () => {
   expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
   expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'episode')).toHaveLength(5)
-  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'project')).toHaveLength(5)
+  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'project')).toHaveLength(4)
 })
 
 test('a series opens on ep_001/script and a film on /script', async ({ page, account }) => {
@@ -188,21 +181,51 @@ test('a series opens on ep_001/script and a film on /script', async ({ page, acc
   expect(filmId).not.toBe(seriesId)
 })
 
-test('＋ adds a second episode to the series and the board lists both', async ({ page, account }) => {
+test('+ asks for a name, adds a second episode, and the header menu lists both', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(`/app/project/${seriesId}/ep_001/script`)
-  await page.getByRole('button', { name: 'New episode' }).click()
-  await page.waitForURL(new RegExp(`/app/project/${seriesId}/ep_002/script$`))
-  const board = page.locator('[data-episode-board]')
-  await expect(board.locator('a[data-board-episode]')).toHaveCount(2)
-  await expect(board.locator('a[data-board-episode="ep_002"]')).toHaveAttribute('aria-current', 'page')
-  await expect(board.getByText('E1')).toBeVisible()
-  await expect(board.getByText('E2')).toBeVisible()
-  await expect(board.getByRole('button', { name: /Episode board/ })).toContainText('2')
+  // The sidebar's + opens the form in flow; nothing is created until it is submitted.
+  await page.locator('aside[data-sidebar] [data-new-episode]').click()
+  const panel = page.locator('aside[data-sidebar] [data-episode-panel="create"]')
+  await expect(panel).toBeVisible()
+  await expect(panel.locator('[data-episode-name]')).toHaveAttribute('placeholder', 'Episode 2')
+  await panel.locator('[data-episode-name]').fill('Standpipe')
+  await panel.locator('[data-episode-name]').press('Enter')
+  await page.waitForURL(new RegExp(`/app/project/${seriesId}/ep_002/script$`), { timeout: 120_000 })
+  await expect(page.locator('aside[data-sidebar] [data-episode-rename]')).toHaveText('Episode 2 · Standpipe')
+
+  // The header's breadcrumb is the switcher: every episode, the current one marked.
+  await page.locator('[data-episode-menu]').click()
+  const menu = page.locator('[data-menu-episode]')
+  await expect(menu).toHaveCount(2)
+  await expect(page.locator('[data-menu-episode="ep_002"]')).toHaveAttribute('aria-current', 'true')
+  await expect(page.locator('[data-menu-episode="ep_001"]')).toContainText('E1')
+  await expect(page.locator('[data-menu-episode="ep_002"]')).toContainText('Standpipe')
+  await page.locator('[data-menu-episode="ep_001"]').click()
+  await page.waitForURL(new RegExp(`/app/project/${seriesId}/ep_001/script$`))
+
+  // Rename from the menu's own form; the sidebar title and the toolbar follow.
+  await page.locator('[data-episode-menu]').click()
+  await page.locator('[data-episode-menu-list] [data-episode-rename]').click()
+  await page.locator('[data-episode-form="rename"] [data-episode-name]').fill('Cold Open')
+  await page.locator('[data-episode-form="rename"] [data-episode-name]').press('Enter')
+  await expect(page.locator('aside[data-sidebar] [data-episode-rename]')).toHaveText('Episode 1 · Cold Open', { timeout: 120_000 })
+
+  // Delete the second episode from its own menu; the walk lands on the neighbour.
+  await page.goto(`/app/project/${seriesId}/ep_002/script`)
+  await page.locator('[data-episode-menu]').click()
+  await page.locator('[data-episode-menu-list] [data-episode-delete]').click()
+  await expect(page.locator('[data-episode-delete-confirm]')).toContainText('cannot be undone')
+  await page.locator('[data-episode-delete-confirm-button]').click()
+  await page.waitForURL(new RegExp(`/app/project/${seriesId}/ep_001/script$`), { timeout: 120_000 })
+  await page.locator('[data-episode-menu]').click()
+  await expect(page.locator('[data-menu-episode]')).toHaveCount(1)
+  // The last episode cannot be deleted: the item is not offered.
+  await expect(page.locator('[data-episode-menu-list] [data-episode-delete]')).toHaveCount(0)
 })
 
 for (const theme of THEMES) {
-  test(`walks all eleven routes of a series, ${theme} theme`, async ({ page, account }) => {
+  test(`walks all nine routes of a series, ${theme} theme`, async ({ page, account }) => {
     await signIn(page, account)
     await page.goto(`/app/project/${seriesId}/ep_001/script`)
     await setTheme(page, theme)
@@ -216,17 +239,17 @@ for (const theme of THEMES) {
 
       const main = page.locator(`main[data-route="${row.route}"]`)
       await expect(main).toBeVisible()
-      await expect(main.getByRole('heading', { level: 1 })).toHaveText(row.title)
+      if (row.title !== null) await expect(main.getByRole('heading', { level: 1 })).toHaveText(row.title)
       for (const [param, value] of Object.entries(row.defaults)) {
         await expect(main).toHaveAttribute(`data-sub-${param}`, value)
       }
 
       await expectRail(page, row.rail)
 
-      if (row.column.kind === 'episode-nav') {
-        await expectEpisodeNav(page, row.route)
+      if (row.column.kind === 'sidebar') {
+        await expectSidebar(page, row.route)
       } else {
-        await expect(page.locator('aside[data-episode-nav]')).toHaveCount(0)
+        await expect(page.locator('aside[data-sidebar]')).toHaveCount(0)
         if (row.column.kind === 'context') {
           const column = page.locator(`aside[data-context-column="${row.route}"]`)
           await expect(column).toBeVisible()
@@ -245,14 +268,27 @@ for (const theme of THEMES) {
   })
 }
 
-test('Writing stays lit on all five episode routes', async ({ page, account }) => {
+test('Writing stays lit on all four writing routes, Production on its own', async ({ page, account }) => {
   await signIn(page, account)
-  for (const route of EPISODE_NAV_ORDER) {
+  for (const route of WRITING_ORDER) {
     await page.goto(`/app/project/${seriesId}/ep_002/${route}`)
-    await expect(page.locator('nav[data-rail] a[aria-current="page"]')).toHaveAttribute('data-rail-item', 'writing')
+    await expect(page.locator('nav[data-rail] [data-rail-item][aria-current="page"]')).toHaveAttribute('data-rail-item', 'writing')
   }
   await page.goto(`/app/project/${seriesId}/ep_002/production`)
-  await expect(page.locator('nav[data-rail] a[aria-current="page"]')).toHaveAttribute('data-rail-item', 'production')
+  await expect(page.locator('nav[data-rail] [data-rail-item][aria-current="page"]')).toHaveAttribute('data-rail-item', 'production')
+})
+
+test('the rail opens the Characters overlay on a writing route and navigates elsewhere', async ({ page, account }) => {
+  await signIn(page, account)
+  await page.goto(`/app/project/${seriesId}/ep_001/script`)
+  await page.locator('nav[data-rail] button[data-rail-item="characters"]').click()
+  const overlay = page.locator('[data-characters-overlay]')
+  await expect(overlay).toBeVisible()
+  await expect(overlay.getByText('No characters yet.')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(overlay).toHaveCount(0)
+  await page.goto(`/app/project/${seriesId}/timeline`)
+  await expect(page.locator('nav[data-rail] a[data-rail-item="characters"]')).toBeVisible()
 })
 
 test('a film routes without an episode segment while still having one episode', async ({ page, account }) => {
@@ -263,10 +299,10 @@ test('a film routes without an episode segment while still having one episode', 
     await page.reload()
     await expect(page.locator('main[data-route="script"]')).toBeVisible()
     await expectRail(page, 'writing')
-    await expectEpisodeNav(page, 'script')
-    // The board is hidden for a film, and so is ＋.
-    await expect(page.locator('[data-episode-board]')).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'New episode' })).toHaveCount(0)
+    await expectSidebar(page, 'script')
+    // The episode menu is hidden for a film, and so is +.
+    await expect(page.locator('[data-episode-menu]')).toHaveCount(0)
+    await expect(page.locator('[data-new-episode]')).toHaveCount(0)
     await page.screenshot({ path: `test-results/workspace-film-script-${theme}.png` })
   }
 
@@ -304,10 +340,11 @@ test('a sub-view that does not exist is a 404; one that does is read', async ({ 
   await signIn(page, account)
   await page.goto(`/app/project/${seriesId}/ep_001/scenes?view=index`)
   await expect(page.locator('main[data-route="scenes"]')).toHaveAttribute('data-sub-view', 'index')
-  await page.goto(`/app/project/${seriesId}/insights?report=presence&lens=producer`)
-  const insights = page.locator('main[data-route="insights"]')
-  await expect(insights).toHaveAttribute('data-sub-report', 'presence')
-  await expect(insights).toHaveAttribute('data-sub-lens', 'producer')
+  await page.goto(`/app/project/${seriesId}/timeline?view=chrono`)
+  await expect(page.locator('main[data-route="timeline"]')).toHaveAttribute('data-sub-view', 'chrono')
+  // Insights was removed with the redesign; its URL is gone, not a shell.
+  const gone = await page.goto(`/app/project/${seriesId}/insights`)
+  expect(gone?.status()).toBe(404)
   const bad = await page.goto(`/app/project/${seriesId}/ep_001/scenes?view=grid`)
   expect(bad?.status()).toBe(404)
 })

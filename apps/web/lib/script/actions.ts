@@ -2,6 +2,7 @@
 
 import type { ThreadId } from '@folio/contracts'
 import {
+  NodeIdSchema,
   ScreenplayNodeSchema,
   ScriptFormatSchema,
   ThreadIdSchema,
@@ -11,7 +12,10 @@ import {
   commitNodePlan,
   createDocument,
   createMentionTarget,
+  listComments,
+  listMemberProfiles,
   mintNodeIds,
+  openThread,
   parseScreenplayRows,
   planNodeWrite,
   readDocumentById,
@@ -47,12 +51,16 @@ import { digestOf } from './digest'
 import { readFdx, writeFdx } from './fdx-adapter'
 import { cachedRows, forgetRows, rememberRows, rowsAfterWrite } from './row-cache'
 import { isRefusal, openEpisode, openEpisodeWith } from './gate'
+import type { EpisodeGate } from './gate'
+import type { ThreadNodeKind, ThreadView } from './panel'
+import { initialsOf, whenLabel } from './panel'
 import type {
   ExportScriptResult,
   ImportScriptResult,
   MentionTargetResult,
   SaveScriptResult,
   SimpleResult,
+  ThreadResult,
   TitlePageResult,
 } from './result'
 import {
@@ -509,25 +517,69 @@ export const createMention = async (
 }
 
 // ---------------------------------------------------------------------------
-// Threads, from the Collaboration tab
+// Threads, inline in the document
 // ---------------------------------------------------------------------------
 
 const BodySchema = z.string().trim().min(1).max(4000)
+
+/**
+ * A thread as the card draws it, shaped here so every action that changes
+ * one returns the whole card and the client replaces it - no route
+ * revalidation, no second read. The member list is one read; a thread has
+ * a handful of turns.
+ */
+const threadViewOf = async (gate: EpisodeGate, threadId: ThreadId, nodeId: string, state: 'open' | 'resolved'): Promise<ThreadView> => {
+  const [comments, members] = await Promise.all([listComments(gate.scope, threadId), listMemberProfiles(gate.scope)])
+  const nameOf = (userId: string): string => members.find((member) => member.userId === userId)?.displayName ?? 'Someone'
+  return {
+    id: threadId,
+    nodeId,
+    state,
+    turns: comments.map((comment) => {
+      const who = nameOf(comment.authorId)
+      return { id: comment.id, who, initials: initialsOf(who), when: whenLabel(comment.createdAt), body: comment.body, mine: comment.authorId === gate.actor }
+    }),
+  }
+}
+
+/**
+ * Open a thread on a node. From the block's `+` handle - creation did not
+ * exist before the redesign. The Script passes `script_node`, the Outline
+ * `outline_block` (`lib/script/panel.ts`, `ThreadNodeKind`): both are node
+ * ids in the same table, and the anchor kind is what `loadScript` /
+ * `loadOutline` filter their threads by, so a kind that lied would draw the
+ * card on neither route.
+ */
+export const openThreadOnNode = async (
+  projectId: string,
+  episode: string,
+  nodeId: string,
+  body: string,
+  kind: ThreadNodeKind = 'script_node',
+): Promise<ThreadResult> => {
+  const id = NodeIdSchema.safeParse(nodeId)
+  const parsedBody = BodySchema.safeParse(body)
+  if (!id.success || !parsedBody.success) return { status: 'error', message: 'Write a comment first.' }
+  const gate = await openEpisode(projectId, episode)
+  if (isRefusal(gate)) return gate
+  const thread = await openThread(gate.scope, { kind, nodeId: id.data }, parsedBody.data)
+  return { status: 'ok', thread: await threadViewOf(gate, thread.id, id.data as string, thread.state) }
+}
 
 export const replyThread = async (
   projectId: string,
   episode: string,
   threadId: string,
+  nodeId: string,
   body: string,
-): Promise<SimpleResult> => {
+): Promise<ThreadResult> => {
   const id = ThreadIdSchema.safeParse(threadId)
   const parsedBody = BodySchema.safeParse(body)
   if (!id.success || !parsedBody.success) return { status: 'error', message: 'Write a reply first.' }
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
   await replyToThread(gate.scope, id.data as ThreadId, parsedBody.data)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'done' }
+  return { status: 'ok', thread: await threadViewOf(gate, id.data as ThreadId, nodeId, 'open') }
 }
 
 export const resolveThread = async (
@@ -540,6 +592,5 @@ export const resolveThread = async (
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
   await setThreadState(gate.scope, id.data as ThreadId, 'resolved')
-  revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'done' }
 }

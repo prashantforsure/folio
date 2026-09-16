@@ -2,7 +2,8 @@ import { listComments, listMemberProfiles } from '@folio/db'
 import { notFound } from 'next/navigation'
 
 import { loadOutline } from '../../../../../../lib/outline/server'
-import type { RevisionRow, ThreadCard } from '../../../../../../lib/script/panel'
+import type { RevisionRow, ThreadView } from '../../../../../../lib/script/panel'
+import { initialsOf, whenLabel } from '../../../../../../lib/script/panel'
 import type { EpisodeContext } from '../../../../../../lib/workspace/context'
 import type { RawSearchParams } from '../../../../../../lib/workspace/params'
 import { parseSubViews } from '../../../../../../lib/workspace/params'
@@ -10,13 +11,17 @@ import type { OutlineDraft } from './outline-workspace'
 import { OutlineWorkspace } from './outline-workspace'
 
 /**
- * The Outline route, server side: one read, then the client workspace.
+ * The Outline route, server side: one read, then the client workspace -
+ * the body inside the surface card the writing layout draws. The `<main
+ * data-route>` contract the smoke test reads is kept. Outline's sub-view
+ * schema is empty (`lib/workspace/params.ts`), and `empty` is
+ * `loadOutline` finding no outline document - never a param.
  *
- * Replaces `RouteShell` for this route as the Script does: the header
- * carries the save indicator and the panel toggle, and the route has a
- * status bar. The `<main data-route>` contract the smoke test reads is
- * kept. Outline's sub-view schema is empty (`lib/workspace/params.ts`), and
- * `empty` is `loadOutline` finding no outline document - never a param.
+ * Threads are shaped here as the Script shapes its own - every turn, with
+ * the author's name and initials - because the same cards draw them
+ * (`_script/comments/`). The `Drafts` list under the title is the manual
+ * snapshots (`⌘S`), newest first; the autosave and import snapshots are
+ * the undo backstop, not drafts, and are not listed.
  */
 export const OutlineRoute = async ({
   context,
@@ -26,7 +31,7 @@ export const OutlineRoute = async ({
   readonly searchParams: Promise<RawSearchParams>
 }) => {
   if (!parseSubViews('outline', await searchParams).ok) notFound()
-  const { scope, project, episode, shape } = context
+  const { scope, project, episode, user } = context
 
   const load = await loadOutline(scope, project, episode)
 
@@ -35,41 +40,34 @@ export const OutlineRoute = async ({
   if (load.state === 'draft') {
     const members = await listMemberProfiles(scope)
     const nameOf = (userId: string): string => members.find((member) => member.userId === userId)?.displayName ?? 'Someone'
-    const threads: ThreadCard[] = await Promise.all(
-      load.threads.map(async (thread): Promise<ThreadCard> => {
+    const threads: ThreadView[] = await Promise.all(
+      load.threads.map(async (thread): Promise<ThreadView> => {
         const comments = await listComments(scope, thread.id)
-        const when = new Date(thread.createdAt)
-        const sameDay = when.toDateString() === new Date().toDateString()
-        const anchor = thread.anchor
-        const anchored =
-          anchor.kind === 'script_node' || anchor.kind === 'storyboard_shot'
-            ? null
-            : load.nodes.find((node) => node.id === anchor.nodeId)
         return {
           id: thread.id,
-          who: nameOf(thread.createdBy),
-          when: sameDay
-            ? when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-            : when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-          at: anchored === undefined || anchored === null ? 'detached' : anchored.type === 'beat' ? 'beat' : anchored.type,
-          body: comments[0]?.body ?? '',
+          nodeId: thread.anchor.kind === 'storyboard_shot' ? '' : (thread.anchor.nodeId as string),
+          state: thread.state,
+          turns: comments.map((comment) => {
+            const who = nameOf(comment.authorId)
+            return {
+              id: comment.id,
+              who,
+              initials: initialsOf(who),
+              when: whenLabel(comment.createdAt),
+              body: comment.body,
+              mine: comment.authorId === user.id,
+            }
+          }),
         }
       }),
     )
-    const history: RevisionRow[] = load.versions.map((version): RevisionRow => ({
-      id: version.id,
-      name:
-        version.reason === 'manual'
-          ? 'Snapshot'
-          : version.reason === 'before_import'
-            ? 'Import — snapshot before'
-            : version.reason === 'before_agent_run'
-              ? 'Before agent run'
-              : version.reason === 'autosave'
-                ? 'Autosave'
-                : version.reason,
-      meta: `${new Date(version.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · ${String(version.nodeCount)} blocks`,
-    }))
+    const drafts: RevisionRow[] = load.versions
+      .filter((version) => version.reason === 'manual')
+      .map((version): RevisionRow => ({
+        id: version.id,
+        name: 'Snapshot',
+        meta: `${new Date(version.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · ${String(version.nodeCount)} blocks`,
+      }))
     draft = {
       documentId: load.document.id,
       updatedAt: load.document.updatedAt,
@@ -78,7 +76,7 @@ export const OutlineRoute = async ({
       labels: load.labels,
       stats: load.stats,
       threads,
-      history,
+      drafts,
     }
   } else if (load.state === 'unreadable') {
     unreadable = load.detail
@@ -89,8 +87,6 @@ export const OutlineRoute = async ({
       projectId={project.id}
       episode={episode.slug}
       episodeTitle={episode.title}
-      project={project}
-      routeId={shape === 'collapsed' ? 'outline' : `${episode.slug}/outline`}
       outlineState={load.state}
       draft={draft}
       unreadable={unreadable}

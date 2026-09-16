@@ -25,7 +25,7 @@ export const ProjectColumnLayout = async ({
   projectId,
   children,
 }: {
-  readonly route: Exclude<ProjectRoute, 'insights' | 'characters'>
+  readonly route: Exclude<ProjectRoute, 'characters'>
   readonly projectId: string
   readonly children: ReactNode
 }) => {

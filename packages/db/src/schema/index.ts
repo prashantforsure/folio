@@ -36,6 +36,9 @@
  *   frame_generations            shot to job, and on failure to the refund entry; `kept_at` marks the take the writer chose
  *   reels                        a run of one scene's shots that renders as one clip - keyed by the heading node's id, like shots
  *   reel_renders                 reel to job, and on failure to the refund entry
+ *   share_links                  the in-app invite: a token, a role, revocable (0016)
+ *   assistant_chats              one conversation with the assistant about one episode's script (0016)
+ *   assistant_messages           its turns, a person's and the model's
  *
  * ## DERIVED CACHE - reproducible by re-running `derive` over the node list
  *
@@ -101,3 +104,5 @@ export * from './credits'
 export * from './storyboard'
 export * from './production'
 export * from './timeline'
+export * from './share'
+export * from './assistant'

@@ -2,11 +2,11 @@
  * The smoke-test contract for the project workspace. **This file grows every
  * phase; it is not rewritten.**
  *
- * AGENTS.md, Validation: "The E2E smoke test walks all thirteen routes in
- * both themes and both states. It is not optional coverage - it is the thing
- * that catches a route shipped without its empty state." Ten now - Notes and
- * Revisions were built, then cut (`docs/build-decisions.md`, "Notes and
- * Revisions routes removed"), and so was Bible ("Bible route removed").
+ * AGENTS.md, Validation: "The E2E smoke test walks all the routes in both
+ * themes and both states. It is not optional coverage - it is the thing that
+ * catches a route shipped without its empty state." Nine now - Notes and
+ * Revisions were built, then cut, so was Bible, and Insights was removed with
+ * the v2 redesign (2026-09-16).
  *
  * One row per route. `workspace.spec.ts` walks the rows; a later phase adds
  * to a row what its route must show - the empty-state copy, the populated
@@ -17,14 +17,7 @@
  * read the same table.
  */
 
-export type RailSection =
-  | 'writing'
-  | 'characters'
-  | 'locations'
-  | 'timeline'
-  | 'research'
-  | 'insights'
-  | 'production'
+export type RailSection = 'writing' | 'characters' | 'locations' | 'timeline' | 'research' | 'production'
 
 export type WorkspaceRouteRow = {
   readonly route: string
@@ -32,12 +25,12 @@ export type WorkspaceRouteRow = {
   readonly scope: 'episode' | 'project'
   /** Which rail item must carry `aria-current="page"`. */
   readonly rail: RailSection
-  /** The 46px header's title. Specified copy. */
-  readonly title: string
+  /** The route's `h1`, where the route still draws one. The redesigned Script has none. */
+  readonly title: string | null
   /** The sub-view params and the default each must resolve to. */
   readonly defaults: Readonly<Record<string, string>>
-  /** Which context column sits beside the page, and its width in px. */
-  readonly column: { readonly kind: 'episode-nav' | 'context' | 'none'; readonly width: number }
+  /** Which column sits beside the page, and its width in px. */
+  readonly column: { readonly kind: 'sidebar' | 'context' | 'none'; readonly width: number }
   /**
    * Added by later phases: what the route's empty state must show. Empty
    * this phase because the routes are empty shells - which is the honest
@@ -52,37 +45,33 @@ export const RAIL_ORDER: readonly RailSection[] = [
   'locations',
   'timeline',
   'research',
-  'insights',
   'production',
 ]
 
-export const RAIL_LABELS: readonly string[] = [
-  'Writing',
-  'Characters',
-  'Locations',
-  'Timeline',
-  'Research',
-  'Insights',
-  'Production',
-]
+export const RAIL_LABELS: readonly string[] = ['Writing', 'Characters', 'Locations', 'Timeline', 'Research', 'Production']
 
-export const EPISODE_NAV_ORDER: readonly string[] = ['script', 'outline', 'storyboard', 'scenes']
+export const RAIL_WIDTH = 56
 
-export const EPISODE_NAV_WIDTH = 238
+/** The four writing routes, all of which light Writing. */
+export const WRITING_ORDER: readonly string[] = ['script', 'outline', 'storyboard', 'scenes']
 
-/** The nav metas a brand-new episode must print. */
+/** The sidebar's three rows. Storyboard is the header pill's other half. */
+export const SIDEBAR_ORDER: readonly string[] = ['script', 'outline', 'scenes']
+
+export const SIDEBAR_WIDTH = 236
+
+/** The sidebar metas a brand-new episode must print. */
 export const EMPTY_NAV_META: Readonly<Record<string, string>> = {
   script: 'empty',
   outline: '—',
-  storyboard: '—',
   scenes: '0',
 }
 
-const nav = { kind: 'episode-nav', width: EPISODE_NAV_WIDTH } as const
+const nav = { kind: 'sidebar', width: SIDEBAR_WIDTH } as const
 
 export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
-  { route: 'script', scope: 'episode', rail: 'writing', title: 'Script', defaults: {}, column: nav },
-  { route: 'outline', scope: 'episode', rail: 'writing', title: 'Outline', defaults: {}, column: nav },
+  { route: 'script', scope: 'episode', rail: 'writing', title: null, defaults: {}, column: nav },
+  { route: 'outline', scope: 'episode', rail: 'writing', title: null, defaults: {}, column: nav },
   { route: 'storyboard', scope: 'episode', rail: 'writing', title: 'Storyboard', defaults: { view: 'board' }, column: nav },
   { route: 'scenes', scope: 'episode', rail: 'writing', title: 'Scenes', defaults: { view: 'cards' }, column: nav },
   {
@@ -128,21 +117,13 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     defaults: { view: 'library' },
     column: { kind: 'context', width: 250 },
   },
-  {
-    route: 'insights',
-    scope: 'project',
-    rail: 'insights',
-    title: 'Insights',
-    defaults: { report: 'pacing', lens: 'showrunner' },
-    column: { kind: 'none', width: 0 },
-  },
 ]
 
 /**
- * Ten. Decision 5 episode-scoped production, decision 6 cut, assets
+ * Nine. Decision 5 episode-scoped production, decision 6 cut, assets
  * reserved; Beats cut 2026-09-12; Revisions and Notes cut 2026-09-14; Bible
- * cut 2026-09-15.
+ * cut 2026-09-15; Insights removed with the redesign 2026-09-16.
  */
-export const WORKSPACE_ROUTE_COUNT = 10
+export const WORKSPACE_ROUTE_COUNT = 9
 
 export const THEMES = ['dark', 'light'] as const

@@ -1,6 +1,6 @@
 import { isReservedProjectSegment } from '@folio/contracts'
 
-import type { RailSection } from './routes'
+import type { RailSection, WorkspaceRoute } from './routes'
 import { isEpisodeRoute, isProjectRoute, railSectionOf } from './routes'
 
 /**
@@ -50,4 +50,20 @@ export const episodeSegmentFromSegments = (segments: readonly string[]): string 
   if (head === undefined) return null
   if (isProjectRoute(head) || isReservedProjectSegment(head) || isEpisodeRoute(head)) return null
   return head
+}
+
+/**
+ * The workspace route in the current URL, if it names one. Same folding as
+ * above: `['characters']` is `characters`, `['ep_001', 'outline']` and
+ * `['outline']` (collapsed) are `outline`; an index on its way to a script,
+ * the settings stub and an unknown segment are `null`.
+ */
+export const workspaceRouteFromSegments = (segments: readonly string[]): WorkspaceRoute | null => {
+  const path = segments.filter((segment) => !(segment.startsWith('(') && segment.endsWith(')')))
+  const head = path[0]
+  if (head === undefined) return null
+  if (isProjectRoute(head) || isEpisodeRoute(head)) return head
+  if (isReservedProjectSegment(head)) return null
+  const route = path[1]
+  return route !== undefined && isEpisodeRoute(route) ? route : null
 }

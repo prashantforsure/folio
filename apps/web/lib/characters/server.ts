@@ -70,7 +70,7 @@ export const castRowOf = (record: CharacterRecordRow): CastRow => ({
   scenes: record.derived?.scenes ?? [],
 })
 
-const isCueSubject = (value: unknown): value is Extract<ResolveSubject, { kind: 'cue' }> =>
+export const isCueSubject = (value: unknown): value is Extract<ResolveSubject, { kind: 'cue' }> =>
   typeof value === 'object' &&
   value !== null &&
   'kind' in value &&

@@ -39,12 +39,24 @@ export const AI_SCOPES = ['selection', 'scene', 'act', 'draft'] as const
 
 export type AiScope = (typeof AI_SCOPES)[number]
 
+/**
+ * The context overlay the rail opens over a writing route - the 330px
+ * Characters peek (`docs/ui design/Route - Script v2.dc.html`, "CONTEXT
+ * OVERLAY"). Ephemeral for the palette's reason: an overlay that remembers it
+ * was open is one that opens by itself on the next route.
+ */
+export const CONTEXT_OVERLAYS = ['characters'] as const
+
+export type ContextOverlay = (typeof CONTEXT_OVERLAYS)[number]
+
 type EphemeralValue = {
   readonly paletteOpen: boolean
   readonly setPaletteOpen: (open: boolean) => void
   readonly togglePalette: () => void
   readonly aiScope: AiScope
   readonly setAiScope: (scope: AiScope) => void
+  readonly contextOverlay: ContextOverlay | null
+  readonly setContextOverlay: (overlay: ContextOverlay | null) => void
 }
 
 const EphemeralContext = createContext<EphemeralValue | null>(null)
@@ -52,14 +64,15 @@ const EphemeralContext = createContext<EphemeralValue | null>(null)
 export const EphemeralProvider = ({ children }: { readonly children: ReactNode }) => {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [aiScope, setAiScope] = useState<AiScope>('scene')
+  const [contextOverlay, setContextOverlay] = useState<ContextOverlay | null>(null)
 
   const togglePalette = useCallback(() => {
     setPaletteOpen((open) => !open)
   }, [])
 
   const value = useMemo<EphemeralValue>(
-    () => ({ paletteOpen, setPaletteOpen, togglePalette, aiScope, setAiScope }),
-    [paletteOpen, togglePalette, aiScope],
+    () => ({ paletteOpen, setPaletteOpen, togglePalette, aiScope, setAiScope, contextOverlay, setContextOverlay }),
+    [paletteOpen, togglePalette, aiScope, contextOverlay],
   )
 
   return <EphemeralContext.Provider value={value}>{children}</EphemeralContext.Provider>

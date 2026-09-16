@@ -1,16 +1,14 @@
 /*
- * The palette. Transcribed verbatim from `Route - Script.dc.html`, which
- * AGENTS.md, Feature workflow 1 makes authoritative wherever two bundles
- * disagree on chrome. Every value here appears identically in all fourteen
- * route bundles.
+ * The palette. Transcribed verbatim from the v2 design package
+ * (`docs/ui design/README.md`, "Tokens", and the identical `:root` /
+ * `[data-theme="light"]` blocks every `Route - * v2.dc.html` declares).
+ * The README: "Copy it verbatim - it is the design system."
  *
  * ## Why three blocks and not two
  *
  * AGENTS.md, UI fidelity: "Theme is `dark` by default, via `data-theme`." The
- * bundles are written the other way round - `:root` carries light and
- * `[data-theme="dark"]` overrides it - because a mock always renders one theme
- * and never has to answer what an unmarked element is. We do, so the default
- * moves into `:root` and the light set becomes an attribute override.
+ * mockups are written dark-first too, so `:root` carries the dark set and the
+ * light set is an attribute override:
  *
  *   :root                    the dark set. An element with no data-theme
  *                            ancestor is dark, which is the product default.
@@ -22,139 +20,173 @@
  *
  * That three-block shape is the whole reason Tailwind's `dark:` variant is
  * banned rather than merely disliked (AGENTS.md, Deliberately not using).
- * `dark:` is a single global bit. The Script route nests a light sheet inside a
- * dark page, and the Storyboard nests a dark frame inside a light one; both are
- * ordinary CSS cascade here and inexpressible there.
+ * `dark:` is a single global bit; the cascade under `data-theme` is not.
  *
- * ## The accent is terracotta
+ * ## One background, translucent surfaces
  *
- * `oklch(0.50 0.17 27)` light, `oklch(0.72 0.14 30)` dark. The design README is
- * explicit that the violet `oklch(0.52 0.13 285)` in the two superseded shell
- * bundles is stale. Terracotta against a warm neutral ground is the entire
- * look; a cool grey substituted for the neutrals, or violet for the accent,
- * destroys it - which is why eslint bans Tailwind's `gray`/`slate` scales by
- * name and why `theme.css` deletes the default colour palette outright rather
- * than leaving it available and disapproved of.
+ * The README's first rule: "Dark canvas, no paper... There is one background
+ * colour; depth comes from translucent white surfaces stacked on it." So
+ * `--s1` / `--s2` / `--s3` are alpha steps, not three greys, and the light
+ * theme swaps the alpha's base colour rather than each step. `--sunk` is the
+ * recessed ground for inputs and side panels; `--bg` the page.
+ *
+ * ## Semantic colour is strict
+ *
+ * "green means settled, amber means needs a decision, orange means
+ * destructive or live. Accent blue is for links, selection and AI actions
+ * only. No other hues." The four are `--ok`, `--warn`, `--live`, `--accent`.
+ *
+ * ## The aliases at the foot
+ *
+ * The routes built before the redesign (Outline, Scenes, Storyboard,
+ * Characters, Locations, Timeline) are styled against the previous token
+ * names - `--desk`, `--panel`, `--sel`, `--add`, `--note` and so on - and are
+ * being rebuilt one at a time. Until each is, its old names resolve to the
+ * nearest new token here, so the whole app moves to the new palette at once
+ * and an unrebuilt route is merely un-redesigned rather than broken. Each
+ * alias is a `var()` reference, so it follows the theme without a second
+ * block. A rebuilt route uses the new names directly; when the last old
+ * consumer is gone the alias block goes with it.
  *
  * Hex literals are legal in this directory and nowhere else: eslint.config.mjs
- * exempts `packages/ui/src/tokens/**` from the hardcoded-hex ban, and that
- * exemption was declared a phase before this file existed.
+ * exempts `packages/ui/src/tokens/**` from the hardcoded-hex ban.
  */
 
 :root {
-  --desk: #151311;
-  --panel: #1c1917;
-  --rail: #181513;
-  --line: rgba(240, 232, 220, 0.13);
-  --line2: rgba(240, 232, 220, 0.07);
-  --ink: #ebe4d8;
-  --ink2: rgba(235, 228, 216, 0.64);
-  --ink3: rgba(235, 228, 216, 0.4);
-  --sheet: #262220;
-  --sheet-ink: #e2dbcf;
-  --sheet-line: rgba(255, 255, 255, 0.11);
-  --sheet-edge: rgba(255, 255, 255, 0.08);
-  --hover: rgba(240, 232, 220, 0.06);
-  --sel: rgba(240, 232, 220, 0.1);
-  --accent: oklch(0.72 0.14 30);
-  --accent-bg: oklch(0.72 0.14 30 / 0.14);
-  --accent-line: oklch(0.72 0.14 30 / 0.4);
-  --accent-ink: #1a1210;
-  --frame-a: oklch(0.3 0.02 50);
-  --frame-b: oklch(0.14 0.01 50);
-  --add: oklch(0.76 0.1 150);
-  --add-bg: oklch(0.76 0.1 150 / 0.13);
-  --del: oklch(0.74 0.12 25);
-  --del-bg: oklch(0.74 0.12 25 / 0.13);
-  --note: oklch(0.78 0.09 75);
-  --note-bg: oklch(0.78 0.09 75 / 0.13);
-  --focus: oklch(0.72 0.14 30);
-  --shadow: none;
-  --grid: rgba(240, 232, 220, 0.18);
-  --slate: #ebe4d8;
-  --slate-ink: #151311;
+  --bg: #0a0a0c;
+  --sunk: #08080a;
+  --s1: rgba(255, 255, 255, 0.035);
+  --s2: rgba(255, 255, 255, 0.055);
+  --s3: rgba(255, 255, 255, 0.085);
+  --line: rgba(255, 255, 255, 0.085);
+  --line2: rgba(255, 255, 255, 0.05);
+  --ink: #f3f2ef;
+  --ink2: rgba(243, 242, 239, 0.62);
+  --ink3: rgba(243, 242, 239, 0.36);
+  --hover: rgba(255, 255, 255, 0.06);
+  --accent: oklch(0.72 0.12 245);
+  --accent-bg: oklch(0.72 0.12 245 / 0.16);
+  --ok: oklch(0.76 0.1 150);
+  --warn: oklch(0.8 0.11 75);
+  --live: oklch(0.72 0.14 40);
+  --glow-cool: oklch(0.55 0.16 250 / 0.2);
+  --glow-warm: oklch(0.62 0.1 62 / 0.13);
+  --solid: #f3f2ef;
+  --solid-ink: #0d0d10;
+  --caret: oklch(0.8 0.14 70);
+  /* Long-form body copy - the script itself. README: "--read 80% ink". */
+  --script: rgba(243, 242, 239, 0.74);
+  --read: rgba(243, 242, 239, 0.8);
+  /* Text on an accent fill. The dark accent is light enough to carry dark ink. */
+  --accent-ink: #0d0d10;
 }
 
 [data-theme='light'] {
-  --desk: #efe9df;
-  --panel: #f8f4ec;
-  --rail: #f3eee4;
-  --line: rgba(40, 30, 18, 0.16);
-  --line2: rgba(40, 30, 18, 0.08);
-  --ink: #1d1915;
-  --ink2: rgba(29, 25, 21, 0.66);
-  --ink3: rgba(29, 25, 21, 0.44);
-  --sheet: #fffdf8;
-  --sheet-ink: #171310;
-  --sheet-line: rgba(0, 0, 0, 0.12);
-  --sheet-edge: rgba(0, 0, 0, 0.16);
-  --hover: rgba(40, 30, 18, 0.05);
-  --sel: rgba(40, 30, 18, 0.08);
-  --accent: oklch(0.5 0.17 27);
-  --accent-bg: oklch(0.5 0.17 27 / 0.09);
-  --accent-line: oklch(0.5 0.17 27 / 0.36);
-  --accent-ink: #fff;
-  --frame-a: oklch(0.32 0.02 50);
-  --frame-b: oklch(0.16 0.01 50);
-  --add: oklch(0.48 0.1 150);
-  --add-bg: oklch(0.48 0.1 150 / 0.1);
-  --del: oklch(0.5 0.14 25);
-  --del-bg: oklch(0.5 0.14 25 / 0.09);
-  --note: oklch(0.55 0.1 75);
-  --note-bg: oklch(0.55 0.1 75 / 0.11);
-  --focus: oklch(0.5 0.17 27);
-  --shadow: none;
-  --grid: rgba(40, 30, 18, 0.16);
-  --slate: #1d1915;
-  --slate-ink: #efe9df;
+  --bg: #f7f6f3;
+  --sunk: #f2f0ec;
+  --s1: rgba(20, 18, 14, 0.035);
+  --s2: rgba(20, 18, 14, 0.055);
+  --s3: rgba(20, 18, 14, 0.085);
+  --line: rgba(20, 18, 14, 0.11);
+  --line2: rgba(20, 18, 14, 0.06);
+  --ink: #16151a;
+  --ink2: rgba(22, 21, 26, 0.64);
+  --ink3: rgba(22, 21, 26, 0.4);
+  --hover: rgba(20, 18, 14, 0.05);
+  --accent: oklch(0.52 0.15 250);
+  --accent-bg: oklch(0.52 0.15 250 / 0.1);
+  --ok: oklch(0.52 0.12 150);
+  --warn: oklch(0.6 0.12 75);
+  --live: oklch(0.58 0.16 40);
+  --glow-cool: oklch(0.65 0.14 250 / 0.1);
+  --glow-warm: oklch(0.72 0.1 62 / 0.1);
+  --solid: #16151a;
+  --solid-ink: #f7f6f3;
+  --caret: oklch(0.62 0.16 60);
+  --script: rgba(22, 21, 26, 0.8);
+  --read: rgba(22, 21, 26, 0.8);
+  --accent-ink: #f7f6f3;
 }
 
 [data-theme='dark'] {
-  --desk: #151311;
-  --panel: #1c1917;
-  --rail: #181513;
-  --line: rgba(240, 232, 220, 0.13);
-  --line2: rgba(240, 232, 220, 0.07);
-  --ink: #ebe4d8;
-  --ink2: rgba(235, 228, 216, 0.64);
-  --ink3: rgba(235, 228, 216, 0.4);
-  --sheet: #262220;
-  --sheet-ink: #e2dbcf;
-  --sheet-line: rgba(255, 255, 255, 0.11);
-  --sheet-edge: rgba(255, 255, 255, 0.08);
-  --hover: rgba(240, 232, 220, 0.06);
-  --sel: rgba(240, 232, 220, 0.1);
-  --accent: oklch(0.72 0.14 30);
-  --accent-bg: oklch(0.72 0.14 30 / 0.14);
-  --accent-line: oklch(0.72 0.14 30 / 0.4);
-  --accent-ink: #1a1210;
-  --frame-a: oklch(0.3 0.02 50);
-  --frame-b: oklch(0.14 0.01 50);
-  --add: oklch(0.76 0.1 150);
-  --add-bg: oklch(0.76 0.1 150 / 0.13);
-  --del: oklch(0.74 0.12 25);
-  --del-bg: oklch(0.74 0.12 25 / 0.13);
-  --note: oklch(0.78 0.09 75);
-  --note-bg: oklch(0.78 0.09 75 / 0.13);
-  --focus: oklch(0.72 0.14 30);
-  --shadow: none;
-  --grid: rgba(240, 232, 220, 0.18);
-  --slate: #ebe4d8;
-  --slate-ink: #151311;
+  --bg: #0a0a0c;
+  --sunk: #08080a;
+  --s1: rgba(255, 255, 255, 0.035);
+  --s2: rgba(255, 255, 255, 0.055);
+  --s3: rgba(255, 255, 255, 0.085);
+  --line: rgba(255, 255, 255, 0.085);
+  --line2: rgba(255, 255, 255, 0.05);
+  --ink: #f3f2ef;
+  --ink2: rgba(243, 242, 239, 0.62);
+  --ink3: rgba(243, 242, 239, 0.36);
+  --hover: rgba(255, 255, 255, 0.06);
+  --accent: oklch(0.72 0.12 245);
+  --accent-bg: oklch(0.72 0.12 245 / 0.16);
+  --ok: oklch(0.76 0.1 150);
+  --warn: oklch(0.8 0.11 75);
+  --live: oklch(0.72 0.14 40);
+  --glow-cool: oklch(0.55 0.16 250 / 0.2);
+  --glow-warm: oklch(0.62 0.1 62 / 0.13);
+  --solid: #f3f2ef;
+  --solid-ink: #0d0d10;
+  --caret: oklch(0.8 0.14 70);
+  --script: rgba(243, 242, 239, 0.74);
+  --read: rgba(243, 242, 239, 0.8);
+  --accent-ink: #0d0d10;
 }
 
 /*
- * Invented tokens. Everything above this line is transcribed from a bundle;
- * everything below it is not, and is listed here so a reviewer can find the
- * guesses in one place.
+ * Derived tints. `color-mix` over the semantic colour, so a theme block above
+ * moves them without repeating them - and so nobody writes a fifth hue by
+ * hand when they need "a little of the warning colour behind a banner".
+ */
+:root {
+  --ok-bg: color-mix(in oklch, var(--ok) 13%, transparent);
+  --warn-bg: color-mix(in oklch, var(--warn) 13%, transparent);
+  --live-bg: color-mix(in oklch, var(--live) 13%, transparent);
+  --accent-line: color-mix(in oklch, var(--accent) 40%, transparent);
+  --focus: var(--accent);
+}
+
+/*
+ * The aliases. See the header: the previous palette's names, each resolved
+ * to the nearest new token, for the routes not yet rebuilt. Nothing new may
+ * be written against these.
+ */
+:root {
+  --desk: var(--bg);
+  --panel: var(--sunk);
+  --rail: var(--bg);
+  --sheet: var(--s1);
+  --sheet-ink: var(--ink);
+  --sheet-line: var(--line);
+  --sheet-edge: var(--line2);
+  --sel: var(--s2);
+  --frame-a: oklch(0.28 0.01 250);
+  --frame-b: oklch(0.14 0.005 250);
+  --add: var(--ok);
+  --add-bg: var(--ok-bg);
+  --del: var(--live);
+  --del-bg: var(--live-bg);
+  --note: var(--warn);
+  --note-bg: var(--warn-bg);
+  --shadow: none;
+  --grid: var(--line);
+  --slate: var(--solid);
+  --slate-ink: var(--solid-ink);
+}
+
+/*
+ * Invented tokens. Everything above this line is transcribed from the design
+ * package; everything below it is not, and is listed here so a reviewer can
+ * find the guesses in one place.
  *
- * `--avatar-bg` / `--avatar-ink` are the round user chip in the rail. The
- * bundles draw it with `background: oklch(0.55 0.10 300); color: #fff` written
- * inline in the markup rather than as a token, and draw two different hues
- * across two files with nothing saying how a hue is chosen. One invariant pair
- * is the smallest honest reading: it is an identity mark, not a palette colour,
- * so it does not move with the theme. If per-user hues were intended, this is
- * the token that becomes a function.
+ * `--avatar-bg` / `--avatar-ink` are the round user chip. The mockups draw
+ * presence avatars with `oklch(0.55 0.13 300)` and two other hues inline and
+ * nothing says how a hue is chosen. One invariant pair is the smallest honest
+ * reading: it is an identity mark, not a palette colour, so it does not move
+ * with the theme. If per-user hues were intended, this is the token that
+ * becomes a function.
  */
 :root {
   --avatar-bg: oklch(0.55 0.1 300);
@@ -162,25 +194,47 @@
 }
 
 /*
- * `--scrim` is the ground behind a modal. The design README gives one value
- * for the command palette - `rgba(15,12,8,.28)` over the page - and no dark
- * variant, so it is declared once and does not move with the theme: it is a
- * darkening, and a darkening reads the same over either desk. The first use
- * is the Trash route's delete-forever confirmation.
+ * The assistant's orb. README, "Assistant": "A radial-gradient sphere
+ * (`#e8f6ff -> #8fd4ff -> #2a7fd4 -> #123a72`) with a blue glow." An identity
+ * mark like the chips: it does not move with the theme, and the four stops
+ * are the design's own hexes, declared here because this is where a hex may
+ * be written. `--orb-glow` and `--orb-glow-soft` are the panel orb's two
+ * shadows; the header orb uses the first alone.
  */
 :root {
-  --scrim: rgba(15, 12, 8, 0.28);
+  --orb-1: #e8f6ff;
+  --orb-2: #8fd4ff;
+  --orb-3: #2a7fd4;
+  --orb-4: #123a72;
+  --orb-1-large: #f2fbff;
+  --orb-2-large: #a8e0ff;
+  --orb-3-large: #4b9fe0;
+  --orb-4-large: #1b4f92;
+  --orb-5-large: #0c2648;
+  --orb-glow: oklch(0.65 0.16 245 / 0.55);
+  --orb-glow-large: oklch(0.62 0.17 245 / 0.45);
+  --orb-glow-soft: oklch(0.7 0.14 245 / 0.35);
+}
+
+/*
+ * `--scrim` is the ground behind a modal and behind an overlaid panel below
+ * 1200px. A darkening, and a darkening reads the same over either canvas, so
+ * it is declared once. The README gives the overlay shadow as
+ * `-24px 0 70px`; the colour is `--panel-shadow`.
+ */
+:root {
+  --scrim: rgba(0, 0, 0, 0.28);
+  --panel-shadow: rgba(0, 0, 0, 0.5);
 }
 
 /*
  * `--chip-1` .. `--chip-10` are the character colours: the six the first
  * Characters bundle wrote inline on its fixture records, and four more added
- * in the route's second pass (2026-09-14, `docs/build-decisions.md`) so a
- * ten-person cast is ten colours. Which record gets which is authored -
- * `characters.color` holds the token's name, picked in the New Character
- * modal and the edit drawer - and `@folio/contracts`'s `CHARACTER_COLORS`
- * names them for the picker. Identity marks, not palette colours: they do
- * not move with the theme, like `--avatar-bg`, and white sits on every one.
+ * in the route's second pass (2026-09-14) so a ten-person cast is ten
+ * colours. Which record gets which is authored - `characters.color` holds the
+ * token's name - and `@folio/contracts`'s `CHARACTER_COLORS` names them for
+ * the picker. Identity marks, not palette colours: they do not move with the
+ * theme, like `--avatar-bg`, and white sits on every one.
  */
 :root {
   --chip-1: oklch(0.5 0.17 27);
@@ -197,11 +251,8 @@
 }
 
 /*
- * `--day` / `--night` are the two ends of the day-against-night bar
- * `Route - Locations.dc.html` draws on every location row, sub-location card
- * and breakdown cell, transcribed from that bundle's `:root` and
- * `[data-theme="dark"]` blocks. They move with the theme, as the bundle's
- * do: the same three-block shape as the palette above.
+ * `--day` / `--night` are the two ends of the day-against-night bar the
+ * Locations route draws on every location row. They move with the theme.
  */
 :root {
   --day: oklch(0.78 0.09 80);
@@ -219,19 +270,10 @@
 }
 
 /*
- * `--thread-*` are the story thread colours of the Timeline. The first four
- * are transcribed from `Route - Timeline.dc.html`'s `:root` and
- * `[data-theme="dark"]` blocks - `--t-water`, `--t-fraud`, `--t-love`,
- * `--t-past` - and renamed by hue, because the bundle's names are one
- * fixture's storylines. They move with the theme, as the bundle's do.
- *
- * `--thread-violet` and `--thread-teal` are INVENTED: the bundle draws four
- * threads and a project may have more. Violet is the palette's own hue 300
- * (`--chip-2`); teal is a hue nothing else in the palette uses, so a thread
- * is never mistaken for an accent, an add or a note.
- *
- * The set is closed - `@folio/contracts`' `STORY_THREAD_COLOURS` is the same
- * six names - so a thread row stores a name and never a colour.
+ * `--thread-*` are the story thread colours of the Timeline, named by hue
+ * because the bundle's names were one fixture's storylines. The set is
+ * closed - `@folio/contracts`' `STORY_THREAD_COLOURS` is the same six names -
+ * so a thread row stores a name and never a colour. They move with the theme.
  */
 :root {
   --thread-terracotta: oklch(0.72 0.14 30);

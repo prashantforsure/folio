@@ -93,6 +93,11 @@ export type StoryThreadId = Branded<'StoryThreadId'>
 export type ReelId = Branded<'ReelId'>
 /** One attempt at rendering a reel's clip. Links a reel to its job, and on failure to its refund. */
 export type ReelRenderId = Branded<'ReelRenderId'>
+/** A share link: the in-app invite AGENTS.md, Constraints names. One row per issued link. See `share.ts`. */
+export type ShareLinkId = Branded<'ShareLinkId'>
+/** An assistant chat, per episode. See `assistant.ts`. */
+export type AssistantChatId = Branded<'AssistantChatId'>
+export type AssistantMessageId = Branded<'AssistantMessageId'>
 
 export const projectId = (raw: string): ProjectId => raw as ProjectId
 export const episodeId = (raw: string): EpisodeId => raw as EpisodeId
@@ -110,6 +115,9 @@ export const generationId = (raw: string): GenerationId => raw as GenerationId
 export const storyThreadId = (raw: string): StoryThreadId => raw as StoryThreadId
 export const reelId = (raw: string): ReelId => raw as ReelId
 export const reelRenderId = (raw: string): ReelRenderId => raw as ReelRenderId
+export const shareLinkId = (raw: string): ShareLinkId => raw as ShareLinkId
+export const assistantChatId = (raw: string): AssistantChatId => raw as AssistantChatId
+export const assistantMessageId = (raw: string): AssistantMessageId => raw as AssistantMessageId
 
 // ---------------------------------------------------------------------------
 // The schemas
@@ -149,6 +157,9 @@ export const GenerationIdSchema = brandedUuid(generationId)
 export const StoryThreadIdSchema = brandedUuid(storyThreadId)
 export const ReelIdSchema = brandedUuid(reelId)
 export const ReelRenderIdSchema = brandedUuid(reelRenderId)
+export const ShareLinkIdSchema = brandedUuid(shareLinkId)
+export const AssistantChatIdSchema = brandedUuid(assistantChatId)
+export const AssistantMessageIdSchema = brandedUuid(assistantMessageId)
 
 // The five brands the pure core owns must survive the round trip through Zod.
 // If one of these stops compiling, a schema has started minting its own brand

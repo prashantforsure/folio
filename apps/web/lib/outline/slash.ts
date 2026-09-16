@@ -12,28 +12,30 @@ import { BLOCK_SHORTCUT } from './keyboard'
  * below (when it was typed mid-sentence). The `/` and the query are deleted
  * either way - the slash is a way of *asking*, and nothing of it is stored.
  *
- * ## The rows are named for the story, the blocks stay the seven
+ * ## The rows are the mockup's, the blocks stay the seven
  *
- * The rows read as structure - *Act heading*, *Sequence*, *Scene heading*,
- * *Scene beat*, *Research note* - because that is what a writer reaches for
- * on an outline. Each row **is** one of the seven blocks AGENTS.md names and
- * nothing else: an act heading is an `h1` (the nav's `N acts` counts `h1`
- * blocks, so the two agree by construction), a sequence an `h2`, a scene
- * heading an `h3`, a scene beat the numbered `beat`, a research note the
- * `quote`. The row's detail line prints the block's own name so the status
- * bar (`Heading 1 ⌘1`) and the menu never disagree about what was made. A
- * new block type is a node-schema change (AGENTS.md, When to ask first),
- * and none is introduced here; `ENTRY` is a `Record` over the union so a
- * type without a row does not compile.
+ * `docs/ui design/Route - Outline v2.dc.html` draws one `Add` list - Text,
+ * Heading, Quote, Numbered list, Divider - each a mono glyph and a name.
+ * The block set is closed at seven (AGENTS.md, The node model: Body, H1,
+ * H2, H3, Quote, Rule, numbered beats), and every one must stay reachable,
+ * so the list is the mockup's five with `Heading 2` and `Heading 3` beside
+ * `Heading`. Each row **is** one of the seven and nothing else: `Text` is
+ * `body`, `Heading` is `h1` (the sidebar's `N acts` counts `h1` blocks, so
+ * the two agree by construction), `Numbered list` the `beat`, `Divider` the
+ * `rule`. The older story names - act, sequence, scene, research note -
+ * stay as keywords so `/act` still finds the heading. A new block type is a
+ * node-schema change (AGENTS.md, When to ask first), and none is introduced
+ * here; `ENTRY` is a `Record` over the union so a type without a row does
+ * not compile.
  */
 
 export type SlashEntry = {
   readonly type: OutlineNodeType
-  /** The row's title, in the writer's terms. */
+  /** The row's title, as the mockup names it. */
   readonly label: string
-  /** The row's second line: the block it makes, and what it is for. */
+  /** What the block is for; kept for the `+` handle's menu and the tests, not drawn on the row. */
   readonly detail: string
-  /** A text glyph - never an icon. */
+  /** A text glyph, drawn in mono - never an icon. */
   readonly glyph: string
   /** What the writer may type after the slash to reach it, besides the label. */
   readonly keywords: readonly string[]
@@ -42,64 +44,64 @@ export type SlashEntry = {
 }
 
 const ENTRY: Readonly<Record<OutlineNodeType, Omit<SlashEntry, 'type' | 'shortcut'>>> = {
+  body: {
+    label: 'Text',
+    detail: 'Prose',
+    glyph: 'T',
+    keywords: ['text', 'body', 'p', 'paragraph', 'prose'],
+  },
   h1: {
-    label: 'Act heading',
+    label: 'Heading',
     detail: 'Heading 1 · counts as an act',
-    glyph: 'H1',
-    keywords: ['act', 'heading', 'heading 1', 'h1', 'title', 't1'],
+    glyph: 'H',
+    keywords: ['heading', 'heading 1', 'h1', 'act', 'title', 't1'],
   },
   h2: {
-    label: 'Sequence',
-    detail: 'Heading 2',
+    label: 'Heading 2',
+    detail: 'A sequence under an act',
     glyph: 'H2',
-    keywords: ['sequence', 'seq', 'heading 2', 'h2', 't2', 'sub'],
+    keywords: ['heading 2', 'h2', 'sequence', 'seq', 't2', 'sub'],
   },
   h3: {
-    label: 'Scene heading',
-    detail: 'Heading 3',
+    label: 'Heading 3',
+    detail: 'A scene under a sequence',
     glyph: 'H3',
-    keywords: ['scene', 'heading 3', 'h3', 't3'],
-  },
-  beat: {
-    label: 'Scene beat',
-    detail: 'Numbered · the lead runs to the first colon',
-    glyph: '1.',
-    keywords: ['beat', 'scene beat', 'number', 'numbered', 'list', '1'],
-  },
-  body: {
-    label: 'Body',
-    detail: 'Prose',
-    glyph: '¶',
-    keywords: ['body', 'text', 'p', 'paragraph', 'prose'],
+    keywords: ['heading 3', 'h3', 'scene', 't3'],
   },
   quote: {
-    label: 'Research note',
-    detail: 'Quote · a source, a reference, a line to keep',
-    glyph: '❝',
-    keywords: ['research', 'note', 'quote', 'q', 'source', 'reference'],
+    label: 'Quote',
+    detail: 'A source, a reference, a line to keep',
+    glyph: '❞',
+    keywords: ['quote', 'q', 'research', 'note', 'source', 'reference'],
+  },
+  beat: {
+    label: 'Numbered list',
+    detail: 'A story beat · the lead runs to the first colon',
+    glyph: '1.',
+    keywords: ['numbered', 'number', 'list', 'beat', 'scene beat', '1'],
   },
   rule: {
-    label: 'Rule',
-    detail: 'A horizontal divider',
+    label: 'Divider',
+    detail: 'A horizontal rule',
     glyph: '—',
-    keywords: ['rule', 'hr', 'divider', 'line', 'break'],
+    keywords: ['divider', 'rule', 'hr', 'line', 'break'],
   },
 }
 
-/** The two sections as drawn with no query: what shapes the story, then what fills it. */
-const STRUCTURE: readonly OutlineNodeType[] = ['h1', 'h2', 'h3', 'beat']
-const PROSE: readonly OutlineNodeType[] = ['body', 'quote', 'rule']
+/** The order drawn: the mockup's five, the two extra headings beside the first. */
+const ORDER: readonly OutlineNodeType[] = ['body', 'h1', 'h2', 'h3', 'quote', 'beat', 'rule']
 
 export const slashEntry = (type: OutlineNodeType): SlashEntry => ({ type, ...ENTRY[type], shortcut: BLOCK_SHORTCUT[type] })
 
-export const SLASH_ENTRIES: readonly SlashEntry[] = [...STRUCTURE, ...PROSE].map(slashEntry)
+export const SLASH_ENTRIES: readonly SlashEntry[] = ORDER.map(slashEntry)
 
 const fold = (text: string): string => text.trim().toLowerCase()
 
 /**
  * The entries a query reaches: the label's prefix matches first, then a
- * keyword's, then anything the label or a keyword contains - so `/act` is
- * Act heading, `/be` is Scene beat and `/note` is Research note.
+ * keyword's, then anything the label or a keyword contains - so `/he` is
+ * the headings, `/be` is the numbered list (a beat) and `/act` the first
+ * heading.
  */
 export const filterSlash = (query: string): readonly SlashEntry[] => {
   const needle = fold(query)
@@ -129,17 +131,10 @@ export type SlashMenu = {
   readonly rows: readonly SlashEntry[]
 }
 
-/** The menu for a query: two sections for a bare slash, one ranked list once the writer types. */
+/** One `Add` section: the seven for a bare slash, the ranked matches once the writer types. */
 export const slashMenuFor = (query: string): SlashMenu => {
-  if (fold(query) !== '') {
-    const matched = filterSlash(query)
-    return { sections: matched.length === 0 ? [] : [{ title: 'Blocks', entries: matched }], rows: matched }
-  }
-  const sections: SlashSection[] = [
-    { title: 'Structure', entries: STRUCTURE.map(slashEntry) },
-    { title: 'Prose', entries: PROSE.map(slashEntry) },
-  ]
-  return { sections, rows: sections.flatMap((section) => section.entries) }
+  const matched = fold(query) === '' ? SLASH_ENTRIES : filterSlash(query)
+  return { sections: matched.length === 0 ? [] : [{ title: 'Add', entries: matched }], rows: matched }
 }
 
 /**
@@ -152,7 +147,7 @@ export const slashOpensAt = (textBeforeCaret: string): boolean => textBeforeCare
 /**
  * Whether the query has left the menu behind: a space followed by nothing
  * that matches is a sentence, not a search. A single space inside a match
- * (`/scene b`) keeps it open.
+ * (`/heading 2`) keeps it open.
  */
 export const slashQueryClosed = (query: string): boolean =>
   /\s{2,}/u.test(query) || (/\s/u.test(query) && filterSlash(query).length === 0)

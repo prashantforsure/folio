@@ -71,7 +71,9 @@ const blockAttributes = (): Attributes => ({
     parseHTML: (element) => element.getAttribute('data-node-id'),
     renderHTML: (attributes) => {
       const id = (attributes as Partial<BlockAttrs>).id
-      return typeof id === 'string' ? { 'data-node-id': id } : {}
+      // `id="n-<uuid>"` beside `data-node-id`: the sidebar's scene rows link
+      // to `#n-<uuid>`, and a fragment needs an element id to land on.
+      return typeof id === 'string' ? { 'data-node-id': id, id: `n-${id}` } : {}
     },
   },
   provenance: {

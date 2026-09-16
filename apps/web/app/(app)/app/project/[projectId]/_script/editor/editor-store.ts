@@ -1,7 +1,6 @@
 import type { MentionEntity, MentionLabel, ScreenplayNodeType } from '@folio/script'
 import { useSyncExternalStore } from 'react'
 
-import type { PageFrame } from '../../../../../../../lib/script/layout'
 import type { PickerChoice, PickerModel } from '../../../../../../../lib/script/pickers'
 import type { SlashEntry, SlashMenu } from '../../../../../../../lib/script/slash'
 
@@ -12,7 +11,7 @@ import type { SlashEntry, SlashMenu } from '../../../../../../../lib/script/slas
  * is a ProseMirror transaction and a DOM patch, and no component renders
  * for it. What the chrome needs is small and changes rarely, and each piece
  * is its own slice here so a component subscribes to exactly what it draws:
- * the status bar to the caret block, the desk to the page frames, a menu to
+ * the toolbar to the caret block, the thread cards to their hosts, a menu to
  * its own view. `useSlice` is `useSyncExternalStore` over one slice; a set
  * that does not change the value is not a notification.
  *
@@ -54,10 +53,19 @@ export type CaretInfo = {
   readonly type: ScreenplayNodeType | null
 }
 
-export type LayoutView = {
-  readonly frames: readonly PageFrame[]
-  readonly heightPx: number
-  readonly paged: boolean
+/**
+ * Where the thread cards and the new-thread composer are drawn: elements the
+ * decorations plugin creates inside the editor's DOM, keyed by thread id (or
+ * `composer`), that React portals into. A new map on every change, so a
+ * subscriber sees it.
+ */
+export type HostMap = ReadonlyMap<string, HTMLElement>
+
+/** The `+` handle's menu: which block it was pressed on, and where. */
+export type HandleMenuView = {
+  readonly nodeId: string
+  readonly pos: number
+  readonly anchor: Anchor
 }
 
 /** Where a floating surface is anchored: the rect of the query, the segment, the caret - in viewport pixels. */
@@ -101,7 +109,8 @@ export type EditorStore = {
   readonly caret: Slice<CaretInfo>
   /** Block ids in document order; a new array only when the structure changed. */
   readonly ids: Slice<readonly string[]>
-  readonly layout: Slice<LayoutView>
+  readonly hosts: Slice<HostMap>
+  readonly handleMenu: Slice<HandleMenuView | null>
   /** Bumped on every document change; the workspace's autosave listens to this. */
   readonly version: Slice<number>
   readonly slash: Slice<SlashView | null>
@@ -114,10 +123,11 @@ const sameCaret = (a: CaretInfo, b: CaretInfo): boolean => a.blockId === b.block
 const sameIds = (a: readonly string[], b: readonly string[]): boolean =>
   a === b || (a.length === b.length && a.every((id, index) => id === b[index]))
 
-export const createEditorStore = (ids: readonly string[], layout: LayoutView): EditorStore => ({
+export const createEditorStore = (ids: readonly string[]): EditorStore => ({
   caret: slice<CaretInfo>({ blockId: null, type: null }, sameCaret),
   ids: slice(ids, sameIds),
-  layout: slice(layout),
+  hosts: slice<HostMap>(new Map()),
+  handleMenu: slice<HandleMenuView | null>(null),
   version: slice(0),
   slash: slice<SlashView | null>(null),
   mention: slice<MentionView | null>(null),

@@ -1,65 +1,69 @@
-import type { GlyphName } from '@folio/ui'
+import type { IconName } from '@folio/ui'
 
 /**
- * The route tree of the project workspace, as data. Ten routes.
+ * The route tree of the project workspace, as data. Nine routes.
  *
  * AGENTS.md, Routing, plus rulings the client made for this and later phases
- * (recorded in `docs/build-decisions.md`, "Workspace shell phase", "Notes
- * and Revisions routes removed" and "Bible route removed"):
+ * (recorded in `docs/build-decisions.md`):
  *
  *   - open decision 5: `/production` is **episode-scoped**, so five routes
- *     carry an episode and five are project-wide;
+ *     carry an episode and four are project-wide;
  *   - open decision 6: `/build` and `/search` are **cut** - not routes, not
  *     reserved;
  *   - `assets` stays in `RESERVED_PROJECT_SEGMENTS` with no route;
- *   - Revisions and Notes were built, then **cut** (ruled 2026-09-14; not
- *     redesigned, not deferred - removed, same as Beats).
- *   - Bible was built, then **cut** (ruled 2026-09-15; same treatment - its
- *     five tables were dropped in migration `0015`).
+ *   - Revisions, Notes and Bible were built, then **cut** (2026-09-14 and
+ *     2026-09-15) - removed, same as Beats.
+ *   - **Insights is removed** with the v2 redesign (2026-09-16,
+ *     `docs/ui design/README.md`: "Routes removed in this redesign: Insights
+ *     and Bible. Neither exists any more"). Its name stays reserved in
+ *     `@folio/contracts` so no episode slug can ever take the segment.
  *
  * Project `/settings` is a stub (AGENTS.md, Constraints) and is not one of the
- * ten. The count is what the E2E smoke test walks, so it is exported and
+ * nine. The count is what the E2E smoke test walks, so it is exported and
  * asserted rather than implied.
  *
- * ## Two orders, and they differ on purpose
+ * ## Three lists, and they differ on purpose
  *
- * `RAIL` is the seven sections in the rail's fixed order. `EPISODE_NAV` is
- * the four rows of the episode nav, and **Storyboard sits above Scenes**
- * there - AGENTS.md, Routing: "Episode nav order deliberately differs from the
- * rail." Neither list is derived from the other.
+ * `RAIL` is the six sections in the rail's fixed order (README, "Shell"):
+ * Writing, Characters, Locations, Timeline, Research, Production. `SIDEBAR`
+ * is the three rows of the writing sidebar - Script, Outline, Scenes - and
+ * **Storyboard is not among them**: since the redesign it is reached through
+ * the Write / Storyboard mode pill in the header, which every writing route
+ * draws. `WRITING_ROUTES` is the four the pill spans.
  *
- * Writing is a section, not a route: it is lit on all four episode nav
- * routes and links to the current episode's script. Production is both - an
+ * Writing is a section, not a route: it is lit on all four writing routes
+ * and links to the current episode's script. Production is both - an
  * episode-scoped route and a rail section of its own.
  */
 
-/** The four episode routes the episode nav lists, in nav order. */
-export const EPISODE_NAV_ROUTES = ['script', 'outline', 'storyboard', 'scenes'] as const
+/** The four writing routes - the ones under the sidebar and the mode pill. */
+export const WRITING_ROUTES = ['script', 'outline', 'storyboard', 'scenes'] as const
 
-export type EpisodeNavRoute = (typeof EPISODE_NAV_ROUTES)[number]
+export type WritingRoute = (typeof WRITING_ROUTES)[number]
+
+/**
+ * Kept as the older name for the callers that still say it. Same four.
+ * @deprecated prefer `WRITING_ROUTES` / `WritingRoute`.
+ */
+export const EPISODE_NAV_ROUTES = WRITING_ROUTES
+export type EpisodeNavRoute = WritingRoute
 
 /** Every episode-scoped route: the four, plus production (decision 5). */
-export const EPISODE_ROUTES = [...EPISODE_NAV_ROUTES, 'production'] as const
+export const EPISODE_ROUTES = [...WRITING_ROUTES, 'production'] as const
 
 export type EpisodeRoute = (typeof EPISODE_ROUTES)[number]
 
-/** The five project-scoped routes, in rail order. */
-export const PROJECT_ROUTES = [
-  'characters',
-  'locations',
-  'timeline',
-  'research',
-  'insights',
-] as const
+/** The four project-scoped routes, in rail order. */
+export const PROJECT_ROUTES = ['characters', 'locations', 'timeline', 'research'] as const
 
 export type ProjectRoute = (typeof PROJECT_ROUTES)[number]
 
 export type WorkspaceRoute = EpisodeRoute | ProjectRoute
 
-/** The ten. The smoke test asserts this number. */
+/** The nine. The smoke test asserts this number. */
 export const WORKSPACE_ROUTES: readonly WorkspaceRoute[] = [...EPISODE_ROUTES, ...PROJECT_ROUTES]
 
-export const WORKSPACE_ROUTE_COUNT = 10
+export const WORKSPACE_ROUTE_COUNT = 9
 
 export const isEpisodeRoute = (value: string): value is EpisodeRoute =>
   (EPISODE_ROUTES as readonly string[]).includes(value)
@@ -67,7 +71,10 @@ export const isEpisodeRoute = (value: string): value is EpisodeRoute =>
 export const isProjectRoute = (value: string): value is ProjectRoute =>
   (PROJECT_ROUTES as readonly string[]).includes(value)
 
-/** Route titles, as the 46px page header prints them. Specified copy. */
+export const isWritingRoute = (value: string): value is WritingRoute =>
+  (WRITING_ROUTES as readonly string[]).includes(value)
+
+/** Route titles, as a page header or a breadcrumb prints them. Specified copy. */
 export const ROUTE_TITLE: Record<WorkspaceRoute, string> = {
   script: 'Script',
   outline: 'Outline',
@@ -78,7 +85,6 @@ export const ROUTE_TITLE: Record<WorkspaceRoute, string> = {
   locations: 'Locations',
   timeline: 'Timeline',
   research: 'Research',
-  insights: 'Insights',
 }
 
 // ---------------------------------------------------------------------------
@@ -86,8 +92,8 @@ export const ROUTE_TITLE: Record<WorkspaceRoute, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * The seven rail sections. `writing` covers the six episode nav routes;
- * every other section is exactly one route.
+ * The six rail sections. `writing` covers the four writing routes; every
+ * other section is exactly one route.
  */
 export const RAIL_SECTIONS = [
   'writing',
@@ -95,7 +101,6 @@ export const RAIL_SECTIONS = [
   'locations',
   'timeline',
   'research',
-  'insights',
   'production',
 ] as const
 
@@ -104,65 +109,88 @@ export type RailSection = (typeof RAIL_SECTIONS)[number]
 export type RailItem = {
   readonly section: RailSection
   readonly label: string
-  readonly glyph: GlyphName
+  readonly icon: IconName
 }
 
-/** Writing ✎ · Characters ◍ · Locations ⌖ · Timeline ◷ · Research ▧ · Insights ◎ · Production ▶ */
+/** Writing · Characters · Locations · Timeline · Research · Production - README, "Rail". */
 export const RAIL: readonly RailItem[] = [
-  { section: 'writing', label: 'Writing', glyph: 'writing' },
-  { section: 'characters', label: 'Characters', glyph: 'characters' },
-  { section: 'locations', label: 'Locations', glyph: 'locations' },
-  { section: 'timeline', label: 'Timeline', glyph: 'timeline' },
-  { section: 'research', label: 'Research', glyph: 'research' },
-  { section: 'insights', label: 'Insights', glyph: 'insights' },
-  { section: 'production', label: 'Production', glyph: 'production' },
+  { section: 'writing', label: 'Writing', icon: 'writing' },
+  { section: 'characters', label: 'Characters', icon: 'characters' },
+  { section: 'locations', label: 'Locations', icon: 'locations' },
+  { section: 'timeline', label: 'Timeline', icon: 'timeline' },
+  { section: 'research', label: 'Research', icon: 'research' },
+  { section: 'production', label: 'Production', icon: 'production' },
 ]
 
-/** Which rail section a route lights. The six writing routes all light Writing. */
+/** Which rail section a route lights. The four writing routes all light Writing. */
 export const railSectionOf = (route: WorkspaceRoute): RailSection =>
   route === 'production' || isProjectRoute(route) ? route : 'writing'
 
 // ---------------------------------------------------------------------------
-// The episode nav
+// The writing sidebar and the mode pill
 // ---------------------------------------------------------------------------
 
-export type EpisodeNavItem = {
-  readonly route: EpisodeNavRoute
+export type SidebarItem = {
+  readonly route: WritingRoute
   readonly label: string
-  readonly glyph: GlyphName
 }
 
-/** Script ▤ · Outline ⋮ · Storyboard ▥ · Scenes ▢ */
-export const EPISODE_NAV: readonly EpisodeNavItem[] = [
-  { route: 'script', label: 'Script', glyph: 'script' },
-  { route: 'outline', label: 'Outline', glyph: 'outline' },
-  { route: 'storyboard', label: 'Storyboard', glyph: 'storyboard' },
-  { route: 'scenes', label: 'Scenes', glyph: 'scenes' },
+/** Script · Outline · Scenes. Storyboard is the mode pill's other half. */
+export const SIDEBAR: readonly SidebarItem[] = [
+  { route: 'script', label: 'Script' },
+  { route: 'outline', label: 'Outline' },
+  { route: 'scenes', label: 'Scenes' },
 ]
 
+/** @deprecated prefer `SIDEBAR`. The same three rows. */
+export const EPISODE_NAV = SIDEBAR
+
+/**
+ * The header's Write / Storyboard pill. `write` is lit on Script, Outline and
+ * Scenes; `storyboard` on Storyboard. Each half links to one route: Write to
+ * the script (the writing surface's home), Storyboard to the board.
+ */
+export const WRITING_MODES = ['write', 'storyboard'] as const
+
+export type WritingMode = (typeof WRITING_MODES)[number]
+
+export const writingModeOf = (route: WritingRoute): WritingMode =>
+  route === 'storyboard' ? 'storyboard' : 'write'
+
+export const WRITING_MODE_TARGET: Record<WritingMode, WritingRoute> = {
+  write: 'script',
+  storyboard: 'storyboard',
+}
+
 // ---------------------------------------------------------------------------
-// Context-panel widths, from the design README
+// Widths, from the design README
 // ---------------------------------------------------------------------------
 
 /**
- * "Episode nav ... **238px** - not 'about 240'. Timeline, Insights, Research,
- * Production 250px. Bible 252px. Characters, Locations 256px."
- *
- * Insights has no context column of its own in this phase - the README lists
- * its width, but the brief gives a column only to locations, research and
- * timeline (Bible had one too, while its route existed - cut 2026-09-15).
- * Characters lost its column in the route's second pass (2026-09-14,
- * `docs/build-decisions.md`): the card grid is the list.
+ * README, "Shell": rail 56px, sidebar 236px, header 60px, panels 400px,
+ * status bar 28px. The context columns the unrebuilt record routes still
+ * draw keep their earlier widths until each route's own pass.
  */
-export const EPISODE_NAV_WIDTH = 238
+export const RAIL_WIDTH = 56
+export const SIDEBAR_WIDTH = 236
+export const HEADER_HEIGHT = 60
+export const PANEL_WIDTH = 400
+export const CONTEXT_OVERLAY_WIDTH = 330
 
-export const CONTEXT_PANEL_WIDTH: Record<
-  Exclude<WorkspaceRoute, EpisodeNavRoute | 'characters'>,
-  number
-> = {
+/** @deprecated the sidebar replaced the episode nav; same number since the redesign. */
+export const EPISODE_NAV_WIDTH = SIDEBAR_WIDTH
+
+export const CONTEXT_PANEL_WIDTH: Record<Exclude<WorkspaceRoute, WritingRoute | 'characters'>, number> = {
   production: 250,
   locations: 256,
   timeline: 250,
   research: 250,
-  insights: 250,
 }
+
+/**
+ * README, "Breakpoints": panels are in flow at 1200 and above, the sidebar
+ * opens by default at 1040 and above, and below 1200 an open panel forces the
+ * sidebar closed.
+ */
+export const PANEL_IN_FLOW_MIN = 1200
+export const SIDEBAR_OPEN_MIN = 1040

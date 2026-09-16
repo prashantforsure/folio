@@ -4,10 +4,12 @@ import { Floating } from '../../../_script/editor/floating/floating-layer'
 import type { OutlineSlashView } from '../outline-store'
 
 /**
- * The outline's slash menu, drawn under the `/` that opened it - the Script
- * route's `slash-menu.tsx` over the outline's rows, in the same chrome
- * (`.folio-slash*` in `globals.css`), in the same floating layer on
- * `document.body`, outside the zoomed desk.
+ * The outline's slash menu, drawn under the `/` that opened it - `docs/ui
+ * design/Route - Outline v2.dc.html`: a 254px `--sunk` card, an `Add`
+ * eyebrow, one row per block with a mono glyph and the name, and an `↵`
+ * badge on the lit row. The Script route's `slash-menu.tsx` over the
+ * outline's rows, in the same chrome (`.folio-slash*` in `globals.css`),
+ * in the same floating layer on `document.body`.
  *
  * Presentation only. The model (`lib/outline/slash.ts`) says what the rows
  * are; the extension (`extensions/slash.ts`) owns the highlighted index and
@@ -19,7 +21,7 @@ export const OutlineSlashMenu = ({ view, context }: { readonly view: OutlineSlas
   const { menu, query, active } = view
   let index = -1
   return (
-    <Floating anchor={view.anchor} context={context} role="listbox" aria-label="Insert a block" data-slash-menu="" className="folio-slash">
+    <Floating anchor={view.anchor} context={context} role="listbox" aria-label="Add a block" data-slash-menu="" className="folio-slash">
       <div className="folio-slash-list">
         {menu.sections.length === 0 ? <div className="folio-slash-empty">No block matches “{query}”</div> : null}
         {menu.sections.map((section) => (
@@ -44,22 +46,13 @@ export const OutlineSlashMenu = ({ view, context }: { readonly view: OutlineSlas
                   }}
                 >
                   <span className="folio-slash-glyph">{entry.glyph}</span>
-                  <span className="folio-slash-label">
-                    {entry.label}
-                    <span className="folio-slash-detail"> · {entry.detail}</span>
-                  </span>
-                  <kbd>{entry.shortcut}</kbd>
+                  <span className="folio-slash-label">{entry.label}</span>
+                  {row === active ? <span className="folio-slash-enter">↵</span> : <kbd>{entry.shortcut}</kbd>}
                 </button>
               )
             })}
           </div>
         ))}
-      </div>
-      <div className="folio-slash-foot">
-        <button type="button" onClick={view.onClose}>
-          Close menu
-        </button>
-        <span>esc</span>
       </div>
     </Floating>
   )

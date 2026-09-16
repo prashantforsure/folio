@@ -98,22 +98,25 @@ describe('the keyboard model', () => {
 })
 
 describe('the slash menu', () => {
-  it('offers the seven under Structure and Prose for a bare slash, and one ranked list once typed', () => {
+  it('offers the seven under one Add section for a bare slash, and one ranked list once typed', () => {
     const bare = slashMenuFor('')
-    expect(bare.sections.map((section) => section.title)).toEqual(['Structure', 'Prose'])
-    expect(bare.rows.map((entry) => entry.type)).toEqual(['h1', 'h2', 'h3', 'beat', 'body', 'quote', 'rule'])
-    expect(slashMenuFor('be').sections.map((section) => section.title)).toEqual(['Blocks'])
+    expect(bare.sections.map((section) => section.title)).toEqual(['Add'])
+    expect(bare.rows.map((entry) => entry.type)).toEqual(['body', 'h1', 'h2', 'h3', 'quote', 'beat', 'rule'])
+    expect(bare.rows.map((entry) => entry.label)).toEqual(['Text', 'Heading', 'Heading 2', 'Heading 3', 'Quote', 'Numbered list', 'Divider'])
+    expect(slashMenuFor('be').sections.map((section) => section.title)).toEqual(['Add'])
     expect(slashMenuFor('zz').sections).toEqual([])
   })
 
-  it('names the rows for the story but every row is one of the seven', () => {
-    expect(filterSlash('act').map((entry) => [entry.type, entry.label])).toEqual([['h1', 'Act heading']])
+  it('names the rows as the mockup does, keeps the story names as keywords, and every row is one of the seven', () => {
+    expect(filterSlash('act')[0]?.type).toBe('h1')
     expect(filterSlash('seq')[0]?.type).toBe('h2')
+    expect(filterSlash('scene')[0]?.type).toBe('h3')
     expect(filterSlash('be').map((entry) => entry.type)).toEqual(['beat'])
     expect(filterSlash('note')[0]?.type).toBe('quote')
     expect(filterSlash('research')[0]?.type).toBe('quote')
-    // Prefix matches lead; the blocks whose label or keyword merely contains an 'h' trail them.
-    expect(filterSlash('h').map((entry) => entry.type)).toEqual(['h1', 'h2', 'h3', 'rule', 'body', 'quote'])
+    expect(filterSlash('div')[0]?.type).toBe('rule')
+    // Prefix matches lead: the three headings, then the blocks a keyword starting with 'h' reaches, then the rest.
+    expect(filterSlash('he').map((entry) => entry.type)).toEqual(['h1', 'h2', 'h3'])
     expect(filterSlash('zz')).toEqual([])
   })
 

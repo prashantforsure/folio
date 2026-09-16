@@ -71,7 +71,8 @@ export const insertMention = (editor: Editor, range: Range, label: MentionLabel)
 }
 
 export type MentionSuggestionOptions = {
-  readonly store: EditorStore | null
+  /** The slice the combobox is published to. The Script's store and the Outline's both carry one. */
+  readonly store: Pick<EditorStore, 'mention'> | null
   /** The label book as the workspace currently holds it. Read on every update, never copied. */
   readonly labels: () => readonly MentionLabel[]
   readonly onCreate: (entity: MentionEntity, name: string) => Promise<MentionLabel | null>

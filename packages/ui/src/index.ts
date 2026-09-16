@@ -30,6 +30,9 @@ export { GLYPHS, TEXT_PRESENTATION, TEXT_VARIATION_SELECTOR, UNSPECIFIED_GLYPHS,
 export type { GlyphName, UnspecifiedGlyphName } from './glyphs'
 export { Glyph } from './glyph'
 
+export { ICONS, Icon } from './icons'
+export type { IconName } from './icons'
+
 export { DEFAULT_THEME, THEME_ATTRIBUTE, THEMES, isTheme, otherTheme } from './theme'
 export type { Theme } from './theme'
 

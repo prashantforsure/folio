@@ -1,9 +1,9 @@
-import type { OutlineNode, OutlineNodeType } from '@folio/script'
+import type { OutlineHeading, OutlineNode, OutlineNodeType } from '@folio/script'
 
 import type { OutlineShape } from '../../../../../../../lib/outline/pm-model'
 import { sameShape } from '../../../../../../../lib/outline/pm-model'
 import type { SlashEntry, SlashMenu } from '../../../../../../../lib/outline/slash'
-import type { Anchor, Slice } from '../../_script/editor/editor-store'
+import type { Anchor, HandleMenuView, HostMap, MentionView, Slice } from '../../_script/editor/editor-store'
 import { slice } from '../../_script/editor/editor-store'
 
 /**
@@ -14,9 +14,15 @@ import { slice } from '../../_script/editor/editor-store'
  * The document lives in the Tiptap editor, not in React state: a keystroke
  * is a ProseMirror transaction and a DOM patch, and no component renders
  * for it. Each piece the chrome needs is its own slice so a component
- * subscribes to exactly what it draws: the status bar to the caret block
- * and the shape, the panel to the shape, the slash menu to its own view.
- * A set that does not change the value is not a notification.
+ * subscribes to exactly what it draws: the toolbar to the shape, the
+ * sidebar's list to the headings and the caret, the thread cards to their
+ * hosts, each menu to its own view. A set that does not change the value
+ * is not a notification.
+ *
+ * Three of the slices are the Script store's own types (`HostMap`,
+ * `HandleMenuView`, `MentionView`), because the pieces that read them - the
+ * thread cards, the handle widget, the `@` combobox - are shared with the
+ * Script and read the slice, never the store.
  */
 
 export type OutlineCaret = {
@@ -38,17 +44,31 @@ export type OutlineStore = {
   readonly caret: Slice<OutlineCaret>
   /** Block ids in document order; a new array only when the structure changed. */
   readonly ids: Slice<readonly string[]>
-  /** The counts the status bar and the panel print; a new value only when a count moved. */
+  /** The counts the toolbar prints; a new value only when a count moved. */
   readonly shape: Slice<OutlineShape>
+  /** The headings in document order, for the sidebar's list; a new array only when one moved or changed. */
+  readonly headings: Slice<readonly OutlineHeading[]>
   /** Bumped on every document change; the workspace's autosave listens to this. */
   readonly version: Slice<number>
   readonly slash: Slice<OutlineSlashView | null>
+  readonly mention: Slice<MentionView | null>
+  readonly handleMenu: Slice<HandleMenuView | null>
+  /** The thread hosts the decorations plugin created, by thread id (or `composer`). */
+  readonly hosts: Slice<HostMap>
 }
 
 const sameCaret = (a: OutlineCaret, b: OutlineCaret): boolean => a.blockId === b.blockId && a.type === b.type
 
 const sameIds = (a: readonly string[], b: readonly string[]): boolean =>
   a === b || (a.length === b.length && a.every((id, index) => id === b[index]))
+
+export const sameHeadings = (a: readonly OutlineHeading[], b: readonly OutlineHeading[]): boolean =>
+  a === b ||
+  (a.length === b.length &&
+    a.every((heading, index) => {
+      const other = b[index]
+      return other !== undefined && heading.id === other.id && heading.level === other.level && heading.text === other.text
+    }))
 
 /** The shape as the server sent it: what the chrome draws until the editor exists and counts for itself. */
 export const initialShape = (nodes: readonly OutlineNode[], words: number): OutlineShape => ({
@@ -58,15 +78,23 @@ export const initialShape = (nodes: readonly OutlineNode[], words: number): Outl
   words,
 })
 
-export const createOutlineStore = (nodes: readonly OutlineNode[], shape: OutlineShape): OutlineStore => ({
+export const createOutlineStore = (
+  nodes: readonly OutlineNode[],
+  shape: OutlineShape,
+  headings: readonly OutlineHeading[],
+): OutlineStore => ({
   caret: slice<OutlineCaret>({ blockId: null, type: null }, sameCaret),
   ids: slice<readonly string[]>(
     nodes.map((node) => node.id as string),
     sameIds,
   ),
   shape: slice(shape, sameShape),
+  headings: slice(headings, sameHeadings),
   version: slice(0),
   slash: slice<OutlineSlashView | null>(null),
+  mention: slice<MentionView | null>(null),
+  handleMenu: slice<HandleMenuView | null>(null),
+  hosts: slice<HostMap>(new Map()),
 })
 
 export { useSlice } from '../../_script/editor/editor-store'

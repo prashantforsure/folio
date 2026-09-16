@@ -84,12 +84,12 @@ describe('session state', () => {
   it('persists the values and never the actions', () => {
     // A stored blob from an older build rehydrating over the current function
     // references replaces a working callback with a stale one, or undefined.
-    useSession.setState({ zoom: 1.5, navOpen: true, sideOpen: false, sideTab: 'collab' })
+    useSession.setState({ zoom: 1.5, navOpen: true, sideOpen: false, sideTab: 'collab', assistantOpen: true })
     const raw = globalThis.sessionStorage.getItem('folio.session')
     expect(raw).not.toBeNull()
     const stored: unknown = JSON.parse(raw ?? '{}')
     const state = (stored as { state?: Record<string, unknown> }).state ?? {}
-    expect(Object.keys(state).sort()).toEqual(['navOpen', 'sideOpen', 'sideTab', 'zoom'])
+    expect(Object.keys(state).sort()).toEqual(['assistantOpen', 'navOpen', 'sideOpen', 'sideTab', 'zoom'])
   })
 })
 
@@ -111,11 +111,14 @@ describe('the state boundaries', () => {
     expect(keys).not.toContain('liveRepaginate')
   })
 
-  it('holds only the four session flags and their setters', () => {
+  it('holds only the five session flags and their setters', () => {
+    // `assistantOpen` joined the four with the redesign (2026-09-16): the
+    // assistant panel is one panel on every route, so whether it is open is
+    // the window's, like the sidebar.
     const values = Object.keys(useSession.getState()).filter(
       (key) => typeof useSession.getState()[key as 'zoom'] !== 'function',
     )
-    expect(values.sort()).toEqual(['navOpen', 'sideOpen', 'sideTab', 'zoom'])
+    expect(values.sort()).toEqual(['assistantOpen', 'navOpen', 'sideOpen', 'sideTab', 'zoom'])
   })
 
   it('states the pagination default without pretending to store it', () => {

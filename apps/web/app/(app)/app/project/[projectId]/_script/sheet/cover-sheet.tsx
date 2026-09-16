@@ -7,18 +7,21 @@ import { memo, useEffect, useRef, useState, useTransition } from 'react'
 import { saveTitlePage } from '../../../../../../../lib/script/actions'
 
 /**
- * The title page, under the header's `▣ Cover` tab.
+ * The title page, reached from the toolbar's document menu.
  *
  * AGENTS.md, Export: "a separate document on the same sheet geometry,
- * exported with the script." So it is the same 816 x 1056 sheet, the same
- * Courier at 16px/16px, and the same tokens - and its fields are Fountain's
- * title-page keys laid out the way a title page is: title, credit and author
- * centred in the upper third; source, draft date, contact, copyright and
- * notes at the foot, left. Every field is editable in place and saved whole
- * through `saveTitlePage`, debounced, with the outcome shown in the corner.
+ * exported with the script." The geometry is the export's, so the fields
+ * are still laid out the way a title page prints - title, credit and
+ * author centred in the upper third; source, draft date, contact,
+ * copyright and notes at the foot, left - and still set in Courier, the
+ * measured face. What changed with the redesign is the ground: no paper,
+ * the same dark canvas as the script, one hairline card at the script's
+ * column width.
  *
- * An empty cover is a valid cover. A field with nothing in it shows its key
- * in `--ink3` as a placeholder and exports as nothing.
+ * Every field is editable in place and saved whole through `saveTitlePage`,
+ * debounced, with the outcome shown in the corner. An empty cover is a valid
+ * cover. A field with nothing in it shows its key in `--ink3` as a
+ * placeholder and exports as nothing.
  */
 
 const CENTRED: readonly TitlePageField[] = ['title', 'credit', 'author']
@@ -36,9 +39,7 @@ const PLACEHOLDER: Readonly<Record<TitlePageField, string>> = {
 }
 
 const fromRecord = (titlePage: TitlePage | null): Record<TitlePageField, string> =>
-  Object.fromEntries(
-    TITLE_PAGE_FIELDS.map((field) => [field, titlePage?.[field] ?? '']),
-  ) as Record<TitlePageField, string>
+  Object.fromEntries(TITLE_PAGE_FIELDS.map((field) => [field, titlePage?.[field] ?? ''])) as Record<TitlePageField, string>
 
 const CoverSheetBody = ({
   projectId,
@@ -55,7 +56,6 @@ const CoverSheetBody = ({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [message, setMessage] = useState<string | null>(null)
   const [, startTransition] = useTransition()
-  const dirty = useRef(false)
   const timer = useRef<number | null>(null)
 
   const persist = (next: Record<TitlePageField, string>): void => {
@@ -76,10 +76,8 @@ const CoverSheetBody = ({
   const edit = (field: TitlePageField, value: string): void => {
     const next = { ...fields, [field]: value }
     setFields(next)
-    dirty.current = true
     if (timer.current !== null) window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
-      dirty.current = false
       persist(next)
     }, 800)
   }
@@ -103,33 +101,27 @@ const CoverSheetBody = ({
       onChange={(event) => {
         edit(field, event.target.value.replace(/\r/gu, ''))
       }}
-      className={`folio-focus block w-full resize-none border-0 bg-transparent p-0 font-mono text-[16px] leading-[16px] text-sheet-ink placeholder:text-ink3 ${className}`}
+      className={`folio-cover-field ${className}`}
     />
   )
 
   return (
-    <div className="folio-desk" data-cover style={{ height: 1056 }}>
-      <div className="folio-page" style={{ top: 0, pointerEvents: 'auto' }}>
-        <div className="absolute inset-x-[144px] top-[336px] flex flex-col gap-[32px] text-center">
-          {CENTRED.map((field) =>
-            input(field, field === 'title' ? 'text-center uppercase' : 'text-center'),
-          )}
-        </div>
-        <div className="absolute bottom-[96px] left-[144px] right-[336px] flex flex-col gap-[16px]">
-          {FOOT.map((field) => input(field, ''))}
-        </div>
-        <span className="absolute bottom-[48px] right-[96px] font-sans text-9-5 text-ink3" data-cover-status={status}>
-          {status === 'saving'
-            ? 'saving…'
-            : status === 'saved'
-              ? 'saved'
-              : status === 'error'
-                ? (message ?? 'not saved')
-                : titlePage === null
-                  ? 'New cover'
-                  : ''}
-        </span>
+    <div className="folio-cover" data-cover>
+      <div className="flex flex-col gap-[32px] pt-[120px] text-center">
+        {CENTRED.map((field) => input(field, field === 'title' ? 'uppercase' : ''))}
       </div>
+      <div className="mt-[200px] flex flex-col gap-[14px] pr-[200px]">{FOOT.map((field) => input(field, 'text-left'))}</div>
+      <span className="mt-[24px] block text-right font-sans text-11 text-ink3" data-cover-status={status}>
+        {status === 'saving'
+          ? 'saving…'
+          : status === 'saved'
+            ? 'saved'
+            : status === 'error'
+              ? (message ?? 'not saved')
+              : titlePage === null
+                ? 'New cover'
+                : ''}
+      </span>
     </div>
   )
 }

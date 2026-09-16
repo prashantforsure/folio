@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
 
 /**
- * Do the seventeen glyphs actually draw?
+ * Do the glyphs actually draw?
  *
- * AGENTS.md, UI fidelity: "Every glyph is a Unicode character rendered as
- * text", followed by the set. `tests/glyphs.test.ts` proves we ship the right
+ * The routes built before the v2 redesign still print AGENTS.md's Unicode
+ * set as text (the redesigned chrome draws inline SVGs instead). `tests/glyphs.test.ts` proves we ship the right
  * characters and `tests/fonts.test.ts` proves none of them is in a self-hosted
  * face. Neither can tell you whether the *browser* finds one, and a missing
  * glyph is a small rectangle, not an error.
@@ -38,7 +38,6 @@ const GLYPHS = [
   ['locations', '⌖'],
   ['timeline', '◷'],
   ['research', '▧'],
-  ['insights', '◎'],
   ['production', '▶'],
   ['themeDark', '☾'],
   ['themeLight', '☀'],
@@ -70,7 +69,7 @@ const PROOF_ID = 'glyph-proof'
 const buildProof = (glyphs: readonly (readonly [string, string])[], sizes: readonly number[]) => `
   const host = document.createElement('div')
   host.id = ${JSON.stringify(PROOF_ID)}
-  host.style.cssText = 'position:fixed;inset:0;z-index:99999;background:var(--desk);color:var(--ink);padding:16px;font-family:var(--font-sans);overflow:auto'
+  host.style.cssText = 'position:fixed;inset:0;z-index:99999;background:var(--bg);color:var(--ink);padding:16px;font-family:var(--font-sans);overflow:auto'
   const rows = ${JSON.stringify(glyphs)}
   const sizes = ${JSON.stringify(sizes)}
   const table = document.createElement('table')

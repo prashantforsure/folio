@@ -13,6 +13,7 @@
     "check:secrets": "node scripts/assert-no-server-secrets.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.126.0",
     "@floating-ui/dom": "1.8.0",
     "@folio/contracts": "workspace:*",
     "@folio/db": "workspace:*",

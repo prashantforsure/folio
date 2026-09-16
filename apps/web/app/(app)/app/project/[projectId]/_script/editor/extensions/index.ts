@@ -3,7 +3,6 @@ import type { Extensions } from '@tiptap/core'
 
 import type { IdentityLog } from '../../../../../../../../lib/script/identity'
 import type { LabelFor } from '../../../../../../../../lib/script/inline'
-import type { SheetLayout } from '../../../../../../../../lib/script/layout'
 import type { EditorStore } from '../editor-store'
 import { blockExtensions } from './blocks'
 import { ScreenplayClipboard } from './clipboard'
@@ -14,7 +13,7 @@ import { ScreenplayMentionSuggestion } from './mention-suggestion'
 import { ScreenplayPickers } from './pickers'
 import { ScreenplayDocument, ScreenplayText } from './schema'
 import { SheetDecorations } from './sheet-decorations'
-import type { SheetInputs } from './sheet-decorations'
+import type { HandleMenuRequest, HostRegistry, SheetInputs } from './sheet-decorations'
 import { ScreenplaySlash } from './slash'
 
 /**
@@ -26,7 +25,9 @@ import { ScreenplaySlash } from './slash'
  * paragraph, no heading, no marks, no page-break node - AGENTS.md:
  * "Pagination is ours, not Plate's", and it is not Tiptap's either. No
  * `UniqueID` extension: it would make Tiptap an id authority, and
- * `identity.ts` is the only minter.
+ * `identity.ts` is the only minter. No drop-cursor either: the `⠿` handle
+ * rides on ProseMirror's own drag-and-drop, and a cursor for it is a
+ * dependency (flagged).
  *
  * Priorities, highest first: the slash menu and the `@` combobox (1100)
  * own Enter, Tab and the arrows while open; the selectors (1099) own them
@@ -44,7 +45,8 @@ export type ScreenplayEditorOptions = {
   readonly labels: () => readonly MentionLabel[]
   readonly onCreateMention: (entity: MentionEntity, name: string) => Promise<MentionLabel | null>
   readonly sheet: SheetInputs
-  readonly onLayout: (layout: SheetLayout) => void
+  readonly hosts: HostRegistry
+  readonly onHandleMenu: (request: HandleMenuRequest) => void
   readonly onIds: (ids: readonly string[]) => void
 }
 
@@ -59,10 +61,10 @@ export const screenplayExtensions = (options: ScreenplayEditorOptions): Extensio
   ScreenplaySlash.configure({ store: options.store }),
   ScreenplayMentionSuggestion.configure({ store: options.store, labels: options.labels, onCreate: options.onCreateMention }),
   ScreenplayPickers.configure({ store: options.store, labels: options.labels }),
-  SheetDecorations.configure({ inputs: options.sheet, onLayout: options.onLayout }),
+  SheetDecorations.configure({ inputs: options.sheet, hosts: options.hosts, onHandleMenu: options.onHandleMenu }),
 ]
 
-export type { SheetInputs } from './sheet-decorations'
-export { sheetInputsTransaction, sheetLayoutOf } from './sheet-decorations'
+export type { HandleMenuRequest, HostRegistry, SheetInputs } from './sheet-decorations'
+export { COMPOSER_HOST, sheetInputsTransaction } from './sheet-decorations'
 export { blockIds } from './identity'
 export { caretBlock } from './commands'

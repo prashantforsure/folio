@@ -17,7 +17,16 @@ import { DEFAULT_BLOCK_ATTRS, blockAttrsOf, blockTypeOf, idsOf } from '../../../
  *   same document, id present   null it - a copy cannot repeat a join key
  *   another document            null it - every block is minted
  *
- * `origin` is cleared on the way through and never reaches the model. A
+ * `origin` is cleared on the way through and never reaches the model.
+ *
+ * A **drag** inside the editor - the `⠿` handle - comes through the same
+ * hook with `view.dragging.move` set: the slice is the live block, `origin`
+ * unset, and ProseMirror deletes the original in the same transaction it
+ * inserts the copy. That is a move, and a move keeps its id (ADR 0001), so
+ * a moving block is left alone even though its id is, at that instant,
+ * still in the document.
+ *
+ * A
  * screenplay block copied from the Script route arrives as HTML no outline
  * parse rule matches, so ProseMirror keeps its text and drops its type; it
  * lands as Body, the first block in the group.
@@ -32,7 +41,7 @@ export type OutlineClipboardOptions = {
 
 export const outlineClipboardKey = new PluginKey('outlineClipboard')
 
-const withIdsSettled = (slice: Slice, documentId: string, present: ReadonlySet<string>): Slice => {
+const withIdsSettled = (slice: Slice, documentId: string, present: ReadonlySet<string>, moving: boolean): Slice => {
   let changed = false
   const nodes: ProseMirrorNode[] = []
   slice.content.forEach((node) => {
@@ -41,6 +50,10 @@ const withIdsSettled = (slice: Slice, documentId: string, present: ReadonlySet<s
       return
     }
     const attrs = blockAttrsOf(node)
+    if (moving && attrs.origin === null && attrs.id !== null) {
+      nodes.push(node)
+      return
+    }
     const keep = attrs.origin === documentId && attrs.id !== null && !present.has(attrs.id)
     const id = keep ? attrs.id : null
     if (id === attrs.id && attrs.origin === null) {
@@ -64,7 +77,8 @@ export const OutlineClipboard = Extension.create<OutlineClipboardOptions>({
       new Plugin({
         key: outlineClipboardKey,
         props: {
-          transformPasted: (slice, view) => withIdsSettled(slice, documentId, new Set(idsOf(view.state.doc))),
+          transformPasted: (slice, view) =>
+            withIdsSettled(slice, documentId, new Set(idsOf(view.state.doc)), view.dragging?.move === true),
           handlePaste: (view, event) => {
             const data = event.clipboardData
             if (data === null) return false

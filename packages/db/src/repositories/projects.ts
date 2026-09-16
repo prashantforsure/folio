@@ -1,8 +1,8 @@
 import type { Episode, EpisodeId, EpisodeSlug, Membership, Project, TitlePage, TitlePageInput, UserId } from '@folio/contracts'
 import { episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
-import { asc, eq, isNull } from 'drizzle-orm'
+import { asc, eq, inArray, isNull } from 'drizzle-orm'
 
-import { episodes, memberships, projects, titlePages, users } from '../schema'
+import { commentThreads, documents, episodes, memberships, nodes, projects, reels, scenes, shots, titlePages, users } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { mintEpisodeSlug } from './episode-slug'
@@ -269,6 +269,59 @@ export const appendEpisode = async (
     throw new Error('Folio: inserting an episode returned no row. This is a bug in the repository.')
   }
   return toEpisode(row)
+}
+
+/**
+ * Rename an episode. The title is the only thing that changes: the slug and
+ * the ordinal are identity and order (ADR 0002), and a name is neither.
+ * Validated to `TitleSchema` by the caller; the row is the scope's own.
+ */
+export const renameEpisode = async (scope: ProjectScope, id: EpisodeId, title: string): Promise<void> => {
+  await dbOf(scope)
+    .update(episodes)
+    .set({ title, updatedAt: new Date() })
+    .where(scoped(scope, episodes, eq(episodes.id, id)))
+}
+
+/**
+ * Delete an episode and everything that was only ever about it.
+ *
+ * The client ruled for a hard delete behind a confirmation (2026-09-16;
+ * AGENTS.md, When to ask first - "delete or purge user data" - was asked).
+ * Not recoverable: nothing here writes a tombstone, and the caller has said
+ * so before calling.
+ *
+ * `ON DELETE CASCADE` carries most of it - `documents` (and through their
+ * composite key the `nodes`), `measurements`, `revisions`, `title_pages`,
+ * `location_episodes`, `assistant_chats`. Four tables are keyed by a **node
+ * id with no foreign key** (the schema's own choice: a scene record, a shot,
+ * a reel and a thread outlive the node they point at on purpose, so a
+ * heading that leaves the script does not take its synopsis with it) and
+ * would be left pointing at nodes that no longer exist. They are swept here
+ * first, by the episode's node ids, in the same transaction:
+ *
+ *   shots            → frame_generations cascade
+ *   reels            → renders cascade
+ *   comment_threads  → comments cascade (the FK would only null the anchor)
+ *   scenes           → scene_derivations cascade
+ *
+ * `jobs` and the ledger are project-scoped history and stay: a frame that
+ * was paid for was paid for. Refusing the last episode is the caller's rule
+ * (a project always has one); this function deletes what it is given.
+ */
+export const deleteEpisode = async (scope: ProjectScope, id: EpisodeId): Promise<void> => {
+  await dbOf(scope).transaction(async (tx) => {
+    const owned = tx
+      .select({ id: nodes.id })
+      .from(nodes)
+      .innerJoin(documents, eq(documents.id, nodes.documentId))
+      .where(scoped(scope, nodes, eq(documents.episodeId, id)))
+    await tx.delete(shots).where(scoped(scope, shots, inArray(shots.sceneNodeId, owned)))
+    await tx.delete(reels).where(scoped(scope, reels, inArray(reels.sceneNodeId, owned)))
+    await tx.delete(commentThreads).where(scoped(scope, commentThreads, inArray(commentThreads.anchorNodeId, owned)))
+    await tx.delete(scenes).where(scoped(scope, scenes, inArray(scenes.sceneNodeId, owned)))
+    await tx.delete(episodes).where(scoped(scope, episodes, eq(episodes.id, id)))
+  })
 }
 
 /**

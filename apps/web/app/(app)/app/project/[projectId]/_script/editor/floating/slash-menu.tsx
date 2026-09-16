@@ -4,13 +4,18 @@ import type { SlashView } from '../editor-store'
 import { Floating } from './floating-layer'
 
 /**
- * The slash menu, drawn under the `/` that opened it.
+ * The slash menu, drawn under the `/` that opened it - `docs/ui
+ * design/Route - Script v2.dc.html`: a 254px `--sunk` card, an `Add`
+ * eyebrow, one row per block with a mono glyph and the name, and an `↵`
+ * badge on the lit row.
  *
  * Presentation only. The model (`lib/script/slash.ts`) says what the rows
- * are and how they are sectioned; the extension (`extensions/slash.ts`)
- * owns the highlighted index and applies the pick. It never takes focus -
- * the editable keeps it, which is what lets the writer keep typing to
- * narrow the list - and it reports a hover or a click through the view.
+ * are and how they are sectioned - the eight types, `Suggested` first when
+ * the caret block has an obvious next - and the extension
+ * (`extensions/slash.ts`) owns the highlighted index and applies the pick.
+ * It never takes focus - the editable keeps it, which is what lets the
+ * writer keep typing to narrow the list - and it reports a hover or a click
+ * through the view.
  *
  * The search line - "Type to search" after a bare slash - is the Suggestion
  * plugin's empty-query decoration, styled in `globals.css`; nothing here
@@ -25,7 +30,7 @@ export const SlashMenu = ({ view, context }: { readonly view: SlashView; readonl
         {menu.sections.length === 0 ? <div className="folio-slash-empty">No block matches “{query}”</div> : null}
         {menu.sections.map((section) => (
           <div key={section.title} className="folio-slash-section">
-            <div className="folio-slash-title">{section.title}</div>
+            <div className="folio-slash-title">{section.title === 'Blocks' ? 'Add' : section.title}</div>
             {section.entries.map((entry) => {
               index += 1
               const row = index
@@ -45,22 +50,13 @@ export const SlashMenu = ({ view, context }: { readonly view: SlashView; readonl
                   }}
                 >
                   <span className="folio-slash-glyph">{entry.glyph}</span>
-                  <span className="folio-slash-label">
-                    {entry.label}
-                    <span className="folio-slash-detail"> · {entry.detail}</span>
-                  </span>
-                  <kbd>{entry.shortcut}</kbd>
+                  <span className="folio-slash-label">{entry.label}</span>
+                  {row === active ? <span className="folio-slash-enter">↵</span> : <kbd>{entry.shortcut}</kbd>}
                 </button>
               )
             })}
           </div>
         ))}
-      </div>
-      <div className="folio-slash-foot">
-        <button type="button" onClick={view.onClose}>
-          Close menu
-        </button>
-        <span>esc</span>
       </div>
     </Floating>
   )

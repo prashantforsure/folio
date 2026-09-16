@@ -56,10 +56,11 @@
 
   body {
     margin: 0;
-    background: var(--desk);
+    background: var(--bg);
     color: var(--ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   a {
@@ -72,15 +73,43 @@
     text-decoration: underline;
   }
 
+  /*
+   * README, "Shape and motion": "Transitions are `.14s` on background,
+   * colour, border and opacity - nothing else animates." Box-shadow rides
+   * along so the focus ring does not snap.
+   */
   button {
     font-family: inherit;
     color: inherit;
     transition:
-      background 0.12s,
-      border-color 0.12s,
-      color 0.12s,
-      box-shadow 0.12s,
-      transform 0.12s;
+      background 0.14s,
+      background-color 0.14s,
+      border-color 0.14s,
+      color 0.14s,
+      opacity 0.14s,
+      box-shadow 0.14s;
+  }
+
+  /* README, "Implementation notes": themed scrollbars - rounded, `--s3` thumb, transparent track. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--s3);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  /* Body copy wraps for reading, not for the algorithm. README, "Type". */
+  p {
+    text-wrap: pretty;
   }
 
   ::selection {

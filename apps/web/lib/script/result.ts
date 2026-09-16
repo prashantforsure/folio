@@ -1,6 +1,7 @@
 import type { Timestamp, TitlePage } from '@folio/contracts'
 import type { MeasurementRecord, MentionLabel, NodeId, PaginationError } from '@folio/script'
 
+import type { ThreadView } from './panel'
 import type { ScriptStats } from './stats'
 
 /**
@@ -90,5 +91,11 @@ export type TitlePageResult =
 
 export type MentionTargetResult =
   | { readonly status: 'created'; readonly label: MentionLabel }
+  | { readonly status: 'refused'; readonly message: string }
+  | { readonly status: 'error'; readonly message: string }
+
+/** A thread action's answer: the card, whole, so the client replaces it in place. */
+export type ThreadResult =
+  | { readonly status: 'ok'; readonly thread: ThreadView }
   | { readonly status: 'refused'; readonly message: string }
   | { readonly status: 'error'; readonly message: string }

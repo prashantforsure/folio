@@ -1,6 +1,10 @@
+import { OutlineGhost } from './editor/static-outline'
+
 /**
- * The Outline's empty state, in two pieces the workspace places on the
- * prose sheet under the title.
+ * The Outline's empty state, in the pieces the workspace places on the
+ * column - `docs/ui design/Route - Outline v2.dc.html`, `content: empty`:
+ * `Untitled outline` in `--ink3`, the caret line "Start typing, or type '/'
+ * to add a block", and two key hints.
  *
  * `empty` is a data state - no outline document exists for the episode -
  * decided on the server, never by a URL. There is no button and no import:
@@ -11,23 +15,32 @@
  * draws the same line as static text so nothing shifts when it does.
  */
 
+const HINTS: readonly { readonly key: string; readonly text: string }[] = [
+  { key: '/', text: 'Add a heading, quote, list or divider' },
+  { key: '@', text: 'Mention a character or location to keep it linked' },
+]
+
 /** The caret line before the editor exists: the ghost's copy, at the ghost's geometry. */
 export const EmptyCaretLine = () => (
   <div className="folio-outline-editable" aria-hidden="true">
     <div className="folio-outline-block" data-type="body">
-      <span className="folio-outline-ghost">
-        Type, or press <b>/</b> for a block<i>|</i>
-      </span>
+      <OutlineGhost alone />
       {/* The line's height, as ProseMirror's trailing break gives an empty block its own. */}
       <br />
     </div>
   </div>
 )
 
-/** The bundle's note under the caret line, drawn until the first save. */
-export const EmptyOutlineNote = () => (
-  <p className="m-0 mt-[28px] px-[96px] font-sans text-10-5 leading-[1.5] text-ink3" data-empty-note>
-    The prose plan for the episode — logline, synopsis, story beats. Its own document, on the same sheet; the script is
-    never rewritten from this page.
-  </p>
+/** The two hints under the caret line, drawn until the first save. */
+export const EmptyOutlineHints = () => (
+  <div className="flex flex-col gap-[12px]" data-empty-note>
+    {HINTS.map((hint) => (
+      <div key={hint.key} className="flex items-baseline gap-[14px]">
+        <span className="min-w-[34px] flex-none rounded-[8px] border border-line2 bg-s1 px-[9px] py-[4px] text-center font-mono text-11-5 text-ink2">
+          {hint.key}
+        </span>
+        <span className="text-14 leading-[1.6] text-ink3">{hint.text}</span>
+      </div>
+    ))}
+  </div>
 )

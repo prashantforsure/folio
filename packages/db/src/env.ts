@@ -158,6 +158,21 @@ const StorageEnvSchema = z.object({
 export type StorageEnv = z.infer<typeof StorageEnvSchema>
 
 /**
+ * The assistant - Anthropic's API. Server only.
+ *
+ * Optional the way storage is: unset, `assistantEnv` is `null` and the
+ * assistant panel draws its composer disabled with a line saying the
+ * assistant is not connected. Set, the key is checked for shape only. The
+ * model id is not an environment variable: it is a decision, written once in
+ * `apps/web/lib/assistant/model.ts`, and an env var would make it a setting.
+ */
+const AssistantEnvSchema = z.object({
+  ANTHROPIC_API_KEY: z.string().min(20, 'looks too short to be an Anthropic key'),
+})
+
+export type AssistantEnv = z.infer<typeof AssistantEnvSchema>
+
+/**
  * What each variable is and where it comes from.
  *
  * Carried here rather than only in `.env.example` so the failure message can
@@ -176,6 +191,7 @@ const PROVENANCE: Readonly<Record<string, string>> = {
   R2_SECRET_ACCESS_KEY: 'The same token. Shown once at creation. Server only.',
   R2_BUCKET: 'The bucket name, as created in the Cloudflare dashboard.',
   R2_PUBLIC_URL: 'The origin the bucket is served from - its custom domain, or the r2.dev public URL - with no trailing slash.',
+  ANTHROPIC_API_KEY: 'Anthropic Console, API keys. Server only. Unset, the assistant panel is drawn disconnected.',
 }
 
 // ---------------------------------------------------------------------------
@@ -274,3 +290,13 @@ export const storageEnv: StorageEnv | null = STORAGE_NAMES.every(
 )
   ? null
   : parseOrThrow(StorageEnvSchema, rawStorage, 'storage')
+
+/**
+ * Server-only. `null` when `ANTHROPIC_API_KEY` is unset - the assistant is
+ * not connected, and every reader treats that as a disabled composer, never
+ * as a broken one.
+ */
+export const assistantEnv: AssistantEnv | null =
+  process.env.ANTHROPIC_API_KEY === undefined || process.env.ANTHROPIC_API_KEY === ''
+    ? null
+    : parseOrThrow(AssistantEnvSchema, { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY }, 'assistant')

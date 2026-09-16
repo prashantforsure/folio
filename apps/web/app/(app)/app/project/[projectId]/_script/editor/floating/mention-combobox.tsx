@@ -10,9 +10,13 @@ import { Floating } from './floating-layer'
  * the extension (`extensions/mention-suggestion.ts`) filters the label book,
  * owns the highlighted index and inserts the mention. The two "New …" rows
  * create a record through the workspace's server action first.
+ *
+ * Same chrome as the slash menu (`.folio-slash`): `--sunk`, 14px radius,
+ * one row per choice with a mono mark - `@` for a character, `⌖` for a
+ * location - and the entity in `--ink3` at the right.
  */
 
-const ENTITY_GLYPH: Readonly<Record<MentionEntity, string>> = { character: '◍', location: '⌖' }
+const ENTITY_MARK: Readonly<Record<MentionEntity, string>> = { character: '@', location: '⌖' }
 
 export const MentionCombobox = ({ view, context }: { readonly view: MentionView; readonly context: Element | null }) => {
   const { choices, active, busy } = view
@@ -23,39 +27,35 @@ export const MentionCombobox = ({ view, context }: { readonly view: MentionView;
       role="listbox"
       aria-label="Mention a character or location"
       data-mention-menu=""
-      className="z-30 w-[260px] rounded-chrome border border-line bg-panel p-[3px] font-sans text-11-5 text-ink"
+      className="folio-slash"
     >
-      {choices.length === 0 ? (
-        <div className="px-[8px] py-[5px] text-10-5 text-ink3">Type a name to mention or create one.</div>
-      ) : null}
-      {choices.map((choice, index) => {
-        const label = choice.kind === 'label' ? choice.label.label : `New ${choice.entity} “${choice.name}”`
-        const entity = choice.kind === 'label' ? choice.label.entity : choice.entity
-        return (
-          <button
-            key={choice.kind === 'label' ? `${choice.label.entity}:${choice.label.id}` : `create:${choice.entity}`}
-            type="button"
-            role="option"
-            aria-selected={index === active}
-            disabled={busy}
-            className={`flex w-full items-center gap-[8px] rounded-chrome px-[8px] py-[5px] text-left ${index === active ? 'bg-sel' : ''}`}
-            onMouseEnter={() => {
-              view.onHover(index)
-            }}
-            onClick={() => {
-              view.onPick(choice)
-            }}
-          >
-            <span className="w-[13px] text-center font-glyph text-11 text-ink2">{ENTITY_GLYPH[entity]}</span>
-            <span className="min-w-0 flex-1 truncate">{label}</span>
-            <span className="text-9-5 text-ink3">{choice.kind === 'label' ? entity : 'create'}</span>
-          </button>
-        )
-      })}
-      <div className="mt-[2px] border-t border-line2 px-[8px] pt-[4px] text-9-5 text-ink3">
-        <button type="button" className="text-ink3" onClick={view.onClose}>
-          Esc to close
-        </button>
+      <div className="folio-slash-list">
+        <div className="folio-slash-title">Mention</div>
+        {choices.length === 0 ? <div className="folio-slash-empty">Type a name to mention or create one.</div> : null}
+        {choices.map((choice, index) => {
+          const label = choice.kind === 'label' ? choice.label.label : `New ${choice.entity} “${choice.name}”`
+          const entity = choice.kind === 'label' ? choice.label.entity : choice.entity
+          return (
+            <button
+              key={choice.kind === 'label' ? `${choice.label.entity}:${choice.label.id}` : `create:${choice.entity}`}
+              type="button"
+              role="option"
+              aria-selected={index === active}
+              disabled={busy}
+              className="folio-slash-row"
+              onMouseEnter={() => {
+                view.onHover(index)
+              }}
+              onClick={() => {
+                view.onPick(choice)
+              }}
+            >
+              <span className="folio-slash-glyph">{ENTITY_MARK[entity]}</span>
+              <span className="folio-slash-label">{label}</span>
+              <kbd>{choice.kind === 'label' ? entity : 'create'}</kbd>
+            </button>
+          )
+        })}
       </div>
     </Floating>
   )

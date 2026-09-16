@@ -1,7 +1,8 @@
 import { listComments, listMemberProfiles } from '@folio/db'
 import { notFound } from 'next/navigation'
 
-import type { RevisionRow, ThreadCard } from '../../../../../../lib/script/panel'
+import type { RevisionRow, ThreadView } from '../../../../../../lib/script/panel'
+import { initialsOf, whenLabel } from '../../../../../../lib/script/panel'
 import { loadScript } from '../../../../../../lib/script/server'
 import type { EpisodeContext } from '../../../../../../lib/workspace/context'
 import type { RawSearchParams } from '../../../../../../lib/workspace/params'
@@ -12,17 +13,16 @@ import { ScriptWorkspace } from './script-workspace'
 /**
  * The Script route, server side: one read, then the client workspace.
  *
- * Replaces `RouteShell` for this route because the Script header carries
- * the `▤ Script / ▣ Cover` segment, the save indicator, undo and the panel
- * toggle, and the route has a status bar - none of which the generic shell
- * draws. The `<main data-route data-sub-*>` contract the smoke test reads is
- * kept exactly.
+ * The `<main data-route data-sub-*>` contract the smoke test reads is kept
+ * exactly. The query is parsed as every route's is, and Script's schema is
+ * empty (`lib/workspace/params.ts`): which document shows is client state,
+ * not `?doc=`, so a switch is not a request and this component does not run
+ * again for one. `empty` is not a param either: it is `loadScript` finding
+ * no screenplay document.
  *
- * The query is parsed as every route's is, and Script's schema is empty
- * (`lib/workspace/params.ts`): the `▤ Script / ▣ Cover` segment and the
- * panel tab are client state, not `?doc=` and `?panel=`, so a tab click is
- * not a request and this component does not run again for one. `empty` is
- * not a param either: it is `loadScript` finding no screenplay document.
+ * Threads are shaped here as the inline cards draw them - every turn, with
+ * the author's name and initials - and only those anchored to a node the
+ * document still has; a detached thread has nowhere to be drawn and is not.
  */
 export const ScriptRoute = async ({
   context,
@@ -32,7 +32,7 @@ export const ScriptRoute = async ({
   readonly searchParams: Promise<RawSearchParams>
 }) => {
   if (!parseSubViews('script', await searchParams).ok) notFound()
-  const { scope, project, episode } = context
+  const { scope, project, episode, user } = context
 
   const load = await loadScript(scope, project, episode)
 
@@ -40,34 +40,25 @@ export const ScriptRoute = async ({
   let unreadable: string | null = null
   if (load.state === 'draft') {
     const members = await listMemberProfiles(scope)
-    const nameOf = (userId: string): string =>
-      members.find((member) => member.userId === userId)?.displayName ?? 'Someone'
-    const paged = load.measurement.ok ? load.measurement.paged : null
-    const threads: ThreadCard[] = await Promise.all(
-      load.threads.map(async (thread): Promise<ThreadCard> => {
+    const nameOf = (userId: string): string => members.find((member) => member.userId === userId)?.displayName ?? 'Someone'
+    const threads: ThreadView[] = await Promise.all(
+      load.threads.map(async (thread): Promise<ThreadView> => {
         const comments = await listComments(scope, thread.id)
-        const first = comments[0]
-        const nodeId = thread.anchor.kind === 'script_node' ? thread.anchor.nodeId : null
-        const placed = nodeId === null ? undefined : paged?.nodes.find((node) => node.id === nodeId)
-        const page = placed?.runs[0]?.page
-        const scene =
-          nodeId === null || paged === null
-            ? undefined
-            : paged.scenes.find((entry) => page !== undefined && entry.startPage <= page && entry.endPage >= page)
-        const when = new Date(thread.createdAt)
-        const today = new Date()
-        const sameDay = when.toDateString() === today.toDateString()
         return {
           id: thread.id,
-          who: nameOf(thread.createdBy),
-          when: sameDay
-            ? when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-            : when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-          at:
-            page === undefined
-              ? 'detached'
-              : `pg ${String(paged?.pages[page - 1]?.label ?? page)}${scene === undefined ? '' : ` · sc ${String(scene.number)}`}`,
-          body: first?.body ?? '',
+          nodeId: thread.anchor.kind === 'script_node' ? (thread.anchor.nodeId as string) : '',
+          state: thread.state,
+          turns: comments.map((comment) => {
+            const who = nameOf(comment.authorId)
+            return {
+              id: comment.id,
+              who,
+              initials: initialsOf(who),
+              when: whenLabel(comment.createdAt),
+              body: comment.body,
+              mine: comment.authorId === user.id,
+            }
+          }),
         }
       }),
     )
@@ -104,7 +95,7 @@ export const ScriptRoute = async ({
       labels: load.labels,
       lockedPages: load.lockedPages,
       revision: episode.revisionColour,
-      threads,
+      threads: threads.filter((thread) => thread.nodeId !== ''),
       revisions,
     }
   } else if (load.state === 'unreadable') {
@@ -120,8 +111,7 @@ export const ScriptRoute = async ({
       episode={episode.slug}
       episodeTitle={episode.title}
       project={project}
-      revisionLabel={revisionLabel}
-      routeId={`${episode.slug}/script`}
+      documentTitle={`${episode.title} · ${revisionLabel}`}
       scriptState={load.state}
       draft={draft}
       titlePage={load.state === 'unreadable' ? null : load.titlePage}
