@@ -10,9 +10,9 @@ import type { WalkOptions } from '../playwright.config'
  * What this proves, in order:
  *
  *   1. **The shell, both themes, and the empty card.** The sidebar card
- *      with `Collections` and the `Clips filed` widget; the header without
- *      the Write / Storyboard pill and with `Research` as its crumb; the
- *      toolbar's Library | Source | Clips pill over `?view=`; the 28px
+ *      with `Collections` and the `Clips filed` widget; the header with
+ *      `Research` as its crumb and the Library | Source | Clips pill in its
+ *      centre over `?view=` (moved there from the toolbar 2026-09-17); the 28px
  *      status bar reading `research`; `Nothing in research yet` as the one
  *      440px card; `?view=grid` is a 404; `?view=source` with no source
  *      lands back on the library.
@@ -98,7 +98,7 @@ test('the shell in both themes; nothing in research is one card; a bad view is a
   await expect(main).toHaveAttribute('data-sub-view', 'library')
   await expect(main).toHaveAttribute('data-research-state', 'empty')
   await expect(page.locator('[data-empty-research]').getByText('Nothing in research yet')).toBeVisible()
-  // The shell: the sidebar card with this route's slots, the header without the mode pill, the crumb, the status bar.
+  // The shell: the sidebar card with this route's slots, the header with the crumb and the views in its centre, the status bar.
   const card = page.locator('aside[data-sidebar]')
   await expect(card).toBeVisible()
   expect(await card.evaluate((el) => el.getBoundingClientRect().width)).toBe(236)
@@ -106,12 +106,13 @@ test('the shell in both themes; nothing in research is one card; a bad view is a
   await expect(card.locator('[data-collections-empty]')).toBeVisible()
   await expect(card.locator('[data-filed-card] [data-filed-count]')).toHaveText('0 / 0')
   await expect(page.locator('[data-research-find]')).toHaveCount(0)
-  await expect(page.locator('[data-mode-pill]')).toHaveCount(0)
   await expect(page.locator('[data-route-crumb]')).toHaveText('Research')
   await expect(page.locator('[data-research-count]')).toHaveText('0 sources')
   await expect(page.locator('[data-status-bar] [data-route-id]')).toHaveText('research')
   await expect(page.locator('[data-status-bar] [data-status-left]')).toContainText('research empty')
-  await expect(page.locator('[data-view-pill][data-shape="text"] [data-view-tab="library"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('[data-writing-header] [data-view-pill] [data-view-tab]')).toHaveText(['Library', 'Source', 'Clips'])
+  await expect(page.locator('[data-writing-header] [data-view-pill] [data-view-tab="library"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('[data-research-toolbar] [data-view-pill]')).toHaveCount(0)
   await expect(page.locator('nav[data-rail] [data-rail-item][aria-current="page"]')).toHaveAttribute('data-rail-item', 'research')
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)

@@ -4,24 +4,28 @@ import type { EpisodeSlug, ProjectId } from '@folio/contracts'
 import { Icon } from '@folio/ui'
 import Link from 'next/link'
 import { useSelectedLayoutSegment } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 
 import { useSession } from '../../../../../../lib/state/session'
 import type { ShareLinkView } from '../../../../../../lib/share/result'
 import { defaultEpisodeTitle, episodeNumber } from '../../../../../../lib/workspace/format'
 import type { WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
-import { episodeRouteHref } from '../../../../../../lib/workspace/hrefs'
+import { episodeRouteHref, projectRouteHref } from '../../../../../../lib/workspace/hrefs'
 import type { EpisodeRoute, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
-import { ROUTE_TITLE, WRITING_MODE_TARGET, isEpisodeRoute, isWritingRoute, writingModeOf } from '../../../../../../lib/workspace/routes'
+import { ROUTE_TITLE, isEpisodeRoute, isProjectRoute, isWritingRoute } from '../../../../../../lib/workspace/routes'
 import { EpisodeDeleteConfirm } from './episode-delete-confirm'
 import { EpisodeForm } from './episode-form'
+import { HeaderViews } from './header-views'
 import { Orb } from './orb'
 import { SharePopover } from './share-popover'
 
 /**
- * The writing header. 60px - `docs/ui design/README.md`, "Header":
- * "Breadcrumb on the left, `Share` and the assistant orb on the right. The
- * Write / Storyboard mode pill lives here **only in the writing routes**."
+ * The header. 60px - `docs/ui design/README.md`, "Header": "Breadcrumb on
+ * the left, `Share` and the assistant orb on the right." Every rebuilt
+ * route's layout renders it: the writing layout for the four writing
+ * routes, and Production's, Characters', Locations' and Research's for
+ * themselves. Timeline, still on its pre-redesign chrome, does not yet.
  *
  * Left: `Project / Episode ▾`. The episode is a menu of the project's
  * episodes, each a link to the same route on that episode, with `Rename
@@ -31,28 +35,52 @@ import { SharePopover } from './share-popover'
  * container is *not* `overflow:hidden` as the mockup's is: the menu is
  * positioned inside it, and the mockup's hidden overflow clipped the whole
  * menu to nothing (found 2026-09-16 - "there is no option to switch"). The
- * project title truncates on its own instead. Centre: the
- * pill - Write lit on Script, Outline and Scenes; Storyboard on Storyboard;
- * each half links to its home. Right: Share (a popover over share links)
- * and the orb, which opens the assistant and hides while it is open
- * (README: "The header orb hides while the panel is open").
+ * project title truncates on its own instead. Right: Share (a popover over
+ * share links) and the orb, which opens the assistant and hides while it is
+ * open (README: "The header orb hides while the panel is open").
+ *
+ * ## The centre is the route's views - ruled 2026-09-17
+ *
+ * The README put a Write / Storyboard mode pill here on the writing routes.
+ * The client ruled it out: the sidebar has a Script row, so `Write` named
+ * nothing the sidebar did not, and Storyboard became a row under it
+ * (`lib/workspace/routes.ts`, `SIDEBAR`). In its place the centre draws the
+ * current route's sub-views - `Boards · Canvas · Shot list` on the
+ * Storyboard, `Scene · Episode` on Production, and so on
+ * (`lib/workspace/views.ts`) - each tab its icon, where the design has
+ * one, beside its name, lit by `?view=` (`header-views.tsx`). The routes'
+ * toolbars stopped drawing their own pill the same day. A route with no
+ * views (Script, Outline) has an empty centre. Characters' views are state,
+ * not the URL, so its layout hands its tabs in as `views` and this draws
+ * them in the same slot.
+ *
+ * `useSearchParams` in the centre is under a `Suspense` so a render that
+ * has no request search params yet (a static prerender, which no route
+ * here is) falls back to nothing rather than to an error.
+ *
+ * The centre is wider than the pill it replaced (three named tabs against
+ * two), so the halves give way before it does: the left half truncates
+ * the project title and then the episode crumb (`min-w-0` down the chain),
+ * and the right half keeps `min-width: fit-content` so Share and the orb
+ * are never pushed under the tabs - at the README's narrowest in-flow
+ * case (1200px, sidebar and assistant both open) the pill sits a little
+ * left of centre rather than over anything.
  *
  * Presence avatars and the Read button are not drawn - ruled 2026-09-16:
  * no presence (no realtime), Read left out.
  *
- * ## Production wears the same header, without the pill
+ * ## The route: told, or read from the segment
  *
- * README, "Header": the mode pill "was removed from Characters, Locations,
- * Timeline, Research and Production - those are outside the writing
- * surface." Production's layout renders this header with `route:
- * 'production'` (a layout that *is* the route knows it; the segment hook
- * cannot see it from there), the pill is not drawn for a route outside
- * `WRITING_ROUTES`, and the breadcrumb grows its third crumb, the route's
- * title (`Route - Production v2.dc.html`: `Project / Episode 1 / Production`).
+ * Production's, Characters', Locations' and Research's layouts render this
+ * header with `route` (a layout that *is* the route knows it; the segment
+ * hook cannot see it from there), and the breadcrumb grows its third crumb,
+ * the route's title (`Route - Production v2.dc.html`: `Project / Episode 1
+ * / Production`). The writing layout cannot pass it and the header reads
+ * the segment below `(writing)` instead.
  *
  * Characters is project-scoped and passes no `current` episode: the crumb
- * is `Project / Characters` (`Route - Characters v2.dc.html`), there is no
- * episode menu and no pill - the pill needs an episode to link to.
+ * is `Project / Characters` (`Route - Characters v2.dc.html`) and there is
+ * no episode menu.
  */
 export type EpisodeChoice = {
   readonly slug: EpisodeSlug
@@ -68,6 +96,7 @@ export const WritingHeader = ({
   current,
   share,
   route: given,
+  views,
 }: {
   readonly projectId: ProjectId
   readonly projectTitle: string
@@ -78,6 +107,8 @@ export const WritingHeader = ({
   readonly share: ShareLinkView
   /** The route, when the layout is the route (Production, Characters). Absent: read from the segment below `(writing)`. */
   readonly route?: WorkspaceRoute
+  /** The centre, when the route's views are not `?view=` (Characters): its own tabs. Absent: the route's `ROUTE_VIEWS` over the URL. */
+  readonly views?: ReactNode
 }) => {
   // The route below the `(writing)` layout: `script`, `outline`, `storyboard`
   // or `scenes`. A layout cannot pass it; the segment hook can see it.
@@ -90,8 +121,9 @@ export const WritingHeader = ({
     setMounted(true)
   }, [])
   const assistantOpen = (mounted ? session.assistantOpen : null) ?? false
-  const mode = writing && current !== undefined ? writingModeOf(route) : null
   const address = current === undefined ? null : { projectId, shape, episode: current.slug }
+  // Where the route's tabs link: the episode's route, or the project's.
+  const baseHref = isProjectRoute(route) ? projectRouteHref(projectId, route) : address === null ? null : episodeRouteHref(address, route)
 
   return (
     <header data-writing-header className="relative flex h-[60px] flex-none items-center gap-[10px] pl-[4px] pr-[14px]">
@@ -113,36 +145,17 @@ export const WritingHeader = ({
         )}
       </div>
 
-      {mode === null || address === null ? null : (
-        <div className="flex flex-none items-center gap-[10px]">
-          <div role="tablist" aria-label="Mode" data-mode-pill className="flex items-center gap-[3px] rounded-pill border border-line2 bg-s1 p-[4px]">
-            <Link
-              href={episodeRouteHref(address, WRITING_MODE_TARGET.write)}
-              role="tab"
-              aria-selected={mode === 'write'}
-              aria-current={mode === 'write' ? 'page' : undefined}
-              data-mode="write"
-              className="folio-pill-tab"
-            >
-              <Icon name="write" size={15} className="opacity-75" />
-              Write
-            </Link>
-            <Link
-              href={episodeRouteHref(address, WRITING_MODE_TARGET.storyboard)}
-              role="tab"
-              aria-selected={mode === 'storyboard'}
-              aria-current={mode === 'storyboard' ? 'page' : undefined}
-              data-mode="storyboard"
-              className="folio-pill-tab"
-            >
-              <Icon name="storyboard" size={15} className="opacity-75" />
-              Storyboard
-            </Link>
-          </div>
-        </div>
-      )}
+      <div data-header-views={route} className="flex flex-none items-center">
+        {views !== undefined ? (
+          views
+        ) : baseHref === null ? null : (
+          <Suspense fallback={null}>
+            <HeaderViews route={route} baseHref={baseHref} />
+          </Suspense>
+        )}
+      </div>
 
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-[8px]">
+      <div className="flex min-w-fit flex-1 items-center justify-end gap-[8px]">
         <SharePopover projectId={projectId} initial={share} />
         {assistantOpen ? null : (
           <button
@@ -208,7 +221,7 @@ const EpisodeMenu = ({
   const nextOrdinal = (episodes.at(-1)?.ordinal ?? 0) + 1
 
   return (
-    <div ref={root} className="relative min-w-0 flex-none">
+    <div ref={root} className="relative min-w-0 shrink">
       <button
         type="button"
         aria-haspopup="menu"

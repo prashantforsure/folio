@@ -4,6 +4,7 @@ import { loadResearch } from '../../../../../../lib/research/server'
 import { loadShareLink } from '../../../../../../lib/share/server'
 import { loadEpisode } from '../../../../../../lib/workspace/context'
 import { projectRouteHref } from '../../../../../../lib/workspace/hrefs'
+import { ResearchHeaderViews } from '../_research/research-header-views'
 import { CollectionsGroup, FiledWidget, ResearchTitleRow } from '../_research/research-sidebar'
 import { SourceDrawer } from '../_research/source-drawer'
 import { FindField, FindProvider } from './find-field'
@@ -14,10 +15,12 @@ import { WritingHeader } from './writing-header'
  * The Research route's shell - the three parts every route wears
  * (`docs/ui design/README.md`, "Shell"), on `characters-layout.tsx`'s
  * pattern: the sidebar card with this route's four slots
- * (`_research/research-sidebar.tsx`), the header told its route (no Write /
- * Storyboard pill: Research is "outside the writing surface"; the crumb is
- * `Project / Research`, no episode - the route is project-scoped), and the
- * main-surface card the page body sits in.
+ * (`_research/research-sidebar.tsx`), the header told its route (the crumb
+ * is `Project / Research`, no episode - the route is project-scoped) and
+ * handed `Library · Source · Clips` for its centre
+ * (`_research/research-header-views.tsx`: a source page is the `source`
+ * view with no `?view=` in its URL, which the header's shared rule cannot
+ * see), and the main-surface card the page body sits in.
  *
  * ## The drawer is nobody's page
  *
@@ -62,6 +65,7 @@ export const ResearchLayout = async ({ projectId, children }: { readonly project
           route="research"
           episodes={context.episodes.map((episode) => ({ slug: episode.slug, ordinal: episode.ordinal, title: episode.title }))}
           share={share}
+          views={<ResearchHeaderViews baseHref={baseHref} />}
         />
         <div data-surface className="folio-surface flex min-h-0 min-w-0 flex-1 flex-col">
           {children}

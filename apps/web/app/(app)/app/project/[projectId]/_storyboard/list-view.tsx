@@ -5,7 +5,7 @@ import { CAMERA_ANGLE_LABEL, SHOT_MOVEMENT_LABEL } from '@folio/script'
 import { Icon } from '@folio/ui'
 import { useState } from 'react'
 
-import { groupLabel, sceneTone } from '../../../../../../lib/storyboard/board'
+import { SHOT_SORT_LABEL, groupLabel, sceneTone, sortShots } from '../../../../../../lib/storyboard/board'
 import { count } from '../../../../../../lib/workspace/format'
 import type { ViewProps } from './handlers'
 import { Description, FrameTile, TONE_DOT, durationLabel, lensLabel, sizeName } from './shot-parts'
@@ -22,8 +22,11 @@ import { Description, FrameTile, TONE_DOT, durationLabel, lensLabel, sizeName } 
  *
  * Rows are read-only, as the mockup draws them; clicking a group row
  * selects the scene so the canvas and the sidebar follow, and the chevron
- * folds the group. The list's order is the shot order - a sort that
- * reorders the print would be a different document from the board.
+ * folds the group. The order within a group is the `Display` menu's sort
+ * (2026-09-17, `sortShots`): story order by default, else shot size, lens
+ * or needs-work-first, each stable over the sequence. The header says
+ * when it is not the sequence, so the print is never mistaken for the
+ * board's order.
  */
 export const ListView = ({ view }: { readonly view: ViewProps }) => (
   <div data-shot-list className="min-h-0 flex-1 overflow-auto px-[20px] pb-[20px]">
@@ -37,6 +40,11 @@ export const ListView = ({ view }: { readonly view: ViewProps }) => (
         <span className="w-[60px] flex-none">Lens</span>
         <span className="w-[56px] flex-none">Dur.</span>
         <span className="min-w-0 flex-1">Description</span>
+        {view.sort === 'sequence' ? null : (
+          <span className="flex-none normal-case tracking-normal text-ink3" data-sorted-by>
+            sorted by {SHOT_SORT_LABEL[view.sort].toLowerCase()}
+          </span>
+        )}
       </div>
 
       {view.scenes.map((scene) => (
@@ -48,7 +56,7 @@ export const ListView = ({ view }: { readonly view: ViewProps }) => (
 
 const SceneGroup = ({ scene, view }: { readonly scene: StoryboardScene; readonly view: ViewProps }) => {
   const [folded, setFolded] = useState(false)
-  const shown = scene.shots.filter(view.visible)
+  const shown = sortShots(scene.shots.filter(view.visible), view.sort)
   const accepted = scene.shots.filter((shot) => shot.state === 'accepted').length
   return (
     <div data-list-scene={scene.sceneNodeId} data-selected={scene.sceneNodeId === view.selected ? 'true' : 'false'}>

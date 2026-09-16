@@ -5,28 +5,21 @@ import { RENDER_RESOLUTIONS } from '@folio/contracts'
 import { Icon } from '@folio/ui'
 import { memo, useRef, useState } from 'react'
 
-import type { EpisodeRoutePath } from '../../../../../../lib/workspace/hrefs'
 import { useDismiss } from '../_chrome/use-dismiss'
-import { ViewPill } from '../_chrome/view-pill'
-import type { ViewPillItem } from '../_chrome/view-pill'
 import { Mark } from './mark'
 
 /**
  * The Production toolbar row - `Route - Production v2.dc.html`: the route
- * name, the count chip (`2 reels in this scene`), the Scene | Episode pill
- * (the shared `_chrome/view-pill.tsx`, text shape, over `?view=`), then
- * `flex: 1`, the resolution control (`720p ▾`, a menu over the project's
+ * name, the count chip (`2 reels in this scene`), then `flex: 1`, the
+ * resolution control (`720p ▾`, a menu over the project's
  * `render_resolution`) and the credits chip (`◐ 220 cr`, orange when the
  * scene has a reel the balance cannot cover). Padding `12px 20px`, 10px
- * gaps, as the mockup's.
+ * gaps, as the mockup's. The mockup's Scene | Episode pill followed the
+ * chip; since 2026-09-17 it is the header's centre (`lib/workspace/views.ts`,
+ * `_chrome/header-views.tsx`), as every route's views are.
  */
 
 export type ProductionView = 'scene' | 'episode'
-
-export const PRODUCTION_VIEWS: readonly ViewPillItem<ProductionView>[] = [
-  { id: 'scene', title: 'Scene' },
-  { id: 'episode', title: 'Episode' },
-]
 
 const ResolutionMenu = memo(
   ({
@@ -88,8 +81,6 @@ ResolutionMenu.displayName = 'ResolutionMenu'
 export const ProductionToolbar = memo(
   ({
     chip,
-    view,
-    baseHref,
     resolution,
     available,
     short,
@@ -98,8 +89,6 @@ export const ProductionToolbar = memo(
   }: {
     /** `2 reels in this scene`. */
     readonly chip: string
-    readonly view: ProductionView
-    readonly baseHref: EpisodeRoutePath
     readonly resolution: RenderResolution
     readonly available: number
     /** The selected scene has a reel the balance cannot cover. */
@@ -112,9 +101,6 @@ export const ProductionToolbar = memo(
       <span className="tabular whitespace-nowrap rounded-pill bg-s2 px-[10px] py-[4px] text-11-5 text-ink2" data-reels-chip>
         {chip}
       </span>
-      <div className="ml-[4px]">
-        <ViewPill label="Production views" shape="text" items={PRODUCTION_VIEWS} current={view} baseHref={baseHref} />
-      </div>
       <div className="flex-1" />
       <ResolutionMenu resolution={resolution} pending={pending} onPick={onResolution} />
       <span

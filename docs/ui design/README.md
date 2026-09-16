@@ -90,7 +90,9 @@ Geist (200–600) and Geist Mono, from Google Fonts.
 
 Radii: 7–10px controls, 12–13px cards, 16px panels, 18px on the main surface's top-left
 only, 999px pills. Transitions are `.14s` on background, colour, border and opacity —
-nothing else animates. The one exception is the assistant orb's 9s drift.
+nothing else animates. Two exceptions: the assistant orb's 9s drift, and the Storyboard canvas's
+thread between cards (`folio-thread`, a dash-offset loop, ruled 2026-09-17); both stop under
+`prefers-reduced-motion`.
 
 ---
 
@@ -123,12 +125,20 @@ The Write / Storyboard mode pill lives here **only in the writing routes** (Scri
 Outline, Scenes, Storyboard). It was removed from Characters, Locations, Timeline, Research
 and Production — those are outside the writing surface.
 
+> **Amended 2026-09-17 (client ruling; the mockups still draw the pill).** The Write /
+> Storyboard pill is gone from every route: the sidebar already had a Script row, and
+> Storyboard is now a sidebar row directly under it (Script · Storyboard · Outline · Scenes).
+> The header's centre draws the **current route's view switcher** instead - the toolbar's
+> pill, moved up, with every tab printing its name beside its icon where a mockup draws one
+> (Storyboard, Scenes). Route toolbars no longer draw the pill.
+
 **Main surface.** One `--s1` card with `border-radius: 18px 0 0 0` and a backdrop blur,
 holding the toolbar, the scrolling content, and the status bar.
 
 **Toolbar.** Route name, a count chip, then the view-switcher pill (rounded segmented
 control, `--s2` on the active tab), then `flex:1`, then secondary buttons and one solid
-primary action. It wraps rather than overflows.
+primary action. It wraps rather than overflows. *(Amended 2026-09-17: the view-switcher pill
+is the header's, above; the toolbar is name, chip, `flex:1`, buttons.)*
 
 **Status bar (28px).** Counts on the left; Hide/Show nav, a green Saved dot, and the mono
 route path on the right.

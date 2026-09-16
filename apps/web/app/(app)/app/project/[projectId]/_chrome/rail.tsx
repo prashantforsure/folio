@@ -31,14 +31,13 @@ import { ThemeToggle } from '../../../../_shell/theme-toggle'
  * says is a placeholder (AGENTS.md, Production phase); an avatar menu does
  * something. Flagged in the phase record.
  *
- * ## Characters opens a peek on the writing routes
+ * ## Every icon navigates, Characters included
  *
  * `Route - Script v2.dc.html` wires the Characters icon to a 330px overlay
- * over the script rather than to `/characters`, and every writing mockup
- * does the same. Ruled 2026-09-16: overlay, with the full route linked from
- * inside it. On the record routes the icon navigates as before. The shell
- * (`project-shell.tsx`) owns the open flag and draws the overlay; this rail
- * only asks.
+ * over the script rather than to `/characters`, and the first shell pass
+ * built it that way. Re-ruled 2026-09-16 (the client): the icon goes
+ * straight to `/characters` from every route; the overlay is gone. Six
+ * links, one shape.
  */
 export const Rail = ({
   projectId,
@@ -49,8 +48,6 @@ export const Rail = ({
   user,
   navOpen,
   onToggleNav,
-  overlayOpen,
-  onToggleCharacters,
 }: {
   readonly projectId: ProjectId
   readonly shape: WorkspaceShape
@@ -61,9 +58,6 @@ export const Rail = ({
   readonly user: ShellUser
   readonly navOpen: boolean
   readonly onToggleNav: () => void
-  readonly overlayOpen: boolean
-  /** Present on the writing routes only; elsewhere Characters is a link. */
-  readonly onToggleCharacters: (() => void) | null
 }) => {
   const address = { projectId, shape, episode }
 
@@ -99,7 +93,7 @@ export const Rail = ({
 
       {RAIL.map((item) => {
         const badge = badgeFor(item.section)
-        const lit = item.section === 'characters' && overlayOpen ? true : active === item.section
+        const lit = active === item.section
         const body = (
           <>
             <Icon name={item.icon} />
@@ -110,24 +104,6 @@ export const Rail = ({
             ) : null}
           </>
         )
-        if (item.section === 'characters' && onToggleCharacters !== null) {
-          return (
-            <button
-              key={item.section}
-              type="button"
-              onClick={onToggleCharacters}
-              aria-pressed={overlayOpen}
-              aria-current={active === item.section ? 'page' : undefined}
-              data-rail-item={item.section}
-              data-lit={lit ? 'true' : 'false'}
-              title={item.label}
-              aria-label={item.label}
-              className="folio-rail-button h-[38px] w-[38px] rounded-[11px]"
-            >
-              {body}
-            </button>
-          )
-        }
         return (
           <Link
             key={item.section}

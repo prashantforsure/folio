@@ -1,7 +1,15 @@
 'use server'
 
 import type { ShotRow } from '@folio/contracts'
-import { FRAME_GENERATION_COST, JobIdSchema, NodeIdSchema, ShotEditSchema, ShotIdSchema } from '@folio/contracts'
+import {
+  CanvasPositionSchema,
+  FRAME_GENERATION_COST,
+  FRAME_UPLOAD_MAX_BYTES,
+  JobIdSchema,
+  NodeIdSchema,
+  ShotEditSchema,
+  ShotIdSchema,
+} from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
 import {
   acceptShots as acceptShotRows,
@@ -12,6 +20,7 @@ import {
   listSceneShots,
   listStoryboardScenes,
   moveShot as moveShotRow,
+  placeShotOnCanvas as placeShotOnCanvasRow,
   queueFrameGeneration,
   readBoundCues,
   readDocumentByKind,
@@ -19,6 +28,7 @@ import {
   readScreenplayNodes,
   readShot,
   readShotLock,
+  setFrameUpload,
   updateShot,
 } from '@folio/db'
 import type { StoryboardSceneHeader } from '@folio/db'
@@ -28,6 +38,8 @@ import { z } from 'zod'
 
 import type { EpisodeGate } from '../script/gate'
 import { isRefusal, openEpisode } from '../script/gate'
+import { IMAGE_EXTENSION, readImage } from '../storage/image'
+import { deleteObject, keyOfPublicUrl, publicUrl, putObject, storageAvailable } from '../storage/r2'
 import type { CancelResult, FrameResult, SceneShotsResult, ShotResult } from './result'
 import { cutScene } from './scene-cut'
 
@@ -55,6 +67,14 @@ import { cutScene } from './scene-cut'
  * cost before the click. `cancelFrame` releases a queued job's reservation
  * in one statement, or asks a running one to stop. Each is one statement
  * after the gate: the shot and job checks ride inside it.
+ *
+ * **The canvas** (2026-09-17) - `placeShotOnCanvas` writes where a card
+ * was dropped, and nothing else: the sequence is still `order_key`. Not
+ * locked, and no revalidation - a position is cosmetic. `uploadFrame` and
+ * `clearFrame` are the location photo's shape (`lib/locations/actions.ts`):
+ * storage checked before the bytes are read, the object written before the
+ * row points at it, the previous object deleted after. The row stores the
+ * URL, so the delete goes back through `keyOfPublicUrl`.
  *
  * **The lock** - since the Production phase, a shot in a finalized reel
  * refuses every write above; the repository's predicate does the refusing
@@ -217,6 +237,95 @@ export const saveShot = async (
   const shot: ShotRow | undefined = rows.find((row) => row.id === written.id)
   if (shot === undefined) return { status: 'error', message: 'The shot was written but is not on the board.' }
   return { status: 'saved', shot }
+}
+
+/** The row as the board reads it, after a write: numbered, with its frame. */
+const shotResult = async (gate: EpisodeGate, shotId: ShotRow['id'], sceneNodeId: ShotRow['sceneNodeId']): Promise<ShotResult> => {
+  const scene = await readSceneHeader(gate.scope, gate.episode.id, sceneNodeId)
+  if (scene === null) return { status: 'error', message: NOT_A_SCENE }
+  const rows = await listSceneShotRows(gate.scope, scene.sceneNodeId, scene.number)
+  const shot: ShotRow | undefined = rows.find((row) => row.id === shotId)
+  if (shot === undefined) return { status: 'error', message: 'The shot was written but is not on the board.' }
+  return { status: 'saved', shot }
+}
+
+// ---------------------------------------------------------------------------
+// The canvas
+// ---------------------------------------------------------------------------
+
+/** Put a card where the canvas dropped it. Cosmetic: the sequence does not move. */
+export const placeShotOnCanvas = async (
+  projectId: string,
+  episode: string,
+  rawShotId: string,
+  rawPosition: unknown,
+): Promise<ShotResult> => {
+  const id = ShotIdSchema.safeParse(rawShotId)
+  const position = CanvasPositionSchema.safeParse(rawPosition)
+  if (!id.success || !position.success) return { status: 'error', message: 'A card goes at a whole x and y.' }
+  const gate = await openEpisode(projectId, episode)
+  if (isRefusal(gate)) return gate
+
+  const written = await placeShotOnCanvasRow(gate.scope, id.data, position.data)
+  if (written === null) return { status: 'error', message: NOT_A_SHOT }
+  return shotResult(gate, written.id, written.sceneNodeId)
+}
+
+const NO_FRAME_STORAGE = 'Frame storage is not set up on this server yet.'
+
+/**
+ * Store a frame the writer chose. The file is the `frame` entry of the
+ * form data. The upload wins over a settled generation until cleared
+ * (`@folio/db`, `foldUpload`); a job in flight still shows through.
+ */
+export const uploadFrame = async (projectId: string, episode: string, rawShotId: string, form: FormData): Promise<ShotResult> => {
+  const id = ShotIdSchema.safeParse(rawShotId)
+  if (!id.success) return { status: 'error', message: NOT_A_SHOT }
+  if (!storageAvailable()) return { status: 'refused', message: NO_FRAME_STORAGE }
+  const image = await readImage(form.get('frame'), FRAME_UPLOAD_MAX_BYTES, 'frame')
+  if (!image.ok) return { status: image.status, message: image.message }
+  const gate = await openEpisode(projectId, episode)
+  if (isRefusal(gate)) return gate
+  const { scope } = gate
+
+  const before = await readShot(scope, id.data)
+  if (before === null) return { status: 'error', message: NOT_A_SHOT }
+  if (before.state === 'proposed') return { status: 'error', message: 'Accept the shot before giving it a frame. A proposal has no frame.' }
+
+  const key = `projects/${gate.project.id}/shots/${id.data}/frame-${crypto.randomUUID()}.${IMAGE_EXTENSION[image.type]}`
+  const put = await putObject(key, image.bytes, image.type)
+  if (!put.ok) return { status: 'error', message: put.message }
+  const url = publicUrl(key)
+  if (url === null) return { status: 'refused', message: NO_FRAME_STORAGE }
+  const pointed = await setFrameUpload(scope, id.data, url)
+  if (!pointed.found) {
+    await deleteObject(key)
+    return { status: 'error', message: await refusedWrite(scope, id.data) }
+  }
+  const previous = pointed.previous === null ? null : keyOfPublicUrl(pointed.previous)
+  if (previous !== null && previous !== key) await deleteObject(previous)
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return shotResult(gate, before.id, before.sceneNodeId)
+}
+
+/** Take the uploaded frame off a shot. The generation underneath, if any, shows again. */
+export const clearFrame = async (projectId: string, episode: string, rawShotId: string): Promise<ShotResult> => {
+  const id = ShotIdSchema.safeParse(rawShotId)
+  if (!id.success) return { status: 'error', message: NOT_A_SHOT }
+  const gate = await openEpisode(projectId, episode)
+  if (isRefusal(gate)) return gate
+  const { scope } = gate
+
+  const before = await readShot(scope, id.data)
+  if (before === null) return { status: 'error', message: NOT_A_SHOT }
+  const pointed = await setFrameUpload(scope, id.data, null)
+  if (!pointed.found) return { status: 'error', message: await refusedWrite(scope, id.data) }
+  if (pointed.previous !== null && storageAvailable()) {
+    const previous = keyOfPublicUrl(pointed.previous)
+    if (previous !== null) await deleteObject(previous)
+  }
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return shotResult(gate, before.id, before.sceneNodeId)
 }
 
 /** Take proposals: they become shots. */

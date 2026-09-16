@@ -83,13 +83,7 @@ export const ResearchWorkspace = ({
       data-research-state={empty ? 'empty' : view}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
-      <ResearchToolbar
-        chip={countChip(view, empty ? 0 : shown.length, clips.length)}
-        view={view}
-        baseHref={baseHref}
-        kind={kind}
-        onKind={setKind}
-      />
+      <ResearchToolbar chip={countChip(view, empty ? 0 : shown.length, clips.length)} kind={kind} onKind={setKind} />
 
       {empty ? (
         <EmptyResearch />

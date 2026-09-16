@@ -18,7 +18,7 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0019` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0020` are applied to the dev Supabase project** and are forward-only.
   (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
   pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
   `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
@@ -39,6 +39,11 @@ authored / derived-cache / measurement. Touching `episodes` needs
   `research_clips`, `research_clip_filings`) and three enums for the Research v2 pass - additive,
   RLS block hand-written on the `0016` pattern; `research_clip_filings.scene_node_id` has no key,
   as `shots.scene_node_id` (`schema/research.ts` says why).
+  `0020` adds `shots.canvas_x` / `canvas_y` (where the Storyboard canvas left a card; null = laid
+  out from `order_key`, both-or-neither by a check) and `shots.frame_upload_url` (a frame the
+  writer uploaded, a URL like `frame_generations.frame_url`) - additive, generated with
+  placeholder env values as `0017` was, applied in its own run on 2026-09-17. `foldUpload` in
+  `repositories/storyboard.ts` is where an upload beats a generation.
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`
   when none is set. The only reader is `apps/web/lib/storage/r2.ts`. And `assistantEnv` -
   `ANTHROPIC_API_KEY`, optional, `null` when unset; the only reader is

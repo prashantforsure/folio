@@ -18,9 +18,9 @@ import { WritingHeader } from './writing-header'
  * draws one).
  *
  * A layout cannot see which child it renders, so the header - a Client
- * Component - reads the route from `useSelectedLayoutSegment` for the mode
- * pill and the breadcrumb's links. Everything else it draws (the episodes,
- * the share link) is read here and passed as data.
+ * Component - reads the route from `useSelectedLayoutSegment` for its
+ * centre (the route's views) and the breadcrumb's links. Everything else
+ * it draws (the episodes, the share link) is read here and passed as data.
  */
 export const WritingLayout = async ({
   projectId,

@@ -4,6 +4,7 @@ import type { Locator, Page } from '@playwright/test'
 import type { WalkOptions } from '../playwright.config'
 import {
   EMPTY_NAV_META,
+  HEADER_VIEWS,
   RAIL_LABELS,
   RAIL_ORDER,
   RAIL_WIDTH,
@@ -26,8 +27,12 @@ import {
  *     `--s2` fill with full ink (the redesign's; no accent bar);
  *   - Writing stays lit across all four writing routes, and Production
  *     lights its own item;
- *   - the sidebar measures exactly 236px, in the order Script · Outline ·
- *     Scenes, and Storyboard is the header pill's other half;
+ *   - the sidebar measures exactly 236px, in the order Script · Storyboard ·
+ *     Outline · Scenes, and the row of the route is lit;
+ *   - the header's centre is the route's views, every tab named and the
+ *     Storyboard's and Scenes' tabs iconed, with the current one lit - and
+ *     nothing on a route with one view (ruled 2026-09-17: the Write /
+ *     Storyboard pill is gone);
  *   - every sidebar meta on a new episode prints the empty convention;
  *   - every sub-view param resolves to its first value, and a value that is
  *     not a view is a 404;
@@ -137,21 +142,46 @@ const expectSidebar = async (page: Page, activeRoute: string): Promise<void> => 
 
   const rows = nav.locator('a[data-episode-route]')
   expect(await rows.evaluateAll((els) => els.map((el) => el.getAttribute('data-episode-route')))).toEqual(SIDEBAR_ORDER)
-  if (activeRoute !== 'storyboard') {
-    await expect(nav.locator('a[data-episode-route][aria-current="page"]')).toHaveAttribute('data-episode-route', activeRoute)
-  }
+  await expect(nav.locator('a[data-episode-route][aria-current="page"]')).toHaveAttribute('data-episode-route', activeRoute)
   for (const [route, meta] of Object.entries(EMPTY_NAV_META)) {
     await expect(nav.locator(`[data-nav-meta="${route}"]`)).toHaveText(meta)
   }
-  await expect(nav.getByText('Scenes appear here as you write headings. Nothing to list yet.')).toBeVisible()
-  await expect(nav.locator('[data-credits-card]')).toBeVisible()
+  if (activeRoute === 'storyboard') {
+    // The Storyboard's second group is `Boards`, not `Scenes`, and its widget counts boards.
+    await expect(nav.locator('[data-boards-card]')).toBeVisible()
+  } else if (activeRoute === 'outline') {
+    // The Outline's second group is `In this outline`, empty until a heading is written.
+    await expect(nav.locator('[data-toc-empty]')).toBeVisible()
+    await expect(nav.locator('[data-credits-card]')).toBeVisible()
+  } else {
+    await expect(nav.getByText('Scenes appear here as you write headings. Nothing to list yet.')).toBeVisible()
+    await expect(nav.locator('[data-credits-card]')).toBeVisible()
+  }
+  await expectHeaderViews(page, activeRoute)
+}
 
-  // The header's mode pill: Write lit on Script, Outline, Scenes; Storyboard on Storyboard.
-  const pill = page.locator('[data-mode-pill]')
-  await expect(pill.locator('[data-mode][aria-selected="true"]')).toHaveAttribute(
-    'data-mode',
-    activeRoute === 'storyboard' ? 'storyboard' : 'write',
-  )
+/**
+ * The header's centre: the route's views (`HEADER_VIEWS`), or nothing. Every
+ * tab prints its name; the current one is `aria-current`; an icon tab
+ * draws an `svg` before the name. No `[data-mode-pill]` anywhere since
+ * 2026-09-17.
+ */
+const expectHeaderViews = async (page: Page, route: string): Promise<void> => {
+  await expect(page.locator('[data-mode-pill]')).toHaveCount(0)
+  const centre = page.locator('[data-writing-header] [data-header-views]')
+  await expect(centre).toHaveAttribute('data-header-views', route)
+  const pill = centre.locator('[data-view-pill]')
+  const views = HEADER_VIEWS[route]
+  if (views === null || views === undefined) {
+    await expect(pill).toHaveCount(0)
+    return
+  }
+  await expect(pill).toHaveCount(1)
+  const tabs = pill.locator('[data-view-tab]')
+  await expect(tabs).toHaveText(views.tabs)
+  await expect(pill.locator('[data-view-tab][aria-current="page"]')).toHaveCount(1)
+  await expect(tabs.first()).toHaveAttribute('aria-current', 'page')
+  await expect(pill.locator('[data-view-tab] svg')).toHaveCount(views.icons)
 }
 
 const hrefFor = (projectId: string, episode: string | null, route: string, scope: 'episode' | 'project') =>
@@ -249,12 +279,12 @@ for (const theme of THEMES) {
       if (row.column.kind === 'sidebar') {
         await expectSidebar(page, row.route)
       } else if (row.column.kind === 'card') {
-        // The route's own card in the shared sidebar shape: 236px, no writing rows, no mode pill.
+        // The route's own card in the shared sidebar shape: 236px, no writing rows; the header's centre is the route's views.
         const card = page.locator('aside[data-sidebar]')
         await expect(card).toBeVisible()
         expect(await card.evaluate((el) => el.getBoundingClientRect().width)).toBe(row.column.width)
         await expect(card.locator('a[data-episode-route]')).toHaveCount(0)
-        await expect(page.locator('[data-mode-pill]')).toHaveCount(0)
+        await expectHeaderViews(page, row.route)
       } else {
         await expect(page.locator('aside[data-sidebar]')).toHaveCount(0)
         if (row.column.kind === 'context') {
@@ -285,17 +315,15 @@ test('Writing stays lit on all four writing routes, Production on its own', asyn
   await expect(page.locator('nav[data-rail] [data-rail-item][aria-current="page"]')).toHaveAttribute('data-rail-item', 'production')
 })
 
-test('the rail opens the Characters overlay on a writing route and navigates elsewhere', async ({ page, account }) => {
+test('the rail navigates straight to /characters from a writing route - no overlay', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(`/app/project/${seriesId}/ep_001/script`)
-  await page.locator('nav[data-rail] button[data-rail-item="characters"]').click()
-  const overlay = page.locator('[data-characters-overlay]')
-  await expect(overlay).toBeVisible()
-  await expect(overlay.getByText('No characters yet.')).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(overlay).toHaveCount(0)
-  await page.goto(`/app/project/${seriesId}/timeline`)
-  await expect(page.locator('nav[data-rail] a[data-rail-item="characters"]')).toBeVisible()
+  await expect(page.locator('nav[data-rail] button[data-rail-item="characters"]')).toHaveCount(0)
+  await page.locator('nav[data-rail] a[data-rail-item="characters"]').click()
+  await expect(page).toHaveURL(new RegExp(`/app/project/${seriesId}/characters$`))
+  await expect(page.locator('[data-characters-overlay]')).toHaveCount(0)
+  await expect(page.locator('main[data-route="characters"]')).toBeVisible()
+  await expectRail(page, 'characters')
 })
 
 test('a film routes without an episode segment while still having one episode', async ({ page, account }) => {

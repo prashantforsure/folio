@@ -3,30 +3,40 @@
 import { Icon } from '@folio/ui'
 import { memo, useRef, useState } from 'react'
 
-import { SHOT_FILTERS, SHOT_FILTER_LABEL } from '../../../../../../lib/storyboard/board'
-import type { ShotFilter } from '../../../../../../lib/storyboard/board'
+import { SHOT_FILTERS, SHOT_FILTER_LABEL, SHOT_SORTS, SHOT_SORT_LABEL } from '../../../../../../lib/storyboard/board'
+import type { ShotFilter, ShotSort } from '../../../../../../lib/storyboard/board'
 import { useDismiss } from '../_chrome/use-dismiss'
-import type { ViewPillItem } from '../_chrome/view-pill'
 
 /**
  * The Storyboard's toolbar row - `docs/ui design/Route - Storyboard
- * v2.dc.html`: the view-switcher pill (three icon tabs: scene boards, shot
- * canvas, shot list - the shared `_chrome/view-pill.tsx`, icon shape),
- * `flex: 1`, then `All shots ▾` and the display options. Padding `12px 20px`, 10px gaps.
+ * v2.dc.html`: `flex: 1`, then one `Display` button. Padding `12px 20px`,
+ * 10px gaps. The mockup's view-switcher pill (three icon tabs: scene
+ * boards, shot canvas, shot list) opened the row; since 2026-09-17 it is
+ * the header's centre, with names (`lib/workspace/views.ts`,
+ * `_chrome/header-views.tsx`), as every route's views are.
  *
- * ## What each control does
+ * ## One menu (2026-09-17)
  *
- *   the pill      three links over `?view=` - the sub-view param
- *                 (`lib/workspace/params.ts`), so a view is a URL.
- *   All shots     a filter over the same rows in every view: all, with a
- *                 frame, waiting on a frame, proposed. Component state.
- *   Display       two toggles, descriptions and frames, for a denser board.
+ * The mockup drew `All shots ▾` beside the display options; the canvas
+ * pass folds the filter into the one `Display` menu, three sections:
  *
- * The mockup's third button, `Group: Scene ▾`, is not drawn. Shots group by
- * scene and by nothing else - a shot hangs off a heading - and a menu with
- * one row is a placeholder. Flagged in the phase record.
+ *   Show      two toggles, descriptions and frames, for a denser board.
+ *   Sort      the list view's order - story order, shot size, lens, needs
+ *             work first (`sortShots`). Drawn only on the list: the board
+ *             and the canvas are the sequence, and a sorted canvas would
+ *             lie about the thread.
+ *   Filter    over the same rows in every view: all, with a frame, waiting
+ *             on a frame, proposed.
  *
- * Between the pill and the buttons, where the mockup leaves space, the row
+ * All component state. The view is `?view=` - the sub-view param
+ * (`lib/workspace/params.ts`), so a view is a URL - and the header's tabs
+ * are three links over it.
+ *
+ * The mockup's `Group: Scene ▾` is still not drawn. Shots group by scene
+ * and by nothing else - a shot hangs off a heading - and a menu with one
+ * row is a placeholder. Flagged in the phase record.
+ *
+ * Before the button, where the mockup leaves space, the row
  * carries the count and the saved dot the Script and Outline toolbars
  * carry (`104 pp · saved` moved into the toolbar row, phase 1), so a write
  * here reports the way a write there does.
@@ -39,60 +49,24 @@ export type DisplayOptions = {
   readonly frames: boolean
 }
 
-/** The three tabs of the icon pill (`_chrome/view-pill.tsx`), in the mockup's order. */
-export const STORYBOARD_VIEWS: readonly ViewPillItem<StoryboardView>[] = [
-  { id: 'board', title: 'Scene boards', icon: 'board' },
-  { id: 'canvas', title: 'Shot canvas', icon: 'canvas' },
-  { id: 'list', title: 'Shot list', icon: 'list' },
-]
-
-export const FilterMenu = memo(({ filter, onPick }: { readonly filter: ShotFilter; readonly onPick: (filter: ShotFilter) => void }) => {
-  const [open, setOpen] = useState(false)
-  const root = useRef<HTMLDivElement>(null)
-  useDismiss(open, () => setOpen(false), root)
-  return (
-    <div ref={root} className="relative">
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        data-filter-menu
-        onClick={() => {
-          setOpen((value) => !value)
-        }}
-        className="folio-pill-button flex h-[34px] items-center gap-[7px] whitespace-nowrap rounded-[10px] px-[13px] text-13"
-      >
-        {SHOT_FILTER_LABEL[filter]}
-        <Icon name="chevron" size={11} strokeWidth={1.5} className="opacity-60" />
-      </button>
-      {open ? (
-        <div role="menu" className="folio-menu absolute right-0 top-[40px] w-[220px]">
-          {SHOT_FILTERS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={value === filter}
-              data-filter={value}
-              className="folio-menu-item"
-              onClick={() => {
-                onPick(value)
-                setOpen(false)
-              }}
-            >
-              <span className="min-w-0 flex-1">{SHOT_FILTER_LABEL[value]}</span>
-              {value === filter ? <Icon name="check" size={13} strokeWidth={1.6} className="flex-none opacity-70" /> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  )
-})
-FilterMenu.displayName = 'FilterMenu'
-
 export const DisplayMenu = memo(
-  ({ display, onChange }: { readonly display: DisplayOptions; readonly onChange: (display: DisplayOptions) => void }) => {
+  ({
+    display,
+    sort,
+    filter,
+    view,
+    onDisplay,
+    onSort,
+    onFilter,
+  }: {
+    readonly display: DisplayOptions
+    readonly sort: ShotSort
+    readonly filter: ShotFilter
+    readonly view: StoryboardView
+    readonly onDisplay: (display: DisplayOptions) => void
+    readonly onSort: (sort: ShotSort) => void
+    readonly onFilter: (filter: ShotFilter) => void
+  }) => {
     const [open, setOpen] = useState(false)
     const root = useRef<HTMLDivElement>(null)
     useDismiss(open, () => setOpen(false), root)
@@ -100,24 +74,26 @@ export const DisplayMenu = memo(
       { key: 'descriptions', label: 'Descriptions' },
       { key: 'frames', label: 'Frames' },
     ]
+    const filtered = filter !== 'all'
     return (
       <div ref={root} className="relative">
         <button
           type="button"
           title="Display options"
-          aria-label="Display options"
           aria-haspopup="menu"
           aria-expanded={open}
           data-display-menu
+          data-filtered={filtered}
           onClick={() => {
             setOpen((value) => !value)
           }}
-          className="folio-pill-button grid h-[34px] w-[34px] place-items-center rounded-[10px]"
+          className="folio-pill-button flex h-[34px] items-center gap-[7px] whitespace-nowrap rounded-[10px] px-[12px] text-13"
         >
           <Icon name="sliders" size={16} strokeWidth={1.4} />
+          {filtered ? SHOT_FILTER_LABEL[filter] : 'Display'}
         </button>
         {open ? (
-          <div role="menu" className="folio-menu absolute right-0 top-[40px] w-[220px]">
+          <div role="menu" className="folio-menu absolute right-0 top-[40px] w-[230px]">
             <span className="folio-eyebrow px-[9px] pb-[4px] pt-[4px]">Show</span>
             {rows.map((row) => (
               <button
@@ -128,11 +104,49 @@ export const DisplayMenu = memo(
                 data-display={row.key}
                 className="folio-menu-item"
                 onClick={() => {
-                  onChange({ ...display, [row.key]: !display[row.key] })
+                  onDisplay({ ...display, [row.key]: !display[row.key] })
                 }}
               >
                 <span className="min-w-0 flex-1">{row.label}</span>
                 {display[row.key] ? <Icon name="check" size={13} strokeWidth={1.6} className="flex-none opacity-70" /> : null}
+              </button>
+            ))}
+            {view === 'list' ? (
+              <>
+                <span className="folio-eyebrow mt-[6px] border-t border-line px-[9px] pb-[4px] pt-[10px]">Sort</span>
+                {SHOT_SORTS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={value === sort}
+                    data-sort={value}
+                    className="folio-menu-item"
+                    onClick={() => {
+                      onSort(value)
+                    }}
+                  >
+                    <span className="min-w-0 flex-1">{SHOT_SORT_LABEL[value]}</span>
+                    {value === sort ? <Icon name="check" size={13} strokeWidth={1.6} className="flex-none opacity-70" /> : null}
+                  </button>
+                ))}
+              </>
+            ) : null}
+            <span className="folio-eyebrow mt-[6px] border-t border-line px-[9px] pb-[4px] pt-[10px]">Filter</span>
+            {SHOT_FILTERS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="menuitemradio"
+                aria-checked={value === filter}
+                data-filter={value}
+                className="folio-menu-item"
+                onClick={() => {
+                  onFilter(value)
+                }}
+              >
+                <span className="min-w-0 flex-1">{SHOT_FILTER_LABEL[value]}</span>
+                {value === filter ? <Icon name="check" size={13} strokeWidth={1.6} className="flex-none opacity-70" /> : null}
               </button>
             ))}
           </div>

@@ -1,4 +1,5 @@
-import type { BoardCoverageRow, ShotRow, StoryboardScene } from '@folio/contracts'
+import type { BoardCoverageRow, ShotEdit, ShotRow, StoryboardScene } from '@folio/contracts'
+import { SHOT_SIZES } from '@folio/script'
 
 import { ABSENT } from '../workspace/format'
 
@@ -26,7 +27,8 @@ export type Tone = 'ok' | 'warn' | 'live' | 'none'
 /** A shot is boarded once it is accepted; a proposal is a question, not a shot. */
 export const isAccepted = (shot: ShotRow): boolean => shot.state === 'accepted'
 
-export const isDrawn = (shot: ShotRow): boolean => shot.frame.kind === 'drawn'
+/** A shot has a picture: drawn by a job, or uploaded by the writer. */
+export const isDrawn = (shot: ShotRow): boolean => shot.frame.kind === 'drawn' || shot.frame.kind === 'uploaded'
 
 /** The mono state beside a canvas node's title, in the writer's terms. */
 export const shotStateLabel = (shot: ShotRow): string => {
@@ -40,6 +42,8 @@ export const shotStateLabel = (shot: ShotRow): string => {
       return 'drawing'
     case 'drawn':
       return 'drawn'
+    case 'uploaded':
+      return 'uploaded'
     case 'failed':
       return 'failed'
     case 'blocked':
@@ -53,6 +57,7 @@ export const shotTone = (shot: ShotRow): Tone => {
   if (shot.state === 'proposed') return 'warn'
   switch (shot.frame.kind) {
     case 'drawn':
+    case 'uploaded':
       return 'ok'
     case 'failed':
     case 'blocked':
@@ -134,6 +139,72 @@ export const matchesFilter = (shot: ShotRow, filter: ShotFilter): boolean => {
       return shot.state === 'proposed'
   }
 }
+
+// ---------------------------------------------------------------------------
+// Sort
+// ---------------------------------------------------------------------------
+
+/**
+ * The list view's `Display` menu, `Sort` section (2026-09-17). Four
+ * readings of one scene's rows; `sequence` is `order_key`, the rows as
+ * they arrive, and the other three are stable over it so ties keep their
+ * story order. Component state - a sort is a window's.
+ */
+export const SHOT_SORTS = ['sequence', 'size', 'lens', 'state'] as const
+
+export type ShotSort = (typeof SHOT_SORTS)[number]
+
+export const SHOT_SORT_LABEL: Record<ShotSort, string> = {
+  sequence: 'Story order',
+  size: 'Shot size',
+  lens: 'Lens',
+  state: 'Needs work first',
+}
+
+export const isShotSort = (value: string): value is ShotSort => (SHOT_SORTS as readonly string[]).includes(value)
+
+/** Needs-work-first: a proposal, then a failure, then no frame, then in flight, then a picture. */
+const stateRank = (shot: ShotRow): number => {
+  if (shot.state === 'proposed') return 0
+  switch (shot.frame.kind) {
+    case 'failed':
+    case 'blocked':
+      return 1
+    case 'empty':
+    case 'cancelled':
+      return 2
+    case 'queued':
+    case 'running':
+      return 3
+    case 'drawn':
+    case 'uploaded':
+      return 4
+  }
+}
+
+const sizeRank = (shot: ShotRow): number => SHOT_SIZES.indexOf(shot.size)
+
+/** A null lens sorts last: it is not a short lens, it is no lens. */
+const lensRank = (shot: ShotRow): number => shot.lensMm ?? Number.POSITIVE_INFINITY
+
+export const sortShots = (shots: readonly ShotRow[], sort: ShotSort): readonly ShotRow[] => {
+  if (sort === 'sequence') return shots
+  const rank = sort === 'size' ? sizeRank : sort === 'lens' ? lensRank : stateRank
+  return shots
+    .map((shot, index) => ({ shot, index, key: rank(shot) }))
+    .sort((a, b) => a.key - b.key || a.index - b.index)
+    .map((entry) => entry.shot)
+}
+
+/** The six fields a save sends, from the row. The canvas edits one at a time and sends the whole spec. */
+export const shotEditOf = (shot: ShotRow): ShotEdit => ({
+  size: shot.size,
+  movement: shot.movement,
+  angle: shot.angle,
+  lensMm: shot.lensMm,
+  durationSeconds: shot.durationSeconds,
+  description: shot.description,
+})
 
 // ---------------------------------------------------------------------------
 // Coverage

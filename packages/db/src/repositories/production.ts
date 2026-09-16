@@ -39,6 +39,7 @@ import type { ProjectScope } from '../scope'
 import { stamp, stampOrNull } from './mapping'
 import {
   byFramePrecedence,
+  foldUpload,
   frameStateOf,
   jobFromRow,
   listStoryboardScenes,
@@ -243,7 +244,7 @@ const assembleScenes = async (
       return {
         ...shot,
         number: shotLabel(scene.number, index + 1),
-        frame: own[0]?.frame ?? { kind: 'empty' },
+        frame: foldUpload(shot.frameUploadUrl, own[0]?.frame ?? { kind: 'empty' }),
         takes: [...own],
       }
     })

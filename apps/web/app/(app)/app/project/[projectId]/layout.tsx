@@ -10,8 +10,8 @@ import { ProjectShell } from './_chrome/project-shell'
  *
  * `docs/ui design/README.md`, "Shell": rail, sidebar, header, main surface,
  * and the panels that float over every route. This layout draws the parts
- * that are the same on every route - the rail, the assistant panel and the
- * Characters overlay, through `ProjectShell` - and the writing layout one
+ * that are the same on every route - the rail and the assistant panel,
+ * through `ProjectShell` - and the writing layout one
  * level down draws the sidebar and header for the four writing routes.
  *
  * ## What is read here, and where it comes from
@@ -45,7 +45,6 @@ const ProjectLayout = async ({
   return (
     <ProjectShell
       projectId={context.project.id}
-      title={context.project.title}
       shape={context.shape}
       fallbackEpisode={fallback.slug}
       badges={badges}

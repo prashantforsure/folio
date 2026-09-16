@@ -16,10 +16,16 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   the frame; [app/(app)/app/(home)/layout.tsx](app/(app)/app/(home)/layout.tsx) draws the
   four-item sidebar for the six list routes (three views over one query in `_projects/`, plus
   `new`, `trash`, `settings`); [app/(app)/app/project/[projectId]/layout.tsx](app/(app)/app/project/[projectId]/layout.tsx)
-  draws the workspace shell through `_chrome/project-shell.tsx` (56px rail, the assistant panel,
-  the Characters overlay), and `_chrome/writing-layout.tsx` the 236px sidebar, 60px header and
+  draws the workspace shell through `_chrome/project-shell.tsx` (56px rail, the assistant panel), and `_chrome/writing-layout.tsx` the 236px sidebar, 60px header and
   main-surface card for the four writing routes. Seven of the nine workspace routes have bodies
   (root `CLAUDE.md`, Repository map).
+- **The header's centre is the route's views (2026-09-17).** `lib/workspace/views.ts` is the
+  table (one row per route, typed against `SUB_VIEW_SCHEMAS`, `label`/`title`/`icon`);
+  `_chrome/header-views.tsx` reads `?view=` with `useSearchParams` and draws `_chrome/view-pill.tsx`
+  in `WritingHeader`'s centre slot; Characters hands the header its own state-driven tabs as
+  `views`. Route toolbars draw no view switcher, and `SIDEBAR` is Script · Storyboard · Outline ·
+  Scenes. Trap: a new `?view=` value needs a row in `ROUTE_VIEWS` or
+  `tests/workspace-routes.test.ts` fails (it asserts the table against the schemas).
 - **The shell owns `html[data-nav-open]`.** Route bodies read `useSession().navOpen` for their own
   geometry and never write the attribute; `useViewport()` (`lib/state/viewport.ts`) is the one
   resize listener. Below 1200px an open assistant panel forces the sidebar closed there.
@@ -43,17 +49,25 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   shares (`lib/outline/server.ts`). Handles, threads and the `@` combobox are the Script's pieces
   (`_script/editor/extensions/handles.ts`, `_script/comments/`, `mention-suggestion.ts`).
 - **The Storyboard route since the redesign:** `_storyboard/storyboard-workspace.tsx` is one
-  container (rows, selection, filter, display toggles, every write) over three layouts -
-  `board-view.tsx`, `canvas-view.tsx`, `list-view.tsx` - that share `shot-parts.tsx` and the
-  `ViewProps` in `handlers.ts`. The toolbar is the shared `_chrome/view-pill.tsx` (icon shape)
-  plus `storyboard-toolbar.tsx`'s filter and display menus; a shot is edited in place, a card
-  drags to reorder (`placeShot`). The sidebar's `Boards` group and `Boards drawn` widget
-  (`_chrome/sidebar-group.tsx`, `_chrome/sidebar-widget.tsx`) read the cell the workspace
-  publishes (`lib/storyboard/coverage.ts`), seeded by `readBoardCoverage`; every derived count
-  and colour is `lib/storyboard/board.ts`, pure and tested. Toolbar dropdowns share
+  container (rows, selection, filter, sort, display toggles, every write) over three layouts -
+  `board-view.tsx`, `canvas/canvas-view.tsx`, `list-view.tsx` - that share `shot-parts.tsx` and
+  the `ViewProps` in `handlers.ts`. The toolbar is `storyboard-toolbar.tsx`'s one `Display`
+  menu (show / sort / filter) - the view switcher is the shell header's since 2026-09-17; a shot is
+  edited in place, a board card drags to reorder (`placeShot`). The sidebar's `Boards` group and
+  `Boards drawn` widget (`_chrome/sidebar-group.tsx`, `_chrome/sidebar-widget.tsx`) read the cell
+  the workspace publishes (`lib/storyboard/coverage.ts`), seeded by `readBoardCoverage`; every
+  derived count and colour is `lib/storyboard/board.ts`, pure and tested. Toolbar dropdowns share
   `_chrome/use-dismiss.ts`. Details: `docs/build-decisions.md`, "Redesign phase 3".
+- **The Storyboard canvas (2026-09-17)** is a free surface: `_storyboard/canvas/` holds the view,
+  the viewport hook (pan by pointer capture, zoom by ctrl/cmd + wheel), the SVG threads, the card
+  with its `Storyboard | Lens` tabs, the lens selects and the `⋯` menu; every number it needs is
+  `lib/storyboard/canvas.ts`, pure and tested. A card's position is `shots.canvas_x` / `canvas_y`
+  (migration `0020`), cosmetic - the thread and the number follow `order_key`. Trap: the ground's
+  `wheel` listener is added by hand with `{ passive: false }`; React's `onWheel` is passive and
+  `preventDefault` there does nothing. Details: `docs/build-decisions.md`, "Redesign phase 3,
+  second pass".
 - **The Research route (v2, 2026-09-16):** `_research/research-workspace.tsx` is the body -
-  toolbar (the shared `_chrome/record-toolbar.tsx` pieces and `view-pill.tsx`), one of Library /
+  toolbar (the shared `_chrome/record-toolbar.tsx` pieces; the views are the header's), one of Library /
   Source / Clips or the empty card, the status bar - and `_chrome/research-layout.tsx` the shell
   on the Characters pattern, with the drawer (`_research/source-drawer.tsx`, the shared
   `_chrome/drawer-shell.tsx` portalled into `#research-drawer`) mounted once in the layout and

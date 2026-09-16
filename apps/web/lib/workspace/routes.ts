@@ -26,17 +26,21 @@ import type { IconName } from '@folio/ui'
  *
  * `RAIL` is the six sections in the rail's fixed order (README, "Shell"):
  * Writing, Characters, Locations, Timeline, Research, Production. `SIDEBAR`
- * is the three rows of the writing sidebar - Script, Outline, Scenes - and
- * **Storyboard is not among them**: since the redesign it is reached through
- * the Write / Storyboard mode pill in the header, which every writing route
- * draws. `WRITING_ROUTES` is the four the pill spans.
+ * is the four rows of the writing sidebar - Script, Storyboard, Outline,
+ * Scenes - one per writing route, in that order. `WRITING_ROUTES` is the
+ * same four in URL-table order. Storyboard was the other half of a Write /
+ * Storyboard mode pill in the header from the v2 redesign until 2026-09-17,
+ * when the client ruled the pill out and the row in ("Redesign, the header's
+ * views" in `docs/build-decisions.md`): the sidebar already had a Script row,
+ * so `Write` said nothing it did not, and the header's centre now names the
+ * route's views instead (`lib/workspace/views.ts`).
  *
  * Writing is a section, not a route: it is lit on all four writing routes
  * and links to the current episode's script. Production is both - an
  * episode-scoped route and a rail section of its own.
  */
 
-/** The four writing routes - the ones under the sidebar and the mode pill. */
+/** The four writing routes - the ones under the writing sidebar. */
 export const WRITING_ROUTES = ['script', 'outline', 'storyboard', 'scenes'] as const
 
 export type WritingRoute = (typeof WRITING_ROUTES)[number]
@@ -127,7 +131,7 @@ export const railSectionOf = (route: WorkspaceRoute): RailSection =>
   route === 'production' || isProjectRoute(route) ? route : 'writing'
 
 // ---------------------------------------------------------------------------
-// The writing sidebar and the mode pill
+// The writing sidebar
 // ---------------------------------------------------------------------------
 
 export type SidebarItem = {
@@ -135,32 +139,20 @@ export type SidebarItem = {
   readonly label: string
 }
 
-/** Script · Outline · Scenes. Storyboard is the mode pill's other half. */
+/**
+ * Script · Storyboard · Outline · Scenes - ruled 2026-09-17: Storyboard is a
+ * row directly under Script (it was the header pill's other half, and the
+ * pill is gone). Each row's meta is `navMeta` (`lib/workspace/format.ts`).
+ */
 export const SIDEBAR: readonly SidebarItem[] = [
   { route: 'script', label: 'Script' },
+  { route: 'storyboard', label: 'Storyboard' },
   { route: 'outline', label: 'Outline' },
   { route: 'scenes', label: 'Scenes' },
 ]
 
-/** @deprecated prefer `SIDEBAR`. The same three rows. */
+/** @deprecated prefer `SIDEBAR`. The same four rows. */
 export const EPISODE_NAV = SIDEBAR
-
-/**
- * The header's Write / Storyboard pill. `write` is lit on Script, Outline and
- * Scenes; `storyboard` on Storyboard. Each half links to one route: Write to
- * the script (the writing surface's home), Storyboard to the board.
- */
-export const WRITING_MODES = ['write', 'storyboard'] as const
-
-export type WritingMode = (typeof WRITING_MODES)[number]
-
-export const writingModeOf = (route: WritingRoute): WritingMode =>
-  route === 'storyboard' ? 'storyboard' : 'write'
-
-export const WRITING_MODE_TARGET: Record<WritingMode, WritingRoute> = {
-  write: 'script',
-  storyboard: 'storyboard',
-}
 
 // ---------------------------------------------------------------------------
 // Widths, from the design README
@@ -168,9 +160,9 @@ export const WRITING_MODE_TARGET: Record<WritingMode, WritingRoute> = {
 
 /**
  * README, "Shell": rail 56px, sidebar 236px, header 60px, panels 400px,
- * status bar 28px. The context columns the unrebuilt record routes still
- * draw keep their earlier widths until each route's own pass; Characters,
- * Locations and Research have had theirs and draw the sidebar card.
+ * status bar 28px. The context column an unrebuilt route still draws keeps
+ * its earlier width until that route's own pass - Timeline's, now; Production,
+ * Characters, Locations and Research have had theirs and draw the sidebar card.
  */
 export const RAIL_WIDTH = 56
 export const SIDEBAR_WIDTH = 236
@@ -181,8 +173,7 @@ export const CONTEXT_OVERLAY_WIDTH = 330
 /** @deprecated the sidebar replaced the episode nav; same number since the redesign. */
 export const EPISODE_NAV_WIDTH = SIDEBAR_WIDTH
 
-export const CONTEXT_PANEL_WIDTH: Record<Exclude<WorkspaceRoute, WritingRoute | 'characters' | 'locations' | 'research'>, number> = {
-  production: 250,
+export const CONTEXT_PANEL_WIDTH: Record<Exclude<WorkspaceRoute, WritingRoute | 'production' | 'characters' | 'locations' | 'research'>, number> = {
   timeline: 250,
 }
 

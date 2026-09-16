@@ -39,6 +39,20 @@ import { projects, users } from './tenancy'
  * a reel is the scene's own `order_key`; a reel adds no second order
  * (`production.ts`).
  *
+ * `canvas_x` / `canvas_y` are where the Storyboard canvas last left the
+ * shot's card (world px, 2026-09-17 ruling). Position is cosmetic: null means
+ * "laid out from `order_key`", and the sequence - the linked list the canvas
+ * draws, the number it prints, the order a reel renders - is `order_key`
+ * alone, so moving a card never reorders anything. Both or neither, by the
+ * check.
+ *
+ * `frame_upload_url` is a frame the writer uploaded rather than drew, a URL
+ * the way `frame_generations.frame_url` is one. It wins over a finished,
+ * failed or cancelled generation until cleared, and a job in flight still
+ * shows through it (`repositories/storyboard.ts`, `foldUpload`). It is a
+ * column here and not a generation row because a generation needs a job,
+ * and an upload has none.
+ *
  * ## `jobs` is the queue's truth, not a mirror of it
  *
  * AGENTS.md wants long-running work to be "a job on the worker: status, cost,
@@ -96,6 +110,11 @@ export const shots = pgTable(
     description: jsonb('description').notNull().default(sql`'[]'::jsonb`),
     origin: shotOriginEnum('origin').notNull(),
     state: shotStateEnum('state').notNull(),
+    /** Where the canvas last left the card. Null = laid out from `order_key`. See the header. */
+    canvasX: integer('canvas_x'),
+    canvasY: integer('canvas_y'),
+    /** A frame the writer uploaded. Wins over a generation until cleared. See the header. */
+    frameUploadUrl: text('frame_upload_url'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
@@ -110,6 +129,8 @@ export const shots = pgTable(
     ),
     /** A typed shot is born accepted. Only a proposal can be waiting. */
     check('shots_typed_is_accepted', sql`${table.origin} <> 'typed' OR ${table.state} = 'accepted'`),
+    /** A canvas position is a pair or nothing. */
+    check('shots_canvas_position_whole', sql`(${table.canvasX} IS NULL) = (${table.canvasY} IS NULL)`),
   ],
 )
 

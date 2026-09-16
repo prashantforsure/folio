@@ -213,3 +213,26 @@ export const hueOf = (id: string): number => {
   for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) % 360
   return hash
 }
+
+/**
+ * What a sidebar row prints: the row minus the scene list and the rest the
+ * list never reads (`_locations/location-sidebar.tsx`). Here, not in that
+ * file, because the layout - a Server Component - maps the loader's rows
+ * through it, and a function exported from a `'use client'` module cannot
+ * be *called* from the server, only rendered (found 2026-09-16 in the user
+ * walk: "Locations route crashes"; moved 2026-09-17).
+ */
+export type LocationSidebarRow = Pick<LocationRow, 'id' | 'name' | 'ie' | 'status' | 'kind' | 'parentId' | 'depth' | 'rollup' | 'sluglines' | 'boundSluglines'>
+
+export const sidebarRowOf = (row: LocationRow): LocationSidebarRow => ({
+  id: row.id,
+  name: row.name,
+  ie: row.ie,
+  status: row.status,
+  kind: row.kind,
+  parentId: row.parentId,
+  depth: row.depth,
+  rollup: row.rollup,
+  sluglines: row.sluglines,
+  boundSluglines: row.boundSluglines,
+})

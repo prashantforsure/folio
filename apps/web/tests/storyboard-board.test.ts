@@ -14,8 +14,10 @@ import {
   sceneNo,
   sceneSlug,
   sceneTone,
+  shotEditOf,
   shotStateLabel,
   shotTone,
+  sortShots,
   waitingCaption,
 } from '../lib/storyboard/board'
 
@@ -34,6 +36,9 @@ const shot = (id: string, state: ShotRow['state'], frame: FrameState): ShotRow =
   sceneNodeId: nodeId('scene-1'),
   orderKey: 'a',
   reelId: null,
+  canvasX: null,
+  canvasY: null,
+  frameUploadUrl: null,
   origin: 'typed',
   state,
   createdAt: '2026-09-16T00:00:00.000Z',
@@ -64,6 +69,7 @@ const DRAWN: FrameState = { kind: 'drawn', jobId: JOB, url: 'https://frames/1.pn
 const QUEUED: FrameState = { kind: 'queued', jobId: JOB, cost: 4 }
 const FAILED: FrameState = { kind: 'failed', jobId: JOB, error: null, refunded: true }
 const BLOCKED: FrameState = { kind: 'blocked', jobId: JOB, reason: 'Nudity.' }
+const UPLOADED: FrameState = { kind: 'uploaded', url: 'https://frames/up.png' }
 
 describe('shotStateLabel and shotTone', () => {
   it('names the frame state in the writer’s terms, a proposal first', () => {
@@ -71,11 +77,13 @@ describe('shotStateLabel and shotTone', () => {
     expect(shotStateLabel(shot('a', 'accepted', QUEUED))).toBe('queued')
     expect(shotStateLabel(shot('a', 'accepted', DRAWN))).toBe('drawn')
     expect(shotStateLabel(shot('a', 'accepted', BLOCKED))).toBe('refused')
+    expect(shotStateLabel(shot('a', 'accepted', UPLOADED))).toBe('uploaded')
     expect(shotStateLabel(shot('a', 'proposed', EMPTY))).toBe('proposed')
   })
 
   it('is green once drawn, orange when failed or refused, amber for a proposal, ink otherwise', () => {
     expect(shotTone(shot('a', 'accepted', DRAWN))).toBe('ok')
+    expect(shotTone(shot('a', 'accepted', UPLOADED))).toBe('ok')
     expect(shotTone(shot('a', 'accepted', FAILED))).toBe('live')
     expect(shotTone(shot('a', 'accepted', BLOCKED))).toBe('live')
     expect(shotTone(shot('a', 'proposed', EMPTY))).toBe('warn')
@@ -116,12 +124,57 @@ describe('matchesFilter', () => {
   const waiting = shot('b', 'accepted', EMPTY)
   const queued = shot('c', 'accepted', QUEUED)
   const proposed = shot('d', 'proposed', EMPTY)
+  const uploaded = shot('e', 'accepted', UPLOADED)
 
-  it('reads the same rows four ways', () => {
+  it('reads the same rows four ways; an upload is a frame', () => {
     expect([drawn, waiting, queued, proposed].filter((entry) => matchesFilter(entry, 'all'))).toHaveLength(4)
-    expect([drawn, waiting, queued, proposed].filter((entry) => matchesFilter(entry, 'drawn'))).toEqual([drawn])
+    expect([drawn, waiting, queued, proposed, uploaded].filter((entry) => matchesFilter(entry, 'drawn'))).toEqual([drawn, uploaded])
+    expect(matchesFilter(uploaded, 'waiting')).toBe(false)
     expect([drawn, waiting, queued, proposed].filter((entry) => matchesFilter(entry, 'waiting'))).toEqual([waiting, queued])
     expect([drawn, waiting, queued, proposed].filter((entry) => matchesFilter(entry, 'proposed'))).toEqual([proposed])
+  })
+})
+
+describe('sortShots', () => {
+  const ws = { ...shot('a', 'accepted', EMPTY), size: 'ws' as const, lensMm: 24 }
+  const cu = { ...shot('b', 'accepted', DRAWN), size: 'cu' as const, lensMm: 85 }
+  const ms = { ...shot('c', 'accepted', FAILED), size: 'ms' as const, lensMm: null }
+  const ms2 = { ...shot('d', 'proposed', EMPTY), size: 'ms' as const, lensMm: 35 }
+  const rows = [cu, ms, ws, ms2]
+
+  it('leaves the sequence alone', () => {
+    expect(sortShots(rows, 'sequence')).toBe(rows)
+  })
+
+  it('orders by the vocabulary, ties in story order', () => {
+    expect(sortShots(rows, 'size').map((entry) => entry.id)).toEqual([ws.id, ms.id, ms2.id, cu.id])
+  })
+
+  it('orders by lens, a missing lens last', () => {
+    expect(sortShots(rows, 'lens').map((entry) => entry.id)).toEqual([ws.id, ms2.id, cu.id, ms.id])
+  })
+
+  it('puts what needs work first', () => {
+    expect(sortShots(rows, 'state').map((entry) => entry.id)).toEqual([ms2.id, ms.id, ws.id, cu.id])
+  })
+
+  it('does not mutate its input', () => {
+    sortShots(rows, 'lens')
+    expect(rows.map((entry) => entry.id)).toEqual([cu.id, ms.id, ws.id, ms2.id])
+  })
+})
+
+describe('shotEditOf', () => {
+  it('is the six spec fields and nothing else', () => {
+    const row = shot('a', 'accepted', DRAWN)
+    expect(shotEditOf(row)).toEqual({
+      size: 'ms',
+      movement: 'static',
+      angle: 'eye_level',
+      lensMm: 50,
+      durationSeconds: null,
+      description: [],
+    })
   })
 })
 

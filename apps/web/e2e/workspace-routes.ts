@@ -56,16 +56,36 @@ export const RAIL_WIDTH = 56
 /** The four writing routes, all of which light Writing. */
 export const WRITING_ORDER: readonly string[] = ['script', 'outline', 'storyboard', 'scenes']
 
-/** The sidebar's three rows. Storyboard is the header pill's other half. */
-export const SIDEBAR_ORDER: readonly string[] = ['script', 'outline', 'scenes']
+/** The sidebar's four rows. Storyboard became a row under Script on 2026-09-17, when the header's Write / Storyboard pill was ruled out. */
+export const SIDEBAR_ORDER: readonly string[] = ['script', 'storyboard', 'outline', 'scenes']
 
 export const SIDEBAR_WIDTH = 236
 
 /** The sidebar metas a brand-new episode must print. */
 export const EMPTY_NAV_META: Readonly<Record<string, string>> = {
   script: 'empty',
+  storyboard: '—',
   outline: '—',
   scenes: '0',
+}
+
+/**
+ * The header's centre since 2026-09-17: the route's views, each tab its
+ * name and - where the mockup draws one - its icon. `null` where the route
+ * has one view (Script, Outline) or no header of its own yet (Timeline,
+ * still on its pre-redesign chrome). Characters' tabs are buttons over
+ * state; the rest are links over `?view=`.
+ */
+export const HEADER_VIEWS: Readonly<Record<string, { readonly tabs: readonly string[]; readonly icons: number } | null>> = {
+  script: null,
+  outline: null,
+  storyboard: { tabs: ['Boards', 'Canvas', 'Shot list'], icons: 3 },
+  scenes: { tabs: ['Cards', 'Index cards', 'Scene list'], icons: 3 },
+  production: { tabs: ['Scene', 'Episode'], icons: 0 },
+  characters: { tabs: ['Cast', 'Relationships', 'Sheet'], icons: 0 },
+  locations: { tabs: ['Places', 'Scenes here', 'Sheet'], icons: 0 },
+  timeline: null,
+  research: { tabs: ['Library', 'Source', 'Clips'], icons: 0 },
 }
 
 const nav = { kind: 'sidebar', width: SIDEBAR_WIDTH } as const
@@ -73,15 +93,18 @@ const nav = { kind: 'sidebar', width: SIDEBAR_WIDTH } as const
 export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
   { route: 'script', scope: 'episode', rail: 'writing', title: null, defaults: {}, column: nav },
   { route: 'outline', scope: 'episode', rail: 'writing', title: null, defaults: {}, column: nav },
-  { route: 'storyboard', scope: 'episode', rail: 'writing', title: 'Storyboard', defaults: { view: 'board' }, column: nav },
+  /** The v2 body (2026-09-16) has no `h1`: the toolbar is the count, the saved dot and `Display`. */
+  { route: 'storyboard', scope: 'episode', rail: 'writing', title: null, defaults: { view: 'board' }, column: nav },
   { route: 'scenes', scope: 'episode', rail: 'writing', title: 'Scenes', defaults: { view: 'cards' }, column: nav },
   {
     route: 'production',
     scope: 'episode',
     rail: 'production',
-    title: 'Production',
+    /** The v2 toolbar (2026-09-16) prints the route name as a span, not an `h1`. */
+    title: null,
     defaults: { view: 'scene' },
-    column: { kind: 'context', width: 250 },
+    /** The v2 pass (2026-09-16): the sidebar card with `Scenes from script` and the `Episode frames` widget. */
+    column: { kind: 'card', width: SIDEBAR_WIDTH },
   },
   {
     route: 'characters',

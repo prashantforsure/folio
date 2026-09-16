@@ -10,7 +10,7 @@ const Page = (props: PageProps<'/app/project/[projectId]/[episodeId]/scenes'>) =
   <EpisodeRoutePage
     route="scenes"
     {...props}
-    header={(subViews, address) => <ScenesHeader address={address} view={subViews.view} />}
+    header={(_subViews, address) => <ScenesHeader address={address} />}
     render={(subViews, address) => <ScenesBody address={address} view={subViews.view} />}
   />
 )

@@ -10,10 +10,11 @@ import { useDismiss } from './use-dismiss'
  * The record routes' toolbar pieces - `docs/ui design/README.md`,
  * "Toolbar": "Route name, a count chip, then the view-switcher pill ...
  * then `flex:1`, then secondary buttons and one solid primary action. It
- * wraps rather than overflows." `12px 20px`, 10px gaps.
+ * wraps rather than overflows." `12px 20px`, 10px gaps. The view-switcher
+ * pill left the row on 2026-09-17 for the header's centre
+ * (`_chrome/header-views.tsx`), where every route's views are drawn.
  *
- *   `RecordToolbar`   the row: the `h1`, the count chip, the pill the route
- *                     hands in (`_chrome/view-pill.tsx`), `flex: 1`, then
+ *   `RecordToolbar`   the row: the `h1`, the count chip, `flex: 1`, then
  *                     the route's right-hand controls
  *   `FilterMenu`      `All characters ▾` / `All locations ▾`: a menu of
  *                     options with a check on the current one; `dividers`
@@ -26,7 +27,6 @@ export const RecordToolbar = ({
   title,
   total,
   countAttr,
-  pill,
   attr,
   children,
 }: {
@@ -34,7 +34,6 @@ export const RecordToolbar = ({
   /** The count chip: a number, or the worded form a mockup writes (`8 sources`, `7 clips`). */
   readonly total: number | string
   readonly countAttr: `data-${string}`
-  readonly pill: ReactNode
   readonly attr: `data-${string}`
   /** The right-hand controls, after `flex: 1`. */
   readonly children: ReactNode
@@ -44,7 +43,6 @@ export const RecordToolbar = ({
     <span className="tabular whitespace-nowrap rounded-pill bg-s2 px-[10px] py-[4px] text-11-5 text-ink2" {...{ [countAttr]: '' }}>
       {total}
     </span>
-    <div className="ml-[4px] min-w-0">{pill}</div>
     <div className="flex-1" />
     {children}
   </div>

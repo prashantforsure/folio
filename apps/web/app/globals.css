@@ -178,32 +178,6 @@
     text-decoration: none;
   }
 
-  /* The header's Write / Storyboard segmented pill. */
-  .folio-pill-tab {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 7px 15px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-    font-size: var(--text-13);
-    font-weight: 500;
-    color: var(--ink2);
-    text-decoration: none;
-  }
-
-  .folio-pill-tab:hover {
-    color: var(--ink);
-    text-decoration: none;
-  }
-
-  .folio-pill-tab[aria-selected='true'] {
-    background: var(--s2);
-    color: var(--ink);
-  }
-
   /* The one solid primary: inverted, `--solid` on `--solid-ink`. */
   .folio-solid-button {
     background: var(--solid);
@@ -1583,11 +1557,15 @@ html[data-nav-open='false'] [data-context-column] {
  * sidebar's `Boards` group; the geometry that is one element's stays at that
  * element as Tailwind utilities (`_storyboard/`).
  *
- *   .folio-view-pill      the toolbar's view switcher (`_chrome/view-pill.tsx`):
- *                         the icon shape is an 11px pill of 34×30 tabs at an
- *                         8px radius; the text shape a 999px pill of `6px
- *                         14px` tabs at 12.5px. `--s2` and full ink on the
- *                         current tab, `--ink3` otherwise, ink on hover.
+ *   .folio-view-pill      the header's view switcher (`_chrome/view-pill.tsx`,
+ *                         drawn by `_chrome/header-views.tsx`): a 999px pill
+ *                         of `6px 14px` tabs at 12.5px, each its icon (where
+ *                         the design draws one) beside its name - one shape
+ *                         since 2026-09-17: the mode pill's container (999px,
+ *                         4px padding) around the toolbar text pill's tabs
+ *                         (`6px 14px` at 12.5px); the mockups' icon-only
+ *                         34×30 tabs are gone by ruling. `--s2` and full ink
+ *                         on the current tab, `--ink2` otherwise, ink on hover.
  *   .folio-board-row      a scene row in the sidebar's `Boards` group: 8px
  *                         10px, a 10px radius, `--s2` while selected.
  *   .folio-shot-card      a board card: `--s1` on `--line2`, a 12px radius,
@@ -1607,38 +1585,28 @@ html[data-nav-open='false'] [data-context-column] {
   .folio-view-pill {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 3px;
     padding: 4px;
     background: var(--s1);
     border: 1px solid var(--line2);
-    border-radius: 11px;
-  }
-
-  .folio-view-pill[data-shape='text'] {
-    gap: 3px;
     border-radius: var(--radius-pill);
   }
 
   .folio-view-pill-tab {
-    width: 34px;
-    height: 30px;
-    display: grid;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
     background: transparent;
     border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    color: var(--ink3);
-    text-decoration: none;
-  }
-
-  .folio-view-pill[data-shape='text'] > .folio-view-pill-tab {
-    width: auto;
-    height: auto;
-    padding: 6px 14px;
     border-radius: var(--radius-pill);
+    cursor: pointer;
     font-size: var(--text-12-5);
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
     color: var(--ink2);
+    text-decoration: none;
   }
 
   .folio-view-pill-tab:hover {
@@ -1649,6 +1617,15 @@ html[data-nav-open='false'] [data-context-column] {
   .folio-view-pill-tab[aria-current='page'] {
     background: var(--s2);
     color: var(--ink);
+  }
+
+  .folio-view-pill-icon {
+    flex: none;
+    opacity: 0.75;
+  }
+
+  .folio-view-pill-tab[aria-current='page'] > .folio-view-pill-icon {
+    opacity: 1;
   }
 
   .folio-board-row {
@@ -1731,10 +1708,96 @@ html[data-nav-open='false'] [data-context-column] {
     box-shadow: 0 12px 34px var(--shade);
   }
 
+  /*
+   * The canvas ground (2026-09-17): a free surface. The world under it is
+   * one absolutely placed div with a `translate() scale()`; the dots are
+   * redrawn to the same transform inline so they move with it. `touch-action:
+   * none` gives the pointer to the pan; `user-select: none` keeps a drag
+   * from selecting the card text under it.
+   */
   .folio-canvas-ground {
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
     background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
     background-size: 24px 24px;
     background-position: 12px 12px;
+  }
+
+  .folio-canvas-ground[data-panning='true'] {
+    cursor: grabbing;
+  }
+
+  .folio-canvas-world {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+
+  .folio-shot-node[data-dragging='true'] {
+    border-color: var(--line);
+    box-shadow: 0 18px 44px var(--shade);
+  }
+
+  .folio-node-grip {
+    cursor: grab;
+  }
+
+  .folio-node-grip:active {
+    cursor: grabbing;
+  }
+
+  /* The card's `Storyboard | Lens` tabs: text on nothing, `--s2` under the one that is open. */
+  .folio-node-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 12px 8px;
+  }
+
+  .folio-node-tab {
+    padding: 4px 9px;
+    border: none;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--ink3);
+    font-size: var(--text-11-5);
+    cursor: pointer;
+  }
+
+  .folio-node-tab:hover {
+    color: var(--ink2);
+  }
+
+  .folio-node-tab[aria-selected='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  /*
+   * The thread from one card to the next in story order, in `--ink3`: a
+   * hairline would sink into the grid dots, which are the same weight. The dash moves -
+   * the design README's second named exception to "nothing else animates"
+   * (2026-09-17), and it stops under `prefers-reduced-motion`. 6 + 8 = 14,
+   * so one period of the offset is one dash and gap, and the loop is
+   * seamless.
+   */
+  .folio-thread {
+    fill: none;
+    stroke: var(--ink3);
+    stroke-width: 1.5;
+    stroke-dasharray: 6 8;
+    stroke-linecap: round;
+    animation: folio-thread 1.6s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .folio-thread {
+      animation: none;
+    }
   }
 
   .folio-frame {
@@ -2301,6 +2364,12 @@ html[data-nav-open='false'] [data-context-column] {
   }
   100% {
     opacity: 0.35;
+  }
+}
+
+@keyframes folio-thread {
+  to {
+    stroke-dashoffset: -14px;
   }
 }
 

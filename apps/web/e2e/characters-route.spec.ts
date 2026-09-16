@@ -14,8 +14,9 @@ import type { WalkOptions } from '../playwright.config'
  * What this proves, in order:
  *
  *   1. **The empty state, both themes.** The 440px card with the busiest
- *      cues; the sidebar card with no rows; `?view=` outside `cast |
- *      relationships | sheet` is a 404, and so is a path that is not a UUID.
+ *      cues; the sidebar card with no rows; `?view=` is an unknown key on
+ *      this route (the tabs are state, ruled 2026-09-16) so a stale link
+ *      opens the cast; a path that is not a UUID is a 404.
  *   2. **Records come from cues; near-misses are the queue, never a second
  *      Meera.** Three cards, the banner counting three, the rail badge the
  *      same; the card whose record a cue proposes wears the `--warn` border
@@ -113,7 +114,7 @@ const card = (page: Page, name: string) =>
 let scriptUrl = ''
 let charactersUrl = ''
 
-test('empty state, both themes; a bad view is a 404', async ({ page, account }) => {
+test('empty state, both themes; a stale ?view= is ignored, a bad id is a 404', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto('/app/new')
   await page.getByLabel('Title').fill(`Characters walk ${new Date().toISOString()}`)
@@ -132,18 +133,22 @@ test('empty state, both themes; a bad view is a 404', async ({ page, account }) 
   await expect(main.getByText('No characters yet')).toBeVisible()
   await expect(main.getByText('Deriving costs nothing and never changes the script.')).toBeVisible()
   await expect(page.locator('[data-rail-badge="characters"]')).toHaveCount(0)
-  // The shell: the sidebar card with no rows, the crumb, no mode pill, the status bar.
+  // The shell: the sidebar card with no rows, the crumb, the three views in the header's centre as buttons, the status bar.
   await expect(page.locator('aside[data-sidebar] [data-cast-empty]')).toBeVisible()
   await expect(page.locator('[data-defined-count]')).toHaveText('0 / 0')
   await expect(page.locator('[data-route-crumb]')).toHaveText('Characters')
-  await expect(page.locator('[data-mode-pill]')).toHaveCount(0)
+  await expect(page.locator('[data-writing-header] [data-view-pill] button[data-view-tab]')).toHaveText(['Cast', 'Relationships', 'Sheet'])
+  await expect(page.locator('[data-writing-header] [data-view-pill] [data-view-tab="cast"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('[data-characters-toolbar] [data-view-pill]')).toHaveCount(0)
   await expect(page.locator('[data-route-id]')).toHaveText('characters')
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
     await page.screenshot({ path: `test-results/characters-empty-${theme}.png`, fullPage: false })
   }
-  const bogus = await page.goto(`${charactersUrl}?view=overview`)
-  expect(bogus?.status()).toBe(404)
+  // The tabs are state, not `?view=`: a stale view link is ignored, not a 404.
+  const stale = await page.goto(`${charactersUrl}?view=relationships`)
+  expect(stale?.status()).toBe(200)
+  await expect(main).toHaveAttribute('data-sub-view', 'cast')
   const notARecord = await page.goto(`${charactersUrl}/not-a-uuid`)
   expect(notARecord?.status()).toBe(404)
 })
@@ -297,9 +302,12 @@ test('a record-level rename rewrites every cue in the script and keeps the profi
 
 test('the graph, the sheet and the filter, both themes; delete refuses a record in the script', async ({ page, account }) => {
   await signIn(page, account)
-  await page.goto(`${charactersUrl}?view=relationships`)
+  await page.goto(charactersUrl)
+  // The pill's tabs are buttons over layout state: the URL stays `/characters`.
+  await page.locator('[data-view-tab="relationships"]').click()
   await expect(page.locator('main[data-route="characters"]')).toHaveAttribute('data-sub-view', 'relationships')
   await expect(page.locator('[data-view-tab="relationships"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page).toHaveURL(charactersUrl)
   await expect(page.locator('[data-graph-node]')).toHaveCount(4)
   // Meera and Suresh Kadam share the corridor: one edge with a count.
   await expect(page.locator('[data-edge-label="1"]').first()).toBeVisible()
@@ -308,7 +316,9 @@ test('the graph, the sheet and the filter, both themes; delete refuses a record 
     await page.screenshot({ path: `test-results/characters-relationships-${theme}.png`, fullPage: false })
   }
 
-  await page.goto(`${charactersUrl}?view=sheet`)
+  await page.locator('[data-view-tab="sheet"]').click()
+  await expect(page.locator('main[data-route="characters"]')).toHaveAttribute('data-sub-view', 'sheet')
+  await expect(page).toHaveURL(charactersUrl)
   await expect(page.locator('[data-sheet-row]')).toHaveCount(4)
   const meeraRow = page.locator('[data-sheet-row]').filter({ hasText: 'Meera Pawar' })
   await expect(meeraRow).toContainText('Defined')

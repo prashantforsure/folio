@@ -1,5 +1,6 @@
 import type {
   BoardCoverageRow,
+  CanvasPosition,
   EpisodeId,
   FrameState,
   GenerationId,
@@ -111,6 +112,9 @@ export const shotFromRow = (row: ShotRowShape): Shot => ({
   description: descriptionOf(row.description),
   origin: row.origin,
   state: row.state,
+  canvasX: row.canvasX,
+  canvasY: row.canvasY,
+  frameUploadUrl: row.frameUploadUrl,
   createdAt: stamp(row.createdAt),
   updatedAt: stamp(row.updatedAt),
 })
@@ -153,6 +157,19 @@ export const frameStateOf = (
     case 'cancelled':
       return { kind: 'cancelled', jobId: job.id }
   }
+}
+
+/**
+ * The eighth state, over the seven: a frame the writer uploaded wins over
+ * every settled generation - empty, drawn, failed, blocked, cancelled - and
+ * a job in flight still shows through it, because the writer needs its
+ * Cancel / Stop and its reservation notice more than the picture. Pure;
+ * `readBoardCoverage`'s `drawn` count says the same thing in SQL.
+ */
+export const foldUpload = (uploadUrl: string | null, generated: FrameState): FrameState => {
+  if (uploadUrl === null) return generated
+  if (generated.kind === 'queued' || generated.kind === 'running') return generated
+  return { kind: 'uploaded', url: uploadUrl }
 }
 
 // ---------------------------------------------------------------------------
@@ -276,7 +293,7 @@ export const listStoryboard = async (
     const rows: ShotRow[] = list.map((shot, index) => ({
       ...shot,
       number: shotLabel(scene.number, index + 1),
-      frame: frames.get(shot.id) ?? { kind: 'empty' },
+      frame: foldUpload(shot.frameUploadUrl, frames.get(shot.id) ?? { kind: 'empty' }),
     }))
     return {
       sceneNodeId: scene.sceneNodeId,
@@ -297,7 +314,8 @@ export const listStoryboard = async (
  * the present scenes of the episode's screenplay, each with its accepted
  * shots, its proposals, and how many accepted shots have a drawn frame. A
  * frame is drawn when the shot's kept-else-latest generation (the same
- * precedence `readFrames` uses) has a picture and its job finished.
+ * precedence `readFrames` uses) has a picture and its job finished - or
+ * the writer uploaded one and no job is in flight (`foldUpload`).
  *
  * The full board (`listStoryboard`) is three statements and the frames of
  * every shot; the three routes that are not the Storyboard need only these
@@ -337,7 +355,12 @@ export const readBoardCoverage = async (scope: ProjectScope, episodeId: EpisodeI
       scene.set,
       count(s.id) filter (where s.state = 'accepted')::int as shots,
       count(s.id) filter (where s.state = 'proposed')::int as proposed,
-      count(s.id) filter (where s.state = 'accepted' and frame.status = 'finished' and frame.frame_url is not null)::int as drawn
+      count(s.id) filter (
+        where s.state = 'accepted' and (
+          (s.frame_upload_url is not null and coalesce(frame.status::text, '') not in ('queued', 'running'))
+          or (frame.status = 'finished' and frame.frame_url is not null)
+        )
+      )::int as drawn
     from scene
     left join ${shots} as s on s.scene_node_id = scene.scene_node_id and s.project_id = ${project}
     left join frame on frame.shot_id = s.id
@@ -414,7 +437,7 @@ export const listSceneShotRows = async (
   return list.map((shot, index) => ({
     ...shot,
     number: shotLabel(sceneNumber, index + 1),
-    frame: frames.get(shot.id) ?? { kind: 'empty' },
+    frame: foldUpload(shot.frameUploadUrl, frames.get(shot.id) ?? { kind: 'empty' }),
   }))
 }
 
@@ -576,6 +599,46 @@ export const deleteShots = async (scope: ProjectScope, shotIds: readonly ShotId[
     .where(scoped(scope, shots, inArray(shots.id, [...shotIds]), notLocked))
     .returning({ id: shots.id })
   return rows.length
+}
+
+/**
+ * Put a card where the canvas dropped it. Not gated by `notLocked`: a
+ * position changes nothing a reel renders (`schema/storyboard.ts`).
+ */
+export const placeShotOnCanvas = async (scope: ProjectScope, shotId: ShotId, position: CanvasPosition): Promise<Shot | null> => {
+  const rows = await dbOf(scope)
+    .update(shots)
+    .set({ canvasX: position.x, canvasY: position.y, updatedAt: new Date() })
+    .where(scoped(scope, shots, eq(shots.id, shotId)))
+    .returning()
+  const row = rows[0]
+  return row === undefined ? null : shotFromRow(row)
+}
+
+/**
+ * Point a shot at an uploaded frame, or at none. One statement that also
+ * returns what it replaced, so the caller can delete the old object
+ * (`setLocationPhotoKey`'s shape). A locked shot keeps its frame.
+ */
+export const setFrameUpload = async (
+  scope: ProjectScope,
+  shotId: ShotId,
+  url: string | null,
+): Promise<{ readonly found: boolean; readonly previous: string | null }> => {
+  const rows = await dbOf(scope).execute(sql`
+    with before as (
+      select ${shots.frameUploadUrl} as previous from ${shots}
+      where ${scoped(scope, shots, eq(shots.id, shotId))}
+    ),
+    written as (
+      update ${shots} set frame_upload_url = ${url}, updated_at = now()
+      where ${scoped(scope, shots, eq(shots.id, shotId), notLocked)}
+      returning id
+    )
+    select (select count(*)::int from written) as found, (select previous from before limit 1) as previous
+  `)
+  const row = rows[0] as { readonly found: number; readonly previous: string | null } | undefined
+  return { found: (row?.found ?? 0) > 0, previous: row?.previous ?? null }
 }
 
 /** Put a shot between two of its scene's neighbours. */

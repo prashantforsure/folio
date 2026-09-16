@@ -13,7 +13,7 @@ import { WritingHeader } from './writing-header'
  * route wears (`docs/ui design/README.md`, "Shell"): the sidebar card, the
  * header, the main-surface card the route body sits in. `_chrome/writing-layout.tsx`
  * for a route outside the writing surface: the header is told its route
- * (no Write / Storyboard pill, a third crumb), and the sidebar takes this
+ * (a third crumb, and `Scene · Episode` in its centre), and the sidebar takes this
  * route's two slots - `Scenes from script` and `Episode frames`
  * (`_production/sidebar-slots.tsx`) - in place of the writing rows.
  *

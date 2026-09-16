@@ -7,7 +7,6 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect } from 'react'
 
 import type { ShellUser } from '../../../../../../lib/auth/session'
-import { useEphemeral } from '../../../../../../lib/state/ephemeral'
 import { useSession } from '../../../../../../lib/state/session'
 import { useViewport } from '../../../../../../lib/state/viewport'
 import { useDrawerOpen } from '../../../../../../lib/workspace/drawer'
@@ -19,14 +18,14 @@ import {
   workspaceRouteFromSegments,
 } from '../../../../../../lib/workspace/segments'
 import { AssistantPanel } from './assistant-panel'
-import { CharactersOverlay } from './characters-overlay'
 import { Rail } from './rail'
 
 /**
  * The project workspace's frame: ambient glows, the rail, the route below,
- * and the two things that float over every route - the assistant panel and
- * the Characters overlay. `docs/ui design/README.md`, "Shell": "Every route
- * is the same three-part shell. Implement it once."
+ * and the one thing that floats over every route - the assistant panel.
+ * `docs/ui design/README.md`, "Shell": "Every route is the same three-part
+ * shell. Implement it once." (The Characters overlay floated here too until
+ * the client re-ruled the rail's icon a plain link, 2026-09-16.)
  *
  * ## The breakpoints live here and nowhere else
  *
@@ -41,7 +40,6 @@ import { Rail } from './rail'
  *              open under 1200. Written to `html[data-nav-open]`, which is
  *              what hides the server-rendered sidebar (`globals.css`).
  *   assistant  the session flag, else closed. `⌘J` toggles it anywhere.
- *   overlay    ephemeral: which peek the rail opened, if any.
  *
  * The route bodies read `useSession().navOpen` for their own geometry and no
  * longer write the attribute; five of them used to, and the last effect to
@@ -49,14 +47,13 @@ import { Rail } from './rail'
  *
  * ## The episode the shell links to
  *
- * The rail, the panel and the overlay all need an episode when the URL has
+ * The rail and the panel both need an episode when the URL has
  * none (a record route): the one the server chose, last opened else first,
  * handed in by the layout. With one in the URL it is re-validated rather
  * than trusted - a brand is not a cast.
  */
 export const ProjectShell = ({
   projectId,
-  title,
   shape,
   fallbackEpisode,
   badges,
@@ -65,7 +62,6 @@ export const ProjectShell = ({
   children,
 }: {
   readonly projectId: ProjectId
-  readonly title: string
   readonly shape: WorkspaceShape
   readonly fallbackEpisode: EpisodeSlug
   readonly badges: RailBadges
@@ -82,7 +78,6 @@ export const ProjectShell = ({
 
   const session = useSession()
   const { mounted, width } = useViewport()
-  const { contextOverlay, setContextOverlay } = useEphemeral()
 
   const assistantOpen = (mounted ? session.assistantOpen : null) ?? false
   const drawerOpen = useDrawerOpen()
@@ -105,20 +100,16 @@ export const ProjectShell = ({
         event.preventDefault()
         session.setAssistantOpen(!assistantOpen)
       }
-      if (event.key === 'Escape' && contextOverlay !== null) setContextOverlay(null)
     }
     window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('keydown', onKey)
     }
-  }, [assistantOpen, contextOverlay, session, setContextOverlay])
+  }, [assistantOpen, session])
 
   const onToggleNav = useCallback(() => {
     session.setNavOpen(!navOpen)
   }, [navOpen, session])
-  const onToggleCharacters = useCallback(() => {
-    setContextOverlay(contextOverlay === 'characters' ? null : 'characters')
-  }, [contextOverlay, setContextOverlay])
 
   return (
     <div
@@ -137,8 +128,6 @@ export const ProjectShell = ({
         user={user}
         navOpen={navOpen}
         onToggleNav={onToggleNav}
-        overlayOpen={contextOverlay === 'characters'}
-        onToggleCharacters={active === 'writing' || active === 'production' ? onToggleCharacters : null}
       />
 
       <div className="relative z-[2] flex min-w-0 flex-1 overflow-hidden">{children}</div>
@@ -153,16 +142,6 @@ export const ProjectShell = ({
           inFlow={panelInFlow}
           onClose={() => {
             session.setAssistantOpen(false)
-          }}
-        />
-      ) : null}
-
-      {contextOverlay === 'characters' ? (
-        <CharactersOverlay
-          projectId={projectId}
-          projectTitle={title}
-          onClose={() => {
-            setContextOverlay(null)
           }}
         />
       ) : null}

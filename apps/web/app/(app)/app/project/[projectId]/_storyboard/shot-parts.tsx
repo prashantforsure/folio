@@ -116,11 +116,11 @@ export const FrameTile = ({ shot, size, badge }: { readonly shot: ShotRow; reado
   const tone = shotTone(shot)
   const block = size === 'node' ? 'block' : 'flex-none'
 
-  if (frame.kind === 'drawn') {
+  if (frame.kind === 'drawn' || frame.kind === 'uploaded') {
     return (
-      <span data-frame="drawn" className={`folio-frame relative ${block} overflow-hidden ${FRAME_BOX[size]}`}>
+      <span data-frame={frame.kind} className={`folio-frame relative ${block} overflow-hidden ${FRAME_BOX[size]}`}>
         <span aria-hidden className="folio-frame-grid absolute inset-0" />
-        {/* A plain img: the frame is at a URL the worker wrote, not an asset Next can optimise. */}
+        {/* A plain img: the frame is at a URL the worker or the upload wrote, not an asset Next can optimise. */}
         <img src={frame.url} alt={`Frame for shot ${shot.number}`} className="absolute inset-0 h-full w-full object-cover" />
         {badge === undefined ? null : (
           <span className="absolute left-[8px] top-[7px] rounded-[6px] bg-frame-badge px-[7px] py-[3px] font-mono text-9-5 text-frame-badge-ink">{badge}</span>
@@ -158,6 +158,7 @@ export const frameNotice = (shot: ShotRow): string | null => {
       return 'Cancelled · reservation released.'
     case 'empty':
     case 'drawn':
+    case 'uploaded':
       return null
   }
 }

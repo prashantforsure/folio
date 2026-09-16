@@ -1,10 +1,11 @@
 'use client'
 
-import type { LocationRow, LocationStatus, ProjectId } from '@folio/contracts'
+import type { LocationStatus, ProjectId } from '@folio/contracts'
 import Link from 'next/link'
 import { useSelectedLayoutSegment } from 'next/navigation'
 
 import { setNewLocationOpen } from '../../../../../../lib/locations/compose'
+import type { LocationSidebarRow } from '../../../../../../lib/locations/view'
 import { LOCATION_GROUP_LABELS, grouped, matchesFind, scoutedOf, statusTone } from '../../../../../../lib/locations/view'
 import { count } from '../../../../../../lib/workspace/format'
 import { locationHref } from '../../../../../../lib/workspace/hrefs'
@@ -34,21 +35,7 @@ import { ProgressWidget, RecordGroup, RecordTitleRow, SidebarNote } from '../_ch
  * cell to publish, and the first paint agrees with the page.
  */
 
-/** What a sidebar row prints: the row minus the scene list and the rest the list never reads. */
-export type LocationSidebarRow = Pick<LocationRow, 'id' | 'name' | 'ie' | 'status' | 'kind' | 'parentId' | 'depth' | 'rollup' | 'sluglines' | 'boundSluglines'>
-
-export const sidebarRowOf = (row: LocationRow): LocationSidebarRow => ({
-  id: row.id,
-  name: row.name,
-  ie: row.ie,
-  status: row.status,
-  kind: row.kind,
-  parentId: row.parentId,
-  depth: row.depth,
-  rollup: row.rollup,
-  sluglines: row.sluglines,
-  boundSluglines: row.boundSluglines,
-})
+/** A row is `LocationSidebarRow` (`lib/locations/view.ts`): the layout - a Server Component - picks it there, since a function in this client module cannot be called from the server. */
 
 export const LocationTitleRow = ({ title }: { readonly title: string }) => (
   <RecordTitleRow

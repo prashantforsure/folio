@@ -6,6 +6,7 @@ import { loadShareLink } from '../../../../../../lib/share/server'
 import { loadEpisode } from '../../../../../../lib/workspace/context'
 import { CastFind, CastGroups, CastSidebarProvider, CastTitleRow, DefinedWidget } from '../_characters/cast-sidebar'
 import { NewCharacterDrawer } from '../_characters/new-character-drawer'
+import { CharactersHeaderViews, CharactersViewProvider } from '../_characters/view-state'
 import { Sidebar } from './sidebar'
 import { WritingHeader } from './writing-header'
 
@@ -13,10 +14,12 @@ import { WritingHeader } from './writing-header'
  * The Characters route's shell - the three parts every route wears
  * (`docs/ui design/README.md`, "Shell"), on `_chrome/production-layout.tsx`'s
  * pattern: the sidebar card with this route's four slots
- * (`_characters/cast-sidebar.tsx`), the header told its route (no Write /
- * Storyboard pill: Characters is "outside the writing surface"; the crumb
- * is `Project / Characters` with no episode - the route is project-scoped),
- * and the main-surface card the page body sits in.
+ * (`_characters/cast-sidebar.tsx`), the header told its route (the crumb
+ * is `Project / Characters` with no episode - the route is project-scoped)
+ * and handed this route's view tabs for its centre (`CharactersHeaderViews`:
+ * the views are state, not `?view=`, so the header cannot read them from
+ * the URL as it does the other routes'), and the main-surface card the page
+ * body sits in.
  *
  * ## The drawer's slot
  *
@@ -58,7 +61,8 @@ export const CharactersLayout = async ({ projectId, children }: { readonly proje
   }))
 
   return (
-    <CastSidebarProvider>
+    <CharactersViewProvider>
+      <CastSidebarProvider>
       <Sidebar
         context={context}
         slots={{
@@ -77,6 +81,7 @@ export const CharactersLayout = async ({ projectId, children }: { readonly proje
           route="characters"
           episodes={context.episodes.map((episode) => ({ slug: episode.slug, ordinal: episode.ordinal, title: episode.title }))}
           share={share}
+          views={<CharactersHeaderViews />}
         />
         <div data-surface className="folio-surface flex min-h-0 min-w-0 flex-1 flex-col">
           {children}
@@ -84,6 +89,7 @@ export const CharactersLayout = async ({ projectId, children }: { readonly proje
       </div>
       <div id="characters-drawer" data-drawer-slot className="relative z-[7] flex min-h-0 flex-none" />
       <NewCharacterDrawer projectId={context.project.id} usedHues={rows.map((row) => row.hue)} />
-    </CastSidebarProvider>
+      </CastSidebarProvider>
+    </CharactersViewProvider>
   )
 }

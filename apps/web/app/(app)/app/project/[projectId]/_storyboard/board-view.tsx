@@ -142,6 +142,19 @@ const SceneColumn = ({ scene, view }: { readonly scene: StoryboardScene; readonl
         <span className="tabular grid h-[22px] min-w-[22px] flex-none place-items-center rounded-pill bg-s2 px-[7px] text-11-5 text-ink2" data-column-count>
           {count(accepted)}
         </span>
+        {/* The canvas, on this scene: the selection is state and survives the `?view=` change. */}
+        <Link
+          href={view.canvasHref}
+          data-open-canvas
+          title="Open this scene on the canvas"
+          className="folio-pill-button flex h-[26px] flex-none items-center gap-[5px] rounded-[8px] px-[9px] text-11-5 no-underline hover:no-underline"
+          onClick={() => {
+            view.onSelect(scene.sceneNodeId)
+          }}
+        >
+          <Icon name="canvas" size={12} strokeWidth={1.5} />
+          Open
+        </Link>
       </div>
 
       {collapsed ? null : (

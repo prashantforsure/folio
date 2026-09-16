@@ -19,7 +19,10 @@ import { SidebarWidget } from './sidebar-widget'
  * pinned to the bottom."
  *
  * The Script mockup, top to bottom: the episode's name and `+` (new
- * episode), the three rows - Script, Outline, Scenes - with a meta each, the
+ * episode), the rows - Script, Outline, Scenes in the mockup; Script,
+ * Storyboard, Outline, Scenes since 2026-09-17, when the client ruled the
+ * header's Write / Storyboard pill out and Storyboard in as a row under
+ * Script (`lib/workspace/routes.ts`, `SIDEBAR`) - with a meta each, the
  * Scenes group with a count and one row per scene (number, heading in mono
  * uppercase, eighths), and the Credits card. No search field: the palette
  * it would open is not built, and a field that opens nothing is a
@@ -44,8 +47,9 @@ import { SidebarWidget } from './sidebar-widget'
  *
  * ## Every value on this card is read, none is written
  *
- *   the three metas  `readEpisodeNavMeta` - `104pp` / `—` / `empty` / `0`
- *                    through `lib/workspace/format.ts`
+ *   the four metas   `readEpisodeNavMeta` - `104pp` / `38 shots` / `3 acts`
+ *                    / `34`, or `empty` / `—` / `—` / `0`, through
+ *                    `lib/workspace/format.ts`
  *   scenes           `listEpisodeScenes` - `scene_derivations` with
  *                    `measurement_scenes.eighths`
  *   headings         `loadOutlineToc` - the outline's `h1` / `h2` / `h3`
@@ -72,7 +76,7 @@ import { SidebarWidget } from './sidebar-widget'
  *
  * ## Production wears the same card with its own two slots
  *
- * `Route - Production v2.dc.html` draws this sidebar without the three
+ * `Route - Production v2.dc.html` draws this sidebar without the writing
  * rows: the title row, then `Scenes from script` (one row per scene with
  * a progress bar), then the `Episode frames` widget. A layout that *is*
  * the route hands both in as `slots` and this card draws them in place of

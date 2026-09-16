@@ -26,8 +26,8 @@ import {
   WORKSPACE_ROUTE_COUNT,
   WRITING_ROUTES,
   railSectionOf,
-  writingModeOf,
 } from '../lib/workspace/routes'
+import { ROUTE_VIEWS, currentView, viewsLabel } from '../lib/workspace/views'
 
 /**
  * The route tree, the two orders, the params and the formatting convention.
@@ -84,24 +84,69 @@ describe('the rail', () => {
   })
 })
 
-describe('the writing sidebar and the mode pill', () => {
-  it('is three rows - Script, Outline, Scenes - and 236px', () => {
-    expect(SIDEBAR.map((item) => `${item.route} ${item.label}`)).toEqual(['script Script', 'outline Outline', 'scenes Scenes'])
+describe('the writing sidebar', () => {
+  it('is four rows - Script, Storyboard, Outline, Scenes - and 236px', () => {
+    // Ruled 2026-09-17: Storyboard is a row under Script; the header's Write / Storyboard pill is gone.
+    expect(SIDEBAR.map((item) => `${item.route} ${item.label}`)).toEqual([
+      'script Script',
+      'storyboard Storyboard',
+      'outline Outline',
+      'scenes Scenes',
+    ])
     expect(SIDEBAR_WIDTH).toBe(236)
   })
 
-  it('puts Storyboard in the header pill, not the sidebar', () => {
-    expect(SIDEBAR.map((item) => item.route)).not.toContain('storyboard')
-    expect(writingModeOf('storyboard')).toBe('storyboard')
-    for (const route of ['script', 'outline', 'scenes'] as const) expect(writingModeOf(route)).toBe('write')
+  it('lists every writing route once', () => {
+    expect([...SIDEBAR.map((item) => item.route)].sort()).toEqual([...WRITING_ROUTES].sort())
   })
 
-  it('keeps the README widths for the panels and the unrebuilt columns', () => {
+  it('keeps the README widths for the panels and the one unrebuilt column', () => {
     expect(PANEL_WIDTH).toBe(400)
-    expect(CONTEXT_PANEL_WIDTH).toEqual({
-      production: 250,
-      timeline: 250,
-    })
+    // Timeline alone still draws a context column; every other route draws the sidebar card.
+    expect(CONTEXT_PANEL_WIDTH).toEqual({ timeline: 250 })
+  })
+})
+
+describe("the header's views", () => {
+  it('tables every `?view=` value of every route, in the schema order, and nothing else', () => {
+    for (const route of WORKSPACE_ROUTES) {
+      // `view` is `z.enum(values).default(first)`: a `ZodDefault` over the enum.
+      const shape: { readonly view?: { unwrap(): { readonly options: readonly string[] } } } = SUB_VIEW_SCHEMAS[route].shape
+      const values = shape.view === undefined ? [] : shape.view.unwrap().options
+      expect(ROUTE_VIEWS[route].map((tab) => tab.id)).toEqual(values)
+      for (const tab of ROUTE_VIEWS[route]) expect(parseSubViews(route, { view: tab.id })).toEqual({ ok: true, params: { view: tab.id } })
+    }
+  })
+
+  it('has no row for the routes whose views are not the URL', () => {
+    // Script and Outline have one view; Characters' three are state (ruled 2026-09-16).
+    expect(ROUTE_VIEWS.script).toEqual([])
+    expect(ROUTE_VIEWS.outline).toEqual([])
+    expect(ROUTE_VIEWS.characters).toEqual([])
+  })
+
+  it('draws the icons the mockups draw, and prints every name', () => {
+    expect(ROUTE_VIEWS.storyboard.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['board Boards', 'canvas Canvas', 'list Shot list'])
+    expect(ROUTE_VIEWS.scenes.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['cards Cards', 'board Index cards', 'list Scene list'])
+    for (const route of ['production', 'locations', 'timeline', 'research'] as const) {
+      for (const tab of ROUTE_VIEWS[route]) expect(tab.icon).toBeUndefined()
+    }
+    for (const route of WORKSPACE_ROUTES) {
+      for (const tab of ROUTE_VIEWS[route]) {
+        expect(tab.title.length).toBeGreaterThan(0)
+        if (tab.icon !== undefined) expect(ICONS[tab.icon]).toBeDefined()
+      }
+    }
+  })
+
+  it('lights the tab the URL names, else the first', () => {
+    expect(currentView('storyboard', null)?.id).toBe('board')
+    expect(currentView('storyboard', 'canvas')?.id).toBe('canvas')
+    expect(currentView('storyboard', 'grid')?.id).toBe('board')
+    expect(currentView('production', 'episode')?.id).toBe('episode')
+    expect(currentView('script', 'anything')).toBeNull()
+    expect(currentView('characters', 'sheet')).toBeNull()
+    expect(viewsLabel('Storyboard')).toBe('Storyboard views')
   })
 })
 
@@ -114,7 +159,7 @@ describe('sub-view params', () => {
     expect(parseSubViews('storyboard', {})).toEqual({ ok: true, params: { view: 'board' } })
     expect(parseSubViews('scenes', {})).toEqual({ ok: true, params: { view: 'cards' } })
     expect(parseSubViews('production', {})).toEqual({ ok: true, params: { view: 'scene' } })
-    expect(parseSubViews('characters', {})).toEqual({ ok: true, params: { view: 'cast' } })
+    expect(parseSubViews('characters', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-16
     expect(parseSubViews('locations', {})).toEqual({ ok: true, params: { view: 'places' } })
     expect(parseSubViews('timeline', {})).toEqual({ ok: true, params: { view: 'story' } })
     expect(parseSubViews('research', {})).toEqual({ ok: true, params: { view: 'library' } })
@@ -190,7 +235,7 @@ describe('the meta convention', () => {
 
   it('prints a new project as the brief specifies', () => {
     expect(WRITING_ROUTES.map((route) => navMeta(route, empty))).toEqual(['empty', '—', '—', '0'])
-    expect(SIDEBAR.map((item) => navMeta(item.route, empty))).toEqual(['empty', '—', '0'])
+    expect(SIDEBAR.map((item) => navMeta(item.route, empty))).toEqual(['empty', '—', '—', '0'])
   })
 
   it('prints a populated episode as the bundle does', () => {

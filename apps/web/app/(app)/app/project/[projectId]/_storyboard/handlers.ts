@@ -1,7 +1,9 @@
-import type { ShotEdit, ShotRow, StoryboardScene } from '@folio/contracts'
+import type { CanvasPosition, ShotEdit, ShotRow, StoryboardScene } from '@folio/contracts'
 import type { LabelBook, MentionLabel } from '@folio/script'
 
-import type { DisplayOptions } from './storyboard-toolbar'
+import type { ShotSort } from '../../../../../../lib/storyboard/board'
+import type { EpisodeRoutePath } from '../../../../../../lib/workspace/hrefs'
+import type { DisplayOptions, StoryboardView } from './storyboard-toolbar'
 
 /**
  * What the three views can do to the board, and what they draw it from.
@@ -24,6 +26,11 @@ export type ShotHandlers = {
   readonly onPlace: (shotId: string, index: number) => void
   readonly onDraw: (shotId: string) => void
   readonly onCancelFrame: (jobId: string) => void
+  /** Where the canvas dropped the card. Cosmetic - the sequence does not move. */
+  readonly onPlaceOnCanvas: (shotId: string, position: CanvasPosition) => void
+  /** A frame the writer chose, over any generation until cleared. */
+  readonly onUploadFrame: (shotId: string, file: File) => void
+  readonly onClearFrame: (shotId: string) => void
 }
 
 export type ViewProps = {
@@ -34,6 +41,12 @@ export type ViewProps = {
   /** `matchesFilter` applied - a view draws these and says when a scene has none. */
   readonly visible: (shot: ShotRow) => boolean
   readonly display: DisplayOptions
+  /** The list view's order. The board and the canvas are always the sequence. */
+  readonly sort: ShotSort
+  /** Whether `Upload image` can do anything: the `R2_*` block is set. */
+  readonly storage: boolean
+  /** The canvas view's address, for the board column's `Open`. */
+  readonly canvasHref: { readonly pathname: EpisodeRoutePath; readonly query: { readonly view: StoryboardView } }
   readonly labels: readonly MentionLabel[]
   readonly book: LabelBook
   /** `FRAME_GENERATION_COST`, named on every draw button before it is spent. */

@@ -387,6 +387,7 @@ export { CreditBalanceSchema, LedgerEntrySchema } from './credits'
 
 export type {
   BoardCoverageRow,
+  CanvasPosition,
   FrameGeneration,
   FrameState,
   Job,
@@ -397,7 +398,9 @@ export type {
 } from './storyboard'
 export {
   BoardCoverageRowSchema,
+  CanvasPositionSchema,
   FRAME_GENERATION_COST,
+  FRAME_UPLOAD_MAX_BYTES,
   FrameGenerationSchema,
   FrameStateSchema,
   JobSchema,

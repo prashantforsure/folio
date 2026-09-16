@@ -40,22 +40,15 @@ export const AI_SCOPES = ['selection', 'scene', 'act', 'draft'] as const
 export type AiScope = (typeof AI_SCOPES)[number]
 
 /**
- * The context overlay the rail opens over a writing route - the 330px
- * Characters peek (`docs/ui design/Route - Script v2.dc.html`, "CONTEXT
- * OVERLAY"). Ephemeral for the palette's reason: an overlay that remembers it
- * was open is one that opens by itself on the next route.
- */
-export const CONTEXT_OVERLAYS = ['characters'] as const
-
-export type ContextOverlay = (typeof CONTEXT_OVERLAYS)[number]
-
-/**
  * A question handed to the assistant by a route - Production's `Suggest
  * rewrite` on a refused shot writes the refusal here and opens the panel,
  * which reads it into its composer once and clears it. Ephemeral for the
- * overlay's reason: a prompt that survived a route change would land in a
+ * palette's reason: a prompt that survived a route change would land in a
  * chat about something else. It widens nothing: the panel reads the script
  * as before, and the writer still presses send.
+ *
+ * (The rail's Characters overlay kept its open flag here until the client
+ * re-ruled the icon a plain link to `/characters`, 2026-09-16.)
  */
 type EphemeralValue = {
   readonly paletteOpen: boolean
@@ -63,8 +56,6 @@ type EphemeralValue = {
   readonly togglePalette: () => void
   readonly aiScope: AiScope
   readonly setAiScope: (scope: AiScope) => void
-  readonly contextOverlay: ContextOverlay | null
-  readonly setContextOverlay: (overlay: ContextOverlay | null) => void
   readonly assistantPrompt: string | null
   readonly setAssistantPrompt: (prompt: string | null) => void
 }
@@ -74,7 +65,6 @@ const EphemeralContext = createContext<EphemeralValue | null>(null)
 export const EphemeralProvider = ({ children }: { readonly children: ReactNode }) => {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [aiScope, setAiScope] = useState<AiScope>('scene')
-  const [contextOverlay, setContextOverlay] = useState<ContextOverlay | null>(null)
   const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null)
 
   const togglePalette = useCallback(() => {
@@ -88,12 +78,10 @@ export const EphemeralProvider = ({ children }: { readonly children: ReactNode }
       togglePalette,
       aiScope,
       setAiScope,
-      contextOverlay,
-      setContextOverlay,
       assistantPrompt,
       setAssistantPrompt,
     }),
-    [paletteOpen, togglePalette, aiScope, contextOverlay, assistantPrompt],
+    [paletteOpen, togglePalette, aiScope, assistantPrompt],
   )
 
   return <EphemeralContext.Provider value={value}>{children}</EphemeralContext.Provider>

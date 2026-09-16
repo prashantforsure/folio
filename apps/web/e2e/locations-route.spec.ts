@@ -13,7 +13,7 @@ import type { WalkOptions } from '../playwright.config'
  *
  *   1. **The empty state, both themes.** No record; the shell is the
  *      sidebar card (no rows, `Scouted 0 / 0`), the `Project / Locations`
- *      crumb with no mode pill, the status bar. `?view=` outside
+ *      crumb with the three views in the header's centre, the status bar. `?view=` outside
  *      `places | scenes | sheet` is a 404, and so is a non-UUID id.
  *   2. **Records come from headings through the alias table, and
  *      near-misses go to the queue, not to a record.** Seven headings in
@@ -144,11 +144,13 @@ test('empty state, both themes; a bad view and a bad id are 404s', async ({ page
   await expect(main.getByText('No locations yet')).toBeVisible()
   await expect(main.getByText('Sluglines stay as written and point at the record.')).toBeVisible()
   await expect(page.locator('[data-rail-badge="locations"]')).toHaveCount(0)
-  // The shell: the sidebar card with no rows, the crumb, no mode pill, the status bar.
+  // The shell: the sidebar card with no rows, the crumb, the views in the header's centre, the status bar.
   await expect(page.locator('aside[data-sidebar] [data-locations-empty]')).toBeVisible()
   await expect(page.locator('[data-scouted-count]')).toHaveText('0 / 0')
   await expect(page.locator('[data-route-crumb]')).toHaveText('Locations')
-  await expect(page.locator('[data-mode-pill]')).toHaveCount(0)
+  await expect(page.locator('[data-writing-header] [data-view-pill] [data-view-tab]')).toHaveText(['Places', 'Scenes here', 'Sheet'])
+  await expect(page.locator('[data-writing-header] [data-view-pill] [data-view-tab="places"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('[data-locations-toolbar] [data-view-pill]')).toHaveCount(0)
   await expect(page.locator('[data-route-id]')).toHaveText('locations')
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)

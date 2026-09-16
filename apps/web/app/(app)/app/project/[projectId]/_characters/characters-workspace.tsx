@@ -11,11 +11,12 @@ import type { SaveIndicator } from '../_chrome/status-bar'
 import { CastView } from './cast-view'
 import type { Relation } from './character-drawer'
 import { CharacterDrawer } from './character-drawer'
-import type { CastFilter, CharactersView } from './characters-toolbar'
+import type { CastFilter } from './characters-toolbar'
 import { CharactersToolbar } from './characters-toolbar'
 import { EmptyCharacters } from './empty-characters'
 import { RelationshipsView } from './relationships-view'
 import { SheetView } from './sheet-view'
+import { useCharactersView } from './view-state'
 
 /**
  * The Characters route's body inside the main-surface card - `Route -
@@ -25,12 +26,14 @@ import { SheetView } from './sheet-view'
  * episodes · Meera Pawar`, `Hide nav`, the saved dot, `characters/<id>`),
  * and the drawer when the URL names a record.
  *
- * ## `?view=` and `:characterId` are the URL; everything else is state
+ * ## `:characterId` is the URL; everything else is state
  *
- * The three views are the sub-view param, so the pill's tabs are links.
  * The selected record is the path, and the drawer is what the path renders
- * over the view. The toolbar's filter, the banner's dismissal, a save in
- * flight: component state, none of it worth a link.
+ * over the view. The three views are state the layout holds
+ * (`view-state.tsx`, ruled 2026-09-16 - the URL stays `/characters`), so
+ * the pill's tabs are buttons; `data-sub-view` keeps its name for the
+ * smoke test that reads it. The toolbar's filter, the banner's dismissal,
+ * a save in flight: component state, none of it worth a link.
  *
  * ## Every write returns a result, and the page re-reads
  *
@@ -46,7 +49,6 @@ export type Run = (job: () => Promise<string | null>) => void
 export const CharactersWorkspace = ({
   projectId,
   projectTitle,
-  view,
   baseHref,
   cast,
   index,
@@ -59,7 +61,6 @@ export const CharactersWorkspace = ({
 }: {
   readonly projectId: ProjectId
   readonly projectTitle: string
-  readonly view: CharactersView
   readonly baseHref: ProjectRoutePath
   readonly cast: readonly CastRow[]
   readonly index: readonly SceneRef[]
@@ -71,6 +72,7 @@ export const CharactersWorkspace = ({
   /** The record the drawer shows, when the path names one. */
   readonly profile: CharacterProfile | null
 }) => {
+  const { view } = useCharactersView()
   const [save, setSave] = useState<SaveIndicator>('saved')
   const pending = useRef(0)
   const run: Run = useCallback((job) => {
@@ -131,7 +133,7 @@ export const CharactersWorkspace = ({
       data-characters-state={empty ? 'empty' : view}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
-      <CharactersToolbar total={figures.length} view={view} baseHref={baseHref} filter={filter} onFilter={setFilter} />
+      <CharactersToolbar total={figures.length} filter={filter} onFilter={setFilter} />
 
       {empty ? (
         <EmptyCharacters projectId={projectId} derivable={derivable ?? { count: 0, top: [] }} run={run} />

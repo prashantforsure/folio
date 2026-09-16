@@ -17,6 +17,7 @@ import type { Run } from './characters-workspace'
 import { DrawerShell, Section } from './drawer-shell'
 import type { ProfileDraft } from './profile-fields'
 import { ProfileFields } from './profile-fields'
+import { useCharactersView } from './view-state'
 
 /**
  * `/characters/:characterId` - the edit drawer, `Route - Characters
@@ -24,7 +25,10 @@ import { ProfileFields } from './profile-fields'
  * E3 Sc 30`; the 78×98 tile with `Upload reference` / `Remove`; the
  * fields (`profile-fields.tsx`); `Arc · from the script`; `Shares scenes
  * with` and its `Relationships →`; and the foot - `Delete` left, `Cancel`
- * / `Save` right (README, "Drawer").
+ * / `Save` right (README, "Drawer"). `Relationships →` switches the view
+ * behind the drawer to the graph (`view-state.tsx`) with this record's node
+ * lit; it used to link to `?view=relationships`, which also closed the
+ * drawer - the view is state now and the URL does not move.
  *
  * ## What the arc is, honestly
  *
@@ -88,6 +92,7 @@ export const CharacterDrawer = ({
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<'rename' | 'delete' | null>(null)
+  const { setView } = useCharactersView()
   const close = useCallback(() => {
     router.push(baseHref)
   }, [baseHref, router])
@@ -319,9 +324,16 @@ export const CharacterDrawer = ({
       <Section>
         <div className="flex items-baseline gap-[8px]">
           <span className="flex-1 text-11-5 text-ink2">Shares scenes with</span>
-          <Link href={`${baseHref}?view=relationships`} data-drawer-relationships className="text-11 text-accent no-underline hover:underline">
+          <button
+            type="button"
+            data-drawer-relationships
+            onClick={() => {
+              setView('relationships')
+            }}
+            className="text-11 text-accent hover:underline"
+          >
             Relationships →
-          </Link>
+          </button>
         </div>
         {relations.length === 0 ? (
           <span className="text-11 text-ink3" data-relations="none">

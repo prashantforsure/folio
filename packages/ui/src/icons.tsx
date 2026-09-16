@@ -58,9 +58,9 @@ export const ICONS = {
   sun: P(20, 'M13 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0z', 'M10 2.8v1.8M10 15.4v1.8M2.8 10h1.8M15.4 10h1.8M4.9 4.9l1.3 1.3M13.8 13.8l1.3 1.3M4.9 15.1l1.3-1.3M13.8 6.2l1.3-1.3'),
   /** Rail: theme toggle, shown while light - the moon that is coming. */
   moon: P(20, 'M15.6 12.4A6.2 6.2 0 0 1 7.6 4.4a6.2 6.2 0 1 0 8 8z'),
-  /** Header pill: Write. A page, smaller. */
+  /** The mockups' Write / Storyboard header pill: Write, a page, smaller. The pill was removed 2026-09-17 (Storyboard is a sidebar row); the path stays, the mockups still draw it. */
   write: P(18, 'M5.6 2.5h6.8a1.6 1.6 0 0 1 1.6 1.6v9.8a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 13.9V4.1a1.6 1.6 0 0 1 1.6-1.6z', 'M6.6 6.5h4.8M6.6 9.5h4.8M6.6 12.5h2.8'),
-  /** Header pill: Storyboard. Two frames. */
+  /** The same pill's Storyboard half: two frames. Kept with `write`. */
   storyboard: P(18, 'M4.1 4h9.8a1.6 1.6 0 0 1 1.6 1.6v6.8a1.6 1.6 0 0 1-1.6 1.6H4.1a1.6 1.6 0 0 1-1.6-1.6V5.6A1.6 1.6 0 0 1 4.1 4z', 'M9 4v10'),
   /** A dropdown's chevron. */
   chevron: P(12, 'M3 5l3 3 3-3'),
@@ -82,6 +82,14 @@ export const ICONS = {
   export: P(16, 'M8 10.5v-8M5 5.5l3-3 3 3', 'M3 12.5v1h10v-1'),
   /** Storyboard view pill: scene boards. Two columns. */
   board: P(18, 'M3.7 3h2a1.2 1.2 0 0 1 1.2 1.2v9.6A1.2 1.2 0 0 1 5.7 15h-2a1.2 1.2 0 0 1-1.2-1.2V4.2A1.2 1.2 0 0 1 3.7 3z', 'M9.6 3h2a1.2 1.2 0 0 1 1.2 1.2v9.6a1.2 1.2 0 0 1-1.2 1.2h-2a1.2 1.2 0 0 1-1.2-1.2V4.2A1.2 1.2 0 0 1 9.6 3z'),
+  /** Scenes view pill: scene cards - four tiles (`Route - Scenes v2.dc.html`, the toolbar's first tab). */
+  cards: P(
+    18,
+    'M3.9 2.6h3a1.3 1.3 0 0 1 1.3 1.3v3a1.3 1.3 0 0 1-1.3 1.3h-3a1.3 1.3 0 0 1-1.3-1.3v-3a1.3 1.3 0 0 1 1.3-1.3z',
+    'M11.1 2.6h3a1.3 1.3 0 0 1 1.3 1.3v3a1.3 1.3 0 0 1-1.3 1.3h-3a1.3 1.3 0 0 1-1.3-1.3v-3a1.3 1.3 0 0 1 1.3-1.3z',
+    'M3.9 9.8h3a1.3 1.3 0 0 1 1.3 1.3v3a1.3 1.3 0 0 1-1.3 1.3h-3a1.3 1.3 0 0 1-1.3-1.3v-3a1.3 1.3 0 0 1 1.3-1.3z',
+    'M11.1 9.8h3a1.3 1.3 0 0 1 1.3 1.3v3a1.3 1.3 0 0 1-1.3 1.3h-3a1.3 1.3 0 0 1-1.3-1.3v-3a1.3 1.3 0 0 1 1.3-1.3z',
+  ),
   /** Storyboard view pill: shot canvas. Two nodes and the link between them. */
   canvas: P(18, 'M3.6 4.5h3.2a1.1 1.1 0 0 1 1.1 1.1v2.2a1.1 1.1 0 0 1-1.1 1.1H3.6a1.1 1.1 0 0 1-1.1-1.1V5.6a1.1 1.1 0 0 1 1.1-1.1z', 'M11.2 9.1h3.2a1.1 1.1 0 0 1 1.1 1.1v2.2a1.1 1.1 0 0 1-1.1 1.1h-3.2a1.1 1.1 0 0 1-1.1-1.1v-2.2a1.1 1.1 0 0 1 1.1-1.1z', 'M7.9 6.7h2.2v4.6'),
   /** Storyboard view pill: shot list. Three lines. */

@@ -79,7 +79,7 @@ export const LocationsWorkspace = ({
 
   return (
     <main data-route="locations" data-sub-view={view} data-locations-state={empty ? 'empty' : view} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <LocationsToolbar total={rows.length} view={view} baseHref={baseHref} filter={filter} onFilter={setFilter} />
+      <LocationsToolbar total={rows.length} filter={filter} onFilter={setFilter} />
 
       {empty ? (
         <EmptyLocations projectId={projectId} derivable={derivable ?? { count: 0, sluglines: 0, top: [] }} run={run} />

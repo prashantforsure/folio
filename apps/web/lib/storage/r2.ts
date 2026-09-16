@@ -62,6 +62,25 @@ export const publicUrl = (key: string | null): string | null => {
 
 const encodeKey = (key: string): string => key.split('/').map(encodeURIComponent).join('/')
 
+/**
+ * The key behind a public URL this bucket wrote, or null: storage unset,
+ * or a URL from somewhere else. The inverse of `publicUrl`, for a caller
+ * that stored the URL rather than the key (`shots.frame_upload_url`, a URL
+ * the way a generation's `frame_url` is one) and now needs to delete the
+ * object.
+ */
+export const keyOfPublicUrl = (url: string): string | null => {
+  const r2 = client()
+  if (r2 === null) return null
+  const prefix = `${r2.publicBase}/`
+  if (!url.startsWith(prefix)) return null
+  try {
+    return url.slice(prefix.length).split('/').map(decodeURIComponent).join('/')
+  } catch {
+    return null
+  }
+}
+
 export type StorageOutcome = { readonly ok: true } | { readonly ok: false; readonly message: string }
 
 /** Write an object. The caller has already checked the bytes are what it says they are. */

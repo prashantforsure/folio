@@ -262,10 +262,17 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 - Rail order is fixed (`docs/ui design/README.md`, "Rail"): Writing · Characters · Locations ·
   Timeline · Research · Production. Writing stays lit across all four writing routes. Insights
   was removed with the v2 redesign (2026-09-16); its name stays reserved.
-- The writing sidebar lists **Script · Outline · Scenes**. Storyboard is not a row: it is the
-  other half of the header's Write / Storyboard mode pill (ruled 2026-09-16).
-- On the writing routes the rail's Characters icon opens a 330px peek overlay, with the full
-  route linked inside it; on the record routes it navigates.
+- The writing sidebar lists **Script · Storyboard · Outline · Scenes** (ruled 2026-09-17, reversing
+  2026-09-16: the header's Write / Storyboard mode pill is gone on every route, Storyboard is a row
+  under Script). The header's centre is the **current route's sub-views** - `?view=` tabs, each its
+  name beside its icon where the design draws one (`lib/workspace/views.ts`); a route with one view
+  has an empty centre. Route toolbars do not draw a second view switcher.
+- The rail's Characters icon navigates to `/characters` from every route (re-ruled by the client
+  2026-09-16; the writing mockups' 330px peek overlay was built in the first shell pass and
+  removed).
+- Characters' `Cast · Relationships · Sheet` tabs are **not** `?view=` (ruled 2026-09-16, the
+  Script route's precedent): the URL stays `/characters`, the view is React state in the route's
+  layout. See the exception table.
 
 ### UI fidelity
 
@@ -419,7 +426,8 @@ share a file.
 | `script.content=empty` | A data state, not a switch | Derive it from whether a script exists |
 | `production.state` | The generation job's status | Drive it from the job row. All six states get built |
 | theme, zoom, panels, palette, aiScope | Per user or per session | localStorage or session state |
-| the assistant panel, the Characters overlay | The same panel on every route; a peek that must not survive a navigation | `assistantOpen` is session state; the overlay is ephemeral React state |
+| the assistant panel | The same panel on every route | `assistantOpen` is session state |
+| Characters' `cast \| relationships \| sheet` | Ruled 2026-09-16 (the client): switching must be instant and the URL must stay `/characters`, as the Script's switches were ruled 2026-09-11 | React state in the route's layout (`_characters/view-state.tsx`), so it survives opening the drawer; `?view=` is an unknown key there |
 | which document the Script shows, the title-page or the script | Component state (ruled 2026-09-11); a scene the sidebar scrolls to is a `#n-<node id>` fragment, never `?selected=` | Not a param |
 
 ### The agent may write anywhere — except

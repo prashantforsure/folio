@@ -13,10 +13,11 @@ import type { WalkOptions } from '../playwright.config'
  * What this proves, in order:
  *
  *   1. **The shell, both themes.** The sidebar card with `Scenes from
- *      script` and the `Episode frames` widget; the header without the
- *      Write / Storyboard pill and with its third crumb; the toolbar's
- *      Scene | Episode pill over `?view=`; the 28px status bar; no script
- *      is the one 440px card; `?view=` outside `scene | episode` is a 404.
+ *      script` and the `Episode frames` widget; the header with its third
+ *      crumb and the Scene | Episode pill in its centre over `?view=`
+ *      (moved there from the toolbar 2026-09-17); the 28px status bar; no
+ *      script is the one 440px card; `?view=` outside `scene | episode` is
+ *      a 404.
  *   2. **A script is scene tabs; an empty scene is the card; a reel is a
  *      card of three columns.** The strip, the sidebar rows and the table
  *      list the same scenes; `＋ Empty reel` draws a reel; `✦ Propose
@@ -139,14 +140,15 @@ test('the shell in both themes; no script is one card; a bad view is a 404', asy
   await expect(main).toHaveAttribute('data-sub-view', 'scene')
   await expect(main).toHaveAttribute('data-production-state', 'no-script')
   await expect(page.locator('[data-production-empty="no-script"]')).toBeVisible()
-  // The shell: the sidebar card with this route's two slots, the header without the mode pill, the third crumb, the status bar.
+  // The shell: the sidebar card with this route's two slots, the header with the third crumb and the views in its centre, the status bar.
   await expect(page.locator('aside[data-sidebar] [data-production-scenes]')).toBeVisible()
   await expect(page.locator('[data-episode-frames-card] [data-episode-frames]')).toHaveText('0 / 0')
-  await expect(page.locator('[data-mode-pill]')).toHaveCount(0)
   await expect(page.locator('[data-route-crumb]')).toHaveText('Production')
   await expect(page.locator('[data-reels-chip]')).toHaveText('0 reels in this scene')
   await expect(page.locator('[data-status-bar] [data-route-id]')).toHaveText('ep_001/production')
-  await expect(page.locator('[data-view-pill][data-shape="text"] [data-view-tab="scene"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('[data-writing-header] [data-view-pill] [data-view-tab]')).toHaveText(['Scene', 'Episode'])
+  await expect(page.locator('[data-writing-header] [data-view-pill] [data-view-tab="scene"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('[data-production-toolbar] [data-view-pill]')).toHaveCount(0)
   await expect(page.locator('nav[data-rail] [data-rail-item][aria-current="page"]')).toHaveAttribute('data-rail-item', 'production')
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)

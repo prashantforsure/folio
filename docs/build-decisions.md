@@ -28,6 +28,255 @@ at in the code today.
 
 ---
 
+## Redesign, the header's views - the mode pill goes, Storyboard is a row (2026-09-17)
+
+The client's brief, verbatim in intent: remove the Write / Storyboard buttons from the top bar
+on every shell - the sidebar has a Script row so `Write` says nothing, and Storyboard goes
+below it - and have the top bar show the sub-pages of the page instead (the Storyboard's
+boards, canvas, shot list), each with its name and not only an icon, the same on every route.
+
+### Rulings this reverses
+
+| Ruled before | Ruled now |
+| --- | --- |
+| 2026-09-16: the writing sidebar is Script · Outline · Scenes; Storyboard is the header pill's other half (AGENTS.md, Routing; the README's "Header") | **Script · Storyboard · Outline · Scenes**, Storyboard directly under Script; no mode pill anywhere. AGENTS.md's bullet, the README's "Header" and "Toolbar" (amended in place, the mockups still draw the pill) and `lib/workspace/routes.ts` say so |
+| The mockups' Storyboard and Scenes pills are icon-only 34×30 tabs; the record routes' are text | **One shape: icon beside name.** Every tab prints its name; the Storyboard's and Scenes' draw the mockup's icon before it. `_chrome/view-pill.tsx` lost its `shape` prop and `data-shape` |
+| The view switcher is the toolbar's, per route | **The header's centre, for every route** - where the pill sat. `lib/workspace/views.ts` is the table, `_chrome/header-views.tsx` lights the tab from `?view=`, and the five toolbars (Storyboard, Production, Locations, Research, Characters) and the Scenes page header stopped drawing theirs |
+
+### Calls made, not ruled
+
+- **Labels.** The Storyboard's tabs print `Boards · Canvas · Shot list` (the brief said
+  "storyboard, canvas, shotlist"; `Storyboard` under the Storyboard row is a tautology and the
+  sidebar group is already `Boards`); their tooltips stay the mockup's `Scene boards` / `Shot
+  canvas` / `Shot list`. Scenes prints `Cards · Index cards · Scene list`. Every other route
+  prints the names it already had.
+- **Icons only where a mockup draws one.** The Scenes mockup's four-tile `cards` icon is
+  transcribed into `icons.tsx` (the set "grows only when a mockup does"); `index` reuses
+  `board` and `list` reuses `list`, as the mockup does. Production, Characters, Locations,
+  Timeline and Research have text tabs in their mockups and there is no icon to transcribe -
+  drawing one would be the lookalike AGENTS.md refuses. The `write` and `storyboard` icons the
+  pill drew stay in the set, orphaned.
+- **The header reads `?view=` itself** (`useSearchParams`, under a `Suspense`) rather than the
+  page publishing its parsed view to a cell: it is the same string the page parsed, the page
+  already 404s an unknown value, and no cell needs seeding. Two routes cannot use that rule and
+  hand the header their own tabs through a new `views` slot: Characters (`CharactersHeaderViews`,
+  its views are state) and Research (`ResearchHeaderViews`: a source page, `/research/:sourceId`,
+  is the `source` view with no query in its address - the shared rule lit `Library` under a source
+  body until the review pass caught it; the segment below `research/layout.tsx` says which).
+- **The header at its narrowest** (1200px, sidebar and assistant both open - the README's smallest
+  in-flow case): three named tabs are wider than the two-tab pill was, so the halves give way
+  first - the right half keeps `min-width: fit-content` (Share and the orb never slide under the
+  tabs) and the episode crumb's wrapper is `min-w-0 shrink` (it truncates after the project
+  title does). Measured: at 1200px with both panels open the crumb is `Res… / ⌄`, the pill and
+  Share intact.
+- **Timeline is untouched.** It has no 60px header yet - it still draws its pre-redesign
+  `ContextColumn` and its own 46px header with glyph + name tabs - and building the shell header
+  there is the Timeline pass. Its row in `ROUTE_VIEWS` exists so the table is total and the test
+  holds; nothing reads it yet.
+- **The writing routes' crumb is unchanged** (`Project / Episode ▾`); the lit sidebar row names
+  the route. The record routes keep their third crumb.
+- **`ROUTE_VIEWS` is typed against `SUB_VIEW_SCHEMAS`** and `tests/workspace-routes.test.ts`
+  asserts the two agree both ways, in order - a new `?view=` value without a tab fails the unit
+  test before it fails a walk.
+
+### Found on the way
+
+- **The Locations route crashed on load** - `locations-layout.tsx` (a Server Component) called
+  `sidebarRowOf`, a function exported from the `'use client'` module `location-sidebar.tsx`,
+  and React refuses that ("Attempted to call sidebarRowOf() from the server"). Reported in the
+  2026-09-16 user walk; fixed here by moving `LocationSidebarRow` and `sidebarRowOf` to
+  `lib/locations/view.ts`, the plain module both sides import.
+- **`e2e/workspace-routes.ts` had drifted** from the v2 bodies: the Storyboard row still
+  expected an `h1` (the v2 toolbar has none) and Production's still said `context 250` (the v2
+  layout draws the sidebar card). Corrected to what the routes draw, so the workspace walk can
+  pass; the walk now also asserts the header's centre per route (`HEADER_VIEWS`).
+- `tests/workspace-routes.test.ts` still expected `parseSubViews('characters', {})` to yield
+  `view: 'cast'`, one pass behind the ruling that made Characters' views state. Corrected.
+- `CONTEXT_PANEL_WIDTH` still listed `production: 250` with a comment saying Production had not
+  had its pass; the v2 Production layout draws the sidebar card. Now `{ timeline: 250 }` -
+  Timeline is the one route left on a context column - and `ContextColumn`'s route type says so.
+- The workspace walk's `expectSidebar` asserted the Scenes group's empty copy on the Outline row,
+  where the second group is `In this outline` (`[data-toc-empty]`). Branched per route.
+- Root `CLAUDE.md`'s "Done" list omitted Locations (rebuilt 2026-09-16); `apps/web/CLAUDE.md`
+  still had the project shell drawing "the Characters overlay", deleted by the Characters second
+  pass. Both corrected.
+
+### Files
+
+`lib/workspace/views.ts` (new), `lib/workspace/routes.ts` (`SIDEBAR` four rows; `WRITING_MODES`,
+`writingModeOf`, `WRITING_MODE_TARGET` deleted), `_chrome/header-views.tsx` (new),
+`_chrome/writing-header.tsx`, `_chrome/view-pill.tsx`, `_chrome/record-toolbar.tsx` (no `pill`),
+`_chrome/characters-layout.tsx`, `_characters/view-state.tsx` (`CharactersHeaderViews`),
+`_chrome/research-layout.tsx`, `_research/research-header-views.tsx` (new), the five toolbars,
+`_scenes/scenes-header.tsx` and both Scenes pages, `packages/ui/src/icons.tsx` (`cards`),
+`globals.css` (`.folio-pill-tab` deleted; `.folio-view-pill` one shape), `lib/locations/view.ts`,
+`_locations/location-sidebar.tsx`, `_chrome/locations-layout.tsx`, `_chrome/context-column.tsx`,
+AGENTS.md, both CLAUDE.md files, the design README, the unit test and seven E2E files.
+
+### Verified
+
+- `pnpm typecheck` 6/6, `pnpm lint` 7/7, `pnpm build` clean including the secrets scan - after the
+  review fixes.
+- `tests/workspace-routes.test.ts` 23/23 and `tests/shell-and-state.test.ts` (35 between them) on
+  nvm's Node 22.23.2 (`node_modules/vitest/vitest.mjs` directly; the default 22.5.1 hits
+  `ERR_REQUIRE_ESM` on jsdom, root `CLAUDE.md` trap 2). The new `the header's views` block asserts
+  `ROUTE_VIEWS` against every schema, the labels and icons, and `currentView`'s default.
+- A five-lens review (runtime, types and leftovers, UI and design rules, tests and E2E, docs), each
+  finding put to two adversarial verifiers, confirmed fourteen and refuted two. The one behavioural
+  regression - Research's source page lighting `Library` - is fixed above; the rest were the header
+  at 1200px, the Outline row in the walk, `CONTEXT_PANEL_WIDTH`, and comment and doc slips, all
+  fixed the same pass.
+- Browser walk on the `:3000` dev server (`e2e-canvas@example.com`), 1440 and 1200px, both themes:
+  the header's centre names the route's views on Storyboard (board, canvas, list), Scenes,
+  Production, Characters, Locations and Research, lit tab following `?view=` across soft
+  navigation, Characters switching without changing the address, Script and Outline with an empty
+  centre; the sidebar's Storyboard row lit on the Storyboard with its `4 shots` meta; Locations
+  loads (it crashed before).
+- E2E against the same server: `storyboard-route.spec.ts` 5/5 (7.1m); `research-route.spec.ts` 4/4
+  (3.8m, after the source-page fix); the shell walks of `production-route`, `locations-route` and
+  `characters-route` (walks 1-2) pass. Not green, not mine: `characters-route` walk 3 fails on
+  `[data-unmatched-match]` (the concurrent Characters second pass's queue), and the suite is
+  serial, so walks 4-6 - including walk 6's click on the `relationships` tab, now in the header -
+  did not run; the suite cannot be started at walk 6 (`charactersUrl` is set by walk 1), and the
+  same click succeeded in the browser walk above. Rerun the suite once that pass settles.
+  `workspace.spec.ts` was not run (it creates two projects per run); its rows were corrected
+  against the routes as drawn.
+
+---
+
+## Redesign phase 3, second pass - the Storyboard canvas (2026-09-17)
+
+The Storyboard's canvas view becomes a free surface. Phase 3 built the mockup's "CANVAS" as a
+CSS-scaled strip of nodes joined by hairlines; the client asked for the Laper AI shape instead -
+pan, zoom, cards dragged anywhere, the sequence drawn as a linked list with animated threads,
+each card a `Storyboard | Lens` toggle, `Generate` beside a `⋯` with Upload image / Clear image /
+Delete, `Add shot` in the toolbar, and one `Display` menu on the list for sort and filter. The
+board (scene columns, Auto board) stays as built.
+
+Four rules collided with the ask; the client ruled on each before the pass started.
+
+### Rulings taken this pass
+
+| Question | Ruling |
+| --- | --- |
+| A card's position needs a home; `shots` had only `order_key` | **Persisted, per shot**, in migration `0020`: `canvas_x` / `canvas_y`, nullable integers in world px, both or neither by a check. Null means "laid out from `order_key`" (`lib/storyboard/canvas.ts`, `autoLayout`). Position is cosmetic: the thread, the number the card prints and the order a reel renders all still read `order_key`, so dragging a card never reorders anything. The alternatives - auto layout with drag as reorder, or a per-tab `sessionStorage` position - were offered and declined |
+| `docs/ui design/README.md`: "Transitions are .14s on background, colour, border and opacity - nothing else animates. The one exception is the assistant orb's 9s drift" | **The thread animates**, and the README now names two exceptions. `.folio-thread` is a dashed SVG path whose `stroke-dashoffset` loops (`@keyframes folio-thread`, 1.6s, 6 + 8 = 14px so the loop is seamless); `prefers-reduced-motion` stops it |
+| AGENTS.md: a dependency needs approval, every time | **Hand-rolled.** `@xyflow/react` was named and declined: pan, zoom, drag and threads are pointer capture, one `translate() scale()` on a world div, and an inline SVG (`_storyboard/canvas/`, ~600 lines with the card). No new package |
+| `Upload image` had no backend: a frame is a `frame_generations` row, and a generation needs a job | **`shots.frame_upload_url text`**, in the same migration - a URL the way a generation's `frame_url` is one. The upload goes to R2 through `lib/storage/r2.ts` on the location photo's pattern, gated on the `R2_*` block; without it the menu item is drawn disabled with the reason in its title |
+
+### Calls made in the pass, flagged
+
+- **One scene per canvas**, as the strip was. Every write is per scene, no cross-scene move
+  exists, and a thread is one scene's sequence. The scene is picked by the canvas toolbar's
+  `‹ Scene NN ›` stepper, the sidebar's `Boards` group, or the board column's new `Open`. The
+  selection stays component state (open decision 10 untouched): Next 16 keys the page segment
+  without its search params, so `StoryboardWorkspace` stays mounted across `?view=` and `Open`
+  lands on the scene it named. Verified in `layout-router.js`, not assumed.
+- **Upload precedence.** A new `FrameState` kind, `uploaded { url }`, rather than a `drawn` with
+  a fake job. `foldUpload` (`@folio/db`, `repositories/storyboard.ts`) prefers the upload over
+  every settled generation - empty, drawn, failed, blocked, cancelled - and lets a `queued` or
+  `running` job show through, because the writer needs its Cancel / Stop and its reservation
+  notice more than the picture. `readBoardCoverage`'s `drawn` count says the same in SQL. The
+  Production route's tiles read `uploaded` as done; its takes stay generation-only.
+- **`placeShotOnCanvas` is not gated by `notLocked`.** A finalized reel locks what it renders
+  from; a position renders nothing. Every other shot write still carries the predicate.
+- **`FilterMenu` is gone; `[data-filter-menu]` with it.** The one `Display` menu has three
+  sections - Show (descriptions, frames), Sort (list view only), Filter - and the button prints
+  the filter's name when one is set. Walk 3's two clicks moved. Sort is `sortShots` in
+  `lib/storyboard/board.ts`: story order, shot size (by the vocabulary), lens (null last),
+  needs-work-first; stable over the sequence; the list header says `sorted by lens` when it is
+  not the sequence. This overrides phase 3's "a sort that reorders the print would be a different
+  document" - the header line is what keeps it honest.
+- **`Add shot` appends a blank node immediately** (`BLANK_SHOT` through `onAdd`) and the card is
+  edited where it lands; the board column's form-based add is unchanged.
+- **The card edits in place, two ways.** The description is a click-to-edit textarea on the
+  `Storyboard` tab (blur or Cmd+Enter saves through the label book, Escape leaves); the `Lens`
+  tab's four selects each save the whole spec on change (`shotEditOf` fills the rest). The long
+  form with the duration is still `⋯ → Edit`. Editing a proposal still accepts it.
+- **Lens is a select of presets** - 14, 24, 35, 50, 85, 135, 200 - plus whatever the row holds
+  when it is none of those, plus `—`. The contract's lens stays a free integer.
+- **The `wheel` listener is added by hand with `{ passive: false }`.** React's `onWheel` is
+  passive, so `preventDefault` there is a no-op and the page would scroll under the zoom. Noted
+  in `apps/web/CLAUDE.md`.
+- **Icons.** No plus, trash or sparkle was added to `packages/ui/src/icons.tsx` - the set grows
+  only when a mockup does. `+` and `⋯` stay text glyphs; the board's `Open` reuses `canvas`.
+
+### What changed
+
+- `packages/db`: `0020_storyboard_canvas.sql` (applied to dev); `schema/storyboard.ts` three
+  columns and a check; `repositories/storyboard.ts` `foldUpload`, `placeShotOnCanvas`,
+  `setFrameUpload`, the coverage SQL; `repositories/production.ts` folds the upload into a
+  shot's frame.
+- `packages/contracts`: `ShotSchema` gains `canvasX`, `canvasY`, `frameUploadUrl`;
+  `FrameStateSchema` gains `uploaded`; `CanvasPositionSchema`; `FRAME_UPLOAD_MAX_BYTES`.
+- `apps/web/lib/storyboard`: `canvas.ts` (new, pure, tested); `board.ts` `SHOT_SORTS`,
+  `sortShots`, `shotEditOf`, `uploaded` in `isDrawn` / label / tone; `actions.ts`
+  `placeShotOnCanvas`, `uploadFrame`, `clearFrame`; `server.ts` `storage`. `lib/storage/r2.ts`
+  `keyOfPublicUrl`. `lib/production/{view,status}.ts` read `uploaded`.
+- `_storyboard/canvas/` (new): `canvas-view.tsx`, `use-canvas-viewport.ts`, `connectors.tsx`,
+  `shot-node.tsx`, `lens-panel.tsx`, `node-menu.tsx`. The old `canvas-view.tsx` is deleted.
+  `storyboard-toolbar.tsx` one menu; `handlers.ts` three handlers and `sort` / `storage` /
+  `canvasHref`; `board-view.tsx` `Open`; `list-view.tsx` sort; `shot-parts.tsx` draws an
+  upload. `globals.css`: the ground, the world, the grip, the tabs, the thread and its keyframe.
+- Docs: the README's motion rule; this section; `apps/web/CLAUDE.md`; `packages/db/CLAUDE.md`.
+
+### Verified
+
+`pnpm typecheck` 6/6, `pnpm lint` 7/7, `pnpm --filter @folio/db db:check` clean, `0020` applied
+to dev, `pnpm build` clean (`check:secrets` included). `tests/storyboard-canvas.test.ts` (new),
+`storyboard-board.test.ts`, `production-view.test.ts`, `production-status.test.ts`: 67 passing
+on local Node 22.5.1 (node environment; the jsdom trap does not apply). The E2E walk
+(`storyboard-route.spec.ts`, walks 3 and 5 extended: the merged Display menu, the fitted zoom,
+the grip drag surviving a reload with the number unchanged, the Lens select, Add shot and
+Remove from the canvas, Upload refused with its reason, the stepper, the list sort) ran **5/5**
+against the dev server on `:3000` with a throwaway account created through the Supabase admin
+API (`e2e-canvas@example.com`, password in the session's scratchpad only; flagged for deletion
+with the other `e2e-*` accounts). The first run failed walk 5 on an assertion that the canvas
+opens at `100%` - it opens fitted, `63%` at Playwright's 1280px viewport - and the assertion
+was rewritten to read the fitted value; the rerun was clean. Two things the browser found: the
+E2E screenshots are captured before hydration, so the fit moved from `useEffect` to
+`useLayoutEffect` to spare the writer the identity-then-fitted flash; and a thread in `--line`
+sinks into the grid dots (both ~10% white), so it is drawn in `--ink3`. Both themes checked on
+the board, the canvas (Storyboard and Lens tabs, the `⋯` menu) and the list's Display menu.
+
+---
+
+## Redesign phase 5, second pass - Characters: the rail is a link, the views are state (2026-09-16)
+
+Two client rulings on the built Characters route, both about where the address moves and where it
+does not. Neither touches a table, an action or a view body.
+
+### Rulings taken this pass
+
+| Question | Ruling |
+| --- | --- |
+| The rail's Characters icon opened the 330px peek overlay on the writing routes (phase 1's ruling, from the writing mockups' "CONTEXT OVERLAY") and navigated only on the record routes | **A plain link to `/characters` from every route.** The client: "take me directly to the /characters route, don't open the side tab." The overlay (`_chrome/characters-overlay.tsx`), its read (`lib/characters/peek.ts`) and its ephemeral flag (`contextOverlay` in `lib/state/ephemeral.tsx`) had no other reader and are deleted rather than left unreachable - a peek nothing can open is a placeholder. The rail's one `button` branch goes with them: six `Link`s, one shape |
+| `Cast · Relationships · Sheet` were `?view=` (AGENTS.md, Routing: "sub-views are query params") | **Client state; the URL stays `/characters`.** The client's words: "keep it smooth ... don't change the route." The same ruling the Script route took on 2026-09-11 for its Script / Cover and Info / Collaboration switches, now a row of its own in AGENTS.md's exception table. `params.ts` parses no `view` for `characters`; a stale `?view=relationships` is an unknown key and opens the cast, not a 404 (the Script's stale `?doc=` reading) |
+| Where the state lives | **The route's layout**, `_characters/view-state.tsx`, beside `CastSidebarProvider`. Opening a record is a navigation (`/characters` → `/characters/:id`) and the page subtree remounts; state in the workspace would snap back to the cast on every graph node or sheet row clicked - which is what the URL-borne view already did, since `characterHref` carried no query. In the layout the view rides across the drawer's open and close, and resets to the cast on a full load |
+| The pill's tabs were `Link`s over `?view=` in the shared `_chrome/view-pill.tsx` | **A second target on the same component.** `ViewPill` takes `baseHref` (links, as before, for the five routes still on `?view=`) or `onSelect` (buttons). Same class, same `aria-current`, same `data-view-tab`, so the CSS and the E2E read one shape. The link variant keeps its guarantee through a conditional: `baseHref` is `never` unless every item is an `AnySubView` |
+| The drawer's `Relationships →` linked to `?view=relationships`, which also closed the drawer | **A button that sets the view**, drawer left open with the record's node lit in the graph. Closing it as a side effect was the link's accident, not a design |
+
+### What changed
+
+- `_chrome/rail.tsx`, `_chrome/project-shell.tsx`, `layout.tsx`: the overlay wiring and the
+  shell's unused `title` prop go; `Escape` no longer has an overlay to close.
+- Deleted: `_chrome/characters-overlay.tsx`, `lib/characters/peek.ts`; `CONTEXT_OVERLAYS` /
+  `contextOverlay` out of `lib/state/ephemeral.tsx`.
+- `lib/workspace/params.ts`: `characters: z.object({})`, with the ruling written beside the
+  Script's.
+- `_characters/view-state.tsx` (new): `CharactersView`, `CHARACTERS_VIEWS`,
+  `CharactersViewProvider`, `useCharactersView`. `characters-layout.tsx` wraps the route in it;
+  the workspace, toolbar and drawer read it; `CharactersRoute` no longer passes `view`.
+- E2E: `workspace.spec.ts`'s overlay walk is now "the rail navigates straight to `/characters`";
+  `characters-route.spec.ts` clicks the tabs and asserts the URL does not move, and asserts a
+  stale `?view=` is a 200 on the cast. Both unrun (need credentials).
+
+### Verified
+
+`pnpm --filter web exec tsc --noEmit` clean; eslint clean on every touched file.
+
+---
+
 ## Redesign phase 7 - the Research route (2026-09-16)
 
 The seventh route rebuilt to the v2 package, and the first built from nothing: `docs/ui

@@ -12,8 +12,9 @@ import type { WalkOptions } from '../playwright.config'
  * What this proves, in order:
  *
  *   1. **The empty state, both themes.** No script; the sidebar's
- *      widget counts boards, not credits; the mode pill lights
- *      Storyboard; `?view=` outside `board | canvas | list` is a 404.
+ *      widget counts boards, not credits, and its Storyboard row is lit;
+ *      the header's centre is `Boards · Canvas · Shot list`, iconed, with
+ *      the board lit; `?view=` outside `board | canvas | list` is a 404.
  *   2. **A script is columns; Auto board proposes; accepting boards.** The
  *      imported script's two accepted headings are two columns (the
  *      `INTERCUT` line is neither a scene nor a column) and two rows in the
@@ -31,8 +32,14 @@ import type { WalkOptions } from '../playwright.config'
  *      with no credits the server refuses with the numbers; with a grant on
  *      the ledger a click writes a queued job; a reload still shows it
  *      queued; cancelling releases it.
- *   5. **Canvas and list draw the same rows.** The node's `⋯` moves it, the
- *      zoom pill scales the strip, the sidebar picks the scene.
+ *   5. **Canvas and list draw the same rows.** The node's `⋯` moves it in
+ *      the sequence; the zoom pill scales the world; a card dragged by its
+ *      grip keeps its position across a reload while its number does not
+ *      change; the `Lens` tab saves a select; `Add shot` in the canvas
+ *      toolbar appends a node and `⋯ → Remove` takes it away; `Upload
+ *      image` is refused with a reason without `R2_*` and stores a frame
+ *      with it; the stepper and the sidebar pick the scene; the list's
+ *      `Display` sorts.
  *
  * Needs a real account; skips without one. Leaves one project behind per
  * run, with a grant of 8 credits on its ledger.
@@ -75,6 +82,12 @@ Meera?
 
 /** What the placeholder cost is, read from the page rather than assumed. */
 let cost = 0
+
+/** A 1×1 transparent PNG, for the upload walk. */
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+)
 
 const signIn = async (page: Page, account: WalkOptions['account']): Promise<void> => {
   if (account === null) throw new Error('The walk needs an account.')
@@ -162,9 +175,15 @@ test('empty state, both themes; a bad view is a 404', async ({ page, account }) 
   await expect(page.locator('[data-empty-state="no-script"]')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'No script yet' })).toBeVisible()
   await expect(page.locator('[data-shot-count]')).toHaveText('0 shots')
-  // The sidebar counts boards here, not credits, and the mode pill lights Storyboard.
+  // The sidebar counts boards here, not credits, and lights its Storyboard row (a row since 2026-09-17).
   await expect(page.locator('[data-boards-card] [data-boards-drawn]')).toHaveText('0 / 0')
-  await expect(page.locator('[data-mode-pill] [data-mode="storyboard"]')).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('aside[data-sidebar] a[data-episode-route][aria-current="page"]')).toHaveAttribute('data-episode-route', 'storyboard')
+  // The header's centre is the three views, each an icon beside its name, the board lit.
+  const headerPill = page.locator('[data-writing-header] [data-view-pill]')
+  await expect(headerPill.locator('[data-view-tab]')).toHaveText(['Boards', 'Canvas', 'Shot list'])
+  await expect(headerPill.locator('[data-view-tab] svg')).toHaveCount(3)
+  await expect(headerPill.locator('[data-view-tab="board"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('[data-storyboard-header] [data-view-pill]')).toHaveCount(0)
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
     await page.screenshot({ path: `test-results/storyboard-empty-${theme}.png`, fullPage: false })
@@ -301,13 +320,13 @@ test('a shot is authored: edit with an @mention, drag to reorder, add, remove, f
   await expect(shots).toHaveCount(4)
   await expect(page.locator('[data-shot-count]')).toHaveText('4 shots')
 
-  // The filter reads the same rows: nothing has a frame yet.
-  await page.locator('[data-filter-menu]').click()
+  // The filter, in the one Display menu, reads the same rows: nothing has a frame yet.
+  await page.locator('[data-display-menu]').click()
   await page.locator('[data-filter="drawn"]').click()
   await expect(column.locator('[data-no-match]')).toBeVisible()
   await expect(shots).toHaveCount(0)
-  await page.locator('[data-filter-menu]').click()
   await page.locator('[data-filter="all"]').click()
+  await page.keyboard.press('Escape')
   await expect(shots).toHaveCount(4)
 })
 
@@ -404,16 +423,86 @@ test('canvas and list draw the same rows', async ({ page, account }) => {
   await expect(nodes.nth(1)).toHaveAttribute('data-shot-node', thirdId ?? '')
   await expect(nodes.nth(1)).toHaveAttribute('data-shot-number', '01-02')
 
-  // The zoom pill scales the strip; Fit never exceeds 100%.
+  // The canvas opens fitted (never past 100%); the pill steps the zoom either side of it.
+  const zoomLabel = page.locator('[data-zoom-label]')
+  await expect(zoomLabel).toHaveText(/^\d+%$/)
+  const fitted = Number.parseInt((await zoomLabel.textContent()) ?? '0', 10)
+  expect(fitted).toBeLessThanOrEqual(100)
   await page.locator('[data-zoom-pill]').getByRole('button', { name: 'Zoom out' }).click()
-  await expect(page.locator('[data-zoom-label]')).toHaveText('90%')
+  const out = Number.parseInt((await zoomLabel.textContent()) ?? '0', 10)
+  expect(out).toBeLessThan(fitted)
+  await page.locator('[data-zoom-pill]').getByRole('button', { name: 'Zoom in' }).click()
+  await page.locator('[data-zoom-pill]').getByRole('button', { name: 'Zoom in' }).click()
+  const back = Number.parseInt((await zoomLabel.textContent()) ?? '0', 10)
+  expect(back).toBeGreaterThan(fitted)
   await page.locator('[data-zoom-fit]').click()
-  await expect(page.locator('[data-zoom-label]')).toHaveText(/^\d+%$/)
+  await expect(zoomLabel).toHaveText(`${String(fitted)}%`)
 
-  // The sidebar's Boards group picks the scene the canvas shows.
-  await page.locator('[data-board-row]').nth(1).click()
+  // Every card sits where the sequence lays it until dragged; the threads follow the sequence.
+  await expect(page.locator('[data-threads] [data-thread]')).toHaveCount(3)
+  const first = nodes.nth(0)
+  const firstId = await first.getAttribute('data-shot-node')
+  const autoX = await first.getAttribute('data-canvas-x')
+  const grip = first.locator('[data-node-grip]')
+  const box = await grip.boundingBox()
+  if (box === null) throw new Error('The grip has no box.')
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 120, { steps: 6 })
+  await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2 + 160, { steps: 6 })
+  await page.mouse.up()
+  await waitSaved(page)
+  const movedX = await first.getAttribute('data-canvas-x')
+  expect(movedX).not.toBe(autoX)
+  // Position is cosmetic: the card is still first in the sequence.
+  await expect(first).toHaveAttribute('data-shot-number', '01-01')
+  await page.reload()
+  await waitMounted(page)
+  await expect(nodes.nth(0)).toHaveAttribute('data-shot-node', firstId ?? '')
+  await expect(nodes.nth(0)).toHaveAttribute('data-canvas-x', movedX ?? '')
+
+  // The Lens tab saves on change, and the card's tags say so.
+  await nodes.nth(2).locator('[data-node-tab="lens"]').click()
+  await nodes.nth(2).locator('[data-lens-field="size"]').selectOption('cu')
+  await waitSaved(page)
+  await nodes.nth(2).locator('[data-node-tab="storyboard"]').click()
+  await expect(nodes.nth(2)).toContainText('Close-up')
+  await expect(nodes.nth(2).locator('[data-frame]')).toContainText('CU ·')
+
+  // Add shot, in the canvas toolbar, appends a node to the sequence; its `⋯` removes it.
+  await page.locator('[data-shot-canvas] [data-add-shot]').click()
+  await waitSaved(page)
+  await expect(nodes).toHaveCount(5)
+  await expect(nodes.nth(4)).toHaveAttribute('data-shot-number', '01-05')
+  await expect(page.locator('[data-threads] [data-thread]')).toHaveCount(4)
+  await nodes.nth(4).locator('[data-node-menu]').click()
+  await page.locator('[data-delete-shot]').click()
+  await waitSaved(page)
+  await expect(nodes).toHaveCount(4)
+
+  // Upload image: refused with a reason without storage; a frame with it.
+  await nodes.nth(2).locator('[data-node-menu]').click()
+  const upload = page.locator('[data-upload-frame]')
+  if (await upload.isDisabled()) {
+    await expect(upload).toHaveAttribute('title', 'Frame storage is not set up on this server yet.')
+    await page.keyboard.press('Escape')
+  } else {
+    await upload.click()
+    await nodes.nth(2).locator('[data-upload-frame-input]').setInputFiles({ name: 'frame.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG })
+    await waitSaved(page)
+    await expect(nodes.nth(2).locator('[data-frame]')).toHaveAttribute('data-frame', 'uploaded')
+    await expect(nodes.nth(2).locator('[data-node-state]')).toHaveText('uploaded')
+    await nodes.nth(2).locator('[data-node-menu]').click()
+    await page.locator('[data-clear-frame]').click()
+    await waitSaved(page)
+    await expect(nodes.nth(2).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
+  }
+
+  // The stepper and the sidebar's Boards group pick the scene the canvas shows.
+  await page.locator('[data-scene-step="next"]').click()
   await expect(page.locator('[data-shot-count]')).toHaveText('Scene 02 · 0 shots')
   await expect(page.locator('[data-shot-canvas] [data-auto-board]')).toBeVisible()
+  await expect(page.locator('[data-board-row]').nth(1)).toHaveAttribute('aria-current', 'true')
   await page.locator('[data-board-row]').nth(0).click()
   await expect(nodes).toHaveCount(4)
   for (const theme of ['dark', 'light'] as const) {
@@ -429,6 +518,18 @@ test('canvas and list draw the same rows', async ({ page, account }) => {
   await expect(page.locator('[data-list-shot]').nth(0)).toContainText('01-01')
   await expect(page.locator('[data-list-shot]').nth(0)).toContainText('35mm')
   await expect(page.locator('[data-list-scene]').nth(1)).toContainText('No shots listed for this scene.')
+
+  // Display sorts the list: by lens, the 35mm shot leads and the header says so.
+  await page.locator('[data-display-menu]').click()
+  await page.locator('[data-sort="lens"]').click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-sorted-by]')).toHaveText('sorted by lens')
+  await expect(page.locator('[data-list-shot]').nth(0)).toContainText('35mm')
+  await page.locator('[data-display-menu]').click()
+  await page.locator('[data-sort="sequence"]').click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-sorted-by]')).toHaveCount(0)
+  await expect(page.locator('[data-list-shot]').nth(0)).toContainText('01-01')
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
     await page.screenshot({ path: `test-results/storyboard-list-${theme}.png`, fullPage: false })

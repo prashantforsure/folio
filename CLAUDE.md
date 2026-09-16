@@ -10,10 +10,10 @@ history (`git show 7a541bd:docs/build-decisions.md`) and are not the reference f
 
 **The app is mid-redesign.** `docs/ui design/README.md` and the nine `Route - * v2.dc.html`
 mockups are the spec; routes are rebuilt to them one at a time. Done: the shell (rail, writing
-sidebar and header, assistant panel, Characters overlay), **Script**, **Outline**,
-**Storyboard**, **Production**, **Characters** and **Research** (the first built from nothing: no body,
-table or contract existed before its pass). The other route bodies still draw their pre-redesign
-chrome inside the new shell until their own pass.
+sidebar and header, assistant panel), **Script**, **Outline**,
+**Storyboard**, **Production**, **Characters**, **Locations** and **Research** (the last built from
+nothing: no body, table or contract existed before its pass). Scenes and Timeline still draw their
+pre-redesign chrome inside the new shell until their own pass.
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -64,9 +64,13 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   `_chrome/project-shell.tsx` is the shell. The `/settings` stub has no route body. Production
   (v2, 2026-09-16) is the first route outside the writing surface on the shell:
   `_chrome/production-layout.tsx` renders the same `Sidebar` (with the route's `slots`) and
-  `WritingHeader` (with `route="production"`, so no mode pill) and the shared `_chrome/status-bar.tsx`
-  and `_chrome/view-pill.tsx`. The assistant (`lib/assistant/`, `app/api/assistant/route.ts`) and share
-  links (`lib/share/`, `app/share/[token]/`) are cross-route features built with the redesign.
+  `WritingHeader` (with `route="production"`, for the third crumb) and the shared `_chrome/status-bar.tsx`.
+  **The header's centre is the route's views** (2026-09-17): `lib/workspace/views.ts` tables every
+  route's `?view=` tabs, `_chrome/header-views.tsx` lights one from the URL, `_chrome/view-pill.tsx`
+  draws them (icon beside name, one shape); the writing sidebar is Script · Storyboard · Outline ·
+  Scenes and the Write / Storyboard pill is gone. The assistant (`lib/assistant/`,
+  `app/api/assistant/route.ts`) and share links (`lib/share/`, `app/share/[token]/`) are cross-route
+  features built with the redesign.
 - `apps/worker` — empty on purpose. Do not create `apps/sync/`.
 
 Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
@@ -90,7 +94,10 @@ Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
   block; the card's `Drop a reference` is a real drop. `character_relationships` is kept as a
   derivation read and nothing writes it. Gender, the colour picker, appearance, the alias
   table and merge have actions and no surface since the v2 pass. Generate (the look-sheet job)
-  is not built.
+  is not built. **The three views are client state, not `?view=`** (ruled 2026-09-16 with the
+  Script precedent): `_characters/view-state.tsx` in the route's layout; the pill's tabs are
+  buttons. The rail's Characters icon is a plain link everywhere - the writing-route overlay
+  was removed the same day.
 - **`beats`, `revisions` and `comment_threads` are tables with no route above them** (AGENTS.md,
   Constraints — all three routes were built, then cut). `beats` was dropped in migration `0010`;
   `revisions` and `comment_threads` stay: the Script route draws threads inline under their

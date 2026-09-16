@@ -131,6 +131,7 @@ export const frameTileOf = (shot: ProductionShot): FrameTile => {
   const { frame } = shot
   switch (frame.kind) {
     case 'drawn':
+    case 'uploaded':
       return { ...base, kind: 'done', word: 'Done', label: '', glyph: '', tone: 'ok', dashed: false, url: frame.url }
     case 'queued':
       return {
@@ -357,7 +358,7 @@ export const sceneCoverageOf = (scene: ProductionScene, input: GateInput): Scene
   for (const reel of scene.reels) {
     const accepted = reel.shots.filter((shot) => shot.state === 'accepted')
     shots += accepted.length
-    done += accepted.filter((shot) => shot.frame.kind === 'drawn').length
+    done += accepted.filter((shot) => shot.frame.kind === 'drawn' || shot.frame.kind === 'uploaded').length
     seconds += reel.clipSeconds
   }
   return {

@@ -43,6 +43,7 @@ export const StoryboardRoute = async ({
       labels={load.state === 'script' ? load.labels : []}
       available={load.balance.available}
       cost={load.state === 'script' ? load.cost : null}
+      storage={load.state === 'script' && load.storage}
     />
   )
 }

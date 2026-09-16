@@ -53,6 +53,15 @@ import type { WorkspaceRoute } from './routes'
  * hide a script that exists. `composer` is not a panel either: ruled
  * 2026-09-11, the composer is a floating window.
  *
+ * ## Characters has none either - ruled 2026-09-16
+ *
+ * The v2 pass parsed `view: cast | relationships | sheet` here; the client
+ * then ruled the route's tabs the way the Script's switches were ruled:
+ * instant, and the URL stays `/characters`. The view is React state in the
+ * route's layout (`_characters/view-state.tsx`), so `?view=` is an unknown
+ * key on this route - a stale `?view=relationships` link opens the cast and
+ * is not a 404.
+ *
  * ## `selected` is not wired
  *
  * The README puts a selected record in `?selected=`, and the storyboard
@@ -75,7 +84,7 @@ export const SUB_VIEW_SCHEMAS = {
   storyboard: z.object({ view: first(['board', 'canvas', 'list']) }),
   scenes: z.object({ view: first(['cards', 'index', 'list']) }),
   production: z.object({ view: first(['scene', 'episode']) }),
-  characters: z.object({ view: first(['cast', 'relationships', 'sheet']) }),
+  characters: z.object({}),
   locations: z.object({ view: first(['places', 'scenes', 'sheet']) }),
   timeline: z.object({ view: first(['story', 'chrono', 'continuity']) }),
   research: z.object({ view: first(['library', 'source', 'clips']) }),

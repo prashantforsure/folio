@@ -7,29 +7,20 @@ import { memo, useRef, useState } from 'react'
 import type { CastGroup } from '../../../../../../lib/characters/cast'
 import { CAST_GROUPS, CAST_GROUP_LABELS } from '../../../../../../lib/characters/cast'
 import { setNewCharacterOpen } from '../../../../../../lib/characters/compose'
-import type { ProjectRoutePath } from '../../../../../../lib/workspace/hrefs'
 import { useDismiss } from '../_chrome/use-dismiss'
-import { ViewPill } from '../_chrome/view-pill'
-import type { ViewPillItem } from '../_chrome/view-pill'
 
 /**
  * The Characters toolbar row - `Route - Characters v2.dc.html`: the route
- * name, the count chip, the `Cast · Relationships · Sheet` pill (the
- * shared `_chrome/view-pill.tsx`, text shape, over `?view=`), `flex: 1`,
- * `All characters ▾` and the solid `＋ New`. `12px 20px`, 10px gaps.
+ * name, the count chip, `flex: 1`, `All characters ▾` and the solid `＋
+ * New`. `12px 20px`, 10px gaps. The mockup's `Cast · Relationships · Sheet`
+ * pill sat between the chip and the gap; since 2026-09-17 it is the
+ * header's centre (`view-state.tsx`, `CharactersHeaderViews`), as every
+ * route's views are.
  *
  * The filter is real: a menu over the groups and the statuses, narrowing
  * the cast and the sheet. Component state - a way of looking, not an
  * address (the Storyboard's ruling for its `All shots ▾`).
  */
-export type CharactersView = 'cast' | 'relationships' | 'sheet'
-
-export const CHARACTERS_VIEWS: readonly ViewPillItem<CharactersView>[] = [
-  { id: 'cast', title: 'Cast' },
-  { id: 'relationships', title: 'Relationships' },
-  { id: 'sheet', title: 'Sheet' },
-]
-
 export type CastFilter = 'all' | `group:${CastGroup}` | `status:${(typeof CHARACTER_STATUSES)[number]}`
 
 export const filterLabel = (filter: CastFilter): string => {
@@ -87,14 +78,10 @@ FilterMenu.displayName = 'FilterMenu'
 export const CharactersToolbar = memo(
   ({
     total,
-    view,
-    baseHref,
     filter,
     onFilter,
   }: {
     readonly total: number
-    readonly view: CharactersView
-    readonly baseHref: ProjectRoutePath
     readonly filter: CastFilter
     readonly onFilter: (filter: CastFilter) => void
   }) => (
@@ -103,9 +90,6 @@ export const CharactersToolbar = memo(
       <span className="tabular whitespace-nowrap rounded-pill bg-s2 px-[10px] py-[4px] text-11-5 text-ink2" data-cast-count>
         {total}
       </span>
-      <div className="ml-[4px] min-w-0">
-        <ViewPill label="Character views" shape="text" items={CHARACTERS_VIEWS} current={view} baseHref={baseHref} />
-      </div>
       <div className="flex-1" />
       <FilterMenu filter={filter} onPick={onFilter} />
       <button

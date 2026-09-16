@@ -63,6 +63,9 @@ import { OrderKeySchema, TimestampSchema } from './primitives'
 /** Credits reserved for one frame. Placeholder - see the header. */
 export const FRAME_GENERATION_COST = 4
 
+/** The most an uploaded frame may weigh. The location photo's bound, for the same reason. */
+export const FRAME_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+
 // ---------------------------------------------------------------------------
 // The shot
 // ---------------------------------------------------------------------------
@@ -102,11 +105,31 @@ export const ShotSchema = z.object({
   reelId: ReelIdSchema.nullable(),
   origin: ShotOriginSchema,
   state: ShotStateSchema,
+  /**
+   * Where the Storyboard canvas last left the card, in world px, or null:
+   * laid out from `order_key`. Cosmetic - the sequence is `order_key` alone
+   * (`schema/storyboard.ts`). Both or neither.
+   */
+  canvasX: z.int().nullable(),
+  canvasY: z.int().nullable(),
+  /** A frame the writer uploaded, or null. Wins over a generation until cleared. */
+  frameUploadUrl: z.string().nullable(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 })
 
 export type Shot = z.infer<typeof ShotSchema>
+
+/**
+ * Where a card is put on the canvas. World px, whole, and bounded so a
+ * runaway drag cannot write a coordinate nothing can pan to.
+ */
+export const CanvasPositionSchema = z.object({
+  x: z.int().min(-100_000).max(100_000),
+  y: z.int().min(-100_000).max(100_000),
+})
+
+export type CanvasPosition = z.infer<typeof CanvasPositionSchema>
 
 // ---------------------------------------------------------------------------
 // Jobs and generations
@@ -174,9 +197,15 @@ export type FrameGeneration = z.infer<typeof FrameGenerationSchema>
  * statuses, which "all get built" (AGENTS.md exception table on
  * `production.state`): a queued frame is not an empty one, and a blocked
  * one must show its reason.
+ *
+ * `uploaded` is the eighth (2026-09-17): a frame the writer put there
+ * rather than drew, so it names no job. The fold prefers it over every
+ * settled generation and lets a job in flight show through
+ * (`repositories/storyboard.ts`, `foldUpload`).
  */
 export const FrameStateSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('empty') }),
+  z.object({ kind: z.literal('uploaded'), url: z.string() }),
   z.object({ kind: z.literal('queued'), jobId: JobIdSchema, cost: z.int().min(0) }),
   z.object({ kind: z.literal('running'), jobId: JobIdSchema, cost: z.int().min(0) }),
   z.object({ kind: z.literal('drawn'), jobId: JobIdSchema, url: z.string() }),

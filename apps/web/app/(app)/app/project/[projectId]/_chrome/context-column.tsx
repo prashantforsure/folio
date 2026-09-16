@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { CONTEXT_PANEL_WIDTH } from '../../../../../../lib/workspace/routes'
 import type { EpisodeNavRoute, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
 
-type ColumnRoute = Exclude<WorkspaceRoute, EpisodeNavRoute | 'characters' | 'locations' | 'research'>
+type ColumnRoute = Exclude<WorkspaceRoute, EpisodeNavRoute | 'production' | 'characters' | 'locations' | 'research'>
 
 /**
  * The record-list / filter column a project route owns. The episode nav's

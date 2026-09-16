@@ -98,6 +98,9 @@ export const isFlagged = (shot: ProductionShot): boolean => {
 
 const inFlight = (frame: FrameState): boolean => frame.kind === 'queued' || frame.kind === 'running'
 
+/** A shot with a picture - drawn by a job or uploaded by the writer. */
+const hasFrame = (shot: ProductionShot): boolean => shot.frame.kind === 'drawn' || shot.frame.kind === 'uploaded'
+
 /** A shot that needs a frame: none yet, or the last one failed, was cancelled, or was refused and the shot rewritten. */
 export const needsFrame = (shot: ProductionShot): boolean => {
   switch (shot.frame.kind) {
@@ -108,6 +111,7 @@ export const needsFrame = (shot: ProductionShot): boolean => {
     case 'blocked':
       return !isFlagged(shot)
     case 'drawn':
+    case 'uploaded':
     case 'queued':
     case 'running':
       return false
@@ -176,7 +180,7 @@ export const reelGates = (reel: ReelRow, input: GateInput): ReelGates => {
   const flagged = accepted.find(isFlagged)
   const busy = accepted.some((shot) => inFlight(shot.frame))
   const pending = accepted.filter(needsFrame)
-  const allDrawn = accepted.length > 0 && accepted.every((shot) => shot.frame.kind === 'drawn')
+  const allDrawn = accepted.length > 0 && accepted.every(hasFrame)
   const cost = pending.length * input.frameCost
   const short = pending.length > 0 && input.available < cost
   const finalized = reel.finalizedAt !== null
@@ -343,7 +347,7 @@ export const episodeStats = (scenes: readonly ProductionScene[]): EpisodeStats =
       reels += 1
       const accepted = reel.shots.filter(isAccepted)
       shots += accepted.length
-      framesDone += accepted.filter((shot) => shot.frame.kind === 'drawn').length
+      framesDone += accepted.filter(hasFrame).length
       if (reel.clip.kind === 'rendered') {
         clipsRendered += 1
         renderedSeconds += reel.clipSeconds

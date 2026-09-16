@@ -14,9 +14,10 @@ export type SidebarRow = {
 }
 
 /**
- * The three rows. A Client Component only so it can read which route is
- * rendering below the `(writing)` layout; everything it prints - the label,
- * the formatted meta, the href - arrives from the server as data.
+ * The four rows - Script, Storyboard, Outline, Scenes (`SIDEBAR` in
+ * `lib/workspace/routes.ts`). A Client Component only so it can read which
+ * route is rendering below the `(writing)` layout; everything it prints -
+ * the label, the formatted meta, the href - arrives from the server as data.
  *
  * `useSelectedLayoutSegment()` from inside `(writing)/layout.tsx` is the
  * route name itself: `script`, `scenes`, and so on. The selected row gets

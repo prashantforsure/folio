@@ -12,9 +12,11 @@ import { CharactersWorkspace } from './characters-workspace'
 /**
  * The Characters route, server side: one read, then the client workspace.
  *
- * `?view=` is `cast | relationships | sheet` (`params.ts`, the v2
- * mockup's tabs), parsed as every route's is; a value outside it is a
- * 404. `/characters/:characterId` opens that record's drawer over the
+ * The route has no sub-view param (`params.ts`, ruled 2026-09-16): the
+ * `Cast · Relationships · Sheet` tabs are client state in the layout
+ * (`view-state.tsx`) and the URL stays `/characters`. `parseSubViews` is
+ * still called so unknown keys are handled as every route handles them.
+ * `/characters/:characterId` opens that record's drawer over the
  * view - the id is the record's UUID, so the URL survives every rename.
  * A record merged into another redirects to the survivor - the loser's
  * row is a tombstone that says where it went - and an id that names
@@ -52,7 +54,6 @@ export const CharactersRoute = async ({
     <CharactersWorkspace
       projectId={project.id}
       projectTitle={project.title}
-      view={parsed.params.view}
       baseHref={projectRouteHref(project.id, 'characters')}
       cast={load.cast}
       index={load.index}

@@ -422,8 +422,6 @@ export const ProductionWorkspace = ({
     >
       <ProductionToolbar
         chip={reelsChip(selectedCoverage?.reels ?? 0)}
-        view={view}
-        baseHref={baseHref}
         resolution={resolution}
         available={available}
         short={short}

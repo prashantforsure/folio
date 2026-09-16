@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 
 import { loadLocations } from '../../../../../../lib/locations/server'
+import { sidebarRowOf } from '../../../../../../lib/locations/view'
 import { loadShareLink } from '../../../../../../lib/share/server'
 import { loadEpisode } from '../../../../../../lib/workspace/context'
-import { LocationFind, LocationGroups, LocationTitleRow, ScoutedWidget, sidebarRowOf } from '../_locations/location-sidebar'
+import { LocationFind, LocationGroups, LocationTitleRow, ScoutedWidget } from '../_locations/location-sidebar'
 import { NewLocationDrawer } from '../_locations/new-location-drawer'
 import { FindProvider } from './find-field'
 import { Sidebar } from './sidebar'
@@ -13,10 +14,10 @@ import { WritingHeader } from './writing-header'
  * The Locations route's shell - the three parts every route wears
  * (`docs/ui design/README.md`, "Shell"), on `_chrome/characters-layout.tsx`'s
  * pattern: the sidebar card with this route's four slots
- * (`_locations/location-sidebar.tsx`), the header told its route (no Write /
- * Storyboard pill: Locations is "outside the writing surface"; the crumb is
- * `Project / Locations` with no episode - the route is project-scoped),
- * and the main-surface card the page body sits in.
+ * (`_locations/location-sidebar.tsx`), the header told its route (the crumb
+ * is `Project / Locations` with no episode - the route is project-scoped -
+ * and `Places · Scenes here · Sheet` in its centre), and the main-surface
+ * card the page body sits in.
  *
  * ## The drawer's slot
  *
