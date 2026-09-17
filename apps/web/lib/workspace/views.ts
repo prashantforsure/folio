@@ -20,10 +20,13 @@ import type { WorkspaceRoute } from './routes'
  * the schema's order, so the first tab is the default and links to the bare
  * path. A route with no sub-view param has an empty row and no pill.
  *
- * Characters is the one route whose views are not a param - `cast |
- * relationships | sheet` are React state by ruling (AGENTS.md, the
- * exception table) - so its row is empty here and its tabs are
- * `_characters/view-state.tsx`, drawn into the same header slot as buttons.
+ * Three routes' views are not a param, by ruling (AGENTS.md, the exception
+ * table): Characters' `cast | relationships | sheet` (2026-09-16), the
+ * Storyboard's `board | canvas | list` and Scenes' `cards | index | list`
+ * (both 2026-09-17) are client state, so their rows are empty here and
+ * their tabs are `_characters/view-state.tsx`, `_storyboard/view-state.tsx`
+ * and `_scenes/view-state.tsx`, drawn into the same header slot as buttons.
+ * All three use this `ViewTab` shape, so the pill is still one shape.
  *
  * ## Titles and labels
  *
@@ -32,8 +35,9 @@ import type { WorkspaceRoute } from './routes'
  * long for a header: the Storyboard's `Scene boards` / `Shot canvas` /
  * `Shot list` print as `Boards` / `Canvas` / `Shot list`. `icon` is drawn
  * only where a mockup draws one for that tab (Storyboard's and Scenes'
- * icon pills); the record routes' mockups draw text tabs and there is no
- * icon to transcribe - inventing one is the lookalike AGENTS.md refuses.
+ * icon pills - both state routes now, so no row in this table carries
+ * one); the record routes' mockups draw text tabs and there is no icon to
+ * transcribe - inventing one is the lookalike AGENTS.md refuses.
  */
 export type ViewTab<V extends string = string> = {
   readonly id: V
@@ -51,16 +55,8 @@ export type RouteView<R extends WorkspaceRoute> = SubViews<R> extends { readonly
 export const ROUTE_VIEWS: { readonly [R in WorkspaceRoute]: readonly ViewTab<RouteView<R>>[] } = {
   script: [],
   outline: [],
-  storyboard: [
-    { id: 'board', title: 'Scene boards', label: 'Boards', icon: 'board' },
-    { id: 'canvas', title: 'Shot canvas', label: 'Canvas', icon: 'canvas' },
-    { id: 'list', title: 'Shot list', icon: 'list' },
-  ],
-  scenes: [
-    { id: 'cards', title: 'Scene cards', label: 'Cards', icon: 'cards' },
-    { id: 'index', title: 'Index cards', icon: 'board' },
-    { id: 'list', title: 'Scene list', icon: 'list' },
-  ],
+  storyboard: [],
+  scenes: [],
   production: [
     { id: 'scene', title: 'Scene' },
     { id: 'episode', title: 'Episode' },

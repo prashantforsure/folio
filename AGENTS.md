@@ -272,7 +272,9 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   removed).
 - Characters' `Cast · Relationships · Sheet` tabs are **not** `?view=` (ruled 2026-09-16, the
   Script route's precedent): the URL stays `/characters`, the view is React state in the route's
-  layout. See the exception table.
+  layout. The Storyboard's `Boards · Canvas · Shot list` and Scenes' `Cards · Index cards · Scene
+  list` took the same ruling on 2026-09-17: the URL stays `/storyboard` or `/scenes`, the view is
+  a client cell the header and the body share. See the exception table.
 
 ### UI fidelity
 
@@ -428,6 +430,8 @@ share a file.
 | theme, zoom, panels, palette, aiScope | Per user or per session | localStorage or session state |
 | the assistant panel | The same panel on every route | `assistantOpen` is session state |
 | Characters' `cast \| relationships \| sheet` | Ruled 2026-09-16 (the client): switching must be instant and the URL must stay `/characters`, as the Script's switches were ruled 2026-09-11 | React state in the route's layout (`_characters/view-state.tsx`), so it survives opening the drawer; `?view=` is an unknown key there |
+| the Storyboard's `board \| canvas \| list` | Ruled 2026-09-17 (the client): the same ask - a tab must switch smoothly and the URL must stay `/storyboard`; as a param each click re-ran the page's server read | A client cell the header's tabs and the workspace both reach (`_storyboard/view-state.tsx`, the `coverage.ts` shape - the shared writing layout cannot host one route's provider); resets to the board when the workspace unmounts; `?view=` is an unknown key there |
+| Scenes' `cards \| index \| list` | Ruled 2026-09-17 (the client): the same ask again, in the same words - smooth, and the URL must stay `/scenes` | The Storyboard's cell shape (`_scenes/view-state.tsx`); the route's own client `<main>` (`_scenes/scenes-main.tsx`) writes `data-sub-view` and resets the cell to the cards on unmount; `?view=` is an unknown key there |
 | which document the Script shows, the title-page or the script | Component state (ruled 2026-09-11); a scene the sidebar scrolls to is a `#n-<node id>` fragment, never `?selected=` | Not a param |
 
 ### The agent may write anywhere — except

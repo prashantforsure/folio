@@ -14,6 +14,8 @@ import type { WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
 import { episodeRouteHref, projectRouteHref } from '../../../../../../lib/workspace/hrefs'
 import type { EpisodeRoute, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
 import { ROUTE_TITLE, isEpisodeRoute, isProjectRoute, isWritingRoute } from '../../../../../../lib/workspace/routes'
+import { ScenesHeaderViews } from '../_scenes/view-state'
+import { StoryboardHeaderViews } from '../_storyboard/view-state'
 import { EpisodeDeleteConfirm } from './episode-delete-confirm'
 import { EpisodeForm } from './episode-form'
 import { HeaderViews } from './header-views'
@@ -50,9 +52,13 @@ import { SharePopover } from './share-popover'
  * (`lib/workspace/views.ts`) - each tab its icon, where the design has
  * one, beside its name, lit by `?view=` (`header-views.tsx`). The routes'
  * toolbars stopped drawing their own pill the same day. A route with no
- * views (Script, Outline) has an empty centre. Characters' views are state,
- * not the URL, so its layout hands its tabs in as `views` and this draws
- * them in the same slot.
+ * views (Script, Outline) has an empty centre. Three routes' views are
+ * state, not the URL: Characters' layout hands its tabs in as `views` and
+ * this draws them in the same slot; the Storyboard and Scenes sit under the
+ * shared writing layout, which cannot see its child, so this draws
+ * `_storyboard/view-state.tsx`'s or `_scenes/view-state.tsx`'s tabs itself
+ * when the segment says `storyboard` or `scenes` (both ruled 2026-09-17,
+ * the same ruling as Characters').
  *
  * `useSearchParams` in the centre is under a `Suspense` so a render that
  * has no request search params yet (a static prerender, which no route
@@ -107,7 +113,7 @@ export const WritingHeader = ({
   readonly share: ShareLinkView
   /** The route, when the layout is the route (Production, Characters). Absent: read from the segment below `(writing)`. */
   readonly route?: WorkspaceRoute
-  /** The centre, when the route's views are not `?view=` (Characters): its own tabs. Absent: the route's `ROUTE_VIEWS` over the URL. */
+  /** The centre, when the route's views are not `?view=` and the layout is the route (Characters): its own tabs. Absent: the Storyboard's or Scenes' state tabs on their segment, else the route's `ROUTE_VIEWS` over the URL. */
   readonly views?: ReactNode
 }) => {
   // The route below the `(writing)` layout: `script`, `outline`, `storyboard`
@@ -148,6 +154,10 @@ export const WritingHeader = ({
       <div data-header-views={route} className="flex flex-none items-center">
         {views !== undefined ? (
           views
+        ) : route === 'storyboard' ? (
+          <StoryboardHeaderViews />
+        ) : route === 'scenes' ? (
+          <ScenesHeaderViews />
         ) : baseHref === null ? null : (
           <Suspense fallback={null}>
             <HeaderViews route={route} baseHref={baseHref} />

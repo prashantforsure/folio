@@ -29,7 +29,8 @@ import { EmptyStoryboard } from './empty-storyboard'
 import type { ShotHandlers, ViewProps } from './handlers'
 import { ListView } from './list-view'
 import { DisplayMenu } from './storyboard-toolbar'
-import type { DisplayOptions, StoryboardView } from './storyboard-toolbar'
+import type { DisplayOptions } from './storyboard-toolbar'
+import { resetStoryboardView, setStoryboardView, useStoryboardView } from './view-state'
 
 /**
  * The Storyboard route's body: the toolbar row, the banners, and one of
@@ -46,17 +47,19 @@ import type { DisplayOptions, StoryboardView } from './storyboard-toolbar'
  * and call back. They share the parts (`shot-parts.tsx`) and share no
  * state, so the three cannot disagree on what a shot is or what it can do.
  *
- * ## `?view=` is the URL; everything else is state
+ * ## Nothing here is the URL
  *
- * The three views are `board | canvas | list`, a sub-view param
- * (`lib/workspace/params.ts`), so the pill's tabs are links. Which scene
- * is selected is component state - the Scenes ruling: selection is not a
- * URL, and `?selected=SCENE_xxx` waits on the id-shape decision (open
- * decision 10). The filter, the sort and the display toggles are component
- * state too: a filter is a way of looking, not an address. The selection
- * survives a `?view=` change because Next keys the page segment without
- * its search params, so this component stays mounted across the pill -
- * which is what lets the board's `Open` pick a scene and land on it.
+ * The three views are `board | canvas | list`, the cell in
+ * `view-state.tsx` (ruled 2026-09-17: state, not `?view=`, so a tab is a
+ * button and the address stays `/storyboard`); the header's pill and this
+ * body read the same cell, and this clears it back to the board on
+ * unmount. Which scene is selected is component state - the Scenes ruling:
+ * selection is not a URL, and `?selected=SCENE_xxx` waits on the id-shape
+ * decision (open decision 10). The filter, the sort and the display
+ * toggles are component state too: a filter is a way of looking, not an
+ * address. A view switch re-renders this one mounted component and
+ * nothing else - no navigation, no server read - which is what lets the
+ * board's `Open` and every card pick a scene and land on it on the canvas.
  *
  * ## The list is the truth, and every write returns it
  *
@@ -81,8 +84,6 @@ import type { DisplayOptions, StoryboardView } from './storyboard-toolbar'
 export type StoryboardWorkspaceProps = {
   readonly projectId: string
   readonly episode: string
-  readonly view: StoryboardView
-  readonly baseHref: EpisodeRoutePath
   readonly scriptHref: EpisodeRoutePath
   readonly state: 'empty' | 'script'
   readonly scenes: readonly StoryboardScene[]
@@ -103,8 +104,6 @@ type SaveState =
 export const StoryboardWorkspace = ({
   projectId,
   episode,
-  view,
-  baseHref,
   scriptHref,
   state,
   scenes: initialScenes,
@@ -117,6 +116,10 @@ export const StoryboardWorkspace = ({
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // The view the header's tabs set; back to the board when this unmounts.
+  const view = useStoryboardView()
+  useEffect(() => resetStoryboardView, [])
 
   const [scenes, setScenes] = useState<readonly StoryboardScene[]>(initialScenes)
   const [available, setAvailable] = useState(initialAvailable)
@@ -131,6 +134,10 @@ export const StoryboardWorkspace = ({
   // The sidebar's `Boards` group and widget read this cell; cleared on unmount.
   const onPick = useCallback((sceneNodeId: string) => {
     setSelected(sceneNodeId)
+  }, [])
+  const onOpenCanvas = useCallback((sceneNodeId: string) => {
+    setSelected(sceneNodeId)
+    setStoryboardView('canvas')
   }, [])
   useEffect(() => {
     publishBoardCoverage({ rows: coverageRows(scenes), selectedId: selected, onPick })
@@ -304,11 +311,11 @@ export const StoryboardWorkspace = ({
     scenes,
     selected,
     onSelect: onPick,
+    onOpenCanvas,
     visible,
     display,
     sort,
     storage,
-    canvasHref: { pathname: baseHref, query: { view: 'canvas' } },
     labels,
     book,
     cost: cost ?? 0,

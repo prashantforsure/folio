@@ -38,11 +38,12 @@ import type { ViewTab } from '../../../../../../lib/workspace/views'
  * offered when every item is a real `?view=` value (`AnySubView`) - a tab
  * cannot link to a view no route parses.
  *
- * A route whose views are component state - Characters, ruled 2026-09-16:
- * switching must be instant and must not change the URL, the Script route's
- * own ruling for its switches - hands `onSelect` instead, and the tabs are
- * buttons. Same class, same `aria-current`, so the pill looks and tests the
- * same either way.
+ * A route whose views are component state - Characters, ruled 2026-09-16,
+ * the Storyboard and Scenes, both ruled 2026-09-17: switching must be
+ * instant and must not change the URL, the Script route's own ruling for
+ * its switches - hands `onSelect` instead, and the tabs are buttons. Same
+ * class, same `aria-current`, so the pill looks and tests the same either
+ * way.
  */
 
 /** A tab. The same shape `lib/workspace/views.ts` tables; kept under the older name for the callers that say it. */

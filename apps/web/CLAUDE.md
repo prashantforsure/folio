@@ -23,9 +23,11 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   table (one row per route, typed against `SUB_VIEW_SCHEMAS`, `label`/`title`/`icon`);
   `_chrome/header-views.tsx` reads `?view=` with `useSearchParams` and draws `_chrome/view-pill.tsx`
   in `WritingHeader`'s centre slot; Characters hands the header its own state-driven tabs as
-  `views`. Route toolbars draw no view switcher, and `SIDEBAR` is Script · Storyboard · Outline ·
-  Scenes. Trap: a new `?view=` value needs a row in `ROUTE_VIEWS` or
-  `tests/workspace-routes.test.ts` fails (it asserts the table against the schemas).
+  `views`, and the header draws the Storyboard's (`_storyboard/view-state.tsx`, a cell the
+  workspace also reads - ruled 2026-09-17, the Characters ruling again) itself on that segment,
+  since the shared writing layout cannot hand them in. Route toolbars draw no view switcher, and
+  `SIDEBAR` is Script · Storyboard · Outline · Scenes. Trap: a new `?view=` value needs a row in
+  `ROUTE_VIEWS` or `tests/workspace-routes.test.ts` fails (it asserts the table against the schemas).
 - **The shell owns `html[data-nav-open]`.** Route bodies read `useSession().navOpen` for their own
   geometry and never write the attribute; `useViewport()` (`lib/state/viewport.ts`) is the one
   resize listener. Below 1200px an open assistant panel forces the sidebar closed there.
@@ -52,7 +54,9 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   container (rows, selection, filter, sort, display toggles, every write) over three layouts -
   `board-view.tsx`, `canvas/canvas-view.tsx`, `list-view.tsx` - that share `shot-parts.tsx` and
   the `ViewProps` in `handlers.ts`. The toolbar is `storyboard-toolbar.tsx`'s one `Display`
-  menu (show / sort / filter) - the view switcher is the shell header's since 2026-09-17; a shot is
+  menu (show / sort / filter) - the view switcher is the shell header's since 2026-09-17, three
+  buttons over the `view-state.tsx` cell (not `?view=`; the URL stays `/storyboard`, a board card
+  and the column's `Open` set the view through `onOpenCanvas`); a shot is
   edited in place, a board card drags to reorder (`placeShot`). The sidebar's `Boards` group and
   `Boards drawn` widget (`_chrome/sidebar-group.tsx`, `_chrome/sidebar-widget.tsx`) read the cell
   the workspace publishes (`lib/storyboard/coverage.ts`), seeded by `readBoardCoverage`; every
@@ -66,6 +70,22 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   `wheel` listener is added by hand with `{ passive: false }`; React's `onWheel` is passive and
   `preventDefault` there does nothing. Details: `docs/build-decisions.md`, "Redesign phase 3,
   second pass".
+- **The Scenes route (v2, 2026-09-17):** `_scenes/scene-workspace.tsx` is the body - a toolbar row
+  (the selected scene, `N scenes · N pages`), the banners, one of `canvas/scene-canvas.tsx`
+  (Cards), `index-view.tsx` or `list-view.tsx`, and two dialogs portalled to `body`:
+  `scene-detail.tsx` (the synopsis editor, the route's one write) and `script-modal.tsx` (the scene
+  on a Courier sheet, `Hollywood | Asian` through `resolveSheet` - Asian draws the open-decision-8
+  refusal). The canvas is the Storyboard's: `use-canvas-viewport`, `connectors` and
+  `lib/storyboard/canvas.ts` are imported across the route boundary, a scene card is `NODE_W`;
+  `lib/scenes/canvas.ts` and `sheet.ts` hold what is scene-specific, pure and tested. Positions are
+  component state (no `scenes.canvas_x`); the canvas opens on `openingWindow`, not a fit. No page
+  header, no status bar. **The three views are client state, not `?view=`** (ruled 2026-09-17, the
+  Storyboard's ruling of the same day): `_scenes/view-state.tsx` is the cell the header's tabs and
+  the body share, `_scenes/scenes-main.tsx` the route's own `<main data-sub-view>` that resets it
+  on unmount, `_scenes/scenes-route.tsx` the server entry both `scenes/page.tsx` files render
+  after `enterEpisodeRoute` - the Storyboard's shape. `_chrome/route-shell.tsx` and
+  `episode-route-page.tsx` went with it (Scenes was their last route). Details:
+  `docs/build-decisions.md`, "Redesign phase 8" and its second pass.
 - **The Research route (v2, 2026-09-16):** `_research/research-workspace.tsx` is the body -
   toolbar (the shared `_chrome/record-toolbar.tsx` pieces; the views are the header's), one of Library /
   Source / Clips or the empty card, the status bar - and `_chrome/research-layout.tsx` the shell

@@ -25,13 +25,17 @@ import { BLANK_SHOT, Description, NoShots, ShotEditor, TONE_DOT, TONE_INK, frame
  *
  * The mockup draws no drawer and no buttons on a card - the card is
  * `cursor: grab`. Dragging a card reorders it in its scene (the drop lands
- * it before the card under the pointer, or at the end). Clicking one is a
- * link to the canvas view on its scene (ruled 2026-09-17; it opened the
+ * it before the card under the pointer, or at the end). Clicking one
+ * opens the canvas view on its scene (ruled 2026-09-17; it opened the
  * editor in place until then), where the shot is authored - the inline
- * description, the `Lens` tab, `Generate`, `⋯ → Edit / Remove`. The board
- * keeps one editor: `+ New shot`. A proposal is a card with an amber
- * dashed border and `proposed` in its tile, so a decision waiting is
- * visible without opening it.
+ * description, the `Lens` tab, `Generate`, `⋯ → Edit / Remove`. The view
+ * is state, not a URL (`view-state.tsx`, ruled the same day), so the card
+ * and the column's `Open` are buttons over `view.onOpenCanvas`, not links
+ * over `?view=canvas` - the card a `role="button"` block, as the list's
+ * scene rows are, because its layers are block content. The board keeps
+ * one editor: `+ New shot`. A proposal is a card with an amber dashed
+ * border and `proposed` in its tile, so a decision waiting is visible
+ * without opening it.
  *
  * ## The card is the frame (2026-09-17)
  *
@@ -158,19 +162,19 @@ const SceneColumn = ({ scene, view }: { readonly scene: StoryboardScene; readonl
         <span className="tabular grid h-[22px] min-w-[22px] flex-none place-items-center rounded-pill bg-s2 px-[7px] text-11-5 text-ink2" data-column-count>
           {count(accepted)}
         </span>
-        {/* The canvas, on this scene: the selection is state and survives the `?view=` change. */}
-        <Link
-          href={view.canvasHref}
+        {/* The canvas, on this scene. */}
+        <button
+          type="button"
           data-open-canvas
           title="Open this scene on the canvas"
-          className="folio-pill-button flex h-[26px] flex-none items-center gap-[5px] rounded-[8px] px-[9px] text-11-5 no-underline hover:no-underline"
+          className="folio-pill-button flex h-[26px] flex-none items-center gap-[5px] rounded-[8px] px-[9px] text-11-5"
           onClick={() => {
-            view.onSelect(scene.sceneNodeId)
+            view.onOpenCanvas(scene.sceneNodeId)
           }}
         >
           <Icon name="canvas" size={12} strokeWidth={1.5} />
           Open
-        </Link>
+        </button>
       </div>
 
       {collapsed ? null : (
@@ -327,9 +331,10 @@ const ShotCard = ({
   const said = view.display.descriptions && shot.description.length > 0
   const chips = mentionChips(shot.description, view.book)
   return (
-    // The canvas, on this shot's scene: the selection is state and survives the `?view=` change, as the column's `Open`.
-    <Link
-      href={view.canvasHref}
+    // The canvas, on this shot's scene, as the column's `Open`. A `role="button"` block, not a `<button>`: the layers below are block content.
+    <div
+      role="button"
+      tabIndex={0}
       data-shot={shot.id}
       data-shot-state={shot.state}
       data-shot-number={shot.number}
@@ -337,7 +342,13 @@ const ShotCard = ({
       aria-label={`Shot ${shot.number} · open on the canvas`}
       className={`folio-shot-card ${dropBefore ? 'folio-drop-before' : ''}`}
       onClick={() => {
-        view.onSelect(shot.sceneNodeId)
+        view.onOpenCanvas(shot.sceneNodeId)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          view.onOpenCanvas(shot.sceneNodeId)
+        }
       }}
       onDragStart={(event) => {
         event.dataTransfer.setData(DRAG_TYPE, shot.id)
@@ -400,6 +411,6 @@ const ShotCard = ({
           </span>
         </div>
       </div>
-    </Link>
+    </div>
   )
 }

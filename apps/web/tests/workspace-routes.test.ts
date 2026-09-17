@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest'
 
 import type { EpisodeNavMeta } from '@folio/contracts'
 
+import { CHARACTERS_VIEWS } from '../app/(app)/app/project/[projectId]/_characters/view-state'
+import { SCENES_VIEWS, VIEW_LABEL } from '../app/(app)/app/project/[projectId]/_scenes/view-state'
+import { STORYBOARD_VIEWS } from '../app/(app)/app/project/[projectId]/_storyboard/view-state'
 import {
   defaultEpisodeTitle,
   eighths,
@@ -119,33 +122,46 @@ describe("the header's views", () => {
   })
 
   it('has no row for the routes whose views are not the URL', () => {
-    // Script and Outline have one view; Characters' three are state (ruled 2026-09-16).
+    // Script and Outline have one view; Characters' three (ruled 2026-09-16), the Storyboard's three and Scenes' three (both 2026-09-17) are state.
     expect(ROUTE_VIEWS.script).toEqual([])
     expect(ROUTE_VIEWS.outline).toEqual([])
     expect(ROUTE_VIEWS.characters).toEqual([])
+    expect(ROUTE_VIEWS.storyboard).toEqual([])
+    expect(ROUTE_VIEWS.scenes).toEqual([])
   })
 
-  it('draws the icons the mockups draw, and prints every name', () => {
-    expect(ROUTE_VIEWS.storyboard.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['board Boards', 'canvas Canvas', 'list Shot list'])
-    expect(ROUTE_VIEWS.scenes.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['cards Cards', 'board Index cards', 'list Scene list'])
-    for (const route of ['production', 'locations', 'timeline', 'research'] as const) {
-      for (const tab of ROUTE_VIEWS[route]) expect(tab.icon).toBeUndefined()
-    }
+  it('draws no icon on the `?view=` routes, and prints every name', () => {
+    // The two mockups that draw icon tabs (Storyboard, Scenes) are state routes now; the record routes' mockups draw text tabs.
     for (const route of WORKSPACE_ROUTES) {
       for (const tab of ROUTE_VIEWS[route]) {
         expect(tab.title.length).toBeGreaterThan(0)
-        if (tab.icon !== undefined) expect(ICONS[tab.icon]).toBeDefined()
+        expect(tab.icon).toBeUndefined()
       }
     }
   })
 
+  it('keeps the same tab shape on the three routes whose views are state', () => {
+    // The Storyboard's and Scenes' tabs draw the mockups' icons; Characters' mockup has text tabs. None is a `?view=` value.
+    expect(STORYBOARD_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['board Boards', 'canvas Canvas', 'list Shot list'])
+    expect(SCENES_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['cards Cards', 'board Index cards', 'list Scene list'])
+    expect(CHARACTERS_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['- Cast', '- Relationships', '- Sheet'])
+    for (const tab of [...STORYBOARD_VIEWS, ...SCENES_VIEWS, ...CHARACTERS_VIEWS]) {
+      expect(tab.title.length).toBeGreaterThan(0)
+      if (tab.icon !== undefined) expect(ICONS[tab.icon]).toBeDefined()
+    }
+    // The Scenes toolbar's word for the view is the tab's title.
+    for (const tab of SCENES_VIEWS) expect(VIEW_LABEL[tab.id]).toBe(tab.title)
+  })
+
   it('lights the tab the URL names, else the first', () => {
-    expect(currentView('storyboard', null)?.id).toBe('board')
-    expect(currentView('storyboard', 'canvas')?.id).toBe('canvas')
-    expect(currentView('storyboard', 'grid')?.id).toBe('board')
+    expect(currentView('locations', null)?.id).toBe('places')
+    expect(currentView('locations', 'sheet')?.id).toBe('sheet')
+    expect(currentView('locations', 'grid')?.id).toBe('places')
     expect(currentView('production', 'episode')?.id).toBe('episode')
     expect(currentView('script', 'anything')).toBeNull()
     expect(currentView('characters', 'sheet')).toBeNull()
+    expect(currentView('storyboard', 'canvas')).toBeNull()
+    expect(currentView('scenes', 'index')).toBeNull()
     expect(viewsLabel('Storyboard')).toBe('Storyboard views')
   })
 })
@@ -156,8 +172,8 @@ describe('sub-view params', () => {
   })
 
   it('defaults each param to its first value', () => {
-    expect(parseSubViews('storyboard', {})).toEqual({ ok: true, params: { view: 'board' } })
-    expect(parseSubViews('scenes', {})).toEqual({ ok: true, params: { view: 'cards' } })
+    expect(parseSubViews('storyboard', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-17
+    expect(parseSubViews('scenes', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-17
     expect(parseSubViews('production', {})).toEqual({ ok: true, params: { view: 'scene' } })
     expect(parseSubViews('characters', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-16
     expect(parseSubViews('locations', {})).toEqual({ ok: true, params: { view: 'places' } })
@@ -173,8 +189,17 @@ describe('sub-view params', () => {
     expect(parseSubViews('script', { doc: 'grid', panel: 'composer' })).toEqual({ ok: true, params: {} })
   })
 
+  it('gives characters, storyboard and scenes no `view`: their tabs are client state, ruled 2026-09-16 and 2026-09-17', () => {
+    // A stale `?view=` link - a real view or not - is an unknown key on all three: it opens the first view, not a 404.
+    expect(parseSubViews('characters', { view: 'relationships' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('storyboard', { view: 'canvas' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('storyboard', { view: 'grid' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('scenes', { view: 'index' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('scenes', { view: 'grid' })).toEqual({ ok: true, params: {} })
+  })
+
   it('refuses a value that is not one of the views, naming the param', () => {
-    expect(parseSubViews('scenes', { view: 'grid' })).toEqual({
+    expect(parseSubViews('locations', { view: 'grid' })).toEqual({
       ok: false,
       param: 'view',
       value: 'grid',
@@ -187,9 +212,9 @@ describe('sub-view params', () => {
   })
 
   it('takes the first of a repeated key and ignores keys it does not know', () => {
-    expect(parseSubViews('scenes', { view: ['index', 'list'], utm_source: 'x' })).toEqual({
+    expect(parseSubViews('locations', { view: ['sheet', 'places'], utm_source: 'x' })).toEqual({
       ok: true,
-      params: { view: 'index' },
+      params: { view: 'sheet' },
     })
   })
 

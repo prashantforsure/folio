@@ -89,6 +89,12 @@
   --color-shot-over-sub: var(--shot-over-sub);
   --color-shot-chip: var(--shot-chip);
 
+  /* The Scenes route's reading sheet. See palette.css. */
+  --color-paper: var(--paper);
+  --color-paper-ink: var(--paper-ink);
+  --color-paper-ink2: var(--paper-ink2);
+  --color-paper-line: var(--paper-line);
+
   /* The Production route's fifth hue. See palette.css. */
   --color-bad: var(--bad);
   --color-bad-bg: var(--bad-bg);

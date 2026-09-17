@@ -12,7 +12,6 @@ import { labelBook } from '@folio/script'
 import { cache } from 'react'
 
 import { nodeDigest } from '../script/server'
-import { loadEpisode } from '../workspace/context'
 import type { EpisodeContext } from '../workspace/context'
 import { cutExcerpts } from './excerpt'
 import type { SceneExcerpt, UnacceptedHeading } from './excerpt'
@@ -41,8 +40,9 @@ import type { SceneExcerpt, UnacceptedHeading } from './excerpt'
  *   `unaccepted`            scene-typed nodes with no derived row: what
  *                           derivation refused, with its reason.
  *
- * Wrapped in `cache()` so the header (count, tabs) and the body share one
- * read per request, the way `loadEpisode` does.
+ * Wrapped in `cache()` so any second reader in the same request - the body
+ * is the one today, since the route's page header went with the redesign -
+ * shares one read, the way `loadEpisode` does.
  */
 
 export type SceneCard = {
@@ -122,12 +122,3 @@ export const loadScenes = cache(
     }
   },
 )
-
-/** The route's context and its load, for a page or a header that has only raw params. */
-export const enterScenes = async (
-  rawProjectId: string,
-  segment: string | null,
-): Promise<{ readonly context: EpisodeContext; readonly load: ScenesLoad }> => {
-  const context = await loadEpisode(rawProjectId, segment)
-  return { context, load: await loadScenes(context) }
-}

@@ -73,8 +73,8 @@ export const EMPTY_NAV_META: Readonly<Record<string, string>> = {
  * The header's centre since 2026-09-17: the route's views, each tab its
  * name and - where the mockup draws one - its icon. `null` where the route
  * has one view (Script, Outline) or no header of its own yet (Timeline,
- * still on its pre-redesign chrome). Characters' tabs are buttons over
- * state; the rest are links over `?view=`.
+ * still on its pre-redesign chrome). Characters', the Storyboard's and
+ * Scenes' tabs are buttons over state; the rest are links over `?view=`.
  */
 export const HEADER_VIEWS: Readonly<Record<string, { readonly tabs: readonly string[]; readonly icons: number } | null>> = {
   script: null,
@@ -95,7 +95,8 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
   { route: 'outline', scope: 'episode', rail: 'writing', title: null, defaults: {}, column: nav },
   /** The v2 body (2026-09-16) has no `h1`: the toolbar is the count, the saved dot and `Display`. */
   { route: 'storyboard', scope: 'episode', rail: 'writing', title: null, defaults: { view: 'board' }, column: nav },
-  { route: 'scenes', scope: 'episode', rail: 'writing', title: 'Scenes', defaults: { view: 'cards' }, column: nav },
+  /** The v2 body (2026-09-17) has no `h1`: the toolbar names the selected scene, or the view. The views are state the same day; the bare path still writes `data-sub-view="cards"`, as the Storyboard's row keeps `board`. */
+  { route: 'scenes', scope: 'episode', rail: 'writing', title: null, defaults: { view: 'cards' }, column: nav },
   {
     route: 'production',
     scope: 'episode',

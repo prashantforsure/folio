@@ -315,6 +315,37 @@
 }
 
 /*
+ * The Scenes route's reading modal (2026-09-17, a client ruling off the
+ * README's "no paper": the expanded script opens on a grey, grained sheet
+ * in Courier, as the reference screenshot draws it - `docs/build-decisions.md`,
+ * "Redesign phase 8"). Four tokens: the sheet, its ink at two strengths, and
+ * the hairline on it. They move with the theme - a mid grey under light ink
+ * on the dark canvas, a light grey under dark ink on the light one - and the
+ * grain itself is an inline SVG in `.folio-paper` (`globals.css`), not a
+ * colour. Nothing outside that modal may reach for them.
+ */
+:root {
+  --paper: #3d3d41;
+  --paper-ink: #efeeea;
+  --paper-ink2: rgba(239, 238, 234, 0.6);
+  --paper-line: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme='light'] {
+  --paper: #e6e4df;
+  --paper-ink: #1a191e;
+  --paper-ink2: rgba(26, 25, 30, 0.62);
+  --paper-line: rgba(20, 18, 14, 0.14);
+}
+
+[data-theme='dark'] {
+  --paper: #3d3d41;
+  --paper-ink: #efeeea;
+  --paper-ink2: rgba(239, 238, 234, 0.6);
+  --paper-line: rgba(255, 255, 255, 0.14);
+}
+
+/*
  * `--scrim` is the ground behind a modal and behind an overlaid panel below
  * 1200px. A darkening, and a darkening reads the same over either canvas, so
  * it is declared once. The README gives the overlay shadow as

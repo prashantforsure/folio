@@ -11,16 +11,25 @@ import type { WalkOptions } from '../playwright.config'
  * What this proves, in order:
  *
  *   1. **The empty state, both themes.** No script; the nav's Scenes row
- *      counts to `0`; `?view=` outside `cards | index | list` is a 404.
+ *      counts to `0`; the header's three tabs are buttons, a click switches
+ *      the view without moving the URL, and a stale `?view=` - a real view
+ *      or not - opens the cards, not a 404 (the views are state since
+ *      2026-09-17).
  *   2. **Scenes are derived from headings, and a malformed heading is not
  *      one.** An import with two real headings and an `INTERCUT - PHONE
  *      CALL` line gives two cards, never a third at location `ERCUT`. Every
- *      card carries a real excerpt, a page and eighths from the measurement
- *      record, dialogue-line and cast-size counts, and cast chips whose
- *      names are the records the cues bound to.
- *   3. **The synopsis is authored on the record.** Written in the detail
- *      card, it survives a reload; the list view's Status column follows it.
- *   4. **Three views over one read**, both themes.
+ *      card - a node on the canvas since 2026-09-17 - carries a real
+ *      excerpt, a page and eighths from the measurement record,
+ *      dialogue-line and cast-size counts, and cast chips whose names are
+ *      the records the cues bound to; the canvas opens fitted on the row
+ *      and the cards are threaded in story order.
+ *   3. **The script tile opens the reading modal.** The whole scene in
+ *      Courier on the sheet; `Asian` shows the engine's refusal (open
+ *      decision 8), never a guessed A4; Escape closes it.
+ *   4. **The synopsis is authored on the record.** Written in the detail
+ *      dialog, it survives a reload; the list view's Status column follows it.
+ *   5. **Three views over one read**, each opened by its header tab, both
+ *      themes.
  *
  * Needs a real account; skips without one. Leaves one project behind per
  * run.
@@ -79,10 +88,22 @@ const setTheme = async (page: Page, theme: 'dark' | 'light'): Promise<void> => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
 }
 
+/** The workspace has hydrated. A click before that is replayed only once hydration finishes, which on a dev server can be seconds. */
+const waitMounted = async (page: Page): Promise<void> => {
+  await expect(page.locator('[data-scenes-header]')).toHaveAttribute('data-mounted', 'true', { timeout: 60_000 })
+}
+
+/** The view is state (ruled 2026-09-17): a full load starts on the cards, and the header's tab - not a `?view=` - opens the index or the list. */
+const toView = async (page: Page, view: 'cards' | 'index' | 'list'): Promise<void> => {
+  await waitMounted(page)
+  await page.locator(`[data-writing-header] [data-view-tab="${view}"]`).click()
+  await expect(page.locator('main[data-route="scenes"]')).toHaveAttribute('data-sub-view', view)
+}
+
 let scriptUrl = ''
 let scenesUrl = ''
 
-test('empty state, both themes; a bad view is a 404', async ({ page, account }) => {
+test('empty state, both themes; the tabs switch in place and a stale view is not a 404', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto('/app/new')
   await page.getByLabel('Title').fill(`Scenes walk ${new Date().toISOString()}`)
@@ -99,12 +120,28 @@ test('empty state, both themes; a bad view is a 404', async ({ page, account }) 
   await expect(main).toHaveAttribute('data-sub-view', 'cards')
   await expect(page.getByRole('heading', { name: 'No script yet' })).toBeVisible()
   await expect(page.locator('[data-nav-meta="scenes"]')).toHaveText('0')
+  // The header's centre is the route's three tabs, as buttons over state, the first lit.
+  const headerPill = page.locator('[data-writing-header] [data-header-views="scenes"] [data-view-pill]')
+  await expect(headerPill.locator('button[data-view-tab]')).toHaveText(['Cards', 'Index cards', 'Scene list'])
+  await expect(headerPill.locator('[data-view-tab] svg')).toHaveCount(3)
+  await expect(headerPill.locator('[data-view-tab="cards"]')).toHaveAttribute('aria-current', 'page')
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
     await page.screenshot({ path: `test-results/scenes-empty-${theme}.png`, fullPage: false })
   }
+  // A tab switches the view and the URL does not move (ruled 2026-09-17).
+  await headerPill.locator('[data-view-tab="index"]').click()
+  await expect(main).toHaveAttribute('data-sub-view', 'index')
+  await expect(headerPill.locator('[data-view-tab="index"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page).toHaveURL(scenesUrl)
+  await expect(page.locator('[data-empty-state="no-script"]')).toBeVisible()
+  // The tabs are state, not `?view=`: a stale view link is ignored, not a 404 - a real view or not.
+  const stale = await page.goto(`${scenesUrl}?view=index`)
+  expect(stale?.status()).toBe(200)
+  await expect(main).toHaveAttribute('data-sub-view', 'cards')
   const bogus = await page.goto(`${scenesUrl}?view=grid`)
-  expect(bogus?.status()).toBe(404)
+  expect(bogus?.status()).toBe(200)
+  await expect(main).toHaveAttribute('data-sub-view', 'cards')
 })
 
 test('scenes come from headings; INTERCUT is not one; every card is read from a table', async ({ page, account }) => {
@@ -145,7 +182,54 @@ test('scenes come from headings; INTERCUT is not one; every card is read from a 
   await expect(first.getByText('RAVI', { exact: true })).toBeVisible()
   await expect(cards.nth(1)).toContainText('1 chars')
   await expect(cards.nth(1)).toContainText('1 lines')
-  await expect(page.locator('main[data-route="scenes"] header')).toContainText('2')
+  // The toolbar's label; the board's `data-scene-count` is the number the walk read above.
+  await expect(page.locator('[data-scenes-header] [data-scene-count]')).toContainText('2 scenes')
+
+  // The canvas: the ground is fitted on the row (never asserted at 100% - the viewport decides),
+  // and one thread joins the two cards in story order.
+  const ground = page.locator('[data-canvas-ground]')
+  await expect(ground).toHaveAttribute('data-zoom', /^\d+$/)
+  await expect(page.locator('[data-threads] path')).toHaveCount(1)
+  await expect(cards.nth(0)).toHaveAttribute('data-selected', 'false')
+  await waitMounted(page)
+  await cards.nth(0).locator('[data-node-grip]').click()
+  await expect(cards.nth(0)).toHaveAttribute('data-selected', 'true')
+  await expect(page.locator('[data-selected-scene]')).toContainText("INT. MEERA'S FLAT - NIGHT")
+})
+
+test('the script tile opens the scene on the sheet; Asian is the refusal, not a guess', async ({ page, account }) => {
+  await signIn(page, account)
+  await page.goto(scenesUrl)
+  const cards = page.locator('[data-scene-card]')
+  await expect(cards).toHaveCount(2)
+  await waitMounted(page)
+  await cards.nth(0).locator('[data-scene-script]').click()
+  const modal = page.locator('[data-script-modal]')
+  await expect(modal).toBeVisible()
+  await expect(modal).toHaveAttribute('data-script-format', 'hollywood')
+  const sheet = modal.locator('[data-script-sheet]')
+  await expect(sheet.locator('[data-type="scene"]')).toHaveText("INT. MEERA'S FLAT - NIGHT")
+  await expect(sheet).toContainText('A kettle on the hob.')
+  await expect(sheet.locator('[data-type="character"]').first()).toHaveText('MEERA')
+  await expect(sheet).toContainText('INTERCUT - PHONE CALL')
+  await expect(sheet).not.toContainText('Rain on the skylight')
+  for (const theme of ['dark', 'light'] as const) {
+    await setTheme(page, theme) // reloads; the modal is component state, so the tile opens it again
+    await waitMounted(page)
+    await cards.nth(0).locator('[data-scene-script]').click()
+    await expect(modal).toBeVisible()
+    await page.screenshot({ path: `test-results/scenes-modal-${theme}.png`, fullPage: false })
+  }
+
+  await modal.locator('[data-reading-format="asian"]').click()
+  await expect(modal).toHaveAttribute('data-script-format', 'asian')
+  await expect(modal.locator('[data-script-refusal]')).toContainText('open decision 8')
+  await expect(modal.locator('[data-script-sheet]')).toHaveCount(0)
+  await modal.locator('[data-read-hollywood]').click()
+  await expect(modal.locator('[data-script-sheet]')).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await expect(modal).toBeHidden()
 })
 
 test('the synopsis is authored on the record and survives a reload', async ({ page, account }) => {
@@ -153,6 +237,7 @@ test('the synopsis is authored on the record and survives a reload', async ({ pa
   await page.goto(scenesUrl)
   const cards = page.locator('[data-scene-card]')
   await expect(cards).toHaveCount(2)
+  await waitMounted(page)
   await cards.nth(0).getByRole('button', { name: /No synopsis yet/ }).click()
   const detail = page.locator('[data-scene-detail]')
   await expect(detail).toBeVisible()
@@ -171,17 +256,21 @@ test('the synopsis is authored on the record and survives a reload', async ({ pa
 
 test('index and list views draw the same scenes, both themes', async ({ page, account }) => {
   await signIn(page, account)
-  await page.goto(`${scenesUrl}?view=index`)
-  await expect(page.locator('main[data-route="scenes"]')).toHaveAttribute('data-sub-view', 'index')
+  await page.goto(scenesUrl)
+  await expect(page.locator('[data-scene-card]')).toHaveCount(2)
+  // The switch is in place: the same two cards, the URL still the bare path.
+  await toView(page, 'index')
+  await expect(page).toHaveURL(scenesUrl)
   await expect(page.locator('[data-index-card]')).toHaveCount(2)
   await expect(page.locator('[data-index-card]').nth(0)).toContainText('Meera waits on a kettle')
   for (const theme of ['dark', 'light'] as const) {
-    await setTheme(page, theme)
+    await setTheme(page, theme) // reloads, which lands on the cards; the tab brings the index back
+    await toView(page, 'index')
     await page.screenshot({ path: `test-results/scenes-index-${theme}.png`, fullPage: false })
   }
 
-  await page.goto(`${scenesUrl}?view=list`)
-  await expect(page.locator('main[data-route="scenes"]')).toHaveAttribute('data-sub-view', 'list')
+  await toView(page, 'list')
+  await expect(page).toHaveURL(scenesUrl)
   const rows = page.locator('[data-scene-row]')
   await expect(rows).toHaveCount(2)
   await expect(rows.nth(0)).toContainText('Ready')
@@ -189,10 +278,11 @@ test('index and list views draw the same scenes, both themes', async ({ page, ac
   await expect(rows.nth(1)).toContainText('No synopsis yet')
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
+    await toView(page, 'list')
     await page.screenshot({ path: `test-results/scenes-list-${theme}.png`, fullPage: false })
   }
 
-  await page.goto(scenesUrl)
+  await toView(page, 'cards')
   await expect(page.locator('[data-scene-card]')).toHaveCount(2)
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)

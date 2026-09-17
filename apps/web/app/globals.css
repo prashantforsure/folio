@@ -1568,8 +1568,9 @@ html[data-nav-open='false'] [data-context-column] {
  *                         on the current tab, `--ink2` otherwise, ink on hover.
  *   .folio-board-row      a scene row in the sidebar's `Boards` group: 8px
  *                         10px, a 10px radius, `--s2` while selected.
- *   .folio-shot-card      a board card (2026-09-17, frame-first): a link to
- *                         the canvas drawn as the card - the column's width
+ *   .folio-shot-card      a board card (2026-09-17, frame-first): a button
+ *                         (a `role="button"` block, the view being state)
+ *                         to the canvas drawn as the card - the column's width
  *                         at 16:9, `--s1` on `--line2`, a 12px radius,
  *                         `cursor: grab`; `flex-shrink: 0` so the scrolling
  *                         column cannot crush its aspect height. Its layers
@@ -3076,5 +3077,299 @@ html[data-nav-open='false'] [data-context-column] {
 
   .folio-clip-this:hover:not(:disabled) {
     opacity: 0.88;
+  }
+}
+
+/*
+ * ## The Scenes route (2026-09-17, "Redesign phase 8" in build-decisions)
+ *
+ * The Cards view is the Storyboard's canvas with a scene per node, and the
+ * script tile on a node opens a reading modal. Client ruling off the
+ * mockup's card grid; the record is `docs/build-decisions.md`.
+ *
+ *   .folio-scene-node     a scene on the canvas: the shot node's recipe -
+ *                         306px, `--sunk`, 14px, the `--shade` shadow -
+ *                         restated here rather than shared by class, so the
+ *                         Storyboard's block is not edited from this route.
+ *                         Merge into one `.folio-canvas-node` when both
+ *                         passes are in.
+ *   .folio-scene-tile     the script excerpt on the node, where a shot's
+ *                         frame sits: `--s1`, a 10px radius, the first
+ *                         lines fading into the ground, and a `Read` mark
+ *                         that rises on hover. The whole tile is the button.
+ *   .folio-scene-line     one excerpt line, inset by its element type the
+ *                         way the mockup's `L()` insets them.
+ *   .folio-modal-scrim    the ground under a modal: the scrim over a
+ *                         backdrop blur, portalled to `body` so the surface
+ *                         card's own blur cannot contain it.
+ *   .folio-paper          the reading sheet: `--paper` under a grain (an
+ *                         inline SVG turbulence, no asset), `--paper-ink`.
+ *   .folio-paper-close    the round X beside the sheet's top-right corner,
+ *                         outside it where there is room and inside where
+ *                         there is not.
+ *   .folio-script-line    one line of the scene on the sheet, Courier, its
+ *                         insets the sheet's own as proportions
+ *                         (`lib/scenes/sheet.ts`).
+ */
+@layer components {
+  .folio-scene-node {
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 12px 34px var(--shade);
+  }
+
+  .folio-scene-node[data-selected='true'] {
+    border-color: var(--line);
+  }
+
+  .folio-scene-node[data-dragging='true'] {
+    border-color: var(--line);
+    box-shadow: 0 18px 44px var(--shade);
+  }
+
+  .folio-scene-tile {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 150px;
+    padding: 11px 12px;
+    overflow: hidden;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 10px;
+    cursor: zoom-in;
+    text-align: left;
+    color: var(--script);
+    transition: border-color 0.14s;
+  }
+
+  .folio-scene-tile:hover,
+  .folio-scene-tile:focus-visible {
+    border-color: var(--line);
+  }
+
+  .folio-scene-tile-fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 40px;
+    background: linear-gradient(to bottom, transparent, var(--sunk));
+    pointer-events: none;
+  }
+
+  /* The `Read` mark: a pill at the tile's foot, hidden until the pointer or the focus is on the tile. */
+  .folio-scene-tile-read {
+    position: absolute;
+    right: 9px;
+    bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    background: var(--s3);
+    border-radius: var(--radius-pill);
+    font-family: var(--font-sans);
+    font-size: var(--text-10-5);
+    color: var(--ink2);
+    opacity: 0;
+    transition: opacity 0.14s;
+  }
+
+  .folio-scene-tile:hover .folio-scene-tile-read,
+  .folio-scene-tile:focus-visible .folio-scene-tile-read {
+    opacity: 1;
+  }
+
+  .folio-scene-line {
+    display: block;
+    font-size: var(--text-10-5);
+    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .folio-scene-line[data-type='scene'],
+  .folio-scene-line[data-type='transition'] {
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+
+  .folio-scene-line[data-type='transition'] {
+    text-align: right;
+  }
+
+  .folio-scene-line[data-type='character'] {
+    padding-left: 34%;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+
+  .folio-scene-line[data-type='paren'] {
+    padding-left: 27%;
+    padding-right: 24%;
+    color: var(--ink3);
+  }
+
+  .folio-scene-line[data-type='dialogue'] {
+    padding-left: 20%;
+    padding-right: 16%;
+  }
+
+  .folio-scene-line[data-type='subtitle'] {
+    padding-left: 20%;
+    padding-right: 16%;
+    font-style: italic;
+    color: var(--ink2);
+  }
+
+  .folio-modal-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--scrim);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .folio-paper {
+    position: relative;
+    background-color: var(--paper);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0.22 0'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
+    color: var(--paper-ink);
+    border: 1px solid var(--paper-line);
+    border-radius: var(--radius-panel);
+    box-shadow: 0 30px 90px var(--panel-shadow);
+  }
+
+  .folio-paper-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    margin: 10px;
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--ink2);
+    box-shadow: 0 8px 24px var(--panel-shadow);
+  }
+
+  .folio-paper-close:hover {
+    background: var(--s3);
+    color: var(--ink);
+  }
+
+  /* Where there is room beside the sheet, the X sits outside its corner, as the reference draws it. */
+  @media (min-width: 960px) {
+    .folio-paper-close {
+      right: -48px;
+      margin: 0;
+    }
+  }
+
+  /* The `Hollywood | Asian` toggle, on the sheet: the view pill's shape over the paper's ink. */
+  .folio-paper-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px;
+    background: color-mix(in oklch, var(--paper-ink) 8%, transparent);
+    border: 1px solid var(--paper-line);
+    border-radius: var(--radius-pill);
+  }
+
+  .folio-paper-toggle > button {
+    padding: 6px 16px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: var(--text-12-5);
+    font-weight: 500;
+    color: var(--paper-ink2);
+  }
+
+  .folio-paper-toggle > button:hover {
+    color: var(--paper-ink);
+  }
+
+  .folio-paper-toggle > button[aria-pressed='true'] {
+    background: color-mix(in oklch, var(--paper-ink) 14%, transparent);
+    color: var(--paper-ink);
+  }
+
+  /* A button on the sheet: the toggle's pill, standing alone. */
+  .folio-paper-button {
+    padding: 7px 14px;
+    background: color-mix(in oklch, var(--paper-ink) 10%, transparent);
+    border: 1px solid var(--paper-line);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: var(--text-12-5);
+    font-weight: 500;
+    color: var(--paper-ink);
+  }
+
+  .folio-paper-button:hover {
+    background: color-mix(in oklch, var(--paper-ink) 16%, transparent);
+  }
+
+  .folio-script-line {
+    display: block;
+    margin: 0;
+    font-family: var(--font-courier);
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--paper-ink);
+  }
+
+  .folio-script-line[data-type='scene'],
+  .folio-script-line[data-type='character'],
+  .folio-script-line[data-type='transition'] {
+    text-transform: uppercase;
+  }
+
+  .folio-script-line[data-type='scene'] {
+    font-weight: 700;
+  }
+
+  .folio-script-line[data-type='transition'] {
+    text-align: right;
+  }
+
+  .folio-script-line[data-type='subtitle'] {
+    font-style: italic;
+  }
+
+  .folio-script-line[data-type='paren'] {
+    color: var(--paper-ink2);
+  }
+
+  /* The refusal on the Asian tab: the engine's words on the sheet, in the sheet's place. */
+  .folio-paper-refusal {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 18px;
+    border: 1px dashed var(--paper-line);
+    border-radius: 12px;
+    color: var(--paper-ink2);
+    font-size: var(--text-13);
+    line-height: 1.55;
   }
 }

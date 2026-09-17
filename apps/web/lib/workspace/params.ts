@@ -62,6 +62,26 @@ import type { WorkspaceRoute } from './routes'
  * key on this route - a stale `?view=relationships` link opens the cast and
  * is not a 404.
  *
+ * ## And Storyboard - ruled 2026-09-17
+ *
+ * `view: board | canvas | list` parsed here from the first shell pass to
+ * the header-views pass; each tab was a link, and a click re-ran the page
+ * on the server before the body changed. The client ruled it as Characters'
+ * was: smooth, and the URL stays `/storyboard`. The view is a cell the
+ * header and the workspace both reach (`_storyboard/view-state.tsx`), so
+ * `?view=` is an unknown key here too - a stale `?view=canvas` link opens
+ * the board and is not a 404.
+ *
+ * ## And Scenes - ruled 2026-09-17, the same day
+ *
+ * `view: cards | index | list` parsed here from the shell-routes phase to
+ * the v2 pass; each tab was a link, and a click moved the address to
+ * `?view=index` and re-ran the page's read. The client ruled it as the
+ * Storyboard's was, in the same words: smooth, and the URL stays `/scenes`.
+ * The view is a cell the header and the route's box both reach
+ * (`_scenes/view-state.tsx`), so `?view=` is an unknown key here too - a
+ * stale `?view=index` link opens the cards and is not a 404.
+ *
  * ## `selected` is not wired
  *
  * The README puts a selected record in `?selected=`, and the storyboard
@@ -81,8 +101,8 @@ const first = <const T extends readonly [string, ...string[]]>(values: T) =>
 export const SUB_VIEW_SCHEMAS = {
   script: z.object({}),
   outline: z.object({}),
-  storyboard: z.object({ view: first(['board', 'canvas', 'list']) }),
-  scenes: z.object({ view: first(['cards', 'index', 'list']) }),
+  storyboard: z.object({}),
+  scenes: z.object({}),
   production: z.object({ view: first(['scene', 'episode']) }),
   characters: z.object({}),
   locations: z.object({ view: first(['places', 'scenes', 'sheet']) }),

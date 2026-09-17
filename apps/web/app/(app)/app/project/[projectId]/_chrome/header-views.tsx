@@ -22,11 +22,14 @@ import { ViewPill } from './view-pill'
  * one (`parseSubViews`). A route with no views renders nothing, and the
  * header keeps its two halves balanced with an empty centre.
  *
- * Two routes do not come through here. Characters' views are state, not
- * the URL, and its layout hands the header `_characters/view-state.tsx`'s
- * tabs in place of this. Research's source page is the `source` view with
- * no `?view=` in its address (`/research/:sourceId`), which this cannot
- * see, so its layout hands `_research/research-header-views.tsx` instead.
+ * Four routes do not come through here. Characters', the Storyboard's and
+ * Scenes' views are state, not the URL: Characters' layout hands the header
+ * `_characters/view-state.tsx`'s tabs in place of this, and the header
+ * draws `_storyboard/view-state.tsx`'s and `_scenes/view-state.tsx`'s
+ * itself on those segments. Research's source page is the `source` view
+ * with no `?view=` in its address (`/research/:sourceId`), which this
+ * cannot see, so its layout hands `_research/research-header-views.tsx`
+ * instead.
  */
 export const HeaderViews = ({ route, baseHref }: { readonly route: WorkspaceRoute; readonly baseHref: EpisodeRoutePath | ProjectRoutePath }) => {
   const params = useSearchParams()

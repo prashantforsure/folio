@@ -28,6 +28,272 @@ at in the code today.
 
 ---
 
+## Redesign phase 8, second pass - Scenes: the views are state (2026-09-17)
+
+One client ruling on the built Scenes route, the one the Storyboard took earlier the same day
+(phase 3, fourth pass) and in the same words: clicking Index cards or Scene list "hard reloads"
+and the URL becomes `/scenes?view=index`; make it smooth and leave the URL alone, "same for
+scene list". No table, no action and no view body changes.
+
+### What the reload was
+
+The Storyboard's, exactly: every tab was a `Link` over `?view=`, the page is a Server Component
+that reads `searchParams`, and a changed search param re-renders the page segment on the server -
+`loadScenes` again (the node list, the derived rows, the measurement and the cast, through the
+pooler) - before the body could change, with the router's loading state in between.
+
+### Rulings taken this pass
+
+| Question | Ruling |
+| --- | --- |
+| `Cards · Index cards · Scene list` were `?view=` | **Client state; the URL stays `/scenes`.** The third row in AGENTS.md's exception table, beside Characters' and the Storyboard's. `params.ts` parses no `view` for `scenes`; `ROUTE_VIEWS.scenes` is empty; a stale `?view=index` - or `?view=grid` - is an unknown key and opens the cards, not a 404 |
+| Where the state lives | **A cell, the Storyboard's shape** (`_scenes/view-state.tsx`): Scenes has no layout of its own either, and the header is the page's sibling. `useSyncExternalStore`, the cards as the server snapshot, so a full load draws the cards lit with no hydration mismatch |
+| Where the `<main data-sub-view>` comes from | **The route's own `<main>`, a client component** (`_scenes/scenes-main.tsx`). Scenes was the last route on `_chrome/route-shell.tsx` + `episode-route-page.tsx`, which wrote `data-sub-view` from the parsed `?view=` on a server-rendered `<main>`; with the view a cell only a client tree can write it. Both `scenes/page.tsx` files now take the Storyboard's shape - `enterEpisodeRoute`, then `_scenes/scenes-route.tsx` (`parseSubViews` for unknown keys, the box, the body) - and the two shell files are deleted rather than orphaned (the Bible reading: nothing else read them) |
+| Where the reset lives | **The route's root, not the workspace.** The Storyboard resets its cell when its workspace unmounts, and its workspace is mounted in every state. Scenes' workspace is not mounted over an empty episode, so `ScenesMain` - which is - carries the unmount reset: leave on the list, come back by the sidebar row, land on the cards, as the bare link always did |
+| The toolbar's word for the view | `VIEW_LABEL` moves from `scene-parts.tsx` to `view-state.tsx` beside the tabs, and the tabs' titles are read from it, so the toolbar's `Index cards` and the tab's tooltip are one string (`tests/workspace-routes.test.ts` asserts it) |
+
+### What changed
+
+- `_scenes/view-state.tsx` (new): `ScenesView`, `VIEW_LABEL`, `SCENES_VIEWS` (the three tabs
+  with the mockup's icons, moved out of `ROUTE_VIEWS`), `setScenesView`, `resetScenesView`,
+  `useScenesView`, `ScenesHeaderViews`. `_scenes/scenes-main.tsx` (new): the `<main>` and the
+  reset. `_scenes/scenes-route.tsx` (new): the server entry, `StoryboardRoute`'s shape.
+- Both `scenes/page.tsx`: the Storyboard pages' shape. `_chrome/route-shell.tsx` and
+  `_chrome/episode-route-page.tsx` deleted - no caller left.
+- `_scenes/scenes-body.tsx` takes `context` and calls `loadScenes` (no `view`);
+  `lib/scenes/server.ts` loses `enterScenes`, which only the body called.
+  `_scenes/scene-workspace.tsx` reads the cell (no `view` prop) and marks its toolbar row
+  `data-mounted` once hydrated; `scene-parts.tsx` loses the type and the labels;
+  `index-view.tsx` / `list-view.tsx` name their view, not a param.
+- `lib/workspace/params.ts`: `scenes: z.object({})`, the ruling written beside the Storyboard's.
+  `lib/workspace/views.ts`: `scenes: []` - no row in the table carries an icon now.
+- `_chrome/writing-header.tsx`: the `scenes` branch beside `storyboard`; `header-views.tsx` and
+  `view-pill.tsx` name the third state route.
+- `tests/workspace-routes.test.ts`: `ROUTE_VIEWS.scenes` is `[]`; `SCENES_VIEWS` asserted from
+  its module with `VIEW_LABEL`; the `?view=` routes carry no icon; `parseSubViews('scenes', …)`
+  yields `{}` and ignores a stale `view`; the refusal, repeated-key and `currentView` cases move
+  to Locations.
+- `e2e/scenes-route.spec.ts`: a `toView` helper on the Storyboard's; walk 1 asserts the tabs are
+  buttons, a click keeps the URL, and `?view=index` / `?view=grid` are 200s on the cards; walk 5
+  opens the index and the list by their tabs and re-opens them after each `setTheme` reload.
+  `e2e/workspace.spec.ts`: the sub-view 404 case moves to Locations, and Scenes' stale `?view=`
+  is asserted a 200 on the cards. `e2e/workspace-routes.ts`: the Scenes row keeps
+  `defaults: { view: 'cards' }` (the bare path still writes it) and takes `title: null` - the v2
+  pass removed the page header and its `h1`, and the row had not followed.
+- AGENTS.md (Routing, the exception table), both CLAUDE.md files, this section.
+
+### Found on the way
+
+- **Walk 2 of the Scenes spec had never run.** Phase 8 shipped its E2E unrun (no creds), and its
+  `[data-scene-count]` locator matched two elements - the board's numeric attribute and the
+  toolbar's label span - a strict-mode violation on the first signed-in run. The locator is
+  scoped to `[data-scenes-header]`; the markup, which both the walk and the memory rule name,
+  is untouched. Its next line asserted the canvas zoom against `/^d+$/` - a `\d` with the
+  backslash lost - against a correct `100`; the regex is fixed. Walk 3 reloaded for each theme
+  (`setTheme`) with the reading modal open and then clicked its `Asian` toggle - the modal is
+  component state and does not survive a reload (the Storyboard walks' trap, fourth pass);
+  the tile re-opens it after each reload, so the `scenes-modal-*` screenshots show the modal.
+  Walk 4's synopsis click landed before the canvas had hydrated: React replays a pre-hydration
+  click once hydration finishes, which on the dev server was past the 5s `expect` (probed: the
+  dialog appeared, seconds late, with no second click). The toolbar row now carries
+  `data-mounted`, as the Storyboard's does, and a `waitMounted` helper precedes every first
+  click in walks 2-5 and every `toView`.
+
+### Verified
+
+- `turbo run typecheck --force` 6/6, `turbo run lint --force` 6/6.
+- `tests/workspace-routes.test.ts`, `tests/shell-and-state.test.ts`, `tests/scenes-canvas.test.ts`
+  and `tests/scenes-sheet.test.ts` on nvm's Node 22.23.2: 48/48.
+- `e2e/scenes-route.spec.ts` against the user's `:3000` dev server with a throwaway
+  `e2e-scenes-views@example.com` (Supabase admin API, the `e2e-views` precedent; password only
+  in the session's scratchpad; flagged for deletion with the others): walk 1 - the tabs are
+  buttons, a click keeps the URL, `?view=index` / `?view=grid` are 200s on the cards - passed
+  on the first run; the strict-mode failure above stopped the serial suite at walk 2. Second
+  run: see the pass's report.
+
+---
+
+## Redesign phase 8 - Scenes: the canvas and the reading modal (2026-09-17)
+
+The Scenes route's pass, ruled off the mockup by the client with two screenshots: the Cards
+view becomes the Storyboard's canvas - the same dark node, the same free ground, pan, zoom, drag,
+the animated thread in story order - with a scene per card; and the script excerpt on a card,
+clicked, opens the whole scene on a grey, grained sheet in Courier over a blurred, dimmed
+window, with a `Hollywood | Asian` toggle at the top and a round ✕ beside its corner. The
+scene-specific data stays on the card: number, heading, cast, lines, pages, `Edit`, `Go to
+Production`. `Route - Scenes v2.dc.html` draws a card grid and no modal; the ruling overrides
+the grid and adds the sheet.
+
+### Rulings taken this pass
+
+| Question | Ruling |
+| --- | --- |
+| The mockup's Cards view is a `repeat(auto-fill, 330px)` grid | **The canvas** (client, 2026-09-17, by screenshot). `_scenes/canvas/` is the Storyboard's shape: one world div under `translate() scale()`, a node per scene at 306px - `SCENE_NODE_W = NODE_W`, so the two routes draw one node - and the `.folio-thread` between consecutive scenes |
+| The README's "Dark canvas, no paper" | **The reading modal is paper** (client, by screenshot): `--paper` / `--paper-ink` / `--paper-ink2` / `--paper-line`, four new tokens in `palette.css` that move with the theme (a mid grey under light ink on the dark canvas, a light grey under dark ink on the light one), and a grain that is an inline SVG turbulence in `.folio-paper`, not an asset. Nothing outside the modal may reach for them |
+| What `Hollywood | Asian` does | **Asks the engine.** The toggle opens on the project's `format` and changes the modal's, not the project's (that is the Script route's Format menu). `lib/scenes/sheet.ts` calls `resolveSheet`: Hollywood lays the scene out at US Letter's insets as proportions of 816px; Asian is open decision 8 and refuses, so the Asian tab draws the refusal - the engine's detail and its two evidence rows - where the sheet would be, with `Read it as Hollywood for now`. Not a guessed A4, not a disabled tab, not a toggle that does nothing |
+
+### Calls made in the pass, flagged
+
+- **Positions are component state.** A shot's position persists (`shots.canvas_x`, migration
+  `0020`, by ruling); `scenes` has no such column and the pass did not add one - a schema
+  decision, and the ask was the frontend. A dragged card keeps its point while the workspace is
+  mounted (a synopsis save does not remount it) and loses it on a reload. If the Storyboard's
+  ruling is wanted here too, it is `scenes.canvas_x` / `canvas_y` on the same shape, an action
+  on `placeShotOnCanvas`'s pattern, and `scenePosition` reading the row before the map.
+- **The canvas opens on the start of the row, not fitted.** An episode has eleven scenes, an
+  hour forty, a feature two hundred; a fit of all of them is the minimum zoom with nothing
+  readable. `openingWindow` (`lib/scenes/canvas.ts`, tested) is the rect that, handed to the
+  Storyboard's `fit`, shows the first cards at 100% from the left edge, or the whole row when it
+  fits. The pill's `Fit` still fits everything, which is what the button says.
+- **The sheet reads, it does not measure.** The modal's lines wrap where the browser wraps them
+  at the sheet's proportional insets; the Script route's ruling (2026-09-16) holds - counts,
+  eighths and the page number stay the measurement record's, and no number is read off the
+  render. `.folio-script-line` is Courier Prime 14px / 1.6, not the engine's 12pt at 6 lpi,
+  because a 720px panel is not a page.
+- **The canvas pieces are imported across the route boundary, not moved.** `SceneCanvas` uses
+  `_storyboard/canvas/use-canvas-viewport.ts`, `connectors.tsx` and `lib/storyboard/canvas.ts`
+  as they are. They belong in `_chrome/canvas/` and `lib/workspace/canvas.ts`, and the zoom pill
+  wants to be one component; the move was not made because the Storyboard's fourth pass was in
+  flight in the same checkout while this one was built, and its files were not to be edited from
+  here. `.folio-scene-node` restates the shot node's five declarations for the same reason;
+  merge both into one `.folio-canvas-node` when both passes are in.
+- **Both dialogs portal to `body`.** The surface card's `backdrop-filter` and the world's
+  `transform` each make their box the containing block for `position: fixed`; a modal rendered
+  inside either would cover that box, not the window. `ScriptModal` and `SceneDetail` render
+  through `createPortal(document.body)`, so the scrim's blur reaches the sidebar and the rail.
+- **The page header is gone.** `RouteShell` is kept for the `?view=` parse and the 404, with
+  `header={() => null}`: the shell header draws the views, the sidebar row carries the count,
+  and the workspace draws its own toolbar row (the selected scene on the left, `N scenes · N
+  pages · synopsis saved` on the right) as the Storyboard does. The old 28px footer is gone with
+  it - the writing routes have no status bar. The E2E's header count assertion moved to
+  `[data-scene-count]`.
+- **Selection, and what a click does.** On the canvas a click selects the card (its border
+  lifts to `--line`, the toolbar names it); `Edit` and `No synopsis yet · write one` open the
+  detail dialog (the latter with the caret in the editor); the tile opens the reading modal. On
+  the index and the list a click opens the detail, as the 2026-09-11 ruling's "detail card in
+  place" always did. The detail's excerpt block is gone - reading is the modal's - and it gained
+  `Read the scene`, which hands over.
+- **Index and list took the tokens, not the mockup's structure.** The index card is the
+  mockup's (`--sunk`, a 3px bar, mono number and heading, synopsis, `pg · eighths`) in a flat
+  grid - the mockup's act columns and colour-by are not built (acts are not a table); the bar
+  is the status. The list is the mockup's table shape with the route's own columns (I/E and
+  Time where the mockup folds them into Day / Night; Lines and Status, which it does not draw).
+- **`Ready` / `Draft` is the synopsis.** The mockup's two words on its status dot; `sceneStatus`
+  in `lib/scenes/canvas.ts`, `--ok` and `--warn`. There is no other status on a scene.
+- **The header pill still says `Cards`.** `ROUTE_VIEWS.scenes` is in the other pass's diff and
+  was not touched; the tab id `cards` is the URL and stays either way.
+- **Icons.** No new icon. The tile's `Read` mark and the `Edit` button reuse `write`; `Go to
+  Production` reuses `production`; the ✕ is `close`.
+
+### What changed
+
+- `packages/ui/src/tokens`: `palette.css` the four `--paper*` tokens in the three-block shape;
+  `theme.css` registers them.
+- `apps/web/lib/scenes`: `canvas.ts` (new, pure: `SCENE_NODE_W`, `scenePosition`,
+  `openingWindow`, `sceneStatus`, `tileBadge`) and `sheet.ts` (new, pure: `readingLayout`,
+  `READING_FORMATS`); `tests/scenes-canvas.test.ts` and `tests/scenes-sheet.test.ts`.
+- `_scenes/`: `scene-workspace.tsx` (the container; replaces `scene-board.tsx`, deleted),
+  `canvas/scene-canvas.tsx` and `canvas/scene-node.tsx` (new), `script-modal.tsx` (new),
+  `scene-detail.tsx` (the dialog, restyled, portalled), `index-view.tsx` and `list-view.tsx`
+  (moved out, on the tokens), `scene-parts.tsx` (the shared formatters and chips),
+  `scenes-body.tsx` (the README's empty card, the workspace). `scenes-header.tsx` deleted; both
+  `scenes/page.tsx` files pass `header={() => null}`.
+- `globals.css`: one block at the end - `.folio-scene-node`, `.folio-scene-tile` and its lines,
+  `.folio-modal-scrim`, `.folio-paper` and its toggle, close, button, refusal and script lines.
+- `e2e/scenes-route.spec.ts`: the header assertion moved; the canvas's zoom, thread and
+  selection asserted; a new walk for the modal (the sheet, `Asian` → the refusal, `Read it as
+  Hollywood`, Escape).
+
+### Verified
+
+`pnpm exec turbo run typecheck lint --force`: 12/12. `tests/scenes-canvas.test.ts` (7),
+`tests/scenes-sheet.test.ts` (4), and the whole web suite on Node 22.23.2 via nvm (the jsdom
+trap): 34 files, 430 passing, with the concurrent pass's changes in the tree. `pnpm --filter web
+build` clean, `check:secrets` included. The E2E walks are **unrun**: no `E2E_*` credentials are
+configured locally and the walk accounts' passwords are not on disk. The CSS was checked instead
+with the static harness (the compiled `.next/static/chunks/*.css` + the node's and the modal's
+markup in an HTML file, Playwright screenshots from the scratchpad, both themes, the tile's
+hover): the node reads as the shot node, the sheet reads as the reference. What the harness
+cannot see - the drag, the wheel, the opening fit, the portals over the real shell - stands on
+the Storyboard's tested viewport and the typecheck, and wants a signed-in walk.
+
+---
+
+## Redesign phase 3, fourth pass - Storyboard: the views are state (2026-09-17)
+
+One client ruling on the built Storyboard route, about where the address moves. The client's
+words, in intent: clicking Canvas or Shot list "hard reloads" and the URL becomes
+`/storyboard?view=canvas`; make it smooth and leave the URL alone, like it looks and feels
+better. No table, no action and no view body changes.
+
+### What the reload was
+
+Not a full page load - Next soft-navigated - but every tab was a `Link` over `?view=`, the page
+is a Server Component that reads `searchParams`, and a changed search param re-renders the page
+segment on the server: `loadStoryboard` ran again (a database round trip through the pooler)
+before the body could change, with the router's loading state in between. The view being a URL
+cost a server read per click.
+
+### Rulings taken this pass
+
+| Question | Ruling |
+| --- | --- |
+| `Boards · Canvas · Shot list` were `?view=` (AGENTS.md, Routing: "sub-views are query params") | **Client state; the URL stays `/storyboard`.** The same ruling Characters' tabs took on 2026-09-16 and the Script's switches on 2026-09-11, now a second row in AGENTS.md's exception table. `params.ts` parses no `view` for `storyboard`; `ROUTE_VIEWS.storyboard` is empty; a stale `?view=canvas` - or `?view=grid` - is an unknown key and opens the board, not a 404 (the Characters reading) |
+| Where the state lives | **A cell, not a provider.** Characters holds its view in a provider in its own layout; the Storyboard has no layout of its own - `(writing)/layout.tsx` is shared with Script, Outline and Scenes and cannot host one route's state - and the header it renders is the page's sibling, not its child. So the view is the shape `lib/storyboard/coverage.ts` already is for the sidebar: a module-level value with `useSyncExternalStore`, in `_storyboard/view-state.tsx` (the Characters file's name), which the header subscribes to for its tab and the workspace for its body. The server snapshot is the board, so a full load draws the board lit with no hydration mismatch |
+| Whether the view survives leaving the route | **No - back to the board on unmount**, as `publishBoardCoverage(null)` is. The sidebar's Storyboard row and the episode menu link the bare path, which opened the board; keeping a canvas across Script → Storyboard would be a behaviour the URL never had. An episode switch remounts the page under its segment and resets the same way |
+| Who draws the tabs | **The header itself, on its segment.** The writing layout cannot pass `views` (a layout cannot see which route it renders), so `WritingHeader` branches on `route === 'storyboard'` and draws `StoryboardHeaderViews` - `ViewPill`'s `onSelect` variant, the buttons Characters' tabs are - where the other routes go through `header-views.tsx` and `?view=`. `HeaderViews` itself is untouched |
+| The board card and the column's `Open` were `Link`s to `?view=canvas` that selected the scene on the way | **`view.onOpenCanvas(sceneNodeId)`**: selects and sets the view in one callback (`ViewProps`; `canvasHref` is gone). `Open` is a `<button>`; the card is a `role="button"` block with `tabIndex` and Enter / Space, the list's scene-row shape, because its layers are block content a `<button>` may not hold. Drag-reorder is unchanged - `draggable` on the `div` as it was on the `a` |
+
+### What changed
+
+- `_storyboard/view-state.tsx` (new): `StoryboardView`, `STORYBOARD_VIEWS` (the three tabs
+  with the mockup's icons, moved out of `ROUTE_VIEWS`), `setStoryboardView`,
+  `resetStoryboardView`, `useStoryboardView`, `StoryboardHeaderViews`.
+- `lib/workspace/params.ts`: `storyboard: z.object({})`, the ruling written beside Characters'.
+  `lib/workspace/views.ts`: `storyboard: []`.
+- `_chrome/writing-header.tsx`: the `storyboard` branch in the centre; `header-views.tsx` and
+  `view-pill.tsx` name the second state route in their docs.
+- `_storyboard/storyboard-workspace.tsx` reads the cell (no `view` or `baseHref` prop), resets it
+  on unmount, and hands the views `onOpenCanvas`; `storyboard-route.tsx` still calls
+  `parseSubViews` for unknown keys and passes no view; `handlers.ts` `onOpenCanvas` for
+  `canvasHref`; `board-view.tsx` two buttons for two links; `storyboard-toolbar.tsx` imports the
+  type it used to own. `globals.css`: the `.folio-shot-card` note says button.
+- `tests/workspace-routes.test.ts`: `ROUTE_VIEWS.storyboard` is `[]`; the Storyboard's and
+  Characters' state tabs are asserted from their own modules (`STORYBOARD_VIEWS`,
+  `CHARACTERS_VIEWS`); `parseSubViews('storyboard', …)` yields `{}` and ignores a stale `view`;
+  `currentView`'s cases move to Scenes.
+- `e2e/storyboard-route.spec.ts`: a `toView` helper clicks the header's tab and asserts
+  `data-sub-view`; every `?view=` navigation is a bare load plus a click; each `page.reload()` and
+  `setTheme` (which reloads) that expected the canvas or the list back re-opens it by its tab;
+  the empty-state walk asserts the tabs are `button`s, the URL does not move on a click, and
+  `?view=list` / `?view=grid` are 200s on the board (the `grid` 404 assertion is gone with the
+  param). `e2e/workspace-routes.ts` keeps `defaults: { view: 'board' }` - it asserts
+  `data-sub-view` on the bare path, which still holds - as Characters' row keeps `cast`.
+- AGENTS.md (Routing, the exception table), both CLAUDE.md files, this section.
+
+### Found on the way
+
+- **Walk 2 was one pass stale.** It clicked the fifth proposal and expected the board's
+  in-place `[data-shot-editor]` with `Accept` / `Discard` - the editor the card pass (third
+  pass, 2026-09-17) removed when a card click became the canvas; that pass rewrote walks 3 and 4
+  and left this step, and the suite is serial, so it had not been past walk 2 since. Now: the
+  click lands on the canvas (URL unchanged), the fifth node has `Accept` and no `Generate`, its
+  `⋯ → Discard` removes it, and the board tab brings the column back with four.
+
+### Verified
+
+- `pnpm typecheck` 6/6 (forced), `pnpm lint` 7/7, `pnpm build` clean including the secrets scan.
+- `tests/workspace-routes.test.ts`, `tests/shell-and-state.test.ts` and
+  `tests/storyboard-board.test.ts` on nvm's Node 22.23.2: 53/53.
+- `e2e/storyboard-route.spec.ts` **5/5 (7.2m)** against the user's `:3000` dev server, with a
+  throwaway `e2e-views@example.com` made through the Supabase admin API for this session (the
+  `e2e-storyboard` / `e2e-canvas` precedent; password nowhere on disk but the session's
+  scratchpad; flagged for deletion with the others). The first run stopped at the stale walk-2
+  step above; the second ran through. The canvas and list screenshots are taken after a
+  reload and a tab click, and show the canvas and the list.
+
+---
+
 ## Redesign, the header's views - the mode pill goes, Storyboard is a row (2026-09-17)
 
 The client's brief, verbatim in intent: remove the Write / Storyboard buttons from the top bar

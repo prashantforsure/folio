@@ -11,9 +11,10 @@ history (`git show 7a541bd:docs/build-decisions.md`) and are not the reference f
 **The app is mid-redesign.** `docs/ui design/README.md` and the nine `Route - * v2.dc.html`
 mockups are the spec; routes are rebuilt to them one at a time. Done: the shell (rail, writing
 sidebar and header, assistant panel), **Script**, **Outline**,
-**Storyboard**, **Production**, **Characters**, **Locations** and **Research** (the last built from
-nothing: no body, table or contract existed before its pass). Scenes and Timeline still draw their
-pre-redesign chrome inside the new shell until their own pass.
+**Storyboard**, **Production**, **Characters**, **Locations**, **Research** (the last built from
+nothing: no body, table or contract existed before its pass) and **Scenes** (2026-09-17, ruled off
+its mockup onto the Storyboard's canvas, with a reading modal). Timeline still draws its
+pre-redesign chrome inside the new shell until its own pass.
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -68,7 +69,9 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   **The header's centre is the route's views** (2026-09-17): `lib/workspace/views.ts` tables every
   route's `?view=` tabs, `_chrome/header-views.tsx` lights one from the URL, `_chrome/view-pill.tsx`
   draws them (icon beside name, one shape); the writing sidebar is Script · Storyboard · Outline ·
-  Scenes and the Write / Storyboard pill is gone. The assistant (`lib/assistant/`,
+  Scenes and the Write / Storyboard pill is gone. Three routes' views are client state, not `?view=`
+  (Characters 2026-09-16, Storyboard and Scenes 2026-09-17 - all client rulings): `_characters/view-state.tsx`,
+  `_storyboard/view-state.tsx` and `_scenes/view-state.tsx`, tabs as buttons in the same slot, the URL unchanged. The assistant (`lib/assistant/`,
   `app/api/assistant/route.ts`) and share links (`lib/share/`, `app/share/[token]/`) are cross-route
   features built with the redesign.
 - `apps/worker` — empty on purpose. Do not create `apps/sync/`.

@@ -6,6 +6,7 @@ import { memo, useRef, useState } from 'react'
 import { SHOT_FILTERS, SHOT_FILTER_LABEL, SHOT_SORTS, SHOT_SORT_LABEL } from '../../../../../../lib/storyboard/board'
 import type { ShotFilter, ShotSort } from '../../../../../../lib/storyboard/board'
 import { useDismiss } from '../_chrome/use-dismiss'
+import type { StoryboardView } from './view-state'
 
 /**
  * The Storyboard's toolbar row - `docs/ui design/Route - Storyboard
@@ -28,9 +29,10 @@ import { useDismiss } from '../_chrome/use-dismiss'
  *   Filter    over the same rows in every view: all, with a frame, waiting
  *             on a frame, proposed.
  *
- * All component state. The view is `?view=` - the sub-view param
- * (`lib/workspace/params.ts`), so a view is a URL - and the header's tabs
- * are three links over it.
+ * All component state - and so is the view, since 2026-09-17: `board |
+ * canvas | list` is the cell in `view-state.tsx`, the header's tabs are
+ * three buttons over it, and the URL stays `/storyboard` (it was `?view=`
+ * until the client ruled it as Characters' tabs were).
  *
  * The mockup's `Group: Scene ▾` is still not drawn. Shots group by scene
  * and by nothing else - a shot hangs off a heading - and a menu with one
@@ -41,8 +43,6 @@ import { useDismiss } from '../_chrome/use-dismiss'
  * carry (`104 pp · saved` moved into the toolbar row, phase 1), so a write
  * here reports the way a write there does.
  */
-
-export type StoryboardView = 'board' | 'canvas' | 'list'
 
 export type DisplayOptions = {
   readonly descriptions: boolean

@@ -14,7 +14,9 @@ import type { WalkOptions } from '../playwright.config'
  *   1. **The empty state, both themes.** No script; the sidebar's
  *      widget counts boards, not credits, and its Storyboard row is lit;
  *      the header's centre is `Boards · Canvas · Shot list`, iconed, with
- *      the board lit; `?view=` outside `board | canvas | list` is a 404.
+ *      the board lit - three buttons over client state (ruled 2026-09-17),
+ *      so a click switches the body and the URL stays `/storyboard`; a
+ *      stale `?view=` link, a real view or not, is a 200 on the board.
  *   2. **A script is columns; Auto board proposes; accepting boards.** The
  *      imported script's two accepted headings are two columns (the
  *      `INTERCUT` line is neither a scene nor a column) and two rows in the
@@ -122,6 +124,12 @@ const waitMounted = async (page: Page): Promise<void> => {
   await expect(page.locator('[data-storyboard-header]')).toHaveAttribute('data-mounted', 'true', { timeout: 60_000 })
 }
 
+/** The view is state (ruled 2026-09-17): a full load starts on the board, and the header's tab - not a `?view=` - opens the canvas or the list. */
+const toView = async (page: Page, view: 'board' | 'canvas' | 'list'): Promise<void> => {
+  await page.locator(`[data-writing-header] [data-view-tab="${view}"]`).click()
+  await expect(page.locator('main[data-route="storyboard"]')).toHaveAttribute('data-sub-view', view)
+}
+
 const waitSaved = async (page: Page): Promise<void> => {
   await expect(page.locator('[data-storyboard-save]')).toHaveAttribute('data-save-state', 'saved', { timeout: 60_000 })
 }
@@ -159,7 +167,7 @@ let scriptUrl = ''
 let storyboardUrl = ''
 let projectId = ''
 
-test('empty state, both themes; a bad view is a 404', async ({ page, account }) => {
+test('empty state, both themes; a tab is a button and a stale view link is ignored', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto('/app/new')
   await page.getByLabel('Title').fill(`Storyboard walk ${new Date().toISOString()}`)
@@ -183,9 +191,9 @@ test('empty state, both themes; a bad view is a 404', async ({ page, account }) 
   // The sidebar counts boards here, not credits, and lights its Storyboard row (a row since 2026-09-17).
   await expect(page.locator('[data-boards-card] [data-boards-drawn]')).toHaveText('0 / 0')
   await expect(page.locator('aside[data-sidebar] a[data-episode-route][aria-current="page"]')).toHaveAttribute('data-episode-route', 'storyboard')
-  // The header's centre is the three views, each an icon beside its name, the board lit.
+  // The header's centre is the three views, each an icon beside its name, the board lit - buttons over client state, not links.
   const headerPill = page.locator('[data-writing-header] [data-view-pill]')
-  await expect(headerPill.locator('[data-view-tab]')).toHaveText(['Boards', 'Canvas', 'Shot list'])
+  await expect(headerPill.locator('button[data-view-tab]')).toHaveText(['Boards', 'Canvas', 'Shot list'])
   await expect(headerPill.locator('[data-view-tab] svg')).toHaveCount(3)
   await expect(headerPill.locator('[data-view-tab="board"]')).toHaveAttribute('aria-current', 'page')
   await expect(page.locator('[data-storyboard-header] [data-view-pill]')).toHaveCount(0)
@@ -193,12 +201,19 @@ test('empty state, both themes; a bad view is a 404', async ({ page, account }) 
     await setTheme(page, theme)
     await page.screenshot({ path: `test-results/storyboard-empty-${theme}.png`, fullPage: false })
   }
-  await page.goto(`${storyboardUrl}?view=list`)
+  // A tab switches the body and the URL does not move (ruled 2026-09-17).
+  await headerPill.locator('[data-view-tab="list"]').click()
   await expect(main).toHaveAttribute('data-sub-view', 'list')
-  await expect(page.locator('[data-view-tab="list"]')).toHaveAttribute('aria-current', 'page')
+  await expect(headerPill.locator('[data-view-tab="list"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page).toHaveURL(storyboardUrl)
   await expect(page.locator('[data-empty-state="no-script"]')).toBeVisible()
+  // The tabs are state, not `?view=`: a stale view link is ignored, not a 404 - a real view or not.
+  const stale = await page.goto(`${storyboardUrl}?view=list`)
+  expect(stale?.status()).toBe(200)
+  await expect(main).toHaveAttribute('data-sub-view', 'board')
   const bogus = await page.goto(`${storyboardUrl}?view=grid`)
-  expect(bogus?.status()).toBe(404)
+  expect(bogus?.status()).toBe(200)
+  await expect(main).toHaveAttribute('data-sub-view', 'board')
 })
 
 test('a script is columns; Auto board proposes real mentions; accepting boards them', async ({ page, account }) => {
@@ -214,7 +229,8 @@ test('a script is columns; Auto board proposes real mentions; accepting boards t
 
   await page.goto(storyboardUrl)
   await waitMounted(page)
-  await expect(page.locator('main[data-route="storyboard"]')).toHaveAttribute('data-storyboard-state', 'board')
+  const main = page.locator('main[data-route="storyboard"]')
+  await expect(main).toHaveAttribute('data-storyboard-state', 'board')
   const columns = page.locator('[data-scene-column]')
   await expect(columns).toHaveCount(2)
   await expect(columns.nth(0)).toHaveAttribute('data-scene-number', '1')
@@ -248,14 +264,18 @@ test('a script is columns; Auto board proposes real mentions; accepting boards t
   await expect(proposed.nth(3).locator('[data-shot-description]')).toContainText("It's business, not charity.")
   await expect(proposed.nth(4).locator('[data-shot-description]')).toContainText('Closing wide.')
 
-  // Open the last proposal: a proposal accepts or discards and has no frame to draw.
+  // Open the last proposal: a card click lands on the canvas (2026-09-17), where a proposal accepts or discards and has no frame to draw.
   await proposed.nth(4).click()
-  const editor = columns.nth(0).locator('[data-shot-editor]')
-  await expect(editor).toBeVisible()
-  await expect(editor.locator('[data-accept-shot]')).toBeVisible()
-  await expect(editor.locator('[data-draw-frame]')).toHaveCount(0)
-  await editor.locator('[data-discard-shot]').click()
+  await expect(main).toHaveAttribute('data-sub-view', 'canvas')
+  await expect(page).toHaveURL(storyboardUrl)
+  const node = page.locator('[data-shot-node]').nth(4)
+  await expect(node.locator('[data-accept-shot]')).toBeVisible()
+  await expect(node.locator('[data-generate-frame]')).toHaveCount(0)
+  await node.locator('[data-node-menu]').click()
+  await page.locator('[data-discard-shot]').click()
   await waitSaved(page)
+  await expect(page.locator('[data-shot-node]')).toHaveCount(4)
+  await toView(page, 'board')
   await expect(proposed).toHaveCount(4)
   await columns.nth(0).locator('[data-accept-all]').click()
   await waitSaved(page)
@@ -286,14 +306,14 @@ test('a card opens its canvas; a shot is authored: edit with an @mention, drag t
   const shots = column.locator('[data-shot]')
   const nodes = page.locator('[data-shot-node]')
   const toBoard = async (): Promise<void> => {
-    await page.locator('[data-view-tab="board"]').click()
-    await expect(main).toHaveAttribute('data-sub-view', 'board')
+    await toView(page, 'board')
   }
   await expect(shots).toHaveCount(4)
 
-  // A card is a link to the canvas on its scene.
+  // A card opens the canvas on its scene - a button over state, so the URL stays put.
   await shots.nth(0).click()
   await expect(main).toHaveAttribute('data-sub-view', 'canvas')
+  await expect(page).toHaveURL(storyboardUrl)
   await expect(page.locator('[data-shot-count]')).toHaveText('Scene 01 · 4 shots')
   await expect(nodes).toHaveCount(4)
 
@@ -358,8 +378,9 @@ test('a card opens its canvas; a shot is authored: edit with an @mention, drag t
 
 test('the frame names its cost, refuses without credits, reserves with them, and releases on cancel', async ({ page, account }) => {
   await signIn(page, account)
-  await page.goto(`${storyboardUrl}?view=canvas`)
+  await page.goto(storyboardUrl)
   await waitMounted(page)
+  await toView(page, 'canvas')
   const main = page.locator('main[data-route="storyboard"]')
   const nodes = page.locator('[data-shot-node]')
   const generate = (index: number) => nodes.nth(index).locator('[data-generate-frame]')
@@ -379,6 +400,7 @@ test('the frame names its cost, refuses without credits, reserves with them, and
   grantCredits(test.info().config.rootDir, projectId, cost * 2)
   await page.reload()
   await waitMounted(page)
+  await toView(page, 'canvas')
 
   // Reserve then execute: the job is queued and the balance drops by exactly the cost.
   await expect(generate(0)).toHaveAttribute('title', `Reserves ${String(cost)} credits · ${String(cost * 2)} available`)
@@ -389,11 +411,13 @@ test('the frame names its cost, refuses without credits, reserves with them, and
   await expect(nodes.nth(0)).toContainText(`Queued · ${String(cost)} credits reserved`)
 
   // Survives a closed tab: the job row is the truth - on the canvas, and in the board card's tile.
+  // A full load starts on the board (the view is state, not the URL); the canvas is a tab away.
   await page.reload()
   await waitMounted(page)
-  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await page.locator('[data-view-tab="board"]').click()
   await expect(main).toHaveAttribute('data-sub-view', 'board')
+  await toView(page, 'canvas')
+  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
+  await toView(page, 'board')
   const shots = page.locator('[data-scene-column]').nth(0).locator('[data-shot]')
   await expect(shots.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
   await expect(shots.nth(0).locator('[data-frame-notice]')).toContainText(`Queued · ${String(cost)} credits reserved`)
@@ -422,10 +446,11 @@ test('the frame names its cost, refuses without credits, reserves with them, and
 
 test('canvas and list draw the same rows', async ({ page, account }) => {
   await signIn(page, account)
-  await page.goto(`${storyboardUrl}?view=canvas`)
+  await page.goto(storyboardUrl)
   await waitMounted(page)
-  await expect(page.locator('main[data-route="storyboard"]')).toHaveAttribute('data-sub-view', 'canvas')
+  await toView(page, 'canvas')
   await expect(page.locator('[data-view-tab="canvas"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page).toHaveURL(storyboardUrl)
   await expect(page.locator('[data-shot-count]')).toHaveText('Scene 01 · 4 shots')
   const nodes = page.locator('[data-shot-node]')
   await expect(nodes).toHaveCount(4)
@@ -477,6 +502,7 @@ test('canvas and list draw the same rows', async ({ page, account }) => {
   await expect(first).toHaveAttribute('data-shot-number', '01-01')
   await page.reload()
   await waitMounted(page)
+  await toView(page, 'canvas')
   await expect(nodes.nth(0)).toHaveAttribute('data-shot-node', firstId ?? '')
   await expect(nodes.nth(0)).toHaveAttribute('data-canvas-x', movedX ?? '')
 
@@ -524,14 +550,17 @@ test('canvas and list draw the same rows', async ({ page, account }) => {
   await expect(page.locator('[data-board-row]').nth(1)).toHaveAttribute('aria-current', 'true')
   await page.locator('[data-board-row]').nth(0).click()
   await expect(nodes).toHaveCount(4)
+  // `setTheme` reloads, and a full load starts on the board: back to the canvas before each shot.
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
+    await waitMounted(page)
+    await toView(page, 'canvas')
+    await expect(nodes).toHaveCount(4)
     await page.screenshot({ path: `test-results/storyboard-canvas-${theme}.png`, fullPage: false })
   }
 
-  await page.goto(`${storyboardUrl}?view=list`)
-  await waitMounted(page)
-  await expect(page.locator('main[data-route="storyboard"]')).toHaveAttribute('data-sub-view', 'list')
+  await toView(page, 'list')
+  await expect(page).toHaveURL(storyboardUrl)
   await expect(page.locator('[data-list-scene]')).toHaveCount(2)
   await expect(page.locator('[data-list-shot]')).toHaveCount(4)
   await expect(page.locator('[data-list-shot]').nth(0)).toContainText('01-01')
@@ -551,6 +580,9 @@ test('canvas and list draw the same rows', async ({ page, account }) => {
   await expect(page.locator('[data-list-shot]').nth(0)).toContainText('01-01')
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
+    await waitMounted(page)
+    await toView(page, 'list')
+    await expect(page.locator('[data-list-shot]')).toHaveCount(4)
     await page.screenshot({ path: `test-results/storyboard-list-${theme}.png`, fullPage: false })
   }
 })

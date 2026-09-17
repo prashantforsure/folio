@@ -1,18 +1,15 @@
-import { EpisodeRoutePage } from '../../../_chrome/episode-route-page'
-import { ScenesBody } from '../../../_scenes/scenes-body'
-import { ScenesHeader } from '../../../_scenes/scenes-header'
+import { ScenesRoute } from '../../../_scenes/scenes-route'
+import { enterEpisodeRoute } from '../../../../../../../../lib/workspace/context'
 
 /**
- * The Scenes route, collapsed (film) shape. One implementation for all three
- * `?view=` values; the header and body share one `cache()`d read.
+ * The Scenes route, collapsed (film) shape. Same read, same views;
+ * `enterEpisodeRoute` resolves the film's one episode and canonicalises the
+ * URL for the project's type before anything renders.
  */
-const Page = (props: PageProps<'/app/project/[projectId]/scenes'>) => (
-  <EpisodeRoutePage
-    route="scenes"
-    {...props}
-    header={(_subViews, address) => <ScenesHeader address={address} />}
-    render={(subViews, address) => <ScenesBody address={address} view={subViews.view} />}
-  />
-)
+const Page = async ({ params, searchParams }: PageProps<'/app/project/[projectId]/scenes'>) => {
+  const { projectId } = await params
+  const context = await enterEpisodeRoute(projectId, null, 'scenes')
+  return <ScenesRoute context={context} searchParams={searchParams} />
+}
 
 export default Page

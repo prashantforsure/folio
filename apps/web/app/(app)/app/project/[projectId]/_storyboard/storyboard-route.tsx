@@ -9,10 +9,15 @@ import { StoryboardWorkspace } from './storyboard-workspace'
 
 /**
  * The Storyboard route, server side: one read, then the client workspace
- * inside the writing layout's surface card. The `<main data-route
- * data-sub-view>` contract the smoke test reads is kept exactly; `?view=`
- * is parsed as every route's is and a value outside `board | canvas | list`
- * is a 404.
+ * inside the writing layout's surface card.
+ *
+ * The route has no sub-view param (`params.ts`, ruled 2026-09-17): the
+ * `Boards · Canvas · Shot list` tabs are client state (`view-state.tsx`)
+ * and the URL stays `/storyboard`, so a view switch never comes back
+ * here. `parseSubViews` is still called so unknown keys are handled as
+ * every route handles them - a stale `?view=canvas` is one, and opens the
+ * board. The `<main data-route data-sub-view>` contract the smoke test
+ * reads is kept by the workspace exactly.
  *
  * `?selected=` is not read. The README writes it as `SCENE_xxx`, which is
  * the open id-shape contradiction (`docs/build-decisions.md`), and the
@@ -35,8 +40,6 @@ export const StoryboardRoute = async ({
     <StoryboardWorkspace
       projectId={project.id}
       episode={episode.slug}
-      view={parsed.params.view}
-      baseHref={episodeRouteHref(address, 'storyboard')}
       scriptHref={episodeRouteHref(address, 'script')}
       state={load.state}
       scenes={load.state === 'script' ? load.scenes : []}

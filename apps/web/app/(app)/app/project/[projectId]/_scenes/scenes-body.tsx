@@ -1,16 +1,16 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-import { enterScenes } from '../../../../../../lib/scenes/server'
+import { loadScenes } from '../../../../../../lib/scenes/server'
+import type { EpisodeContext } from '../../../../../../lib/workspace/context'
 import { count } from '../../../../../../lib/workspace/format'
 import { episodeRouteHref } from '../../../../../../lib/workspace/hrefs'
-import type { RouteAddress } from '../_chrome/episode-route-page'
-import { SceneBoard } from './scene-board'
-import type { ScenesView } from './scenes-header'
+import type { EpisodeRoutePath } from '../../../../../../lib/workspace/hrefs'
+import { SceneWorkspace } from './scene-workspace'
 import { UnacceptedList } from './unaccepted'
 
 /**
- * The Scenes body: one of three empty states, or the board.
+ * The Scenes body: one of three empty states, or the workspace.
  *
  * AGENTS.md, exception table: "Every route ships both states - no
  * exceptions." Scenes has more than two, and the brief asks for the
@@ -27,59 +27,71 @@ import { UnacceptedList } from './unaccepted'
  *                        headings, they are listed *as refused*, with the
  *                        reason `readSlugline` gave - never as scenes.
  *
+ * The empty states are the README's card ("a single 440px card: heading,
+ * one paragraph of plain explanation, an accent AI action plus a manual
+ * alternative, and a one-line caveat"), as the Storyboard draws them - with
+ * the manual action alone, since there is no AI action to offer over a
+ * script that does not exist.
+ *
  * Every number printed here is read: the node count is the length of the
  * node list, the scene count is the derived rows, and neither is estimated.
  */
 
 const Empty = ({
+  state,
   title,
+  scriptHref,
+  action,
+  caveat,
   children,
 }: {
+  readonly state: 'no-script' | 'unreadable' | 'no-scenes'
   readonly title: string
+  readonly scriptHref: EpisodeRoutePath | null
+  readonly action: string
+  readonly caveat: string
   readonly children: ReactNode
 }) => (
-  <div className="flex h-full min-h-[320px] items-center justify-center p-[24px]">
-    <div className="flex w-full max-w-[420px] flex-col gap-[10px] rounded-chrome border border-line bg-panel p-[20px]">
-      <h2 className="m-0 font-serif text-21 font-medium tracking-title">{title}</h2>
-      {children}
+  <div className="flex h-full min-h-[320px] items-center justify-center px-[20px] py-[32px]" data-empty-state={state}>
+    <div className="flex w-full max-w-[440px] flex-col gap-[16px] rounded-panel border border-line2 bg-s1 p-[24px]">
+      <div className="flex flex-col gap-[7px]">
+        <h2 className="m-0 text-17 font-medium tracking-title">{title}</h2>
+        {children}
+      </div>
+      {scriptHref === null ? null : (
+        <Link href={scriptHref} className="folio-solid-button flex h-[36px] items-center justify-center gap-[8px] rounded-[10px] text-13 font-medium no-underline hover:no-underline">
+          {action}
+        </Link>
+      )}
+      <span className="text-11-5 text-ink3">{caveat}</span>
     </div>
   </div>
 )
 
 const Copy = ({ children }: { readonly children: ReactNode }) => (
-  <p className="m-0 text-11-5 leading-[1.55] text-ink2">{children}</p>
+  <p className="m-0 text-13 leading-[1.55] text-ink2" style={{ textWrap: 'pretty' }}>
+    {children}
+  </p>
 )
 
-export const ScenesBody = async ({
-  address,
-  view,
-}: {
-  readonly address: RouteAddress
-  readonly view: ScenesView
-}) => {
-  const { context, load } = await enterScenes(address.projectId, address.segment)
+export const ScenesBody = async ({ context }: { readonly context: EpisodeContext }) => {
+  const load = await loadScenes(context)
   const scriptHref = episodeRouteHref(context.address, 'script')
 
   if (load.state === 'empty') {
     return (
-      <Empty title="No script yet">
-        <Copy>
-          Scenes are read from the script&rsquo;s headings. There is no script for this episode, so
-          there is nothing to read yet.
-        </Copy>
-        <Link href={scriptHref} className="text-11-5 text-accent">
-          Open the Script route to start or import one &rarr;
-        </Link>
+      <Empty state="no-script" title="No script yet" scriptHref={scriptHref} action="Open the script" caveat="Write or import a script there; the scenes read its headings.">
+        <Copy>Scenes are read from the script&rsquo;s headings. There is no script for this episode, so there is nothing to read yet.</Copy>
       </Empty>
     )
   }
 
   if (load.state === 'unreadable') {
     return (
-      <Empty title="The script would not read">
+      <Empty state="unreadable" title="The script would not read" scriptHref={null} action="" caveat="Nothing is drawn over a node list that does not read.">
         <Copy>
-          A node in this document does not read as a screenplay node, so the scenes cannot be
-          listed over it. The reader refused at <span className="font-mono">{load.detail}</span>.
+          A node in this document does not read as a screenplay node, so the scenes cannot be listed over it. The reader refused at{' '}
+          <span className="font-mono">{load.detail}</span>.
         </Copy>
       </Empty>
     )
@@ -87,29 +99,22 @@ export const ScenesBody = async ({
 
   if (load.scenes.length === 0) {
     return (
-      <Empty title="A script, but no scenes">
+      <Empty state="no-scenes" title="A script, but no scenes" scriptHref={scriptHref} action="Open the script" caveat="Fix the headings there; the scenes follow the script.">
         <Copy>
-          This script has {count(load.nodeCount)} node{load.nodeCount === 1 ? '' : 's'} and
-          derivation found no scene heading it could accept. Scenes appear here as you write
-          headings: <span className="font-mono">INT. MEERAS FLAT - NIGHT</span> is one;
+          This script has {count(load.nodeCount)} node{load.nodeCount === 1 ? '' : 's'} and derivation found no scene heading it could accept. Scenes appear here as
+          you write headings: <span className="font-mono">INT. MEERAS FLAT - NIGHT</span> is one;
           <span className="font-mono"> INTERCUT - PHONE CALL</span> is not, and never becomes one.
         </Copy>
         <UnacceptedList unaccepted={load.unaccepted} />
-        <Link href={scriptHref} className="text-11-5 text-accent">
-          Open the Script route &rarr;
-        </Link>
       </Empty>
     )
   }
 
   return (
-    <SceneBoard
-      view={view}
+    <SceneWorkspace
       projectId={context.project.id}
       episode={context.episode.slug}
-      routeTag={
-        context.shape === 'collapsed' ? 'scenes' : `${context.episode.slug}/scenes`
-      }
+      format={context.project.format}
       productionHref={episodeRouteHref(context.address, 'production')}
       scenes={load.scenes}
       totalPages={load.measurement === null ? null : load.measurement.totalPages}
