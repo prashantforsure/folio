@@ -107,6 +107,38 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   script are `@folio/script`'s `sets.ts`, computed in `lib/locations/server.ts` - nothing new is
   stored. Trap: a queue decision's `Undo` is `revokeDecision`, keyed by the row's key, and a `New
   location` undo deletes the minted record only while it is blank.
+- **The Timeline route (rebuilt 2026-09-18 in five phases - the written plan is the spec):**
+  `_timeline/timeline-workspace.tsx` is the body and runs the pure core itself - the loader
+  (`lib/timeline/server.ts`) hands rows, threads, episodes, the introductions and the verdict keys,
+  and the workspace computes the chronology, the jumps, the continuity findings and the placement
+  proposals over them with `@folio/script` (`timeline.ts`, `continuity.ts`, `time-cues.ts`), so a
+  write lands as a *patch* over its row (`applyPatches` / `patchLanded` in `lib/timeline/view.ts`)
+  before the refresh. Pieces: the toolbar (`timeline-toolbar.tsx`: count chip, `Lanes by ▾`, the
+  episode scope, `⋯` with `Read in story order` / `Story chronology as Markdown`, `Place N scenes`
+  opening the queue), the banner, `proposal-queue.tsx` (a day per unplaced scene read from the
+  page's cues with its reason and citation; `Accept` / `Skip` / `Accept all` with `Undo`), the
+  lanes (`lanes-grid.tsx` over `scene-card.tsx`: drag to a day column or a thread row, a trailing
+  `＋ Day N` column, ghost cards for a scene's further threads, a roving tabindex with `[` `]` `F`
+  `D` `C`; `unplaced-strip.tsx` under the chronology is a drop target both ways), `continuity.tsx`
+  (open cards, `Notes` and `Marked deliberate` folds, `It's deliberate` / `Reopen`), the empty
+  card, the status bar, `scene-drawer.tsx` (`Place in time`: day / clock / flashback, `⇅` and
+  `+1 day`, **What the page says** citation chips, the findings on the scene, thread chips with
+  `▲ Make row` and `×`, cast and set links; it publishes the assistant's `scene` Focus) and
+  `read-modal.tsx` (the Scenes sheet's `PaperModal` + `ReadingPaper`, a scene at a time via
+  `readSceneLines`). `_chrome/timeline-layout.tsx` is the shell; the sidebar
+  (`timeline-sidebar.tsx`) is the Threads group (a row is a solo, carries `EpisodeBars`, drags to
+  reorder, `⋯` opens `thread-editor.tsx`) and the `Placed in time` widget. The views, the
+  selected scene, the solo thread and the one `useRun` are `_timeline/view-state.tsx`; the drawer
+  is not a path (open decision 10). `lib/timeline/facts.ts` is the panel's cell; the assistant
+  sends `timeline: true` on the route and `lib/assistant/server.ts`'s `timelineOf` runs the same
+  loader and check. Every write is one statement (`writeSceneThreads` whole-list with the
+  project check inside it, `placeScenes` / `unplaceScenes` over `unnest`, `orderStoryThreads`,
+  `deleteStoryThread`'s CTE that also densifies `position`, `markFindingDeliberate` /
+  `reopenFinding` on `timeline_findings`, `0023`). Traps: the drawer's draft is keyed on the
+  scene id and never reset from props; a card's id is readable on drop, not during the drag, so
+  the workspace decides what a drop writes; the check's thresholds are constants in
+  `continuity.ts`, not rulings. Details: `docs/build-decisions.md`, "Timeline rebuild, phases 2-5"
+  and "phase 1".
 - **The Characters route (rebuilt in four phases, 2026-09-17/18):** `_characters/characters-workspace.tsx`
   is the body - the shared toolbar pieces, one of Cast / Presence / Sheet (`view-state.tsx`, client
   state) or the empty card, the status bar with its `toast` slot (`use-toast.ts` - a queue decision

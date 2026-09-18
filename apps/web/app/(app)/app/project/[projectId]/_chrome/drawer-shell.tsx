@@ -26,7 +26,7 @@ import { PANEL_IN_FLOW_MIN } from '../../../../../../lib/workspace/routes'
  *
  * One frame for every record route's drawer. Rendered through a portal into
  * the route layout's slot - `#<route>-drawer`, a sibling of the column
- * (`characters-layout.tsx`, `locations-layout.tsx`, `research-layout.tsx`) - so it sits beside the
+ * (`characters-layout.tsx`, `locations-layout.tsx`, `research-layout.tsx`, `timeline-layout.tsx`) - so it sits beside the
  * column, full height, as the mockups draw it; a page renders inside the
  * surface and could not otherwise reach that position. The slot exists
  * only after hydration, so the drawer's first paint is a client paint.
@@ -44,7 +44,7 @@ export const DrawerShell = ({
   children,
 }: {
   /** Which route's slot to fill: `characters` portals into `#characters-drawer`. */
-  readonly route: 'characters' | 'locations' | 'research'
+  readonly route: 'characters' | 'locations' | 'research' | 'timeline'
   readonly title: string
   readonly meta: ReactNode
   /** The `aria-label`; `data-<route>-drawer` carries it too, for the walks. */

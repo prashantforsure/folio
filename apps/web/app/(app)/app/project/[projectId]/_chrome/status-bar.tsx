@@ -9,8 +9,8 @@ import { SIDEBAR_OPEN_MIN } from '../../../../../../lib/workspace/routes'
  * (28px)": "Counts on the left; Hide/Show nav, a green Saved dot, and the
  * mono route path on the right." The record routes draw it (their mockups
  * do); the writing routes do not (theirs do not) - AGENTS.md, UI fidelity.
- * Production is the first rebuilt route to carry it; Characters,
- * Locations, Timeline and Research take the same one at their pass.
+ * Production was the first rebuilt route to carry it; Characters,
+ * Locations, Research and the Timeline took the same one at their pass.
  *
  * `Hide nav` is the shell's own flag (`useSession().navOpen`), toggled here
  * and read by `project-shell.tsx`, which writes `html[data-nav-open]`. The

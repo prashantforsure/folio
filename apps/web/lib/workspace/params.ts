@@ -92,6 +92,16 @@ import type { WorkspaceRoute } from './routes'
  * is an unknown key here too - a stale `?view=sheet` link opens the places
  * and is not a 404.
  *
+ * ## And Timeline - ruled 2026-09-18, the same day
+ *
+ * `view: story | chrono | continuity` parsed here from the Timeline phase
+ * (2026-09-12) to the rebuild; each tab was a link that re-ran the page's
+ * read. The client ruled it as the four before it: instant, and the URL
+ * stays `/timeline`. The view is React state in the route's layout
+ * (`_timeline/view-state.tsx`, the Locations shape), so `?view=` is an
+ * unknown key here too - a stale `?view=chrono` link opens story order and
+ * is not a 404.
+ *
  * ## `selected` is not wired
  *
  * The README puts a selected record in `?selected=`, and the storyboard
@@ -116,7 +126,7 @@ export const SUB_VIEW_SCHEMAS = {
   production: z.object({ view: first(['scene', 'episode']) }),
   characters: z.object({}),
   locations: z.object({}),
-  timeline: z.object({ view: first(['story', 'chrono', 'continuity']) }),
+  timeline: z.object({}),
   research: z.object({ view: first(['library', 'source', 'clips']) }),
 } as const satisfies Record<WorkspaceRoute, z.ZodObject>
 

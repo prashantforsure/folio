@@ -20,7 +20,6 @@ import {
 import { episodeRouteHref, projectHref, projectRouteHref } from '../lib/workspace/hrefs'
 import { parseSubViews, SUB_VIEW_SCHEMAS } from '../lib/workspace/params'
 import {
-  CONTEXT_PANEL_WIDTH,
   PANEL_WIDTH,
   RAIL,
   RAIL_WIDTH,
@@ -104,10 +103,8 @@ describe('the writing sidebar', () => {
     expect([...SIDEBAR.map((item) => item.route)].sort()).toEqual([...WRITING_ROUTES].sort())
   })
 
-  it('keeps the README widths for the panels and the one unrebuilt column', () => {
+  it('keeps the README width for the panels', () => {
     expect(PANEL_WIDTH).toBe(400)
-    // Timeline alone still draws a context column; every other route draws the sidebar card.
-    expect(CONTEXT_PANEL_WIDTH).toEqual({ timeline: 250 })
   })
 })
 
@@ -129,8 +126,9 @@ describe("the header's views", () => {
     expect(ROUTE_VIEWS.characters).toEqual([])
     expect(ROUTE_VIEWS.storyboard).toEqual([])
     expect(ROUTE_VIEWS.scenes).toEqual([])
-    // Locations' three joined them on 2026-09-18.
+    // Locations' three and the Timeline's three joined them on 2026-09-18.
     expect(ROUTE_VIEWS.locations).toEqual([])
+    expect(ROUTE_VIEWS.timeline).toEqual([])
   })
 
   it('draws no icon on the `?view=` routes, and prints every name', () => {
@@ -181,7 +179,7 @@ describe('sub-view params', () => {
     expect(parseSubViews('production', {})).toEqual({ ok: true, params: { view: 'scene' } })
     expect(parseSubViews('characters', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-16
     expect(parseSubViews('locations', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-18
-    expect(parseSubViews('timeline', {})).toEqual({ ok: true, params: { view: 'story' } })
+    expect(parseSubViews('timeline', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-18
     expect(parseSubViews('research', {})).toEqual({ ok: true, params: { view: 'library' } })
     expect(parseSubViews('outline', {})).toEqual({ ok: true, params: {} })
     expect(parseSubViews('script', {})).toEqual({ ok: true, params: {} })
@@ -193,8 +191,8 @@ describe('sub-view params', () => {
     expect(parseSubViews('script', { doc: 'grid', panel: 'composer' })).toEqual({ ok: true, params: {} })
   })
 
-  it('gives characters, storyboard, scenes and locations no `view`: their tabs are client state, ruled 2026-09-16, -17 and -18', () => {
-    // A stale `?view=` link - a real view or not - is an unknown key on all four: it opens the first view, not a 404.
+  it('gives characters, storyboard, scenes, locations and timeline no `view`: their tabs are client state, ruled 2026-09-16, -17 and -18', () => {
+    // A stale `?view=` link - a real view or not - is an unknown key on all five: it opens the first view, not a 404.
     expect(parseSubViews('characters', { view: 'presence' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('characters', { view: 'relationships' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('storyboard', { view: 'canvas' })).toEqual({ ok: true, params: {} })
@@ -203,6 +201,8 @@ describe('sub-view params', () => {
     expect(parseSubViews('scenes', { view: 'grid' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('locations', { view: 'sheet' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('locations', { view: 'grid' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('timeline', { view: 'chrono' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('timeline', { view: 'lens/nobody' })).toEqual({ ok: true, params: {} })
   })
 
   it('refuses a value that is not one of the views, naming the param', () => {
@@ -211,7 +211,7 @@ describe('sub-view params', () => {
       param: 'view',
       value: 'grid',
     })
-    expect(parseSubViews('timeline', { view: 'lens/nobody' })).toEqual({
+    expect(parseSubViews('production', { view: 'lens/nobody' })).toEqual({
       ok: false,
       param: 'view',
       value: 'lens/nobody',

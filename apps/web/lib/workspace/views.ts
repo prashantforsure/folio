@@ -20,15 +20,16 @@ import type { WorkspaceRoute } from './routes'
  * the schema's order, so the first tab is the default and links to the bare
  * path. A route with no sub-view param has an empty row and no pill.
  *
- * Four routes' views are not a param, by ruling (AGENTS.md, the exception
+ * Five routes' views are not a param, by ruling (AGENTS.md, the exception
  * table): Characters' `cast | presence | sheet` (2026-09-16; Presence replaced Relationships 2026-09-18), the
  * Storyboard's `board | canvas | list` and Scenes' `cards | index | list`
- * (both 2026-09-17) and Locations' `places | scenes | sheet` (2026-09-18)
- * are client state, so their rows are empty here and their tabs are
+ * (both 2026-09-17), Locations' `places | scenes | sheet` and the
+ * Timeline's `story | chrono | continuity` (both 2026-09-18) are client
+ * state, so their rows are empty here and their tabs are
  * `_characters/view-state.tsx`, `_storyboard/view-state.tsx`,
- * `_scenes/view-state.tsx` and `_locations/view-state.tsx`, drawn into the
- * same header slot as buttons. All four use this `ViewTab` shape, so the
- * pill is still one shape.
+ * `_scenes/view-state.tsx`, `_locations/view-state.tsx` and
+ * `_timeline/view-state.tsx`, drawn into the same header slot as buttons.
+ * All five use this `ViewTab` shape, so the pill is still one shape.
  *
  * ## Titles and labels
  *
@@ -49,6 +50,8 @@ export type ViewTab<V extends string = string> = {
   readonly label?: string
   /** Drawn before the label, where the design draws one. */
   readonly icon?: IconName
+  /** A count drawn after the label in `--warn-bg` - the Timeline's Continuity tab and its open findings (2026-09-18). Absent or zero, no badge. */
+  readonly badge?: number
 }
 
 /** The `?view=` values of one route, or `never` where the route has none. */
@@ -65,11 +68,7 @@ export const ROUTE_VIEWS: { readonly [R in WorkspaceRoute]: readonly ViewTab<Rou
   ],
   characters: [],
   locations: [],
-  timeline: [
-    { id: 'story', title: 'Story order' },
-    { id: 'chrono', title: 'Chronology' },
-    { id: 'continuity', title: 'Continuity' },
-  ],
+  timeline: [],
   research: [
     { id: 'library', title: 'Library' },
     { id: 'source', title: 'Source' },

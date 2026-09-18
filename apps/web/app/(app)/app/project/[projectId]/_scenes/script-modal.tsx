@@ -3,6 +3,7 @@
 import type { ScriptFormat } from '@folio/script'
 import { Icon } from '@folio/ui'
 import { useEffect, useId, useState } from 'react'
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 import type { ExcerptLine } from '../../../../../../lib/scenes/excerpt'
@@ -42,12 +43,18 @@ import { sceneNo } from './scene-parts'
  * The lines wrap where the browser wraps them at the sheet's proportional
  * insets (`lib/scenes/sheet.ts`). No count is read off this render; the
  * card's `pg` and eighths stay the measurement record's.
+ *
+ * ## Two pieces, two readers
+ *
+ * `PaperModal` is the scrim, the portal, the close and Escape;
+ * `ReadingPaper` is the sheet with its format toggle and meta line.
+ * `ScriptModal` puts one scene on them; the Timeline's `Read in story
+ * order` (`_timeline/read-modal.tsx`) walks every placed scene through
+ * the same two, a scene at a time, with `Previous` and `Next` in the
+ * slot under the toggle.
  */
-export const ScriptModal = ({ card, format: initialFormat, onClose }: { readonly card: SceneCard; readonly format: ScriptFormat; readonly onClose: () => void }) => {
-  const [format, setFormat] = useState<ScriptFormat>(initialFormat)
+export const PaperModal = ({ attr, onClose, children }: { readonly attr: Readonly<Record<string, string>>; readonly onClose: () => void; readonly children: ReactNode }) => {
   const [mounted, setMounted] = useState(false)
-  const headingId = useId()
-  const layout = readingLayout(format)
 
   useEffect(() => {
     setMounted(true)
@@ -67,8 +74,7 @@ export const ScriptModal = ({ card, format: initialFormat, onClose }: { readonly
   return createPortal(
     <div
       className="folio-modal-scrim"
-      data-script-modal={card.derived.sceneNodeId}
-      data-script-format={format}
+      {...attr}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -77,42 +83,75 @@ export const ScriptModal = ({ card, format: initialFormat, onClose }: { readonly
         <button type="button" className="folio-paper-close" aria-label="Close" title="Close (Esc)" onClick={onClose}>
           <Icon name="close" size={14} strokeWidth={1.5} />
         </button>
-
-        <div role="dialog" aria-modal="true" aria-labelledby={headingId} className="folio-paper flex max-h-[86vh] flex-col overflow-hidden">
-          <div className="flex flex-none flex-col items-center gap-[6px] px-[28px] pb-[10px] pt-[18px]">
-            <div className="folio-paper-toggle" role="group" aria-label="Page format">
-              {READING_FORMATS.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  aria-pressed={format === entry.id}
-                  data-reading-format={entry.id}
-                  title={entry.page}
-                  onClick={() => {
-                    setFormat(entry.id)
-                  }}
-                >
-                  {entry.label}
-                </button>
-              ))}
-            </div>
-            <span className="font-mono text-10-5 text-paper-ink2">
-              Scene {sceneNo(card.derived.number)} · {count(card.excerpt.lines.length)} line{card.excerpt.lines.length === 1 ? '' : 's'} ·{' '}
-              {READING_FORMATS.find((entry) => entry.id === format)?.page}
-            </span>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-[28px] pb-[36px] pt-[14px]">
-            {layout.ok ? (
-              <Sheet lines={card.excerpt.lines} layout={layout} headingId={headingId} />
-            ) : (
-              <Refusal layout={layout} headingId={headingId} heading={card.derived.heading} onHollywood={() => setFormat('hollywood')} />
-            )}
-          </div>
-        </div>
+        {children}
       </div>
     </div>,
     document.body,
+  )
+}
+
+/** The grained sheet: the format toggle, the meta line, an optional row of controls, then the scene at the sheet's insets or the engine's refusal. */
+export const ReadingPaper = ({
+  lines,
+  heading,
+  meta,
+  format,
+  onFormat,
+  controls,
+}: {
+  readonly lines: readonly ExcerptLine[]
+  readonly heading: string
+  /** `Scene 4 · 12 lines · US Letter`. */
+  readonly meta: string
+  readonly format: ScriptFormat
+  readonly onFormat: (format: ScriptFormat) => void
+  readonly controls?: ReactNode
+}) => {
+  const headingId = useId()
+  const layout = readingLayout(format)
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby={headingId} className="folio-paper flex max-h-[86vh] flex-col overflow-hidden">
+      <div className="flex flex-none flex-col items-center gap-[6px] px-[28px] pb-[10px] pt-[18px]">
+        <div className="folio-paper-toggle" role="group" aria-label="Page format">
+          {READING_FORMATS.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              aria-pressed={format === entry.id}
+              data-reading-format={entry.id}
+              title={entry.page}
+              onClick={() => {
+                onFormat(entry.id)
+              }}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+        <span className="font-mono text-10-5 text-paper-ink2">{meta}</span>
+        {controls}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-[28px] pb-[36px] pt-[14px]">
+        {layout.ok ? <Sheet lines={lines} layout={layout} headingId={headingId} /> : <Refusal layout={layout} headingId={headingId} heading={heading} onHollywood={() => onFormat('hollywood')} />}
+      </div>
+    </div>
+  )
+}
+
+export const ScriptModal = ({ card, format: initialFormat, onClose }: { readonly card: SceneCard; readonly format: ScriptFormat; readonly onClose: () => void }) => {
+  const [format, setFormat] = useState<ScriptFormat>(initialFormat)
+  const lines = card.excerpt.lines
+  return (
+    <PaperModal attr={{ 'data-script-modal': card.derived.sceneNodeId, 'data-script-format': format }} onClose={onClose}>
+      <ReadingPaper
+        lines={lines}
+        heading={card.derived.heading}
+        meta={`Scene ${sceneNo(card.derived.number)} · ${count(lines.length)} line${lines.length === 1 ? '' : 's'} · ${READING_FORMATS.find((entry) => entry.id === format)?.page ?? ''}`}
+        format={format}
+        onFormat={setFormat}
+      />
+    </PaperModal>
   )
 }
 

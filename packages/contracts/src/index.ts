@@ -479,6 +479,9 @@ export {
 } from './workspace'
 
 export type {
+  FindingVerdict,
+  Placement,
+  SceneCues,
   StoryThread,
   StoryThreadColour,
   StoryThreadEdit,
@@ -488,13 +491,20 @@ export type {
   TimelineSceneRow,
 } from './timeline'
 export {
+  CONTINUITY_KINDS,
+  ContinuityKindSchema,
+  FindingVerdictSchema,
+  PlacementSchema,
+  PlacementsSchema,
   STORY_THREAD_COLOURS,
+  SceneThreadsSchema,
   StoryClockSchema,
   StoryThreadColourSchema,
   StoryThreadEditSchema,
   StoryThreadSchema,
   StoryTimeEditSchema,
   StoryTimeSchema,
+  ThreadOrderSchema,
 } from './timeline'
 
 export type {

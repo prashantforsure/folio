@@ -6,6 +6,7 @@ import {
   CharacterIdSchema,
   EpisodeIdSchema,
   LocationIdSchema,
+  NodeIdSchema,
   ProjectIdSchema,
   UserIdSchema,
 } from './ids'
@@ -95,6 +96,8 @@ export const AskScopeSchema = z.enum(ASK_SCOPES)
 export const AskFocusSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('character'), id: CharacterIdSchema }),
   z.object({ kind: z.literal('location'), id: LocationIdSchema }),
+  /** The Timeline drawer's scene (the Timeline rebuild, phase 5): its story time, neighbours and findings. */
+  z.object({ kind: z.literal('scene'), id: NodeIdSchema }),
 ])
 
 export type AskFocus = z.infer<typeof AskFocusSchema>
@@ -109,6 +112,8 @@ export const AskInputSchema = z.object({
   focus: AskFocusSchema.optional(),
   /** The Locations route's turn: the location records go into the system block beside the cast (ruled 2026-09-18). Project scope only. */
   places: z.boolean().optional(),
+  /** The Timeline route's turn: every scene's story time and threads go into the system block (the Timeline rebuild, phase 5). Project scope only. */
+  timeline: z.boolean().optional(),
 })
 
 export type AskRequest = z.input<typeof AskInputSchema>

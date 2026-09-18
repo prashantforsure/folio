@@ -1,8 +1,8 @@
 import type { EpisodeSlug, ProjectId, SceneRef } from '@folio/contracts'
 import type { CharacterId } from '@folio/script'
-import { useSyncExternalStore } from 'react'
 
 import type { WorkspaceShape } from '../workspace/hrefs'
+import { createCell } from '../workspace/open-cell'
 
 /**
  * What the Characters workspace knows that the assistant panel wants:
@@ -38,26 +38,9 @@ export type CharacterFacts = {
   readonly noDescription: readonly { readonly id: CharacterId; readonly name: string }[]
 }
 
-type Listener = () => void
+const cell = createCell<CharacterFacts | null>(null)
 
-let current: CharacterFacts | null = null
-const listeners = new Set<Listener>()
-
-export const publishCharacterFacts = (cell: CharacterFacts | null): void => {
-  if (cell === current) return
-  current = cell
-  for (const listener of listeners) listener()
-}
-
-const subscribe = (listener: Listener): (() => void) => {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-const read = (): CharacterFacts | null => current
-const readServer = (): CharacterFacts | null => null
+export const publishCharacterFacts = cell.set
 
 /** The published cell, or `null` when no Characters workspace is mounted. */
-export const useCharacterFacts = (): CharacterFacts | null => useSyncExternalStore(subscribe, read, readServer)
+export const useCharacterFacts = cell.use

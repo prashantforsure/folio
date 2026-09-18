@@ -1,8 +1,8 @@
 import type { EpisodeSlug, ProjectId, SceneRef } from '@folio/contracts'
 import type { LocationId } from '@folio/script'
-import { useSyncExternalStore } from 'react'
 
 import type { WorkspaceShape } from '../workspace/hrefs'
+import { createCell } from '../workspace/open-cell'
 
 /**
  * What the Locations workspace knows that the assistant panel wants: which
@@ -40,26 +40,9 @@ export type LocationFacts = {
   readonly nightExteriors: readonly (FactsPlace & { readonly nights: number })[]
 }
 
-type Listener = () => void
+const cell = createCell<LocationFacts | null>(null)
 
-let current: LocationFacts | null = null
-const listeners = new Set<Listener>()
-
-export const publishLocationFacts = (cell: LocationFacts | null): void => {
-  if (cell === current) return
-  current = cell
-  for (const listener of listeners) listener()
-}
-
-const subscribe = (listener: Listener): (() => void) => {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-const read = (): LocationFacts | null => current
-const readServer = (): LocationFacts | null => null
+export const publishLocationFacts = cell.set
 
 /** The published cell, or `null` when no Locations workspace is mounted. */
-export const useLocationFacts = (): LocationFacts | null => useSyncExternalStore(subscribe, read, readServer)
+export const useLocationFacts = cell.use

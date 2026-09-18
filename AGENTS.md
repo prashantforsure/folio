@@ -49,7 +49,7 @@ days.
 | Storage | Supabase Storage | Signed URLs for everything |
 | Jobs | BullMQ + Redis on a long-running Railway service | |
 | Payments | Dodo Payments | Merchant of record; webhooks reconciled idempotently |
-| AI | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) use structured outputs (`messages.parse` + `zodOutputFormat`) and write only into an unsaved field or the `character_findings` rows; tool use and proposals are still its next life |
+| AI | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17), `/locations` and `/timeline` (2026-09-18). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) use structured outputs (`messages.parse` + `zodOutputFormat`) and write only into an unsaved field or the `character_findings` rows; tool use and proposals are still its next life |
 | PDF | `pdf-lib` or `pdfkit` on our own layout engine | |
 | FDX | `fast-xml-parser` + custom mapping | |
 | Fountain | Custom, in `packages/script` | |
@@ -324,7 +324,10 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   route changes. It is not a route. Today it is a **read-only chat** over the episode's script
   (`apps/web/lib/assistant/`, `assistant_chats` / `assistant_messages`, migration `0016`): it
   reads, it answers, it writes nothing. On `/characters` it reads the whole project and, with a
-  record open, a Focus block for it (ruled 2026-09-17). The Characters drawer's two model actions
+  record open, a Focus block for it (ruled 2026-09-17); on `/locations` the location records
+  beside the cast (2026-09-18); on `/timeline` every scene's story time, its threads and the
+  continuity check's open findings, with the drawer's scene as the Focus (the Timeline rebuild,
+  2026-09-18). The Characters drawer's two model actions
   (2026-09-18) are the first steps past the chat and stay inside the rule below: `Draft from the
   script` lands two or three cited sentences in an **unsaved** field the writer keeps with Save,
   and `Check for contradictions` returns pairs of quotes that are kept as rows the writer waves
@@ -448,6 +451,7 @@ share a file.
 | the Storyboard's `board \| canvas \| list` | Ruled 2026-09-17 (the client): the same ask - a tab must switch smoothly and the URL must stay `/storyboard`; as a param each click re-ran the page's server read | A client cell the header's tabs and the workspace both reach (`_storyboard/view-state.tsx`, the `coverage.ts` shape - the shared writing layout cannot host one route's provider); resets to the board when the workspace unmounts; `?view=` is an unknown key there |
 | Scenes' `cards \| index \| list` | Ruled 2026-09-17 (the client): the same ask again, in the same words - smooth, and the URL must stay `/scenes` | The Storyboard's cell shape (`_scenes/view-state.tsx`); the route's own client `<main>` (`_scenes/scenes-main.tsx`) writes `data-sub-view` and resets the cell to the cards on unmount; `?view=` is an unknown key there |
 | Locations' `places \| scenes \| sheet` | Ruled 2026-09-18 (the client), with the rebuild: the same ask, and the URL must stay `/locations` | React state in the route's layout (`_locations/view-state.tsx`, the Characters shape - the route has a layout of its own), so it survives opening the drawer; `?view=` is an unknown key there |
+| the Timeline's `story \| chrono \| continuity` | Ruled 2026-09-18 (the client), with the rebuild: the same ask, and the URL must stay `/timeline` | React state in the route's layout (`_timeline/view-state.tsx`, the Locations shape), beside the selected scene and the solo thread - the drawer is not a path (open decision 10); `?view=` is an unknown key there |
 | which document the Script shows, the title-page or the script | Component state (ruled 2026-09-11); a scene the sidebar scrolls to is a `#n-<node id>` fragment, never `?selected=` | Not a param |
 
 ### The agent may write anywhere — except

@@ -2,16 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { StatusToast } from '../_chrome/status-bar'
+import type { StatusToast } from './status-bar'
 
 /** How long an act that can be taken back stays takeable-back in the status bar. */
 export const TOAST_MS = 8000
 
 /**
  * The status bar's toast: a line and, usually, an `Undo`, for a few
- * seconds after a queue decision or a rename. One at a time - a new one
- * replaces the old and restarts the clock; the timer is cleared on
- * unmount. Moves to `_chrome/` when a second route needs it.
+ * seconds after a queue decision, a rename or a bulk placement. One at a
+ * time - a new one replaces the old and restarts the clock; the timer is
+ * cleared on unmount. Characters, Locations and Timeline share it.
  */
 export const useToast = (): {
   readonly toast: StatusToast | null

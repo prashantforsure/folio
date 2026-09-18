@@ -400,21 +400,11 @@ export {
   readBeatHeadline,
 } from './beats'
 
-export type {
-  Chronology,
-  ContinuityFinding,
-  ContinuityFindingKind,
-  StoryDayColumn,
-  StoryJump,
-  StorySpan,
-  StoryTime,
-  TimelineScene,
-} from './timeline'
+export type { Chronology, StoryDayColumn, StoryJump, StorySpan, StoryTime, TimelineScene } from './timeline'
 export {
   STORY_CLOCK_PATTERN,
   chronology,
   compareStoryTime,
-  continuityFindings,
   formatStoryDay,
   formatStoryTime,
   isStoryClock,
@@ -422,4 +412,17 @@ export {
   storyJumps,
   storySpan,
 } from './timeline'
+export type { ContinuityFinding, ContinuityInput, ContinuityKind, ContinuityScene } from './continuity'
+export {
+  DAYLIGHT,
+  DAY_GAP_DAYS,
+  FLAGGED_KINDS,
+  INFORMATIONAL_KINDS,
+  NIGHT_HOURS,
+  THREAD_SILENT_EPISODES,
+  THREAD_SILENT_PAGES,
+  continuityFindings,
+} from './continuity'
+export type { ActionCue, HeadingBind, PlacementProposal, PlacementReason, SceneTimeCues } from './time-cues'
+export { CUE_ACTION_LINES, proposePlacements, timeCuesOf } from './time-cues'
 

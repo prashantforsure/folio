@@ -84,7 +84,8 @@ export const HEADER_VIEWS: Readonly<Record<string, { readonly tabs: readonly str
   production: { tabs: ['Scene', 'Episode'], icons: 0 },
   characters: { tabs: ['Cast', 'Presence', 'Sheet'], icons: 0 },
   locations: { tabs: ['Places', 'Scenes here', 'Sheet'], icons: 0 },
-  timeline: null,
+  /** The rebuild (2026-09-18): the views are state. The Continuity tab carries a count badge only while a finding is open - none on the walk's fresh project. */
+  timeline: { tabs: ['Story order', 'Chronology', 'Continuity'], icons: 0 },
   research: { tabs: ['Library', 'Source', 'Clips'], icons: 0 },
 }
 
@@ -120,7 +121,8 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     route: 'locations',
     scope: 'project',
     rail: 'locations',
-    title: 'Locations',
+    /** The toolbar's `h1` is not drawn on the empty state, which the walk's fresh project is (noted 2026-09-18, the Timeline pass). */
+    title: null,
     /** The views are state since 2026-09-18; the bare path still writes `data-sub-view="places"`. */
     defaults: { view: 'places' },
     /** The rebuild (2026-09-18): the sidebar card is the location list - groups and the counts widget. */
@@ -131,9 +133,12 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     route: 'timeline',
     scope: 'project',
     rail: 'timeline',
-    title: 'Timeline',
+    /** The rebuild (2026-09-18): the toolbar's `h1` is not drawn on the empty state, which the walk's fresh project is. */
+    title: null,
+    /** The views are state since 2026-09-18; the bare path still writes `data-sub-view="story"`. */
     defaults: { view: 'story' },
-    column: { kind: 'context', width: 250 },
+    /** The rebuild (2026-09-18): the sidebar card is the thread list and the `Placed in time` widget - the last context column is gone. */
+    column: { kind: 'card', width: SIDEBAR_WIDTH },
     emptyState: { text: 'Your scenes have a page order, not a story time' },
   },
   {

@@ -38,6 +38,10 @@ import type { ViewTab } from '../../../../../../lib/workspace/views'
  * offered when every item is a real `?view=` value (`AnySubView`) - a tab
  * cannot link to a view no route parses.
  *
+ * A tab may carry a `badge` - a count after the name in `--warn-bg`, the
+ * Timeline's Continuity tab and its open findings (2026-09-18); zero draws
+ * nothing.
+ *
  * A route whose views are component state - Characters, ruled 2026-09-16,
  * the Storyboard and Scenes, both ruled 2026-09-17: switching must be
  * instant and must not change the URL, the Script route's own ruling for
@@ -78,6 +82,11 @@ export const ViewPill = <V extends string>({
         <>
           {item.icon === undefined ? null : <Icon name={item.icon} size={15} strokeWidth={1.4} className="folio-view-pill-icon" />}
           {item.label ?? item.title}
+          {item.badge === undefined || item.badge === 0 ? null : (
+            <span className="folio-view-pill-badge tabular" data-view-badge>
+              {item.badge}
+            </span>
+          )}
         </>
       )
       const shared = {

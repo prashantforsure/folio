@@ -1,348 +1,562 @@
 'use client'
 
-import type {
-  EpisodeSlug,
-  ProjectId,
-  StoryThreadRow,
-  TimelineEpisodeColumn,
-  TimelineSceneRow,
-} from '@folio/contracts'
-import type { Chronology, ContinuityFinding, StoryJump } from '@folio/script'
-import { formatStoryDay } from '@folio/script'
+import type { EpisodeSlug, Placement, ProjectId, SceneRef, StoryThreadId, StoryThreadRow, StoryTimeEdit, TimelineEpisodeColumn, TimelineSceneRow } from '@folio/contracts'
+import type { ContinuityFinding } from '@folio/script'
+import { chronology, formatStoryTime, proposePlacements, storyJumps } from '@folio/script'
 import type { NodeId } from '@folio/script'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { placeScenes } from '../../../../../../lib/timeline/actions'
-import { useSession } from '../../../../../../lib/state/session'
-import type { EpisodeRoutePath, ProjectRoutePath } from '../../../../../../lib/workspace/hrefs'
+import { markDeliberate, placeScenes, reopenFinding, saveStoryTime, setSceneThreads, unplaceScenes } from '../../../../../../lib/timeline/actions'
+import { publishTimelineFacts } from '../../../../../../lib/timeline/facts'
+import { chronologyFilename, chronologyMarkdown } from '../../../../../../lib/timeline/markdown'
+import type { GridLanes, NoteBook, ScenePatch } from '../../../../../../lib/timeline/view'
+import {
+  applyPatches,
+  bucketFindings,
+  countChip,
+  countsOf,
+  emptyLeft,
+  findingNote,
+  findingsAbout,
+  findingsOf,
+  gridOf,
+  matchesFind,
+  nextDayAfter,
+  patchLanded,
+  placementsOf,
+  plural,
+  previousFrameScene,
+  sceneRef,
+  statusLeft,
+  verdictOf,
+} from '../../../../../../lib/timeline/view'
+import type { ProjectRoutePath, ScenePath, WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
+import { sceneHref } from '../../../../../../lib/workspace/hrefs'
+import { useFind } from '../_chrome/find-field'
+import { StatusBar } from '../_chrome/status-bar'
+import { useToast } from '../_chrome/use-toast'
 import { Continuity } from './continuity'
 import { EmptyTimeline } from './empty-timeline'
-import { plural, sceneRef } from './figures'
-import { ScenePanel } from './scene-panel'
-import { StoryGrid } from './story-grid'
-import { useTimelineState } from './timeline-state'
+import type { DropTarget } from './lanes-grid'
+import { LanesGrid } from './lanes-grid'
+import { ProposalQueue } from './proposal-queue'
+import { ReadModal } from './read-modal'
+import type { DrawerField } from './scene-drawer'
+import { SceneDrawer } from './scene-drawer'
+import type { ScopeOption } from './timeline-toolbar'
+import { TimelineToolbar } from './timeline-toolbar'
+import { UnplacedBanner, UnplacedStrip } from './unplaced-strip'
+import { useTimelineState } from './view-state'
 
 /**
- * The Timeline route's main column: the 46px header (title, the header
- * note, the `Story order / Chronology / Continuity` segment with the open
- * findings badge, `✦ Assume continuous`), the view, the 272px scene panel
- * beside the grid, and the 28px footer (`N scenes · M threads · K
- * flashbacks`, the view's note, `Hide nav`, the save indicator, the route
- * id). `Route - Timeline.dc.html`, with the tokens in place of its hexes.
+ * The Timeline route's body inside the main-surface card: the toolbar
+ * (`timeline-toolbar.tsx`), the unplaced banner, the proposal queue while
+ * it is open, one of the three views or the empty card, the 28px status
+ * bar (`_chrome/status-bar.tsx`: `17 placed · 7 unplaced · 4 threads · 2
+ * flashbacks`, the toast after a bulk write, `Hide nav`, the saved dot,
+ * `/timeline`), the drawer while a scene is selected, and the reader.
  *
- * ## `?view=` is the URL; everything else is state
+ * ## Everything here is state
  *
- * The three views are the sub-view param, so the tabs are links. Which
- * scene is selected and which threads are dimmed are `timeline-state.tsx`,
- * shared with the column the layout draws. "Place by hand" is the same.
+ * The three views are the provider's (`view-state.tsx`, ruled 2026-09-18 -
+ * the URL stays `/timeline`), so the header's tabs are buttons;
+ * `data-sub-view` keeps its name for the smoke test that reads it. The
+ * selected scene is the provider's too (open decision 10 keeps it off the
+ * URL), the solo thread likewise; the episode scope, the lanes, the
+ * queue, the banner's dismiss, the toast, the reader: component state,
+ * none of it worth a link.
  *
- * ## Story order, chronology, continuity
+ * ## The core runs here, over what the writer just did
  *
- * `story` is page order: columns are episodes as written. `chrono` is
- * story-time order: columns are days. `continuity` lists the findings -
- * scenes whose story time precedes the scene before them on the page - as
- * the pure core computed them over the same rows. Nothing here computes
- * an order; `@folio/script`'s `timeline.ts` did, on the server.
+ * The loader hands the rows; this component runs `@folio/script` over
+ * them - the chronology, the jumps, the continuity findings, the
+ * placement proposals - and lays the result out with `lib/timeline/view.ts`.
+ * Every write lands as a *patch* over its row first (`applyPatches`), so
+ * the grid re-orders and the findings re-run before the refresh answers;
+ * a patch goes when the refreshed row agrees with it, or when its write
+ * failed. The first pass computed the order on the server and drew
+ * nothing until the round trip came back.
  *
- * ## Not drawn
+ * ## One bulk write, and its undo
  *
- * `＋ Event` and `Anchors · fixed dates`: a third authored thing the brief
- * does not name. The `Series / Episode 1` scope toggle: story order's
- * columns are already the episodes. `Cast report`-style exports: none
- * exists. All flagged in the phase report.
+ * `Accept all` in the queue writes every proposal the writer has not
+ * skipped, in one statement, and the status bar offers `Undo` for a few
+ * seconds - `unplaceScenes` over exactly the placements the write answered
+ * with. A single `Accept` is the drawer's own write. Nothing here reads a
+ * slugline as a date: the proposals are the core's reading of the page's
+ * cues, and each says so.
  */
-
-export type TimelineView = 'story' | 'chrono' | 'continuity'
-
-export type EpisodeLinks = {
-  readonly script: EpisodeRoutePath
-  readonly scenes: EpisodeRoutePath
-}
-
 export type TimelineWorkspaceProps = {
   readonly projectId: ProjectId
-  readonly view: TimelineView
-  readonly baseHref: ProjectRoutePath
+  readonly projectTitle: string
+  readonly shape: WorkspaceShape
+  readonly charactersHref: ProjectRoutePath
   readonly scenes: readonly TimelineSceneRow[]
   readonly threads: readonly StoryThreadRow[]
   readonly episodes: readonly TimelineEpisodeColumn[]
-  readonly findings: readonly ContinuityFinding[]
-  readonly jumps: Readonly<Record<string, StoryJump>>
-  readonly chronology: Chronology
-  readonly flashbacks: number
-  readonly links: Readonly<Record<EpisodeSlug, EpisodeLinks>>
+  readonly introductions: Readonly<Record<string, NodeId>>
+  readonly deliberate: readonly string[]
 }
 
-export type SaveState =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'saving' }
-  | { readonly kind: 'saved' }
-  | { readonly kind: 'error'; readonly message: string }
+type PatchEntry = { readonly patch: ScenePatch; readonly done: boolean }
 
-/** Run a write, and report. `null` from the job means it succeeded. */
-export type Run = (job: () => Promise<string | null>) => void
+const refOf = (scene: TimelineSceneRow): SceneRef => ({
+  sceneNodeId: scene.sceneNodeId,
+  episode: scene.episode,
+  episodeOrdinal: scene.episodeOrdinal,
+  number: scene.number,
+  heading: scene.heading,
+})
 
-const TABS: readonly { readonly id: TimelineView; readonly label: string; readonly glyph: string }[] = [
-  { id: 'story', label: 'Story order', glyph: '▤' },
-  { id: 'chrono', label: 'Chronology', glyph: '◷' },
-  { id: 'continuity', label: 'Continuity', glyph: '⚠' },
-]
-
-export const TimelineWorkspace = ({
-  projectId,
-  view,
-  baseHref,
-  scenes,
-  threads,
-  episodes,
-  findings,
-  jumps,
-  chronology,
-  flashbacks,
-  links,
-}: TimelineWorkspaceProps) => {
+export const TimelineWorkspace = ({ projectId, projectTitle, shape, charactersHref, scenes: loaded, threads, episodes, introductions, deliberate }: TimelineWorkspaceProps) => {
   const router = useRouter()
-  const session = useSession()
-  const { selected, select, byHand } = useTimelineState()
-  const [mounted, setMounted] = useState(false)
-  const [viewport, setViewport] = useState(1440)
-  useEffect(() => {
-    setMounted(true)
-    const read = (): void => {
-      setViewport(window.innerWidth)
-    }
-    read()
-    window.addEventListener('resize', read)
-    return () => {
-      window.removeEventListener('resize', read)
-    }
-  }, [])
-  const navOpen = (mounted ? session.navOpen : null) ?? viewport >= 1000
-  // `html[data-nav-open]` is written by the shell (`_chrome/project-shell.tsx`)
-  // since the redesign; this route only reads the flag for its own geometry.
+  const { view, setView, selected, select, solo, byHand, save, run, setFlags } = useTimelineState()
+  const { toast, show, clear } = useToast()
+  const { query } = useFind()
+  const [scope, setScope] = useState<ScopeOption>('all')
+  const [lanes, setLanes] = useState<GridLanes>('thread')
+  const [bannerDismissed, setBannerDismissed] = useState(false)
+  const [queueOpen, setQueueOpen] = useState(false)
+  const [skipped, setSkipped] = useState<ReadonlySet<NodeId>>(new Set())
+  const [patches, setPatches] = useState<ReadonlyMap<NodeId, PatchEntry>>(new Map())
+  const [drawerField, setDrawerField] = useState<DrawerField | null>(null)
+  const [reading, setReading] = useState<NodeId | null>(null)
 
-  const [saveState, setSaveState] = useState<SaveState>({ kind: 'idle' })
-  const pending = useRef(0)
-  const run: Run = useCallback(
-    (job) => {
-      pending.current += 1
-      setSaveState({ kind: 'saving' })
-      void (async () => {
-        let failure: string | null
-        try {
-          failure = await job()
-        } catch (cause) {
-          failure = cause instanceof Error ? cause.message : 'The save did not reach the server.'
-        } finally {
-          pending.current -= 1
-        }
-        if (failure !== null) setSaveState({ kind: 'error', message: failure })
-        else {
-          if (pending.current === 0) setSaveState({ kind: 'saved' })
-          router.refresh()
-        }
-      })()
+  // A patch goes once the refreshed row agrees with it, or its write is done and a refresh has landed.
+  useEffect(() => {
+    setPatches((current) => {
+      if (current.size === 0) return current
+      const next = new Map<NodeId, PatchEntry>()
+      for (const [id, entry] of current) {
+        const row = loaded.find((scene) => scene.sceneNodeId === id)
+        if (row !== undefined && !entry.done && !patchLanded(row, entry.patch)) next.set(id, entry)
+      }
+      return next.size === current.size ? current : next
+    })
+  }, [loaded])
+
+  const scenes = useMemo(() => applyPatches(loaded, new Map([...patches].map(([id, entry]) => [id, entry.patch]))), [loaded, patches])
+  const pure = useMemo(() => scenes.map((scene) => ({ id: scene.sceneNodeId, storyTime: scene.storyTime, flashback: scene.flashback })), [scenes])
+  const chrono = useMemo(() => chronology(pure), [pure])
+  const jumps = useMemo(() => storyJumps(pure), [pure])
+  const findings = useMemo(() => findingsOf(scenes, introductions, threads), [scenes, introductions, threads])
+  const deliberateKeys = useMemo(() => new Set(deliberate), [deliberate])
+  const buckets = useMemo(() => bucketFindings(findings, deliberateKeys), [findings, deliberateKeys])
+  const proposals = useMemo(
+    () =>
+      proposePlacements(
+        scenes.map((scene) => ({
+          id: scene.sceneNodeId,
+          storyTime: scene.storyTime,
+          flashback: scene.flashback,
+          cues: scene.cues === null ? null : { ...scene.cues, sceneNodeId: scene.sceneNodeId, light: scene.light },
+        })),
+      ).filter((proposal) => !skipped.has(proposal.sceneNodeId)),
+    [scenes, skipped],
+  )
+  const counts = useMemo(() => countsOf(scenes, threads.length, buckets.open.length), [scenes, threads.length, buckets.open.length])
+  const empty = counts.placed === 0 && threads.length === 0 && !byHand
+  const shown: 'story' | 'chrono' | 'continuity' | 'empty' = empty ? 'empty' : view
+
+  const byId = useMemo(() => new Map<NodeId, TimelineSceneRow>(scenes.map((scene) => [scene.sceneNodeId, scene])), [scenes])
+  const book = useMemo<NoteBook>(() => {
+    const people = new Map<string, string>()
+    for (const scene of scenes) for (const person of scene.cast) people.set(person.id, person.name)
+    const threadNames = new Map<string, string>(threads.map((thread) => [thread.id, thread.name]))
+    return {
+      sceneOf: (id) => byId.get(id) ?? null,
+      characterName: (id) => people.get(id) ?? null,
+      threadName: (id) => threadNames.get(id) ?? null,
+    }
+  }, [byId, scenes, threads])
+  const noteOf = useCallback((finding: ContinuityFinding) => findingNote(finding, book), [book])
+
+  // The header's Continuity badge reads the provider; the body is where the count is known.
+  useEffect(() => {
+    setFlags(buckets.open.length)
+  }, [buckets.open.length, setFlags])
+  useEffect(
+    () => () => {
+      setFlags(0)
     },
-    [router],
+    [setFlags],
   )
 
-  const placed = scenes.filter((scene) => scene.storyTime !== null).length
-  const unplaced = scenes.length - placed
-  const open = findings.filter((finding) => finding.kind === 'order')
-  const empty = placed === 0 && threads.length === 0 && !byHand
-  const shown: TimelineView | 'empty' = empty ? 'empty' : view
-
-  const selectedScene = selected === null ? null : (scenes.find((scene) => scene.sceneNodeId === selected) ?? null)
+  const selectedScene = selected === null ? null : (byId.get(selected) ?? null)
   // A selection the load no longer has - a scene deleted elsewhere - is dropped.
   useEffect(() => {
     if (selected !== null && selectedScene === null) select(null)
   }, [selected, selectedScene, select])
 
-  const previousOf = (scene: TimelineSceneRow): TimelineSceneRow | null => {
-    const at = scenes.indexOf(scene)
-    for (let index = at - 1; index >= 0; index -= 1) {
-      const candidate = scenes[index]
-      if (candidate !== undefined && candidate.storyTime !== null && !candidate.flashback) return candidate
-    }
-    return null
-  }
-  const findingOf = (id: NodeId): ContinuityFinding | null =>
-    findings.find((finding) => finding.sceneId === id) ?? null
+  // A scope the episodes no longer list - an episode deleted elsewhere - falls back to the series.
+  useEffect(() => {
+    if (scope !== 'all' && !episodes.some((episode) => episode.episode === scope)) setScope('all')
+  }, [episodes, scope])
 
-  const continueFrom = (day: number): void => {
-    run(async () => {
-      const result = await placeScenes(projectId, day)
-      return result.status === 'placed' ? null : result.message
+  // The assistant panel's facts: the open scene, the unplaced, the quiet threads.
+  useEffect(() => {
+    const index = scenes.map(refOf)
+    publishTimelineFacts({
+      projectId,
+      shape,
+      episodes: episodes.map((episode) => ({ slug: episode.episode as EpisodeSlug, ordinal: episode.ordinal, title: episode.title })),
+      index,
+      open:
+        selectedScene === null
+          ? null
+          : {
+              id: selectedScene.sceneNodeId,
+              ref: refOf(selectedScene),
+              findings: findingsAbout(buckets, selectedScene.sceneNodeId).map((finding) => ({ key: finding.key, ref: refOf(selectedScene), note: noteOf(finding) })),
+            },
+      unplaced: scenes.filter((scene) => scene.storyTime === null).map(refOf),
+      quiet: buckets.open
+        .filter((finding) => finding.kind === 'thread-silent')
+        .flatMap((finding) => {
+          const scene = byId.get(finding.sceneId)
+          return scene === undefined ? [] : [{ key: finding.key, ref: refOf(scene), note: noteOf(finding), thread: (finding.subject === null ? null : book.threadName(finding.subject)) ?? 'A thread' }]
+        }),
     })
+  }, [book, buckets, byId, episodes, noteOf, projectId, scenes, selectedScene, shape])
+  useEffect(
+    () => () => {
+      publishTimelineFacts(null)
+    },
+    [],
+  )
+
+  const grid = useMemo(
+    () => gridOf(shown === 'chrono' ? 'chrono' : 'story', scenes, threads, episodes, chrono, scope === 'all' ? null : scope, lanes),
+    [shown, scenes, threads, episodes, chrono, scope, lanes],
+  )
+  const matches = useCallback((scene: TimelineSceneRow) => matchesFind(scene, query), [query])
+  const unplacedScenes = useMemo(() => scenes.filter((scene) => scene.storyTime === null && (scope === 'all' || scene.episode === scope)), [scenes, scope])
+
+  const scriptHrefOf = useCallback((scene: TimelineSceneRow): ScenePath => sceneHref({ projectId, shape, episode: scene.episode }, scene.sceneNodeId), [projectId, shape])
+
+  // ---------------------------------------------------------------------------
+  // Writes, each as a patch first
+  // ---------------------------------------------------------------------------
+
+  const commit = useCallback(
+    (id: NodeId, patch: ScenePatch, job: () => Promise<{ readonly status: string; readonly message?: string }>): void => {
+      setPatches((current) => new Map(current).set(id, { patch: { ...current.get(id)?.patch, ...patch }, done: false }))
+      run(async () => {
+        const result = await job()
+        if (result.status !== 'saved') {
+          setPatches((current) => {
+            const next = new Map(current)
+            next.delete(id)
+            return next
+          })
+          return result.message ?? 'That could not be saved.'
+        }
+        setPatches((current) => {
+          const entry = current.get(id)
+          return entry === undefined ? current : new Map(current).set(id, { ...entry, done: true })
+        })
+        router.refresh()
+        return null
+      })
+    },
+    [router, run],
+  )
+
+  const writeTime = useCallback(
+    (id: NodeId, edit: StoryTimeEdit): void => {
+      commit(id, { storyTime: edit.day === null ? null : { day: edit.day, clock: edit.clock }, flashback: edit.flashback }, () => saveStoryTime(projectId, id, edit))
+    },
+    [commit, projectId],
+  )
+
+  const writeThreads = useCallback(
+    (id: NodeId, ids: readonly StoryThreadId[]): void => {
+      commit(id, { threads: ids }, () => setSceneThreads(projectId, id, ids))
+    },
+    [commit, projectId],
+  )
+
+  /** A drop: onto a day (chronology), onto a row (a thread), or both. Page order is never touched. */
+  const drop = useCallback(
+    (id: NodeId, target: DropTarget): void => {
+      const scene = byId.get(id)
+      if (scene === undefined) return
+      if (target.day !== null && scene.storyTime?.day !== target.day) {
+        writeTime(id, { day: target.day, clock: null, flashback: scene.flashback })
+      } else if (target.day === null && target.unplace && scene.storyTime !== null) {
+        writeTime(id, { day: null, clock: null, flashback: scene.flashback })
+      }
+      if (lanes === 'thread' && target.rowKey !== null && target.rowKey !== 'none' && scene.threads[0] !== target.rowKey) {
+        const threadId = target.rowKey as StoryThreadId
+        writeThreads(id, [threadId, ...scene.threads.filter((entry) => entry !== threadId)])
+      }
+    },
+    [byId, lanes, writeThreads, writeTime],
+  )
+
+  const nudge = useCallback(
+    (id: NodeId, days: number): void => {
+      const scene = byId.get(id)
+      if (scene === undefined || scene.storyTime === null) return
+      writeTime(id, { day: scene.storyTime.day + days, clock: scene.storyTime.clock, flashback: scene.flashback })
+    },
+    [byId, writeTime],
+  )
+
+  const toggleFlashback = useCallback(
+    (id: NodeId): void => {
+      const scene = byId.get(id)
+      if (scene === undefined) return
+      writeTime(id, { day: scene.storyTime?.day ?? null, clock: scene.storyTime?.clock ?? null, flashback: !scene.flashback })
+    },
+    [byId, writeTime],
+  )
+
+  const acceptAll = useCallback(
+    (placements: readonly Placement[]): void => {
+      if (placements.length === 0) return
+      for (const placement of placements) {
+        setPatches((current) => new Map(current).set(placement.sceneNodeId, { patch: { storyTime: placement.time }, done: false }))
+      }
+      run(async () => {
+        const result = await placeScenes(projectId, placements)
+        if (result.status !== 'placed') {
+          setPatches((current) => {
+            const next = new Map(current)
+            for (const placement of placements) next.delete(placement.sceneNodeId)
+            return next
+          })
+          return result.message
+        }
+        setPatches((current) => {
+          const next = new Map(current)
+          for (const placement of placements) {
+            const entry = next.get(placement.sceneNodeId)
+            if (entry !== undefined) next.set(placement.sceneNodeId, { ...entry, done: true })
+          }
+          return next
+        })
+        router.refresh()
+        setQueueOpen(false)
+        const landed = result.placements
+        show(`Placed ${plural(landed.length, 'scene')}`, {
+          label: 'Undo',
+          onClick: () => {
+            clear()
+            for (const placement of landed) {
+              setPatches((current) => new Map(current).set(placement.sceneNodeId, { patch: { storyTime: null }, done: false }))
+            }
+            run(async () => {
+              const undone = await unplaceScenes(projectId, landed)
+              if (undone.status !== 'unplaced') return undone.message
+              setPatches((current) => {
+                const next = new Map(current)
+                for (const placement of landed) {
+                  const entry = next.get(placement.sceneNodeId)
+                  if (entry !== undefined) next.set(placement.sceneNodeId, { ...entry, done: true })
+                }
+                return next
+              })
+              router.refresh()
+              return null
+            })
+          },
+        })
+        return null
+      })
+    },
+    [clear, projectId, router, run, show],
+  )
+
+  const verdict = useCallback(
+    (finding: ContinuityFinding, deliberateNow: boolean): void => {
+      run(async () => {
+        const result = deliberateNow ? await markDeliberate(projectId, verdictOf(finding)) : await reopenFinding(projectId, finding.key)
+        if (result.status !== 'saved') return result.message
+        router.refresh()
+        return null
+      })
+    },
+    [projectId, router, run],
+  )
+
+  const exportMarkdown = useCallback((): void => {
+    const markdown = chronologyMarkdown(projectTitle, scenes, threads, chrono)
+    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = chronologyFilename(projectTitle)
+    anchor.click()
+    URL.revokeObjectURL(url)
+    show(`Exported ${anchor.download}.`)
+  }, [chrono, projectTitle, scenes, show, threads])
+
+  // ---------------------------------------------------------------------------
+  // Selection
+  // ---------------------------------------------------------------------------
+
+  const openScene = useCallback(
+    (id: NodeId, field: DrawerField | null = null) => {
+      select(id)
+      setDrawerField(field)
+    },
+    [select],
+  )
+  const close = useCallback(() => {
+    select(null)
+    setDrawerField(null)
+  }, [select])
+  const openFromContinuity = useCallback(
+    (id: NodeId) => {
+      select(id)
+      setView('story')
+    },
+    [select, setView],
+  )
+
+  const readOrder = useMemo(() => chrono.days.flatMap((day) => day.sceneIds), [chrono])
+  const openQueue = (): void => {
+    setQueueOpen(true)
+    setSkipped(new Set())
   }
-  const lastDay = chronology.days[chronology.days.length - 1]?.day ?? null
 
-  const headerNote =
-    shown === 'story'
-      ? 'columns are episodes as written · chips show when each scene happens'
-      : shown === 'chrono'
-        ? 'columns are story days · chips show where each scene sits on the page'
-        : shown === 'continuity'
-          ? `${plural(open.length, 'place')} where page order and story time disagree`
-          : ''
-  const footerNote =
-    shown === 'continuity'
-      ? `${String(open.length)} open`
-      : shown === 'empty'
-        ? 'Empty'
-        : `${shown === 'chrono' ? 'Chronology' : 'Story order'}${selectedScene === null ? '' : ` · ${sceneRef(selectedScene)} selected`}`
-
-  const tabHref = (tab: TimelineView) => (tab === 'story' ? baseHref : (`${baseHref}?view=${tab}` as const))
-  const continuityHref = `${baseHref}?view=continuity` as const
+  const left = shown === 'empty' ? emptyLeft(projectTitle) : statusLeft(counts, selectedScene)
+  const chip = countChip(shown === 'continuity' ? 'continuity' : 'story', counts)
+  const episodeChoices = useMemo(() => episodes.map((episode) => ({ slug: episode.episode as EpisodeSlug, ordinal: episode.ordinal, title: episode.title })), [episodes])
+  const newDay = nextDayAfter(scenes)
 
   return (
-    <main
-      data-route="timeline"
-      data-sub-view={view}
-      data-timeline-state={shown}
-      className="flex min-w-0 flex-1 flex-col overflow-hidden"
-    >
-      <header
-        data-timeline-header
-        data-mounted={mounted ? 'true' : 'false'}
-        className="flex h-[46px] flex-none items-center gap-[10px] border-b border-line px-[14px]"
-      >
-        <h1 className="m-0 flex-none font-serif text-21 font-medium leading-none tracking-title">Timeline</h1>
-        <span className="min-w-0 flex-1 truncate text-11 text-ink3">{headerNote}</span>
-        <nav aria-label="Timeline views" className="flex flex-none gap-[2px] rounded-chrome border border-line2 p-[2px]">
-          {TABS.map((tab) => {
-            const active = tab.id === view
-            return (
-              <Link
-                key={tab.id}
-                href={tabHref(tab.id)}
-                aria-current={active ? 'page' : undefined}
-                data-view-tab={tab.id}
-                className={`flex items-center gap-[6px] whitespace-nowrap rounded-chrome px-[10px] py-[4px] text-11-5 no-underline hover:text-ink hover:no-underline ${
-                  active ? 'bg-accent-bg text-accent' : 'text-ink2'
-                }`}
-              >
-                <span aria-hidden="true" className="text-10 opacity-70" style={{ fontFamily: 'var(--font-glyph)' }}>
-                  {tab.glyph}
-                </span>
-                {tab.label}
-                {tab.id === 'continuity' && open.length > 0 ? (
-                  <span
-                    data-continuity-badge
-                    className="tabular grid h-[14px] min-w-[14px] place-items-center rounded-chrome bg-note px-[4px] text-9 font-bold text-rail"
-                  >
-                    {open.length}
-                  </span>
-                ) : null}
-              </Link>
-            )
-          })}
-        </nav>
-        {shown !== 'empty' && unplaced > 0 ? (
-          <button
-            type="button"
-            onClick={() => {
-              continueFrom(lastDay ?? 1)
-            }}
-            data-assume-continuous
-            className="flex flex-none items-center gap-[6px] whitespace-nowrap rounded-chrome border border-line2 bg-transparent px-[9px] py-[4px] text-11 text-ink2 hover:bg-hover hover:text-ink"
-          >
-            <span aria-hidden="true" className="text-10" style={{ fontFamily: 'var(--font-glyph)' }}>
-              ✦
-            </span>
-            {lastDay === null ? 'Assume continuous' : `Continue from ${formatStoryDay(lastDay)}`}
-          </button>
-        ) : null}
-      </header>
-
-      <div className="flex min-h-0 flex-1">
-        {shown === 'empty' ? (
-          <EmptyTimeline projectId={projectId} scenes={scenes.length} run={run} />
-        ) : shown === 'continuity' ? (
-          <Continuity
-            projectId={projectId}
-            scenes={scenes}
-            findings={findings}
-            placed={placed}
-            baseHref={baseHref}
-            links={links}
-            run={run}
-          />
-        ) : (
-          <>
-            <StoryGrid
-              view={shown}
-              scenes={scenes}
-              threads={threads}
-              episodes={episodes}
-              chronology={chronology}
-              jumps={jumps}
-              onContinue={continueFrom}
-            />
-            {selectedScene === null ? (
-              <aside
-                data-scene-panel="none"
-                className="flex w-[272px] flex-none flex-col items-center justify-center border-l border-line bg-panel px-[20px] text-center text-11-5 leading-[1.5] text-ink3"
-              >
-                Pick a scene to give it a story time and threads.
-              </aside>
-            ) : (
-              <ScenePanel
-                key={selectedScene.sceneNodeId}
-                projectId={projectId}
-                scene={selectedScene}
-                previous={previousOf(selectedScene)}
-                finding={findingOf(selectedScene.sceneNodeId)}
-                previousOfFinding={((): TimelineSceneRow | null => {
-                  const finding = findingOf(selectedScene.sceneNodeId)
-                  if (finding === null) return null
-                  return scenes.find((scene) => scene.sceneNodeId === finding.previousId) ?? null
-                })()}
-                threads={threads}
-                links={links[selectedScene.episode] ?? null}
-                continuityHref={continuityHref}
-                run={run}
-              />
-            )}
-          </>
-        )}
-      </div>
-
-      <footer className="flex h-[28px] flex-none items-center gap-[10px] overflow-hidden border-t border-line bg-panel px-[14px] text-10-5 text-ink2">
-        <span className="flex-none whitespace-nowrap">
-          <b className="font-semibold text-ink">{scenes.length}</b> {scenes.length === 1 ? 'scene' : 'scenes'} ·{' '}
-          {plural(threads.length, 'thread')} · {plural(flashbacks, 'flashback')}
-        </span>
-        <span className="flex-none text-ink3">·</span>
-        <span className="min-w-0 truncate">{footerNote}</span>
-        <div className="min-w-0 flex-1" />
-        <button
-          type="button"
-          onClick={() => {
-            session.setNavOpen(!navOpen)
+    <main data-route="timeline" data-sub-view={view} data-timeline-state={shown} data-lanes={lanes} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {shown === 'empty' ? null : (
+        <TimelineToolbar
+          count={chip}
+          scope={scope}
+          episodes={episodeChoices}
+          onScope={setScope}
+          lanes={lanes}
+          onLanes={setLanes}
+          unplaced={counts.unplaced}
+          queueOpen={queueOpen}
+          onQueue={() => {
+            if (queueOpen) setQueueOpen(false)
+            else openQueue()
           }}
-          className="flex-none whitespace-nowrap rounded-chrome border border-line2 bg-transparent px-[7px] py-[2px] text-10 text-ink2 hover:bg-hover"
-        >
-          {navOpen ? 'Hide nav' : 'Show nav'}
-        </button>
-        <span className="flex flex-none items-center gap-[5px] whitespace-nowrap" data-save-state={saveState.kind}>
-          <span
-            className={`h-[6px] w-[6px] rounded-full ${
-              saveState.kind === 'error' ? 'bg-del' : saveState.kind === 'saving' ? 'bg-note' : 'bg-add'
-            }`}
+          canRead={readOrder.length > 0}
+          onRead={() => {
+            setReading(readOrder[0] ?? null)
+          }}
+          onExport={exportMarkdown}
+        />
+      )}
+
+      {shown !== 'empty' && shown !== 'continuity' && counts.unplaced > 0 && !bannerDismissed && !queueOpen ? (
+        <UnplacedBanner
+          count={counts.unplaced}
+          onPlace={openQueue}
+          onDismiss={() => {
+            setBannerDismissed(true)
+          }}
+        />
+      ) : null}
+
+      {shown !== 'empty' && queueOpen ? (
+        <ProposalQueue
+          projectId={projectId}
+          shape={shape}
+          proposals={proposals}
+          scenes={scenes}
+          onAccept={(proposal) => {
+            const scene = byId.get(proposal.sceneNodeId)
+            if (scene !== undefined) writeTime(scene.sceneNodeId, { day: proposal.time.day, clock: proposal.time.clock, flashback: scene.flashback })
+          }}
+          onSkip={(id) => {
+            setSkipped((current) => new Set(current).add(id))
+          }}
+          onAcceptAll={() => {
+            acceptAll(placementsOf(proposals))
+          }}
+          onOpen={openScene}
+          onClose={() => {
+            setQueueOpen(false)
+          }}
+        />
+      ) : null}
+
+      {shown === 'empty' ? (
+        <EmptyTimeline scenes={scenes.length} onPlace={openQueue} />
+      ) : shown === 'continuity' ? (
+        <Continuity scenes={scenes} buckets={buckets} noteOf={noteOf} placed={counts.placed} scriptHrefOf={scriptHrefOf} onOpen={openFromContinuity} onVerdict={verdict} />
+      ) : (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+          <LanesGrid
+            view={shown}
+            lanes={lanes}
+            grid={grid}
+            threads={threads}
+            buckets={buckets}
+            noteOf={noteOf}
+            jumps={jumps}
+            selected={selected}
+            solo={solo}
+            newDay={newDay}
+            matches={matches}
+            onOpen={openScene}
+            onDrop={drop}
+            onNudge={nudge}
+            onFlashback={toggleFlashback}
+            onClose={close}
           />
-          {saveState.kind === 'saving'
-            ? 'saving…'
-            : saveState.kind === 'error'
-              ? saveState.message
-              : saveState.kind === 'saved'
-                ? 'saved'
-                : 'authored'}
-        </span>
-        <span className="flex-none whitespace-nowrap font-mono text-9-5 text-ink3">/timeline</span>
-      </footer>
+          {shown === 'chrono' ? <UnplacedStrip scenes={unplacedScenes} selected={selected} matches={matches} onOpen={openScene} onDrop={drop} /> : null}
+        </div>
+      )}
+
+      <StatusBar left={left} save={save} routeId="/timeline" toast={toast} />
+
+      {selectedScene === null ? null : (
+        <SceneDrawer
+          key={selectedScene.sceneNodeId}
+          projectId={projectId}
+          scene={selectedScene}
+          previous={previousFrameScene(scenes, selectedScene.sceneNodeId)}
+          findings={findingsAbout(buckets, selectedScene.sceneNodeId)}
+          deliberate={buckets.deliberate.filter((finding) => finding.sceneId === selectedScene.sceneNodeId)}
+          noteOf={noteOf}
+          threads={threads}
+          scriptHref={scriptHrefOf(selectedScene)}
+          cueHref={selectedScene.cues?.action === null || selectedScene.cues === null ? null : sceneHref({ projectId, shape, episode: selectedScene.episode }, selectedScene.cues.action.nodeId)}
+          charactersHref={charactersHref}
+          field={drawerField}
+          busy={save === 'saving'}
+          onSave={(edit) => {
+            writeTime(selectedScene.sceneNodeId, edit)
+          }}
+          onThreads={(ids) => {
+            writeThreads(selectedScene.sceneNodeId, ids)
+          }}
+          onVerdict={verdict}
+          onClose={close}
+        />
+      )}
+
+      {reading === null ? null : (
+        <ReadModal
+          projectId={projectId}
+          order={readOrder}
+          current={reading}
+          labelOf={(id) => {
+            const scene = byId.get(id)
+            if (scene === undefined) return ''
+            const when = scene.storyTime === null ? 'no time' : formatStoryTime(scene.storyTime)
+            return `${sceneRef(scene)} · ${when}`
+          }}
+          headingOf={(id) => byId.get(id)?.heading ?? ''}
+          onTurn={setReading}
+          onClose={() => {
+            setReading(null)
+          }}
+        />
+      )}
     </main>
   )
 }

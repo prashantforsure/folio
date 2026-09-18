@@ -26,13 +26,13 @@ import type { NodeId } from './ids'
  * ## The flashback flag is the writer's answer, not a finding's
  *
  * "A finding is a flag, not an error. Flashbacks are legitimate." The
- * flag on a scene says its jump backwards is meant. `continuityFindings`
- * still reports it - the finding is the fact that page order and story
- * time disagree here - but as `kind: 'flashback'`, and a flashback is
- * skipped when looking for "the scene before it on the page": the scene
- * after a flashback is compared with the last scene of the frame story,
- * not with the flashback, so a return to the present is not a jump and a
- * real step backwards hidden behind a flashback is still found.
+ * flag on a scene says its jump backwards is meant. The continuity check
+ * (`continuity.ts`) still reports it - the finding is the fact that page
+ * order and story time disagree here - but as `kind: 'flashback'`, and a
+ * flashback is skipped when looking for "the scene before it on the page":
+ * the scene after a flashback is compared with the last scene of the
+ * frame story, not with the flashback, so a return to the present is not a
+ * jump and a real step backwards hidden behind a flashback is still found.
  *
  * ## Unknown never precedes
  *
@@ -96,26 +96,8 @@ export const precedesStoryTime = (a: StoryTime, b: StoryTime): boolean => {
 }
 
 // ---------------------------------------------------------------------------
-// Continuity
+// Jumps
 // ---------------------------------------------------------------------------
-
-export type ContinuityFindingKind = 'order' | 'flashback'
-
-/**
- * A scene whose story time precedes the scene before it on the page.
- *
- * `previousId` is the scene it was compared with: the nearest earlier scene
- * on the page that has a story time and is not a flashback. `kind` is
- * `flashback` when the scene itself carries the flag - reported, and
- * legitimate.
- */
-export type ContinuityFinding = {
-  readonly sceneId: NodeId
-  readonly previousId: NodeId
-  readonly kind: ContinuityFindingKind
-  readonly sceneTime: StoryTime
-  readonly previousTime: StoryTime
-}
 
 type Placed = { readonly id: NodeId; readonly time: StoryTime; readonly flashback: boolean }
 
@@ -123,28 +105,6 @@ const placedOf = (scenes: readonly TimelineScene[]): readonly Placed[] =>
   scenes.flatMap((scene) =>
     scene.storyTime === null ? [] : [{ id: scene.id, time: scene.storyTime, flashback: scene.flashback }],
   )
-
-/**
- * Every finding, in page order. See the header for what "the scene before
- * it" means when flashbacks are involved.
- */
-export const continuityFindings = (scenes: readonly TimelineScene[]): readonly ContinuityFinding[] => {
-  const findings: ContinuityFinding[] = []
-  let previous: Placed | null = null
-  for (const scene of placedOf(scenes)) {
-    if (previous !== null && precedesStoryTime(scene.time, previous.time)) {
-      findings.push({
-        sceneId: scene.id,
-        previousId: previous.id,
-        kind: scene.flashback ? 'flashback' : 'order',
-        sceneTime: scene.time,
-        previousTime: previous.time,
-      })
-    }
-    if (!scene.flashback) previous = scene
-  }
-  return findings
-}
 
 export type StoryJump = 'back' | 'ahead'
 

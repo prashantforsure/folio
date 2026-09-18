@@ -13,8 +13,11 @@ mockups are the spec; routes are rebuilt to them one at a time. Done: the shell 
 sidebar and header, assistant panel), **Script**, **Outline**,
 **Storyboard**, **Production**, **Characters**, **Locations**, **Research** (the last built from
 nothing: no body, table or contract existed before its pass) and **Scenes** (2026-09-17, ruled off
-its mockup onto the Storyboard's canvas, with a reading modal). Timeline still draws its
-pre-redesign chrome inside the new shell until its own pass.
+its mockup onto the Storyboard's canvas, with a reading modal) and **Timeline** (2026-09-18, all
+five phases — every route is on the shell now). **Three mockups are retired:** Characters
+(2026-09-17), Locations and Timeline (both 2026-09-18) were rebuilt to written plans instead — the
+"Characters rebuild", "Locations rebuild" and "Timeline rebuild" sections of
+`docs/build-decisions.md` are their spec.
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -47,6 +50,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 | add a table, or ask what may write one | [packages/db/src/schema/index.ts](packages/db/src/schema/index.ts) — every table classified |
 | answer something the spec leaves open | [docs/build-decisions.md](docs/build-decisions.md) — "Open, and blocking" is the live list |
 | add a colour, a size or a radius | [packages/ui/src/tokens/](packages/ui/src/tokens/) — the one place a hex may be written |
+| read or add an environment variable | [.env.example](.env.example) — every variable, its reader and where it comes from; the `R2_*` block and `ANTHROPIC_API_KEY` are optional, session vs transaction pooler is not a choice. A new variable lands in `packages/db/src/env.ts` and there in the same change |
 
 ## Repository map
 
@@ -61,7 +65,8 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 - `apps/web` — auth, the home shell, the workspace chrome, and the built route bodies: Script,
   Outline, Storyboard, Scenes, Characters, Locations, Timeline, Research, Production — all nine
   (AGENTS.md, Architecture). Each has an `app/(app)/app/project/[projectId]/_<route>/`
-  directory and a `lib/<route>/` with its actions. `lib/workspace/routes.ts` is the route tree;
+  directory and a `lib/<route>/` with its actions. `lib/workspace/routes.ts` is the route tree
+  (`lib/routes.ts` is something else: the one `as Route` assertion for auth's `next` redirects);
   `_chrome/project-shell.tsx` is the shell. The `/settings` stub has no route body. Production
   (v2, 2026-09-16) is the first route outside the writing surface on the shell:
   `_chrome/production-layout.tsx` renders the same `Sidebar` (with the route's `slots`) and
@@ -85,39 +90,32 @@ Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
   without asking (AGENTS.md, Adding a dependency). Boundary files are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`;
   the document lives in the editor, never in React state. See AGENTS.md, The node model, for the
   slash-menu / no-type-bar rule both editors follow.
-- **The Characters route was rebuilt to a written plan, not a mockup** (ruled 2026-09-17;
-  `Route - Characters v2.dc.html` is retired for this route - "Characters rebuild" in
-  `docs/build-decisions.md`, four sections, one per phase, all built 2026-09-17/18). The route
-  reads the script back as evidence about each person: views `Cast · Presence · Sheet` (client
-  state, `_characters/view-state.tsx`; Presence is a character × scene grid that replaced the
-  graph), content-first cards with a presence strip (`@folio/ui` `PresenceStrip`), the alias
-  table (`_characters/alias-table.tsx`), the reasoned, undoable queue with pair rows for two
-  records that read as one person, and a drawer ordered derived-first (stats, Voice, Introduced,
-  Presence, Scenes, Sets, then a `Notes` fold, then Continuity). The pure core counts the voice
-  (`packages/script` `derive.ts`: words, speeches, first / last / longest line, per-scene counts,
-  exchanges; `introductions.ts`, `sides.ts`, `revertCueRewrites` for the rename's undo) on
-  `character_derivations` since migration `0021`, which also added `characters.origin`. The
-  assistant reads the whole project on `/characters` with a Focus block for the open record, and
-  the drawer's `✦ Draft from the script` / `✦ Check for contradictions`
-  (`lib/characters/model-actions.ts`) write only into an unsaved field or `character_findings`
-  (`0022`) - open decision 13 stands. The Script editor's cues carry `data-character-id` with a
-  hover card and a `Colour cues` toggle. `/characters/:uuid` is the edit drawer (a portal into
-  the layout's slot). Migration `0013` dropped the first pass's profile; `0017` brought back
-  `wants`, `needs` and `status`. Portraits are on Cloudflare R2 (`apps/web/lib/storage/r2.ts`,
-  gated on the optional `R2_*` block). `character_relationships` is kept as a derivation read and
-  nothing writes it. Generate (the look-sheet job) is not built. The rail's Characters icon is a
-  plain link everywhere.
-- **The Locations route was rebuilt to a written plan, not the mockup** (ruled 2026-09-18, the
-  Characters precedent; `Route - Locations v2.dc.html` is retired for this route - "Locations
-  rebuild" in `docs/build-decisions.md`). The views `Places · Scenes here · Sheet` are client state
-  (`_locations/view-state.tsx`); `/locations/:uuid` is the drawer. What the script says about a
-  set is read at request time, not stored: `packages/script/src/sets.ts` (the establishing line,
-  the `INT/EXT × DAY/NIGHT` quadrant, similar-set pairs, set-text matching) over the node list
-  and the scene index in `lib/locations/server.ts` - no migration. `scheduled_days` is authored in
-  the drawer's Production fold and rolled up; the alias table is `_locations/slugline-table.tsx`;
-  every scene ref is a link into the script; the assistant reads the location records on
-  `/locations` (`places: true`, a location Focus). `PresenceStrip` in `@folio/ui` is shared with
-  Characters. No scouting layer beyond status / address / days / one photo, by ruling.
+- **Characters and Locations read the script back as evidence; they store little.** What the
+  script says about a person is computed in `packages/script` (`derive.ts` voice counts,
+  `introductions.ts`, `sides.ts`) into `character_derivations` (migration `0021`); what it says
+  about a set is computed at request time by `packages/script/src/sets.ts` over the node list
+  and never stored. The drawers are `/characters/:uuid` and `/locations/:uuid` (portals into the
+  layout's slot); the views (`Cast · Presence · Sheet`, `Places · Scenes here · Sheet`) are client
+  state. The Script editor's cues carry `data-character-id`; `PresenceStrip` in `@folio/ui` is
+  shared by both. The drawer's `✦ Draft from the script` / `✦ Check for contradictions`
+  (`lib/characters/model-actions.ts`) write only an unsaved field or `character_findings`
+  (`0022`) — open decision 13 stands. Portraits are on R2 (`lib/storage/r2.ts`, gated on the
+  `R2_*` block). `character_relationships` is a derivation read that nothing writes; Generate
+  (the look-sheet job) is not built. Everything else — the queue, the alias tables, the drawer
+  order, the scouting-layer ruling — is in the two rebuild sections of `docs/build-decisions.md`.
+- **The Timeline was rebuilt in five phases (2026-09-18) to a written plan.** Three authored
+  things (`story_threads`; `scenes.story_day/story_clock/flashback/threads`, migration `0011`;
+  `timeline_findings`, the writer's `It's deliberate` on a finding, `0023`) and three pure
+  modules in `packages/script` - `timeline.ts` (the order), `continuity.ts` (eight rules, named
+  thresholds) and `time-cues.ts` (what a heading's `CONTINUOUS` / `LATER` and a line like "the
+  next morning" say, and the placements they propose). Nothing reads a slugline as a date: the
+  queue *proposes* a day with its reason and citation, the writer accepts or skips, and the
+  bulk accept is undoable. `Story order · Chronology · Continuity` are client state
+  (`_timeline/view-state.tsx`; `/timeline/:sceneId` waits on open decision 10), the workspace
+  runs the core over the rows and patches writes optimistically, the lanes grid drags and takes
+  keys, and the assistant reads story time on the route (`timeline: true`). `✦ Suggest
+  placements` is not built (open decision 13). "Timeline rebuild, phases 2-5" and "phase 1" in
+  `docs/build-decisions.md`.
 - **`beats`, `revisions` and `comment_threads` are tables with no route above them** (AGENTS.md,
   Constraints — all three routes were built, then cut). `beats` was dropped in migration `0010`;
   `revisions` and `comment_threads` stay: the Script route draws threads inline under their
@@ -142,7 +140,7 @@ walks (`apps/web/e2e/*-route.spec.ts`) need `E2E_EMAIL`/`E2E_PASSWORD` and skip 
 pnpm typecheck   # 6 packages — also a test suite: @ts-expect-error guarantees live in it
 pnpm lint        # eslint.config.mjs is AGENTS.md made executable; each ban error carries its reason
 pnpm test        # only @folio/script and web have test scripts
-pnpm build       # only web
+pnpm build       # only web; ends with scripts/assert-no-server-secrets.mjs, which fails the build if a server secret is in a client chunk
 pnpm test:e2e    # Playwright, web only — see the E2E_* note above
 
 pnpm --filter @folio/script exec vitest run src/paginate.test.ts    # one file
@@ -176,6 +174,6 @@ Traps that produce a false reading:
 ## Working here
 
 - **Escalate the open decisions in AGENTS.md; do not resolve them.** They're one table there
-  now (twelve rows) — read it before touching any of them.
+  (thirteen rows, four struck through as ruled or moot) — read it before touching any of them.
 - **Any dependency needs approval, every time.** `packages/script` has none — keep it that way.
 - Report literally: paste failing output, name assumptions, flag any rule you were tempted to break.

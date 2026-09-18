@@ -1,62 +1,46 @@
-import type { EpisodeSlug } from '@folio/contracts'
 import { notFound } from 'next/navigation'
 
 import { loadTimeline } from '../../../../../../lib/timeline/server'
 import type { ProjectContext } from '../../../../../../lib/workspace/context'
-import { episodeRouteHref, projectRouteHref } from '../../../../../../lib/workspace/hrefs'
+import { projectRouteHref } from '../../../../../../lib/workspace/hrefs'
 import type { RawSearchParams } from '../../../../../../lib/workspace/params'
 import { parseSubViews } from '../../../../../../lib/workspace/params'
 import { TimelineWorkspace } from './timeline-workspace'
-import type { EpisodeLinks } from './timeline-workspace'
 
 /**
  * The Timeline route, server side: one read, then the client workspace.
  *
- * `?view=` is `story | chrono | continuity` (`params.ts`), parsed as every
- * route's is; a value outside it is a 404. Everything else the route
- * shows - which scene is selected, which threads are dimmed - is state,
- * never a param (`timeline-state.tsx`).
+ * The three views are state, not `?view=` (ruled 2026-09-18,
+ * `_timeline/view-state.tsx`), so the search params are parsed for the
+ * empty schema every route parses and nothing else - a stale
+ * `?view=chrono` link opens story order. Which scene is selected and
+ * which thread is solo are state too.
  *
- * The `<main data-route data-sub-view>` contract the smoke test reads is
- * kept by the workspace exactly. `jumps` crosses the boundary as a record:
- * a `Map` does not serialise.
+ * `loadTimeline` is `cache()`d on the context; the layout beside this
+ * page (`_chrome/timeline-layout.tsx`) makes the same call for the
+ * sidebar, so the two share one read per request. The `<main data-route
+ * data-sub-view>` contract the smoke test reads is kept by the workspace
+ * exactly. The order, the findings and the proposals are not loaded: the
+ * workspace runs the pure core over these rows, so an edit re-orders the
+ * grid before the refresh lands.
  */
-export const TimelineRoute = async ({
-  context,
-  searchParams,
-}: {
-  readonly context: ProjectContext
-  readonly searchParams: Promise<RawSearchParams>
-}) => {
+export const TimelineRoute = async ({ context, searchParams }: { readonly context: ProjectContext; readonly searchParams: Promise<RawSearchParams> }) => {
   const parsed = parseSubViews('timeline', await searchParams)
   if (!parsed.ok) notFound()
-  const { project, episodes, shape } = context
+  const { project, shape } = context
   const load = await loadTimeline(context)
-
-  const links: Record<EpisodeSlug, EpisodeLinks> = Object.fromEntries(
-    episodes.map((episode) => {
-      const address = { projectId: project.id, shape, episode: episode.slug }
-      const pair: EpisodeLinks = {
-        script: episodeRouteHref(address, 'script'),
-        scenes: episodeRouteHref(address, 'scenes'),
-      }
-      return [episode.slug, pair]
-    }),
-  ) as Record<EpisodeSlug, EpisodeLinks>
 
   return (
     <TimelineWorkspace
       projectId={project.id}
-      view={parsed.params.view}
-      baseHref={projectRouteHref(project.id, 'timeline')}
+      projectTitle={project.title}
+      shape={shape}
+      charactersHref={projectRouteHref(project.id, 'characters')}
       scenes={load.scenes}
       threads={load.threads}
       episodes={load.episodes}
-      findings={load.findings}
-      jumps={Object.fromEntries(load.jumps)}
-      chronology={load.chronology}
-      flashbacks={load.flashbacks}
-      links={links}
+      introductions={load.introductions}
+      deliberate={load.deliberate}
     />
   )
 }

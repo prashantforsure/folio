@@ -5,6 +5,7 @@ import {
   listBoundCues,
   listBoundSluglines,
   listCharacterRecords,
+  listEpisodes,
   listLocationRecords,
   listMessages,
   listSceneIndex,
@@ -17,13 +18,17 @@ import {
 import type { CharacterRecordRow, LocationRecordRow, ProjectScope, SceneIndexRow } from '@folio/db'
 import { assistantEnv } from '@folio/db/env'
 import type { ScreenplayNode } from '@folio/script'
-import { establishingLines, quadrantOf } from '@folio/script'
+import { establishingLines, formatStoryTime, quadrantOf } from '@folio/script'
 import Anthropic from '@anthropic-ai/sdk'
 
 import { formatSceneRef, sceneRefOf } from '../characters/figures'
 import { dayNightShort, quadrantLabel } from '../locations/view'
+import type { EpisodeGate } from '../script/gate'
 import { isRefusal, openEpisodeWith } from '../script/gate'
-import type { FocusInput, LocationFocusInput, PlaceInput, ScriptInput } from './context'
+import { loadTimeline } from '../timeline/server'
+import { bucketFindings, findingNote, findingsAbout, findingsOf, previousFrameScene, sceneRef } from '../timeline/view'
+import type { NoteBook } from '../timeline/view'
+import type { FocusInput, LocationFocusInput, PlaceInput, SceneFocusInput, ScriptInput, StoryTimeInput } from './context'
 import { buildContext } from './context'
 import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
 
@@ -52,8 +57,9 @@ import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
  * `scope: 'project'` (the Characters route, ruled 2026-09-17) reads every
  * episode with `[E2 Sc 9]` headers; a `focus` adds the open record as a
  * second, uncached block so the cacheable prefix stays stable between
- * turns. A stale focus id is no block and no error. Text only: no tools,
- * because the assistant may not write.
+ * turns. A stale focus id is no block and no error. `places` (Locations)
+ * and `timeline` (Timeline) add that route's records to the system block.
+ * Text only: no tools, because the assistant may not write.
  */
 
 export const assistantConnected = (): boolean => assistantEnv !== null
@@ -171,6 +177,64 @@ const placesOf = async (
   }
 }
 
+/**
+ * The Timeline route's turn (the rebuild, phase 5): every scene's story
+ * time, flag and threads, the check's open findings, and the drawer's
+ * scene as the Focus block - the same loader and the same pure check the
+ * route itself draws from (`lib/timeline/server.ts`, `view.ts`), so the
+ * model reads exactly what the writer sees. Read only when the turn asks
+ * for it (`timeline: true`), so the other routes' prefixes are unchanged.
+ */
+const timelineOf = async (
+  gate: Pick<EpisodeGate, 'scope' | 'project'>,
+  focusId: string | null,
+): Promise<{ readonly scenes: readonly StoryTimeInput[]; readonly findings: readonly string[]; readonly focus: SceneFocusInput | null }> => {
+  const load = await loadTimeline({ scope: gate.scope, project: gate.project, episodes: await listEpisodes(gate.scope) })
+  const threadName = new Map(load.threads.map((thread) => [thread.id as string, thread.name]))
+  const byId = new Map(load.scenes.map((scene) => [scene.sceneNodeId as string, scene]))
+  const people = new Map<string, string>()
+  for (const scene of load.scenes) for (const person of scene.cast) people.set(person.id, person.name)
+  const book: NoteBook = {
+    sceneOf: (id) => byId.get(id as string) ?? null,
+    characterName: (id) => people.get(id) ?? null,
+    threadName: (id) => threadName.get(id) ?? null,
+  }
+  const buckets = bucketFindings(findingsOf(load.scenes, load.introductions, load.threads), new Set(load.deliberate))
+  const line = (finding: (typeof buckets.open)[number]): string => {
+    const scene = byId.get(finding.sceneId as string)
+    return `${scene === undefined ? finding.sceneId : sceneRef(scene)}: ${findingNote(finding, book)}`
+  }
+  const scenes: StoryTimeInput[] = load.scenes.map((scene) => ({
+    ref: sceneRef(scene),
+    heading: scene.heading,
+    storyTime: scene.storyTime === null ? null : formatStoryTime(scene.storyTime),
+    flashback: scene.flashback,
+    threads: scene.threads.flatMap((id) => threadName.get(id as string) ?? []),
+  }))
+  const open = focusId === null ? undefined : byId.get(focusId)
+  if (open === undefined) return { scenes, findings: buckets.open.map(line), focus: null }
+  const previous = previousFrameScene(load.scenes, open.sceneNodeId)
+  return {
+    scenes,
+    findings: buckets.open.map(line),
+    focus: {
+      kind: 'scene',
+      ref: sceneRef(open),
+      heading: open.heading,
+      synopsis: open.synopsis,
+      storyTime: open.storyTime === null ? 'not placed' : formatStoryTime(open.storyTime),
+      flashback: open.flashback,
+      threads: open.threads.flatMap((id) => threadName.get(id as string) ?? []),
+      previous: previous === null || previous.storyTime === null ? null : `${sceneRef(previous)} · ${formatStoryTime(previous.storyTime)}`,
+      cues: [
+        ...(open.cues?.timeOfDay === null || open.cues === null ? [] : [`heading: ${open.cues.timeOfDay}`]),
+        ...(open.cues?.action === null || open.cues === null ? [] : [`line: "${open.cues.action.quote}"`]),
+      ],
+      findings: findingsAbout(buckets, open.sceneNodeId).map((finding) => findingNote(finding, book)),
+    },
+  }
+}
+
 export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome> => {
   const anthropic = assistantClient()
   if (anthropic === null) {
@@ -244,9 +308,14 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
         )
       : null
 
+  // The Timeline route's turn (the rebuild, phase 5): story time and the
+  // findings beside the script, and the drawer's scene as the Focus block.
+  const timelineRead = input.timeline === true && input.scope === 'project' ? await timelineOf(gate, input.focus?.kind === 'scene' ? input.focus.id : null) : null
+
   const history = await listMessages(scope, chatId)
   await appendMessage(scope, chatId, 'user', input.message)
 
+  const focused = placeRead?.focus ?? timelineRead?.focus ?? focus
   const context = buildContext({
     projectTitle: project.title,
     script,
@@ -255,7 +324,8 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
       .filter((record) => record.derived === null || record.derived.presence === 'present')
       .map((record) => ({ name: record.name, line: record.role ?? record.bio })),
     ...(placeRead === null ? {} : { places: placeRead.places }),
-    ...(placeRead?.focus != null ? { focus: placeRead.focus } : focus === null ? {} : { focus }),
+    ...(timelineRead === null ? {} : { timeline: { scenes: timelineRead.scenes, findings: timelineRead.findings } }),
+    ...(focused === null ? {} : { focus: focused }),
   })
 
   const messages: Anthropic.MessageParam[] = [

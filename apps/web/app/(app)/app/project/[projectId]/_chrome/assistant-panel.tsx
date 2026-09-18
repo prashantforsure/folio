@@ -15,6 +15,8 @@ import { citeOf } from '../../../../../../lib/characters/figures'
 import type { LocationFacts } from '../../../../../../lib/locations/facts'
 import { useLocationFacts } from '../../../../../../lib/locations/facts'
 import { useEphemeral } from '../../../../../../lib/state/ephemeral'
+import type { TimelineFacts } from '../../../../../../lib/timeline/facts'
+import { useTimelineFacts } from '../../../../../../lib/timeline/facts'
 import { characterHref } from '../../../../../../lib/workspace/hrefs'
 import type { RailSection, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
 import type { CitationChip } from './citation-chips'
@@ -71,8 +73,12 @@ import { Orb } from './orb'
  * `focus` so the model knows who "she" is; the subhead says `Reading all
  * 3 episodes.` and `data-assistant-focus` names the record. A `Scene N`
  * or `E2 Sc 9` in an answer becomes a citation chip, and on `/characters`
- * a link into the script. Project scope is sent on `/characters` only -
- * the widening is per route, and AGENTS.md puts each one behind a question.
+ * a link into the script. Project scope is sent on the three record routes
+ * - Characters (2026-09-17), Locations (2026-09-18) and, since the Timeline
+ * rebuild's phase 5, Timeline, where the turn also carries `timeline: true`
+ * so the server adds every scene's story time and the open findings to the
+ * system block, and the drawer's scene as the Focus. The widening is per
+ * route, and AGENTS.md puts each one behind a question.
  */
 
 type Chip = { readonly label: string; readonly tone: 'live' | 'warn' | 'accent' | 'ok' | 'ink3'; readonly kind?: 'report' }
@@ -173,7 +179,22 @@ const locationsChips = (places: LocationFacts | null): readonly Chip[] => [
 const locationsSubhead = (places: LocationFacts | null): string =>
   places?.open == null ? LOCATIONS_SUBHEAD : `Ask about the locations, or have me describe ${places.open.name} from its scenes.`
 
-const chipsFor = (route: WorkspaceRoute | null, facts: CharacterFacts | null, places: LocationFacts | null): readonly Chip[] =>
+/**
+ * The Timeline route's chips (the rebuild, phase 5): three reports the
+ * route already computes - the unplaced scenes, why the drawer's scene is
+ * flagged, where a thread goes quiet - answered from the facts cell
+ * (`lib/timeline/facts.ts`) with no model. The second names the open scene
+ * when the drawer has one.
+ */
+const timelineChips = (times: TimelineFacts | null): readonly Chip[] => [
+  { label: times === null || times.unplaced.length === 0 ? 'Which scenes have no story time?' : `Which ${String(times.unplaced.length)} scenes have no story time?`, tone: 'warn', kind: 'report' },
+  { label: times?.open == null ? 'Why is this scene flagged?' : `Why is ${formatRef(times.open.ref)} flagged?`, tone: 'accent', kind: 'report' },
+  { label: 'Where does a thread go quiet?', tone: 'ok', kind: 'report' },
+]
+
+const formatRef = (ref: { readonly episodeOrdinal: number; readonly number: number }): string => `E${String(ref.episodeOrdinal)} Sc ${String(ref.number)}`
+
+const chipsFor = (route: WorkspaceRoute | null, facts: CharacterFacts | null, places: LocationFacts | null, times: TimelineFacts | null): readonly Chip[] =>
   route === 'outline'
     ? OUTLINE_CHIPS
     : route === 'storyboard'
@@ -184,7 +205,9 @@ const chipsFor = (route: WorkspaceRoute | null, facts: CharacterFacts | null, pl
           ? charactersChips(facts)
           : route === 'locations'
             ? locationsChips(places)
-            : CHIPS
+            : route === 'timeline'
+              ? timelineChips(times)
+              : CHIPS
 
 const subheadFor = (route: WorkspaceRoute | null, section: RailSection | null, facts: CharacterFacts | null, places: LocationFacts | null): string =>
   route === 'outline'
@@ -199,11 +222,11 @@ const subheadFor = (route: WorkspaceRoute | null, section: RailSection | null, f
             ? locationsSubhead(places)
             : SUBHEAD[section ?? 'writing']
 
-/** The project-scoped routes: the panel says what it reads - the whole project on both since 2026-09-18. */
-const PROJECT_ROUTES: readonly WorkspaceRoute[] = ['characters', 'locations']
+/** The project-scoped routes: the panel says what it reads - the whole project on all three. */
+const PROJECT_ROUTES: readonly WorkspaceRoute[] = ['characters', 'locations', 'timeline']
 
-/** The routes the model reads the whole project on: Characters by the 2026-09-17 ruling, Locations by the 2026-09-18 one (with the location records beside the cast). */
-const WHOLE_PROJECT_ROUTES: readonly WorkspaceRoute[] = ['characters', 'locations']
+/** The routes the model reads the whole project on: Characters by the 2026-09-17 ruling, Locations by the 2026-09-18 one (with the location records beside the cast), Timeline by the rebuild's phase 5 (with story time and the findings). */
+const WHOLE_PROJECT_ROUTES: readonly WorkspaceRoute[] = ['characters', 'locations', 'timeline']
 
 /** A report's answer, printed by the panel: the sentence, its citations, the records it names. */
 type Report = {
@@ -275,6 +298,48 @@ const placeReportFor = (label: string, places: LocationFacts): Omit<Report, 'id'
           ? 'No heading is an exterior at night.'
           : `${String(nights.length)} ${nights.length === 1 ? 'set has' : 'sets have'} night exteriors: ${nights.map((place) => `${place.name} (${String(place.nights)})`).join(', ')}.`,
       cites: nights.flatMap((place) => cite(place.first)),
+      people: [],
+    }
+  }
+  return null
+}
+
+/** The Timeline route's reports, over the facts its workspace publishes: arithmetic, no model. */
+const timeReportFor = (label: string, times: TimelineFacts): Omit<Report, 'id' | 'createdAt'> | null => {
+  const cite = (ref: TimelineFacts['index'][number]): CitationChip => citeOf(times.projectId, times.shape, ref)
+  if (label.startsWith('Which') && label.endsWith('have no story time?')) {
+    const unplaced = times.unplaced
+    return {
+      role: 'report',
+      label,
+      sentence:
+        unplaced.length === 0
+          ? 'Every scene has a story time.'
+          : `${String(unplaced.length)} ${unplaced.length === 1 ? 'scene has' : 'scenes have'} no story time yet. Open the queue with Place scenes to read a day for each off the page.`,
+      cites: unplaced.map(cite),
+      people: [],
+    }
+  }
+  if (label.startsWith('Why is') && label.endsWith('flagged?')) {
+    const open = times.open
+    if (open === null) {
+      return { role: 'report', label, sentence: 'Open a scene from the grid first - the drawer is what "this scene" means.', cites: [], people: [] }
+    }
+    return {
+      role: 'report',
+      label,
+      sentence: open.findings.length === 0 ? `${formatRef(open.ref)} has no open finding.` : open.findings.map((finding) => finding.note).join(' '),
+      cites: [cite(open.ref)],
+      people: [],
+    }
+  }
+  if (label === 'Where does a thread go quiet?') {
+    const quiet = times.quiet
+    return {
+      role: 'report',
+      label,
+      sentence: quiet.length === 0 ? 'No thread goes quiet for a whole episode or thirty pages.' : quiet.map((finding) => finding.note).join(' '),
+      cites: quiet.map((finding) => cite(finding.ref)),
       people: [],
     }
   }
@@ -396,11 +461,15 @@ export const AssistantPanel = ({
   const { assistantPrompt, setAssistantPrompt, assistantFocus } = useEphemeral()
   const facts = useCharacterFacts()
   const places = useLocationFacts()
-  const readOrdinal = (facts ?? places)?.episodes.find((entry) => entry.slug === episode)?.ordinal ?? null
+  const times = useTimelineFacts()
+  const routeFacts = route === 'characters' ? facts : route === 'locations' ? places : route === 'timeline' ? times : null
+  const readOrdinal = routeFacts?.episodes.find((entry) => entry.slug === episode)?.ordinal ?? null
   const projectScoped = route !== null && PROJECT_ROUTES.includes(route)
   const wholeProject = route !== null && WHOLE_PROJECT_ROUTES.includes(route)
   const focus =
-    wholeProject && assistantFocus !== null && ((route === 'characters' && assistantFocus.kind === 'character') || (route === 'locations' && assistantFocus.kind === 'location'))
+    wholeProject &&
+    assistantFocus !== null &&
+    ((route === 'characters' && assistantFocus.kind === 'character') || (route === 'locations' && assistantFocus.kind === 'location') || (route === 'timeline' && assistantFocus.kind === 'scene'))
       ? assistantFocus
       : null
 
@@ -494,6 +563,7 @@ export const AssistantPanel = ({
         scope: wholeProject ? 'project' : 'episode',
         ...(focus === null ? {} : { focus: { kind: focus.kind, id: focus.id } }),
         ...(route === 'locations' ? { places: true } : {}),
+        ...(route === 'timeline' ? { timeline: true } : {}),
       }
       const response = await fetch('/api/assistant', {
         method: 'POST',
@@ -659,7 +729,7 @@ export const AssistantPanel = ({
                 {turn.body.length === 0 && turn.id === 'pending' ? (
                   <span className="folio-thinking">Thinking</span>
                 ) : turn.role === 'assistant' ? (
-                  <CitedBody body={turn.body} ordinal={readOrdinal} facts={route === 'characters' ? facts : route === 'locations' ? places : null} episode={episode} />
+                  <CitedBody body={turn.body} ordinal={readOrdinal} facts={routeFacts} episode={episode} />
                 ) : (
                   turn.body
                 )}
@@ -671,15 +741,22 @@ export const AssistantPanel = ({
 
       {empty ? (
         <div className="flex flex-none flex-col items-start gap-[7px] px-[20px] pb-[14px]">
-          {chipsFor(route, facts, places).map((chip) => (
+          {chipsFor(route, facts, places, times).map((chip) => (
             <button
               key={chip.label}
               type="button"
               className="folio-chip-button"
               data-chip-kind={chip.kind ?? 'ask'}
               onClick={() => {
-                if (chip.kind === 'report' && (facts !== null || places !== null)) {
-                  const report = route === 'locations' && places !== null ? placeReportFor(chip.label, places) : facts === null ? null : reportFor(chip.label, facts)
+                if (chip.kind === 'report' && routeFacts !== null) {
+                  const report =
+                    route === 'locations' && places !== null
+                      ? placeReportFor(chip.label, places)
+                      : route === 'timeline' && times !== null
+                        ? timeReportFor(chip.label, times)
+                        : facts === null
+                          ? null
+                          : reportFor(chip.label, facts)
                   if (report !== null) {
                     const stamp = new Date().toISOString()
                     setTurns((existing) => [...existing, { ...report, id: `report:${stamp}`, createdAt: stamp }])

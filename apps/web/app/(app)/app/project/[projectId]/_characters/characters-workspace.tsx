@@ -20,7 +20,7 @@ import { EmptyCharacters } from './empty-characters'
 import { NewCharacterDrawer } from './new-character-drawer'
 import { PresenceView } from './presence-view'
 import { SheetView } from './sheet-view'
-import { useToast } from './use-toast'
+import { useToast } from '../_chrome/use-toast'
 import { useCharactersView } from './view-state'
 
 /**

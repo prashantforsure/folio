@@ -4,7 +4,6 @@ import { nodeId } from './ids'
 import {
   chronology,
   compareStoryTime,
-  continuityFindings,
   formatStoryTime,
   isStoryClock,
   precedesStoryTime,
@@ -65,76 +64,6 @@ describe('precedesStoryTime', () => {
     expect(precedesStoryTime(at(2), at(2, '06:40'))).toBe(false)
     expect(precedesStoryTime(at(2, '06:40'), at(2))).toBe(false)
     expect(precedesStoryTime(at(2), at(2))).toBe(false)
-  })
-})
-
-describe('continuityFindings', () => {
-  it('finds nothing in a straight read, with unplaced scenes in between', () => {
-    const scenes = [
-      scene('a', at(1, '07:10')),
-      scene('b', at(1, '09:30')),
-      scene('c', null),
-      scene('d', at(1)),
-      scene('e', at(2, '06:40')),
-    ]
-    expect(continuityFindings(scenes)).toEqual([])
-  })
-
-  it('flags a scene whose story time precedes the scene before it on the page', () => {
-    const scenes = [scene('a', at(2, '06:40')), scene('b', at(2, '05:50')), scene('c', at(3))]
-    expect(continuityFindings(scenes)).toEqual([
-      {
-        sceneId: nodeId('b'),
-        previousId: nodeId('a'),
-        kind: 'order',
-        sceneTime: at(2, '05:50'),
-        previousTime: at(2, '06:40'),
-      },
-    ])
-  })
-
-  it('reports a flashback as a flashback and compares the return against the frame story', () => {
-    const scenes = [
-      scene('a', at(2, '06:40')),
-      scene('past', at(-3650), true),
-      scene('b', at(2, '08:00')),
-    ]
-    expect(continuityFindings(scenes)).toEqual([
-      {
-        sceneId: nodeId('past'),
-        previousId: nodeId('a'),
-        kind: 'flashback',
-        sceneTime: at(-3650),
-        previousTime: at(2, '06:40'),
-      },
-    ])
-  })
-
-  it('does not let a flashback hide a real step backwards', () => {
-    const scenes = [scene('a', at(5)), scene('past', at(-10), true), scene('b', at(3))]
-    expect(continuityFindings(scenes).map((f) => [f.sceneId, f.previousId, f.kind])).toEqual([
-      ['past', 'a', 'flashback'],
-      ['b', 'a', 'order'],
-    ])
-  })
-
-  it('a flashback that goes forward is not a finding', () => {
-    const scenes = [scene('a', at(1)), scene('later', at(9), true), scene('b', at(2))]
-    expect(continuityFindings(scenes)).toEqual([])
-  })
-
-  it('compares across the unplaced: the scene before it is the last one with a time', () => {
-    const scenes = [scene('a', at(3)), scene('gap', null), scene('b', at(1))]
-    expect(continuityFindings(scenes).map((f) => f.sceneId)).toEqual(['b'])
-  })
-
-  it('same day, one clock missing: not a finding', () => {
-    const scenes = [scene('a', at(3, '23:30')), scene('b', at(3))]
-    expect(continuityFindings(scenes)).toEqual([])
-  })
-
-  it('a flashback first on the page has nothing before it', () => {
-    expect(continuityFindings([scene('past', at(-1), true), scene('a', at(1))])).toEqual([])
   })
 })
 

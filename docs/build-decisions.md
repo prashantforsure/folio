@@ -18,7 +18,13 @@ at in the code today.
   ledger row, no rate limit - three more places the number would go once there is one.
 - **Open decision 8, A4.** `resolveSheet('asian')` refuses; the Script route's banner says so.
 - **Open decision 10, `SCENE_xxx`.** Unchanged. The sidebar's scene rows are `#n-<node id>`
-  fragments, which name a node, never a scene record; `?selected=` stays unwired.
+  fragments, which name a node, never a scene record; `?selected=` stays unwired, and the
+  Timeline's drawer is state, not `/timeline/:sceneId` (2026-09-18).
+- **`✦ Suggest placements` (the Timeline's model action)** takes the Characters buttons'
+  standing under open decision 13 and is not built; the rules-based proposal queue stands in.
+- **`scenes.story_time` and `scenes.beats`** are dead columns: nothing reads or writes them
+  since `0011` and `0010`. A column drop is AGENTS.md's ask-first; the Timeline rebuild
+  (2026-09-18) left them and asks.
 - **Open decision 11, past green; 12, locked pages.** Unchanged, both refused at the engine.
 - **Membership roles are stored and enforced nowhere.** A share link issues `writer | reader`
   and `addMembership` writes it; nothing reads it back. Deciding that a `reader` cannot share,
@@ -29,6 +35,410 @@ at in the code today.
   are the machinery, the ruling is missing.
 
 ---
+
+## Timeline rebuild, phases 2-5 - placement, continuity, threads, the assistant (2026-09-18)
+
+Phase 1 (the section below) put the route on the shell and left four phases of the approved
+plan: placement, the continuity check, thread tooling and the assistant. The client asked for
+the rest in one go - "fix those as well, make sure it's working end to end, and clear out the
+unwanted code" - so this is one pass and one section, in four parts, with the cleanup at the
+end. The four rulings of phase 1 stand; nothing here re-opens them. The one deviation from the
+ruled shape of `timeline_findings` is under "Judgement calls".
+
+### Phase 2 - placement: the page as evidence, the writer as the author
+
+**Time cues** - `packages/script/src/time-cues.ts` (pure, no dependencies, `time-cues.test.ts`,
+7 tests). `timeCuesOf(nodes, headings)` reads, per accepted scene, the heading's time of day and
+how it *binds* to the scene before it (`CONTINUOUS` / `SAME TIME` = the same moment, `LATER` /
+`MOMENTS LATER` = the same day) and the first action line among the scene's first two
+(`CUE_ACTION_LINES`) that names a time - quoted, with the node it came from and an `offsetDays`
+where the count is exact: "the next morning" is 1, "three days later" 3, "two weeks later" 14,
+"that night" 0, "two days earlier" -2. "A year later", "months later" and "1997" are cues with
+`offsetDays: null` - quoted as evidence, never counted, because a month is not a number of days
+and a year is not a day at all. Read at request time in `lib/timeline/server.ts` over the
+project's node list (`readProjectScreenplayNodes`, the read Locations already makes for
+`establishingLines`), stored nowhere; the rows carry `cues` and `light` (the `light-vs-clock`
+rule's input) across the boundary.
+
+**Proposals** - `proposePlacements(scenes, firstDay)` in the same file: one proposed story time
+per unplaced, unflagged scene, in page order, each counted from the last frame-story scene
+before it - placed by the writer, or proposed just above. A bind takes the day (and, for
+`continuous`, the clock); an exact cue adds its days; anything else *carries* the day, and
+says so (`reason: 'carried'`). A flashback-flagged scene is skipped and never counted from.
+
+**The queue** (`_timeline/proposal-queue.tsx`, the Characters resolve queue's shape) - what
+`Place N scenes` (the toolbar, the banner's `Place them`, the empty card's primary) opens over
+the grid: a row per proposal with the ref, the slug, the line (`CONTINUOUS → same day and clock
+as E1 Sc 4` · `LATER → Day 2, later the same day` · `"the next morning" → Day 3` · `no cue →
+Day 3, carried from E1 Sc 9`), the evidence as a citation chip into the script at the line it was
+read from, `Day N` (solid when read from the page, a line button for a carry) and `Skip`.
+Folded past six rows. `Accept` is the drawer's own write for that scene - and the rows below
+re-count from the day just written, which is what a carry means. `Skip` hides the row for the
+visit and writes nothing. `Accept all` is one statement (`placeScenes` over `unnest`, only where
+the scene still has no day) and the status bar offers `Undo` - `unplaceScenes` over exactly the
+placements the write answered with, only where each still carries exactly that day and clock.
+This is what replaced `Assume continuous`: the same carry for a scene with no cue, shown as a
+proposal with its reason, accepted one at a time or whole, taken back the same way. A carried
+day is still one the writer accepted, so `placed` means "the writer said so".
+
+**Optimistic writes** - the loader no longer computes the order: `TimelineLoad` is the rows,
+the threads, the episodes, the introductions and the verdict keys, and the workspace runs
+`@folio/script` over them (`chronology`, `storyJumps`, `continuityFindings`,
+`proposePlacements`). Every write lands as a *patch* over its row first (`applyPatches`,
+`patchLanded` in `view.ts`), so the grid re-orders and the findings re-run before the round trip;
+a patch goes when the refreshed row agrees with it, or at once when the write fails. The first
+pass drew nothing until the refresh came back (the E2E budgeted a minute per save).
+
+**Drag** - a card is `draggable` (HTML5, no dependency; the id rides under
+`application/x-folio-scene`). In chronology every cell is a target: the scene takes the column's
+day (clock cleared, flag kept) and, on the thread lanes, the row's thread as its first when it
+differs; a trailing `＋ Day N` column is a new day after the frame story. The unplaced strip is a
+target the other way - a placed card dropped there loses its time. In story order the columns
+are page order, so a drop changes only the row. The sidebar's thread rows drag too (phase 4).
+
+**Keys** - the grid's roving tabindex: one card in the tab order (the selected, else the first);
+`←`/`→` along the row, `↑`/`↓` across rows in the same column, `Home`/`End`; `Enter` opens the
+drawer, `Escape` closes it; `F` flips the flashback flag; `[` and `]` move the scene a day
+earlier or later; `D` and `C` open the drawer on its Day or Clock field. The drawer gained
+`+1 day` (one after the day typed, else after the previous scene) beside `⇅ Same day as the
+previous`, and a **What the page says** section - the heading's time of day and the cue line as
+citation chips into the script, so the writer decides with the page in view.
+
+### Phase 3 - continuity: eight rules, one verdict
+
+**The check** - `packages/script/src/continuity.ts` (pure, `continuity.test.ts`, 15 tests),
+replacing `timeline.ts`'s one-rule `continuityFindings` (`storyJumps` stays there for the chip's
+arrow). `continuityFindings({ scenes, introductions, threads })` over `ContinuityScene` rows -
+the timeline scene plus the page's facts the route already loads: episode, page, cast ids, set
+id, the heading's light, thread ids. Each finding carries `kind`, a stable `key`, the scene, the
+scene it is measured against, a `subject` (a character or thread id) and, for the gap kinds,
+the gap:
+
+| kind | the fact | the false positive it refuses |
+| --- | --- | --- |
+| `order` | a frame scene earlier in story time than the *latest* frame scene before it on the page; a run of scenes that keep going back in order is one finding, on the run's first | `Day 5, Day 3, Day 4` was one finding on the 3 and nothing on the 4; adjacent-pair comparison |
+| `flashback` / `flashforward` | the same fact on a flagged scene, either direction | listed as a card - the flag is the answer |
+| `same-day-unclocked` | two consecutive frame scenes on one day, one without a clock | an `order` finding on an unknowable order; informational |
+| `two-places` | a character in two scenes at one day and clock in two different sets | an unclocked scene, an unresolved heading |
+| `before-introduction` | a character present earlier in story time than the scene that introduces them (`character_derivations.introduced_at`) | a flashback, where that is the point |
+| `light-vs-clock` | a `DAY` heading clocked outside `DAYLIGHT` (05:00-21:00), a `NIGHT` heading inside `NIGHT_HOURS` (07:00-18:00) | a summer evening at 20:30 |
+| `thread-silent` | a thread with no scene for `THREAD_SILENT_EPISODES` (1) whole episodes or `THREAD_SILENT_PAGES` (30) pages between two of its scenes | - |
+| `day-gap` | more than `DAY_GAP_DAYS` (7) days between consecutive frame scenes | informational |
+
+The thresholds are named constants in the core (plan item 10), not rulings. `precedesStoryTime`
+is still strict - unknown never precedes - and the rules inherit it.
+
+**Buckets and notes** - `lib/timeline/view.ts`'s `bucketFindings(findings, deliberateKeys)`:
+`open` (what the tab's badge counts), `notes` (the two informational kinds), `deliberate`,
+`flagged` (the two flag kinds, counted in one line at the foot, never cards). `findingNote`
+words each kind over the names only this side knows (`Meera is at Kitchen and at Standpipe at
+Day 2 · 06:40 (E1 Sc 9).` · `Farida is present here (Day 1) but is introduced in E2 Sc 3 (Day
+3).` · `The heading says NIGHT but the clock says 14:00.` · `Love goes quiet for 1 whole episode
+between E1 Sc 12 and here.`); `KIND_LABEL` is the card's chip.
+
+**The verdict** - `timeline_findings` (`0023`, applied to dev in its own run): `kind`, the
+check's `key` (unique per project), `a_ref`, `b_ref`, `subject`, `created_at`, cascading with
+the project, RLS on the `0022` pattern. A row is `It's deliberate`; `Reopen` deletes it. The
+Continuity view lists the open findings as cards (the kind chip, the note, `Against E1 Sc 9`,
+`Open →`, `Open in Script →`, `It's deliberate`), the notes and the deliberate under two folds
+(`Notes · 4`, `Marked deliberate · 1`, each card with `Reopen`), and the flag count at the foot.
+The drawer lists the findings about its scene in a **Continuity** section with the same
+buttons. The card's `⚠` is an open finding (its title the kind and the note); `↺` a flashback,
+`↻` a flash-forward.
+
+### Phase 4 - threads as a tool
+
+- **Reorder** - the sidebar's rows drag (`application/x-folio-thread`); a drop writes the whole
+  order (`orderThreads` → `orderStoryThreads`, one statement over `unnest ... with ordinality`
+  that refuses a list disagreeing with the project's threads). `deleteStoryThread`'s CTE gained a
+  fourth step: the remaining threads close the gap in `position`, so the column is dense again
+  as the schema comment promised.
+- **A scene's row is a choice** - the drawer's thread chips carry `▲ Make row` (first = row) and
+  `×`; the `＋` menu appends. All three are one write of the whole list (`setSceneThreads` →
+  `writeSceneThreads`, which refuses a list naming a thread the project does not have, in the
+  same statement) - `linkSceneThread` and `unlinkSceneThread` are gone. A drop onto another
+  thread's row is the same write.
+- **Ghost cards** - on the thread lanes a scene on threads A and B draws its card in A's row
+  and a dashed ghost (`data-scene-ghost`, `--ink3`) in B's - "where threads run in parallel",
+  drawn. A ghost opens the same drawer and does not drag.
+- **Presence** - each sidebar row carries `EpisodeBars` (`@folio/ui`), one bar per episode
+  (`threadPresence` in `view.ts`; the layout hands the counts) - "does the B-plot disappear in
+  E3" at a glance.
+- **Pacing** - each chronology column head carries the ruler (`.folio-lane-ruler`): a bar as
+  long as the day's share of the fullest day's pages (`rulerOf`), under the `3 scenes · 4 6/8 pp`
+  line it already printed.
+- **Lanes by** - `Lanes by threads ▾ / characters / locations` on the toolbar: the same grid,
+  a different `rowsOf` (`GridLanes` in `view.ts`). Character lanes put a scene in every cast
+  member's row, whole; location lanes in its set's row; rows by scene count. Solo and drag-to-row
+  apply on the thread lanes only.
+- **Export** - `⋯ → Story chronology as Markdown` (`lib/timeline/markdown.ts`, pure, tested on
+  the Outline export's precedent): a heading per story day, each scene's ref, set, clock and
+  threads, the unplaced at the foot; `monsoon-line-chronology.md` through a Blob, the toast
+  names it.
+- **Read in story order** - `⋯ → Read in story order` (`_timeline/read-modal.tsx`): every
+  placed scene on the Scenes route's grained sheet, a scene at a time in story time, `Previous`
+  / `Next` and the arrow keys, `3 of 17 · E1 Sc 4 · Day 2 · 06:40` in the meta line. A scene's
+  lines are read when the reader turns to it (`readSceneLines`, the one read-on-demand action:
+  the document's nodes cut with `lib/scenes/excerpt.ts`), not shipped with the route.
+  `_scenes/script-modal.tsx` was split into `PaperModal` (scrim, portal, Escape) and
+  `ReadingPaper` (toggle, meta, sheet or refusal, an optional controls row) so both readers are
+  the same two pieces; `ScriptModal` is unchanged in what it draws.
+
+### Phase 5 - the assistant reads story time
+
+- **Facts cell** - `lib/timeline/facts.ts` (`createCell`, below): the scene index, the drawer's
+  scene with its findings' notes, the unplaced refs, the `thread-silent` findings. The panel's
+  three chips on `/timeline` are **reports**, no model: `Which 7 scenes have no story time?`
+  (the refs as citation chips), `Why is E1 Sc 14 flagged?` (the open scene's notes; asks for a
+  scene when none is open), `Where does a thread go quiet?` (the silent threads' notes). The
+  subhead the panel already printed - "Ask how the story sits in time, or where a thread goes
+  quiet" - is true now.
+- **Focus kind `scene`** - `AskFocusSchema` and `AssistantFocus` gained `{ kind: 'scene', id }`;
+  the drawer publishes its scene on mount and clears it on unmount; `sceneFocusBlock` in
+  `lib/assistant/context.ts` reads the ref, heading, gist, story time and flag, threads, the
+  frame scene before it, the page's cues and the findings on it, and tells the model it cannot
+  place the scene itself.
+- **The read** - the panel sends `scope: 'project'` and `timeline: true` on `/timeline`;
+  `lib/assistant/server.ts`'s `timelineOf` runs the same loader and the same check the route
+  draws from (`loadTimeline` over the gate's scope, `bucketFindings`, `findingNote`) and adds a
+  **Story time** block to the system prompt - every scene's ref, heading, story time or
+  `unplaced`, flag and threads - and the open findings as lines, so "where does the love thread
+  stall" is answered from what the route knows. `loadTimeline` now takes
+  `Pick<ProjectContext, 'scope' | 'project' | 'episodes'>` so the turn can build it from the gate
+  rather than re-run the page loader. This is the widening AGENTS.md puts behind a question; the
+  client approved all five phases with the plan, and the read is per route as the other two are.
+- **`✦ Suggest placements` is not built** - a model action in the queue is open decision 13's
+  (no price, no ledger row); the rules-based queue stands in.
+
+### Cleanup
+
+- `lib/workspace/open-cell.ts`'s `createOpenCell` is now `createCell<T>(initial)` with
+  `createOpenCell = () => createCell(false)`; the three facts cells (Characters, Locations,
+  Timeline) are `createCell<Facts | null>(null)` instead of three copies of the same store.
+- `_characters/use-toast.ts` moved to `_chrome/use-toast.ts` (its own doc said "moves to
+  `_chrome/` when a second route needs it"; three routes did).
+- Gone: `timeline.ts`'s `continuityFindings` and `ContinuityFinding` (superseded by
+  `continuity.ts`); `lib/timeline/server.ts`'s `enterTimeline` (unused), the loaded `findings` /
+  `jumps` / `chronology` / `span` / `placed` / `flashbacks` (computed on the client now);
+  `view.ts`'s `spanLabel` (unused) and `openFindings` (replaced by `bucketFindings`);
+  `linkSceneThread` / `unlinkSceneThread` / `placeUnplacedScenes` (replaced by
+  `writeSceneThreads` / `placeScenes`); the `jumps` record across the boundary.
+- `scenes.story_time` and `scenes.beats` are still on the row: a column drop is asked for
+  (AGENTS.md, When to ask first) and this pass did not take it.
+
+### Judgement calls, flagged
+
+- **`timeline_findings` has no `status` column.** The ruling named `character_findings`' shape
+  (`status open | deliberate`); with a row written only when the writer says deliberate, the
+  column would hold one value, and a column with one value is a column. A row *is* the verdict;
+  `Reopen` deletes it. One column fewer than ruled; reversible in a migration if a second status
+  ever means something.
+- **`order` is keyed on the scene alone** (`order:<sceneId>`), not on the pair: which scene it
+  is measured against changes as the writer places more, and "this one steps back" is what the
+  writer marked deliberate.
+- **Ghost cards do not drag** and the row a drop lands in is the *first* thread; a ghost's own
+  row is reachable through the drawer's `▲`.
+- **`next morning` as a quick button was not added** (plan, tier 2): it would write a clock the
+  page did not say. `+1 day` is.
+- **Two of the plan's key bindings changed**: `←`/`→` navigate the grid (the plan had them nudge
+  the day, which collides with arrow navigation); `[` and `]` nudge instead.
+- **The proposal queue's `Day N` button is solid only for a proposal read from the page**; a
+  carry is a line button, so the eye lands on what the page said.
+- **`loadTimeline` reads the node list and the character records on every load** (two reads
+  the first pass did not make), for the cues and the introductions. Both are reads Locations and
+  Characters make per load already; nothing is stored.
+- The E2E's thread drag uses Playwright's `dragTo`, which drives HTML5 drag and drop in Chromium;
+  if it proves flaky on another engine the grid's drop is also reachable by keyboard.
+
+### Verification
+
+`pnpm exec turbo run typecheck lint --force`: 12 successful, 12 total. `@folio/script`: 546
+tests (32 files) including `time-cues.test.ts` (7) and `continuity.test.ts` (15); web: 519 tests
+(41 files) on Node 22.23 including `tests/timeline-view.test.ts` (25). `next build` green,
+`assert-no-server-secrets` green. `0023` applied to the dev project. `e2e/timeline-route.spec.ts`
+rewritten for the queue, the verdicts, the light rule, the ghost and `▲`, the sidebar drag, the
+lanes, the keys, the chronology drag, the reader and the export - the walk's result is in the
+pass report.
+
+## Timeline rebuild, phase 1 - the shell and the grid (2026-09-18)
+
+The Timeline route was the last on its pre-redesign chrome inside the v2 shell: a 250px
+`ContextColumn`, its own 46px header with glyph tabs, its own 28px footer with a different
+save vocabulary, a 272px inline aside for the selected scene, legacy alias tokens throughout,
+and `?view=` links that re-ran the page on every tab. The client asked for the whole route
+audited - "the design does not match the rest of the website, and the work it does needs
+improvement" - and the audit (the plan file, "Timeline route - audit and rebuild brief"; 59
+points across chrome, views, data integrity, the continuity check, interactions, the save path,
+missing states, accessibility, dead code and the assistant) became a five-phase plan the client
+approved. This section is phase 1. The next four are placement (a proposal queue over the
+scene's own time cues, drag, keyboard), continuity (eight pure rules and `timeline_findings`
+verdicts in `0023`), threads (reorder, ghost cards, presence, pacing, Markdown export) and the
+assistant (facts cell, Focus, reading story time).
+
+### Client rulings (2026-09-18)
+
+| Question | Ruling |
+| --- | --- |
+| Does `Route - Timeline v2.dc.html` still bind the route | **No - the plan is the spec**, the Characters and Locations ruling applied. The README's language, tokens and patterns still apply; the mockup's vocabulary (`Place in time`, `Dim the other threads`, the lead on the Continuity view) is kept where the plan kept it |
+| `Story order · Chronology · Continuity` as `?view=` or state | **Client state** (`_timeline/view-state.tsx`, the Locations shape - the route has a layout of its own); the URL stays `/timeline`; `?view=` is an unknown key, a stale link opens story order |
+| How much of the plan | **All five phases, in order**, each its own pass and section |
+| Where a finding's verdict lives | **A `timeline_findings` table** (migration `0023`, the `character_findings` shape) - a row only when the writer says *deliberate*; the check stays pure and unstored. Phase 3's |
+
+### The audit, in one paragraph
+
+The data layer was sound - two authored things, a pure order, stale thread ids dropped on read
+- and the surface above it was not: `Assume continuous` wrote `story_day = 1` to every scene as
+authored data indistinguishable from a typed value, so after one click the span read "1 day",
+continuity "agreed everywhere" and the empty state never came back (the CLAUDE.md warning in
+one button); the empty card claimed sluglines marked `CONTINUOUS` and `LATER` were respected
+when nothing read a slugline; `Continue from Day N` counted from the last chronology column,
+flashback days included; the scene panel reset its form on every prop change, and every write on
+the route refreshed the router, so a half-typed day vanished mid-edit; `chain` wrote the unsaved
+flashback flag and `Clear` silently unset it; `linkThread` stored any well-formed id without
+checking the thread's project; `deleteThread` was two statements with no transaction; every
+action revalidated the whole project layout; `shortSlug` cut `INT. HOUSE - KITCHEN - DAY` to
+`HOUSE`; the thread picker was a native `<select>` that closed on blur before `change` in two
+browsers; hidden threads only dimmed and stayed in the tab order; the grid was `div`s with no
+roles; the continuity check had one rule, compared adjacent pairs only, and had no verdict but
+the flashback flag; the assistant panel promised "where a thread goes quiet" and read no story
+time. Phase 1 fixes the chrome, the views, the write path, the falsehoods and the interactions;
+the check's depth and the assistant are phases 3 and 5.
+
+### What was built
+
+**Shell** - `_chrome/timeline-layout.tsx` on `locations-layout.tsx`'s pattern: the shared
+`Sidebar` with four slots (`_timeline/timeline-sidebar.tsx`), `WritingHeader route="timeline"`
+handed `TimelineHeaderViews` for its centre, the `folio-surface` card, and the `#timeline-drawer`
+slot beside the column. `_chrome/context-column.tsx` and `CONTEXT_PANEL_WIDTH` are deleted -
+every route draws the sidebar card now - and the header's and status bar's "Timeline does not
+yet" notes are gone.
+
+**Sidebar** - the project name with `+` (`New thread`, through `lib/timeline/compose.ts`'s cell,
+so the title row and the group agree), `Find a scene or character` (the shared `FindField`,
+narrowing the grid by ref, heading, set or a cast name), the **Threads** group - one row per
+thread: the 3×22 colour bar, the name over `E1 → E3 · 6 scenes · +2 shared`, the row count in
+mono; a click is a **solo** (`Dim the other threads` - every other lane drops to 40% and out of
+the tab order; a second click clears); `⋯` on hover opens the inline editor (rename, recolour,
+delete) - and the **Placed in time** widget (`17 / 24`, the accent bar, `7 scenes have no time
+yet`). Every write here goes through the provider's one `useRun`, so a rename says `Saving…` in
+the body's status bar.
+
+**Views** - `_timeline/view-state.tsx`: `TimelineView`, `TIMELINE_VIEWS`, `TimelineStateProvider`
+(the view, the selected scene, the solo thread, `byHand`, the shared `save`/`run`, and the flag
+count the body publishes for the Continuity tab's badge), `useTimelineState`,
+`TimelineHeaderViews`. `SUB_VIEW_SCHEMAS.timeline` is `z.object({})` and `ROUTE_VIEWS.timeline`
+is `[]`; `ViewTab` gained an optional `badge` and `ViewPill` draws it (`.folio-view-pill-badge`,
+`--warn-bg`) - the one addition to a shared piece.
+
+**Toolbar** (`timeline-toolbar.tsx`, the shared `RecordToolbar`) - `Timeline`, the count chip
+(`17 placed` / `4 flags`), `All episodes ▾` (a `FilterMenu`; only with more than one episode) and
+the solid `Place 7 scenes on Day 3` while anything is unplaced. No `✦` on it: nothing reads the
+script, so the accent is not earned; phase 2's queue takes its place.
+
+**Lanes** (`lanes-grid.tsx`, `scene-card.tsx`) - `role="grid"` with `columnheader`, `rowheader`
+and `gridcell`; `168px` then `minmax(196px, 1fr)` per column, 10px gaps, wider than the surface
+and scrolling inside it; a sticky header row of column cards (`E1 · Standpipe · 104 pp · 5
+placed · Day 1 → 3`; `Day 2 · 3 scenes · 4 6/8 pp`; a flashback-only day says `flashback` in
+`--warn` on `--warn-bg` and tints its cells); sticky row heads. The card: the mono ref, the mark
+(`↺` flashback, `⚠` finding, each with screen-reader text and the note as its title), the short
+slug (the set as `readSlugline` reads it - `HOUSE - KITCHEN`), the chip that says *when* in story
+order and *where on the page* in chronology, the jump arrow, the "also" dots. `aria-pressed`
+while it is the drawer's; `--lane-colour` carries the thread's token to the 3px bar. All in one
+`.folio-lane-*` block in `globals.css`; no legacy alias anywhere on the route.
+
+**Drawer** (`scene-drawer.tsx`, the shared `DrawerShell`) - `Place in time`, `E1 Sc 14 · p. 36`,
+`Ask` and `Open in script` in the head; the slugline and gist; `Day` and `Clock` (the clock
+disabled without a day, masked `HH:MM`); the `Flashback` toggle (`.folio-status-tab`, warn); `⇅
+Same day as the previous scene`; the relative block (`Same day as E1 Sc 9, 22:15 → 06:40` / `1
+day after E1 Sc 9.` / `First scene in story time.` / `Flashback. Sits outside the day count.` /
+the finding's note on `--warn-bg`); **Threads** as chips with `×` and a `＋` menu (`folio-menu`,
+not a `<select>`); **In this scene** - the cast as pills into `/characters/:id` and the set into
+`/locations/:id` (rows carry `set` now: `scene_derivations.location_id` resolved through
+`readMentionLabels`, the read the loader already made); the foot: `Open in Script →` (the
+heading's `#n-<node id>`), the notice, `Cancel`, `Save`. The draft is initialised once and keyed
+on the scene id; `⇅` and `Clear` edit the draft and only `Save` writes; `Clear` keeps the flag.
+
+**Continuity** (`continuity.tsx`) - the lead ("None of these are errors on their own"), one card
+per `order` finding with the note, the scene it was compared with, `Open →` (the drawer, in story
+order) and `Open in Script →`; the flashback count at the foot; a quiet card at zero. The first
+pass's `Flashback` button on a card is gone - the flag is set in the drawer with the scene in
+view.
+
+**Empty state** (`empty-timeline.tsx`, the shared `EmptyCard`) - `Place N scenes` and `＋ By
+hand`, the caveat `Placing a scene never changes its page order.`; the false slugline line is
+gone. **Unplaced** - a `folio-banner` over the grid in both views (`7 scenes aren't placed in
+time yet · Place them · ✕`) and, under the chronology only, a dashed strip of the unplaced
+scenes' cards so one can be opened from there; in story order an unplaced scene is already in
+its episode's column with a dashed `no time` chip. **Status bar** - the shared one:
+`17 placed · 7 unplaced · 4 threads · 2 flashbacks` (` · E1 Sc 4` while selected), the toast,
+the saved dot, `/timeline`.
+
+**Read model** - `lib/timeline/view.ts`, pure and tested (`tests/timeline-view.test.ts`, 12
+tests): `gridOf` (rows, columns, cells, a scope), `threadFigures` and `episodeFigures` (moved
+off `server.ts`, where they were untested), `previousFrameScene`, `lastFrameDay` (the frame
+story's - flashback days sit outside it), `findingNote`, `relativeLine`, `countsOf`,
+`statusLeft`, `countChip`, `placedNote`, `matchesFind`, `shortSlug`, `chipOf`. `TimelineSceneRow`
+gained `eighths` and `set`; `StoryThreadRow` gained `lanes`; `TimelineEpisodeColumn` gained
+`days`. The repository selects `location_id` and `eighths` from joins it already made.
+
+**Writes** - `deleteStoryThread` is one CTE (unlink every scene, delete the row); `linkSceneThread`
+carries `exists (select 1 from story_threads where id = $1 and project_id = $tenant)` in the same
+statement, so an id from elsewhere is refused where the column's missing foreign key would have
+let it through; `placeUnplacedScenes` answers with the ids it placed and `unplaceScenes` is the
+undo over exactly those, only where they still carry that day and no clock. Every action
+revalidates `/app/project/:id/timeline`, not the project layout. `Place N scenes` counts from
+`lastFrameDay`, and the status bar offers `Undo` for eight seconds.
+
+### Judgement calls, flagged
+
+- **`Assume continuous` retired for a carry the writer can take back.** The plan's answer to the
+  authoritative-assumption trap is phase 2's proposal queue; until it exists the toolbar's
+  `Place N scenes` is the same one-day write with two differences - the day is the frame story's
+  last, not the last column's, and the write answers with its ids so `Undo` is exact. The
+  empty card's primary is the same button, on the `EmptyCard`'s accent slot because that is the
+  card's shape; phase 2's `✦` queue is the AI action the README means there.
+- **The strip is under the chronology, not story order.** The plan said the reverse; in story
+  order an unplaced scene is already in its episode's column, so a strip there would list every
+  card twice. Under the chronology it is the only place an unplaced scene can be opened.
+- **The cast are name pills, not `IdentityChip`s.** The chip needs the record's hue and the
+  timeline rows carry ids and names; reading `characters.color` for a pill is a second read for
+  a colour. The Characters link beside the section is the way to the faces.
+- **Flash-forward is copy, not a column** (plan item 5): the flag means "outside the frame
+  story" and phase 3's check derives the direction from the times.
+- **Selection is state, not a path** (plan item 8): `/timeline/:sceneId` would name a scene in a
+  URL and open decision 10 (`SCENE_xxx`) is exactly that question. The drawer opens by id in the
+  provider, so a reload opens with none.
+- **Anchors and events stay deferred** (plan item 7), as the 2026-09-12 brief left them.
+- **No `loading.tsx` / `error.tsx`.** The audit listed their absence; no route in the app has
+  either, and adding them to one route is a shell decision, not a Timeline one.
+- **The roving tabindex and the arrow keys** are phase 2's, with drag; phase 1 gives the grid
+  its roles and every mark its text.
+- **Locations' E2E row.** `e2e/workspace-routes.ts` had `title: 'Locations'` beside an empty
+  state whose toolbar (and `h1`) is not drawn; set to `null` with a note, since the Timeline row
+  needed the same reading and the walk would have failed there first.
+
+### Not built, by ruling or by absence
+
+- The proposal queue over the scene's own time cues, drag to place, the keyboard model (phase 2).
+- The seven further continuity rules, run-level `order`, `It's deliberate` and migration `0023`
+  (phase 3); `character_findings`' shape is the model.
+- Thread reorder, a scene's row as a choice, ghost cards for parallel action, thread × episode
+  presence, pages-per-day ruler, `Lanes by` character or location, Markdown export, `Read
+  chronologically` (phase 4).
+- The assistant's facts cell, Focus kind `scene`, reading story time and threads, and `✦ Suggest
+  placements` (phase 5; the last inherits open decision 13).
+- `scenes.story_time` and `scenes.beats` stay as dead columns: a column drop is asked for.
+- Membership, not role, on every action - unchanged and flagged again.
+
+### Verification
+
+`pnpm typecheck` (forced, 6 packages) and `pnpm lint` green. `tests/timeline-view.test.ts` (12),
+`tests/workspace-routes.test.ts` and `tests/shell-and-state.test.ts` pass on Node 22.23 (55
+tests). `e2e/timeline-route.spec.ts` rewritten (five tests: the shell and the empty state, placing
+and its undo with the tabs switching without the URL moving, a finding and the flashback flag, threads
+made / linked / solo'd / renamed / deleted with a half-typed day surviving a write, reload / scope /
+chronology); `e2e/workspace-routes.ts` and `workspace.spec.ts` updated for the card column, the
+three tabs and the stale `?view=`. The walk's result is in the pass report.
 
 ## Locations rebuild - the script's evidence first (2026-09-18)
 

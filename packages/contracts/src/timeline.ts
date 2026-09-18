@@ -1,11 +1,11 @@
-import type { CharacterId, NodeId, StoryTime } from '@folio/script'
+import type { CharacterId, ContinuityKind, HeadingBind, Light, LocationId, NodeId, StoryTime } from '@folio/script'
 import { STORY_CLOCK_PATTERN } from '@folio/script'
 import { z } from 'zod'
 
 import { assertExact } from './equality'
 import type { Equals } from './equality'
 import type { EpisodeSlug, StoryThreadId } from './ids'
-import { ProjectIdSchema, StoryThreadIdSchema } from './ids'
+import { NodeIdSchema, ProjectIdSchema, StoryThreadIdSchema } from './ids'
 import { TimestampSchema } from './primitives'
 
 /**
@@ -117,6 +117,28 @@ export const StoryTimeEditSchema = z
 
 export type StoryTimeEdit = z.infer<typeof StoryTimeEditSchema>
 
+/**
+ * One placement of the proposal queue's bulk accept, and of its undo: a
+ * scene and the story time it takes. `placeScenes` writes each only where
+ * the scene still has no day; `unplaceScenes` clears each only where the
+ * scene still carries exactly this time - a scene the writer retimed in
+ * between is theirs.
+ */
+export const PlacementSchema = z.object({
+  sceneNodeId: NodeIdSchema,
+  time: StoryTimeSchema,
+})
+
+export type Placement = z.infer<typeof PlacementSchema>
+
+export const PlacementsSchema = z.array(PlacementSchema).min(1).max(10_000)
+
+/** A scene's threads, whole, in the writer's order - the first is its row. */
+export const SceneThreadsSchema = z.array(StoryThreadIdSchema).max(64)
+
+/** The threads' row order, whole: every thread of the project, once. */
+export const ThreadOrderSchema = z.array(StoryThreadIdSchema).min(1).max(256)
+
 // ---------------------------------------------------------------------------
 // The read model
 // ---------------------------------------------------------------------------
@@ -136,16 +158,33 @@ export type TimelineSceneRow = {
   readonly synopsis: string | null
   /** Start page on the project's measurement, or null when unmeasured. */
   readonly page: number | null
+  /** Length in eighths on the same measurement, or null when unmeasured. */
+  readonly eighths: number | null
   readonly cast: readonly { readonly id: CharacterId; readonly name: string }[]
+  /** The set the heading resolved to (`scene_derivations.location_id`), with the record's name; null while unresolved. Since the rebuild (2026-09-18). */
+  readonly set: { readonly id: LocationId; readonly name: string } | null
   readonly storyTime: StoryTime | null
   readonly flashback: boolean
   /** The threads it runs through, in the writer's order. The first is its row. */
   readonly threads: readonly StoryThreadId[]
+  /** The heading's light, as `readSlugline` reads it - what `light-vs-clock` checks. */
+  readonly light: Light
+  /** What the page says about when: the heading's time of day and how it binds, and the first action line naming a time. Read at request time (`@folio/script`'s `time-cues.ts`), never stored. */
+  readonly cues: SceneCues | null
+}
+
+/** A scene's time cues as the route draws them - `SceneTimeCues` without the id and the light the row already carries. */
+export type SceneCues = {
+  readonly timeOfDay: string | null
+  readonly bind: HeadingBind
+  readonly action: { readonly nodeId: NodeId; readonly quote: string; readonly offsetDays: number | null } | null
 }
 
 /** A thread with what the grid needs beside it: how many present scenes it runs through. */
 export type StoryThreadRow = StoryThread & {
   readonly scenes: number
+  /** How many of those sit in its row - scenes whose first thread it is. The rest are `shared`. */
+  readonly lanes: number
   /** First and last episode ordinal it touches, or null with no scene. */
   readonly span: { readonly from: number; readonly to: number } | null
 }
@@ -159,4 +198,44 @@ export type TimelineEpisodeColumn = {
   readonly pages: number | null
   readonly scenes: number
   readonly placed: number
+  /** The frame story's first and last day in the episode, or null while nothing in it is placed. */
+  readonly days: { readonly from: number; readonly to: number } | null
 }
+
+// ---------------------------------------------------------------------------
+// Verdicts
+// ---------------------------------------------------------------------------
+
+/**
+ * The continuity check's kinds, as the `timeline_findings` enum spells them
+ * (`0023`). The check is `@folio/script`'s `continuity.ts`, pure and
+ * unstored; a row here is the writer's `It's deliberate` on one of its
+ * findings, keyed on the finding's stable `key`. Ruled 2026-09-18: the
+ * `character_findings` shape, a row only when the writer says deliberate.
+ */
+export const CONTINUITY_KINDS = [
+  'order',
+  'flashback',
+  'flashforward',
+  'same-day-unclocked',
+  'two-places',
+  'before-introduction',
+  'light-vs-clock',
+  'thread-silent',
+  'day-gap',
+] as const
+
+assertExact<Equals<(typeof CONTINUITY_KINDS)[number], ContinuityKind>>()
+
+export const ContinuityKindSchema = z.enum(CONTINUITY_KINDS)
+
+/** What marking a finding deliberate takes: the finding, as the check identified it. */
+export const FindingVerdictSchema = z.object({
+  kind: ContinuityKindSchema,
+  key: z.string().min(1).max(200),
+  aRef: NodeIdSchema,
+  bRef: NodeIdSchema.nullable(),
+  subject: z.string().max(80).nullable(),
+})
+
+export type FindingVerdict = z.infer<typeof FindingVerdictSchema>

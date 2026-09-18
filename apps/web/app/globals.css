@@ -1655,6 +1655,19 @@ html[data-nav-open='false'] [data-context-column] {
     opacity: 0.75;
   }
 
+  .folio-view-pill-badge {
+    display: grid;
+    place-items: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 5px;
+    background: var(--warn-bg);
+    font-size: var(--text-10);
+    font-weight: 600;
+    line-height: 1;
+    color: var(--warn);
+  }
   .folio-view-pill-tab[aria-current='page'] > .folio-view-pill-icon {
     opacity: 1;
   }
@@ -2725,7 +2738,8 @@ html[data-nav-open='false'] [data-context-column] {
     text-decoration: none;
   }
 
-  .folio-record-row[aria-current='page'] {
+  .folio-record-row[aria-current='page'],
+  .folio-record-row[aria-pressed='true'] {
     background: var(--s2);
     color: var(--ink);
   }
@@ -3495,5 +3509,237 @@ html[data-nav-open='false'] [data-context-column] {
     color: var(--paper-ink2);
     font-size: var(--text-13);
     line-height: 1.55;
+  }
+}
+
+/*
+ * The Timeline route - the rebuild (2026-09-18, the written plan is the
+ * spec; `Route - Timeline v2.dc.html` is retired for this route). The
+ * lanes grid: threads down, episodes or story days across, one card per
+ * scene in its first thread's row.
+ *
+ *   .folio-lanes          the grid: `168px` for the row heads, then one
+ *                         `minmax(196px, 1fr)` column per episode or day,
+ *                         10px gaps; wide enough to scroll inside the surface.
+ *   .folio-lane-head      the sticky column-header row's cells and the
+ *                         sticky row heads, both on the surface's own
+ *                         colour (`--s1` over `--bg`) so the cards pass
+ *                         under them.
+ *   .folio-lane-column    one column's card: `9px 12px`, a 10px radius on
+ *                         `--line2`; `data-flashback` tints it `--warn-bg`
+ *                         and its name `--warn`.
+ *   .folio-lane-cell      one cell: `--warn-bg` under a flashback column.
+ *   .folio-lane-row       one thread's row: `8px 0` over a `--line2`
+ *                         hairline; `data-dimmed` while another thread is
+ *                         solo.
+ *   .folio-lane-card      a scene: `--s1` on `--line2`, a 9px radius, its
+ *                         thread's colour as a 3px bar down the left
+ *                         (`--lane-colour`, set inline from the thread's
+ *                         token); `--line` on hover, `--accent` while it
+ *                         is the drawer's.
+ *   .folio-lane-chip      the card's mono chip: `data-tone='warn'` for a
+ *                         flashback, `data-dashed` for `no time`.
+ *   .folio-lane-ruler     a day column's share of the fullest day's pages,
+ *                         a 3px bar in the column head (phase 4).
+ *   [data-scene-ghost]    the same scene in a further thread's row: dashed,
+ *                         `--ink3` (phase 4).
+ *   [data-drop-target]    a cell or the strip while a card is over it:
+ *                         `--accent-bg` and an accent hairline (phase 2).
+ *   [data-thread-drop]    a sidebar thread row while another is dragged
+ *                         over it: an accent hairline above.
+ */
+@layer components {
+  .folio-lanes {
+    display: grid;
+    align-content: start;
+    column-gap: 10px;
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .folio-lane-head {
+    position: sticky;
+    z-index: 3;
+    /* The surface's own colour, opaque: `--s1` composited over `--bg`, so the cards pass under the heads without a darker (or lighter) block showing. */
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--s1), var(--s1));
+  }
+
+  .folio-lane-head[data-axis='column'] {
+    top: 0;
+    padding: 0 0 8px;
+  }
+
+  .folio-lane-head[data-axis='row'] {
+    left: 0;
+    z-index: 2;
+    padding-right: 12px;
+  }
+
+  .folio-lane-head[data-axis='corner'] {
+    top: 0;
+    left: 0;
+    z-index: 4;
+  }
+
+  .folio-lane-column {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 9px 12px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 10px;
+  }
+
+  .folio-lane-column[data-flashback='true'] {
+    background: var(--warn-bg);
+    border-color: transparent;
+  }
+
+  .folio-lane-column[data-flashback='true'] > [data-column-name] {
+    color: var(--warn);
+  }
+
+  .folio-lane-row {
+    display: contents;
+  }
+
+  .folio-lane-row > * {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-top: 1px solid var(--line2);
+  }
+
+  .folio-lane-row[data-dimmed='true'] > * {
+    opacity: 0.4;
+  }
+
+  .folio-lane-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    min-height: 56px;
+    padding: 2px;
+    border-radius: 10px;
+  }
+
+  .folio-lane-cell[data-flashback='true'] {
+    background: var(--warn-bg);
+  }
+
+  .folio-lane-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    padding: 8px 10px 8px 13px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 9px;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    overflow: hidden;
+    transition:
+      border-color 0.14s,
+      background-color 0.14s;
+  }
+
+  .folio-lane-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--lane-colour, var(--line));
+  }
+
+  .folio-lane-card:hover {
+    border-color: var(--line);
+  }
+
+  .folio-lane-card[aria-pressed='true'] {
+    background: var(--accent-bg);
+    border-color: var(--accent);
+  }
+
+  .folio-lane-card:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+
+  .folio-lane-chip {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid var(--line2);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: var(--text-10);
+    line-height: 1.5;
+    color: var(--ink2);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .folio-lane-chip[data-tone='warn'] {
+    border-color: transparent;
+    background: var(--warn-bg);
+    color: var(--warn);
+  }
+
+  .folio-lane-chip[data-dashed='true'] {
+    border-style: dashed;
+    border-color: var(--line);
+    color: var(--ink3);
+  }
+
+  .folio-lane-ruler {
+    display: block;
+    height: 3px;
+    margin-top: 4px;
+    border-radius: 2px;
+    background: var(--line2);
+    overflow: hidden;
+  }
+
+  .folio-lane-ruler > span {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--ink3);
+  }
+
+  .folio-lane-card[data-scene-ghost] {
+    border-style: dashed;
+    background: transparent;
+  }
+
+  .folio-lane-card[data-scene-ghost]::before {
+    opacity: 0.5;
+  }
+
+  .folio-lane-card[data-scene-ghost] > * {
+    opacity: 0.7;
+  }
+
+  .folio-lane-cell[data-drop-target='over'],
+  .folio-lane-strip[data-drop-target='over'] {
+    background: var(--accent-bg);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    border-radius: 10px;
+  }
+
+  [data-thread-drop='over'] {
+    box-shadow: inset 0 1px 0 0 var(--accent);
+  }
+
+  [data-thread-dragging='true'] {
+    opacity: 0.5;
   }
 }

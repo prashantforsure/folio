@@ -31,7 +31,16 @@ import { CONTEXT_CHAR_CAP } from './model'
  *
  * On `/characters` with a record open the system prompt ends with a Focus
  * block - the record as the drawer shows it - so "what does she want" has
- * a "she". Volatile, so it is its own block after the cacheable prefix.
+ * a "she"; on `/locations` the place, on `/timeline` the scene in the
+ * drawer with its story time and findings. Volatile, so it is its own
+ * block after the cacheable prefix.
+ *
+ * ## Story time, on the Timeline
+ *
+ * On `/timeline` (the rebuild, phase 5) the system block carries every
+ * scene's story time, flag and threads, and the check's open findings, so
+ * "where does the love thread stall" and "why is E1 Sc 14 flagged" are
+ * answered from what the route knows rather than guessed from the page.
  *
  * ## Read-only, and said so
  *
@@ -54,7 +63,7 @@ export type AssistantContext = {
 
 const INSTRUCTIONS = `You are the writing assistant inside Folio, a screenwriting workspace. You are talking to the writer of the screenplay below.
 
-What you can do: read the script, the cast list and (on the Locations route) the location records, answer questions about them, point out continuity gaps, suggest lines, beats, scenes, character or location notes, and talk through the draft.
+What you can do: read the script, the cast list, (on the Locations route) the location records and (on the Timeline route) each scene's story time, its threads and the continuity findings, answer questions about them, point out continuity gaps, suggest lines, beats, scenes, character or location notes, and talk through the draft.
 
 What you cannot do: change the script. You have no way to edit it. When you suggest a change, write it out plainly so the writer can put it in themselves; do not claim to have made it.
 
@@ -318,11 +327,59 @@ const locationFocusBlock = (focus: LocationFocusInput): string =>
     `When the writer asks you to describe ${focus.name}, answer from the action lines under its headings, one or two sentences they can paste into the description, each citing the scene it comes from. You cannot write into the record yourself.`,
   ].join('\n')
 
+/**
+ * The Timeline drawer's scene as the Focus block reads it (the Timeline
+ * rebuild, phase 5): where it is, when the writer placed it, what the page
+ * says about when, and what the check found.
+ */
+export type SceneFocusInput = {
+  readonly kind: 'scene'
+  /** `E1 Sc 14`. */
+  readonly ref: string
+  readonly heading: string
+  readonly synopsis: string | null
+  /** `Day 2 · 06:40`, or `not placed`. */
+  readonly storyTime: string
+  readonly flashback: boolean
+  readonly threads: readonly string[]
+  /** The frame-story scene before it on the page and its time, or null. */
+  readonly previous: string | null
+  /** What the page says: the heading's time of day, the cue line. */
+  readonly cues: readonly string[]
+  readonly findings: readonly string[]
+}
+
+/** One scene as the Timeline route's system block lists it. */
+export type StoryTimeInput = {
+  readonly ref: string
+  readonly heading: string
+  /** `Day 2 · 06:40`, or null unplaced. */
+  readonly storyTime: string | null
+  readonly flashback: boolean
+  readonly threads: readonly string[]
+}
+
+const sceneFocusBlock = (focus: SceneFocusInput): string =>
+  [
+    `Focus: the writer has ${focus.ref} open in the Timeline's Place in time drawer.`,
+    `Scene: ${focus.ref} ${focus.heading}`,
+    `Synopsis: ${written(focus.synopsis)}`,
+    `Story time: ${focus.storyTime}${focus.flashback ? ' · flagged as a flashback' : ''}`,
+    `Threads: ${focus.threads.length === 0 ? 'none' : focus.threads.join(', ')}`,
+    `Frame-story scene before it on the page: ${focus.previous ?? 'none placed'}`,
+    `What the page says about when: ${focus.cues.length === 0 ? 'nothing' : focus.cues.join('; ')}`,
+    `Continuity findings on it: ${focus.findings.length === 0 ? 'none' : focus.findings.join(' | ')}`,
+    '',
+    `When the writer asks where this scene belongs in time, answer from the page's own cues and the scenes around it, and say which line you read it from. You cannot place it yourself; the writer types the day.`,
+  ].join('\n')
+
 /** The Focus block: the open record as the drawer shows it, and what a draft for it should be. */
-export const focusBlock = (focus: FocusInput | LocationFocusInput): string =>
+export const focusBlock = (focus: FocusInput | LocationFocusInput | SceneFocusInput): string =>
   'kind' in focus && focus.kind === 'location'
     ? locationFocusBlock(focus)
-    : [
+    : 'kind' in focus && focus.kind === 'scene'
+      ? sceneFocusBlock(focus)
+      : [
     `Focus: the writer has ${focus.name}'s record open on the Characters route.`,
     `Name: ${focus.name}`,
     `In the script as: ${focus.cues.length === 0 ? 'no spelling bound yet' : focus.cues.join(', ')}`,
@@ -350,6 +407,7 @@ export const buildContext = ({
   labels,
   cast,
   places,
+  timeline,
   focus,
 }: {
   readonly projectTitle: string
@@ -359,7 +417,9 @@ export const buildContext = ({
   readonly cast: readonly { readonly name: string; readonly line: string | null }[]
   /** The location records, on the Locations route only (ruled 2026-09-18); absent elsewhere. */
   readonly places?: readonly PlaceInput[]
-  readonly focus?: FocusInput | LocationFocusInput
+  /** Every scene's story time and threads, and the open findings, on the Timeline route only; absent elsewhere. */
+  readonly timeline?: { readonly scenes: readonly StoryTimeInput[]; readonly findings: readonly string[] }
+  readonly focus?: FocusInput | LocationFocusInput | SceneFocusInput
 }): AssistantContext => {
   const castLines =
     cast.length === 0
@@ -381,13 +441,32 @@ export const buildContext = ({
                 .join('\n'),
         ]
 
+  const timelineLines =
+    timeline === undefined
+      ? []
+      : [
+          '',
+          'Story time (what the writer placed each scene at; "unplaced" means no day yet; a flashback sits outside the frame story):',
+          timeline.scenes.length === 0
+            ? 'No scenes yet.'
+            : timeline.scenes
+                .map(
+                  (scene) =>
+                    `- ${scene.ref} ${scene.heading}: ${scene.storyTime ?? 'unplaced'}${scene.flashback ? ' · flashback' : ''}${scene.threads.length === 0 ? '' : ` · threads: ${scene.threads.join(', ')}`}`,
+                )
+                .join('\n'),
+          '',
+          'Continuity findings (the check over story time and the page; flags, not errors):',
+          timeline.findings.length === 0 ? 'None open.' : timeline.findings.map((line) => `- ${line}`).join('\n'),
+        ]
+
   if (script.kind === 'episode') {
     const rendered = renderScript(script.nodes, labels)
     const scriptBlock =
       script.nodes.length === 0
         ? 'The script is empty. Nothing has been written yet.'
         : `${rendered.text}${rendered.truncated ? '\n\n[The script continues; it was cut here to fit. Say so if the writer asks about a later scene.]' : ''}`
-    const system = [INSTRUCTIONS, '', `Project: ${projectTitle}`, `Episode: ${script.episodeTitle}`, '', 'Cast:', castLines, ...placeLines, '', 'Script:', scriptBlock].join('\n')
+    const system = [INSTRUCTIONS, '', `Project: ${projectTitle}`, `Episode: ${script.episodeTitle}`, '', 'Cast:', castLines, ...placeLines, ...timelineLines, '', 'Script:', scriptBlock].join('\n')
     return { system, focus: focus === undefined ? null : focusBlock(focus), truncated: rendered.truncated, cut: [] }
   }
 
@@ -403,6 +482,7 @@ export const buildContext = ({
     'Cast:',
     castLines,
     ...placeLines,
+    ...timelineLines,
     '',
     'Script:',
     scriptBlock,

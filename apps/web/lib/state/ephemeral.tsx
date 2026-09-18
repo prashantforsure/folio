@@ -61,6 +61,8 @@ export type AssistantFocus =
   | { readonly kind: 'character'; readonly id: string; readonly name: string }
   /** The Locations drawer's record (the Locations rebuild, 2026-09-18); the panel sends it on `/locations`. */
   | { readonly kind: 'location'; readonly id: string; readonly name: string }
+  /** The Timeline drawer's scene (the Timeline rebuild, phase 5); `name` is its ref. The panel sends it on `/timeline`. */
+  | { readonly kind: 'scene'; readonly id: string; readonly name: string }
 
 type EphemeralValue = {
   readonly paletteOpen: boolean

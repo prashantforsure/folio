@@ -26,8 +26,8 @@ import { SharePopover } from './share-popover'
  * The header. 60px - `docs/ui design/README.md`, "Header": "Breadcrumb on
  * the left, `Share` and the assistant orb on the right." Every rebuilt
  * route's layout renders it: the writing layout for the four writing
- * routes, and Production's, Characters', Locations' and Research's for
- * themselves. Timeline, still on its pre-redesign chrome, does not yet.
+ * routes, and Production's, Characters', Locations', Research's and the
+ * Timeline's for themselves.
  *
  * Left: `Project / Episode ▾`. The episode is a menu of the project's
  * episodes, each a link to the same route on that episode, with `Rename

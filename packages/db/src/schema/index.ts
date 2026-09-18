@@ -32,6 +32,8 @@
  *   location_bound_sluglines
  *   scenes                       synopsis, story time (day, clock, flashback), beat links (opaque), thread links
  *   story_threads                a named, coloured storyline; the scenes it runs through are `scenes.threads`
+ *   timeline_findings            the writer's `It's deliberate` on a continuity finding (0023) - the check is
+ *                                pure and unstored; a row is the one thing it cannot compute
  *   resolve_decisions            authored input, never derived output
  *   credit_ledger                append-only
  *   shots                        a scene does not say how it is shot - keyed by the heading node's id

@@ -1,6 +1,6 @@
-import { STORY_THREAD_COLOURS } from '@folio/contracts'
+import { CONTINUITY_KINDS, STORY_THREAD_COLOURS } from '@folio/contracts'
 import { sql } from 'drizzle-orm'
-import { check, index, integer, pgEnum, pgTable, text } from 'drizzle-orm/pg-core'
+import { check, index, integer, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 import { createdAtColumn, idColumn, projectIdColumn, updatedAtColumn } from './columns'
 import { projects } from './tenancy'
@@ -50,5 +50,49 @@ export const storyThreads = pgTable(
     index('story_threads_project_position_idx').on(table.projectId, table.position),
     check('story_threads_name_not_empty', sql`length(btrim(${table.name})) > 0`),
     check('story_threads_position_not_negative', sql`${table.position} >= 0`),
+  ],
+)
+
+/**
+ * The writer's verdict on a continuity finding. AUTHORED (`0023`, the
+ * Timeline rebuild's phase 3).
+ *
+ * The check itself is `@folio/script`'s `continuity.ts` - eight pure rules
+ * over the story time the writer typed and what the page says, run on
+ * every read and stored nowhere. What *is* stored is the one thing a
+ * function of the node list cannot know: that the writer looked at a
+ * finding and said `It's deliberate`. A row here is that answer, keyed on
+ * the finding's stable `key` (`kind:scene:other:subject`, the check's
+ * own), so it survives every re-read and every re-derive; `Reopen` deletes
+ * it. Ruled 2026-09-18: the `character_findings` shape - the kind, the two
+ * heading node ids with no key (`shots.scene_node_id`'s convention: a scene
+ * that leaves the script leaves its verdict unmatched, and unmatched is
+ * invisible) and the subject (a character or thread id) beside the key,
+ * so a row reads as what it is about. One column fewer than that shape:
+ * no `status`, because a row *is* the verdict - the only status a row
+ * could have is `deliberate`, and a column with one value is a column.
+ */
+export const continuityKindEnum = pgEnum('timeline_finding_kind', CONTINUITY_KINDS)
+
+export const timelineFindings = pgTable(
+  'timeline_findings',
+  {
+    id: idColumn(),
+    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
+    kind: continuityKindEnum('kind').notNull(),
+    /** The check's stable key for the finding; what the route matches on. */
+    key: text('key').notNull(),
+    /** The scene the finding is about. Heading node id, no key. */
+    aRef: uuid('a_ref').notNull(),
+    /** The scene it was measured against, when there is one. */
+    bRef: uuid('b_ref'),
+    /** A character or thread id, for the kinds about one. Text: the two id spaces share this column. */
+    subject: text('subject'),
+    createdAt: createdAtColumn(),
+  },
+  (table) => [
+    index('timeline_findings_project_idx').on(table.projectId),
+    uniqueIndex('timeline_findings_key').on(table.projectId, table.key),
+    check('timeline_findings_key_not_empty', sql`length(btrim(${table.key})) > 0`),
   ],
 )

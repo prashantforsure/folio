@@ -160,22 +160,16 @@ export const EPISODE_NAV = SIDEBAR
 
 /**
  * README, "Shell": rail 56px, sidebar 236px, header 60px, panels 400px,
- * status bar 28px. The context column an unrebuilt route still draws keeps
- * its earlier width until that route's own pass - Timeline's, now; Production,
- * Characters, Locations and Research have had theirs and draw the sidebar card.
+ * status bar 28px. Every route draws the sidebar card since the Timeline's
+ * rebuild (2026-09-18) retired the last pre-redesign context column.
  */
 export const RAIL_WIDTH = 56
 export const SIDEBAR_WIDTH = 236
 export const HEADER_HEIGHT = 60
 export const PANEL_WIDTH = 400
-export const CONTEXT_OVERLAY_WIDTH = 330
 
 /** @deprecated the sidebar replaced the episode nav; same number since the redesign. */
 export const EPISODE_NAV_WIDTH = SIDEBAR_WIDTH
-
-export const CONTEXT_PANEL_WIDTH: Record<Exclude<WorkspaceRoute, WritingRoute | 'production' | 'characters' | 'locations' | 'research'>, number> = {
-  timeline: 250,
-}
 
 /**
  * README, "Breakpoints": panels are in flow at 1200 and above, the sidebar
