@@ -1,59 +1,71 @@
 'use client'
 
-import type { ProjectId, ResolveItem } from '@folio/contracts'
+import type { ProjectId, ResolveItem, SceneFacts } from '@folio/contracts'
 import { CHARACTER_STATUS_LABELS, PORTRAIT_TYPES } from '@folio/contracts'
-import { EpisodeBars } from '@folio/ui'
-import { useRouter } from 'next/navigation'
+import { EpisodeBars, PresenceStrip } from '@folio/ui'
+import Link from 'next/link'
 import { useState } from 'react'
 
 import { resolveCue, uploadPortrait } from '../../../../../../lib/characters/actions'
 import type { CastFigure } from '../../../../../../lib/characters/cast'
-import { sceneLabel, statusTone } from '../../../../../../lib/characters/cast'
-import { formatSceneRef } from '../../../../../../lib/characters/figures'
+import { cueLine, fitsStrip, statusTone, stripGroups } from '../../../../../../lib/characters/cast'
+import { citeOf } from '../../../../../../lib/characters/figures'
+import { count } from '../../../../../../lib/workspace/format'
+import type { WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
 import { characterHref } from '../../../../../../lib/workspace/hrefs'
 import { CitationChips } from '../_chrome/citation-chips'
 import { ConflictBlock } from '../_chrome/conflict-block'
-import type { Run } from './characters-workspace'
+import type { Run } from '../_chrome/use-run'
+import type { QueueDecision } from './unmatched-queue'
 
 /**
- * One character, as `Route - Characters v2.dc.html` draws the card: a
- * `--s1` card at a 14px radius, the 4:5 face on `--sunk` - the portrait
- * with a scrim and the name in white over its foot, or the dashed inset
- * with the 42px/200 initial, `Drop a reference` and the name on `--bg` -
- * the status badge top right; then the description (12.5px, three lines),
- * and the foot: `79 scenes` in mono beside the episode bars (`@folio/ui`'s
- * `EpisodeBars`, `E1 28 · E2 24 · E3 27` in its title).
+ * One character, content first (the rebuild, 2026-09-18): the name over
+ * the role with a 6px status dot and, with a portrait, a 28px thumbnail;
+ * the alias line (`MEERA 79 · MEERA (V.O.) 3 · YOUNG MEERA 2`, three chips
+ * and `+ N more`); the quote slot - the description, else the first line
+ * the character speaks in quotes with its scene, else the introducing
+ * action line under a `from the script` eyebrow, else `No description
+ * yet.`; a conflict block when an open cue proposes this record; the
+ * presence strip (or episode bars past `STRIP_LIMIT.card` scenes); and the
+ * foot: `52 speaks · 27 mentioned · 412 lines` with the span as linked
+ * chips. About 170px tall. The 4:5 face went with the mockup.
  *
- * The card is a link to `/characters/:id`, the drawer. `aria-current`
- * while that record is the drawer's: the border is `--line`. A conflict -
- * an open cue proposing this record - turns the border `--warn` and draws
- * the README's amber block under the description with `It's <name>` /
- * `It's deliberate` (`_chrome/conflict-block.tsx`).
- *
- * `Drop a reference` is real: a file dropped on the face uploads as the
- * portrait, through `uploadPortrait`, with storage configured; without it
- * the hint is not drawn and nothing accepts a drop.
+ * The whole card is one link (`.folio-record-link`, stretched), so a
+ * middle-click, a ctrl-click and Space are the browser's; the conflict
+ * block's buttons and the chips sit above it (`data-raised`) and act on
+ * their own. A dropped image on the card uploads as the portrait when
+ * storage is configured (`data-over` draws the dashed outline).
  */
+const CUES_SHOWN = 3
+
 export const CharacterCard = ({
   projectId,
+  shape,
   figure,
+  index,
   selected,
   storage,
   run,
+  onDecided,
 }: {
   readonly projectId: ProjectId
+  readonly shape: WorkspaceShape
   readonly figure: CastFigure
+  readonly index: readonly SceneFacts[]
   readonly selected: boolean
   readonly storage: boolean
   readonly run: Run
+  /** A conflict block's decision, for the status bar's toast and its undo. */
+  readonly onDecided: (item: ResolveItem, decision: QueueDecision) => void
 }) => {
-  const router = useRouter()
   const [over, setOver] = useState(false)
   const [busy, setBusy] = useState(false)
   const href = characterHref(projectId, figure.id)
-  const portrait = figure.portraitUrl
   const conflict = figure.conflicts[0]
-  const tone = statusTone(figure.status)
+  const cues = cueLine(figure.cues)
+  const shownCues = cues.slice(0, CUES_SHOWN)
+  const first = figure.first === null ? null : citeOf(projectId, shape, figure.first)
+  const last = figure.last === null ? null : citeOf(projectId, shape, figure.last)
 
   const upload = (file: File): void => {
     if (!PORTRAIT_TYPES.includes(file.type as (typeof PORTRAIT_TYPES)[number])) return
@@ -70,9 +82,36 @@ export const CharacterCard = ({
     run(async () => {
       const result = await resolveCue(projectId, item.key, choice)
       setBusy(false)
-      return result.status === 'resolved' ? null : result.message
+      if (result.status !== 'resolved') return result.message
+      onDecided(
+        item,
+        choice.kind === 'proposal' ? { kind: 'bound', id: figure.id, name: figure.name } : { kind: 'not-this', id: figure.id, name: figure.name },
+      )
+      return null
     })
   }
+
+  const quote =
+    figure.bio !== null ? (
+      <p className="m-0 line-clamp-2 text-12-5 leading-[1.5] text-ink2" style={{ textWrap: 'pretty' }} data-card-line data-card-quote-kind="bio">
+        {figure.bio}
+      </p>
+    ) : figure.quote !== null ? (
+      <p className="m-0 line-clamp-2 text-12-5 leading-[1.5] text-ink2" style={{ textWrap: 'pretty' }} data-card-line data-card-quote-kind="line">
+        “{figure.quote.text}”
+      </p>
+    ) : figure.intro !== null ? (
+      <div className="flex flex-col gap-[3px]" data-card-line data-card-quote-kind="intro">
+        <span className="folio-eyebrow">from the script</span>
+        <p className="m-0 line-clamp-2 text-12-5 leading-[1.5] text-ink2" style={{ textWrap: 'pretty' }}>
+          {figure.intro.text}
+        </p>
+      </div>
+    ) : (
+      <p className="m-0 text-12-5 leading-[1.5] text-ink3" data-card-line data-card-quote-kind="none">
+        No description yet.
+      </p>
+    )
 
   return (
     <article
@@ -80,94 +119,71 @@ export const CharacterCard = ({
       data-status={figure.status}
       data-group={figure.group}
       data-conflict={conflict === undefined ? 'false' : 'true'}
+      data-over={over ? 'true' : 'false'}
       aria-current={selected ? 'true' : undefined}
-      className="folio-cast-card"
-      onClick={() => {
-        router.push(href)
+      className="folio-record-card"
+      onDragOver={(event) => {
+        if (!storage) return
+        event.preventDefault()
+        setOver(true)
       }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') router.push(href)
+      onDragLeave={(event) => {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+        setOver(false)
       }}
-      role="link"
-      tabIndex={0}
-      aria-label={`Edit ${figure.name}`}
+      onDrop={(event) => {
+        if (!storage) return
+        event.preventDefault()
+        setOver(false)
+        const file = event.dataTransfer.files[0]
+        if (file !== undefined) upload(file)
+      }}
     >
-      <div
-        data-card-face
-        data-has-portrait={portrait === null ? 'false' : 'true'}
-        className="relative flex flex-none items-center justify-center overflow-hidden bg-sunk"
-        style={{ aspectRatio: '4 / 5' }}
-        onDragOver={(event) => {
-          if (!storage) return
-          event.preventDefault()
-          setOver(true)
-        }}
-        onDragLeave={() => {
-          setOver(false)
-        }}
-        onDrop={(event) => {
-          if (!storage) return
-          event.preventDefault()
-          setOver(false)
-          const file = event.dataTransfer.files[0]
-          if (file !== undefined) upload(file)
-        }}
-      >
-        {portrait === null ? (
-          <span
-            aria-hidden="true"
-            className="absolute inset-[10px] rounded-[9px] border border-dashed"
-            style={{ borderColor: over ? 'var(--accent)' : 'var(--line)' }}
-          />
-        ) : (
-          <img src={portrait} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      <div className="flex items-center gap-[10px]">
+        {figure.portraitUrl === null ? null : (
+          <span className="relative h-[28px] w-[28px] flex-none overflow-hidden rounded-[7px] bg-sunk" data-card-portrait>
+            <img src={figure.portraitUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          </span>
         )}
-        {portrait === null ? (
-          <span className="relative flex flex-col items-center gap-[7px] pb-[22px]">
-            <span className="text-[42px] font-extralight leading-none tracking-[-.03em] text-ink3">{figure.initial}</span>
-            {storage ? <span className="text-11 text-ink3">Drop a reference</span> : null}
-          </span>
-        ) : null}
-        <span className="folio-cast-badge folio-tone-ink" data-tone={tone} data-card-status>
-          {CHARACTER_STATUS_LABELS[figure.status]}
-        </span>
         <span
-          className="absolute inset-x-0 bottom-0 flex flex-col gap-[2px]"
-          style={
-            portrait === null
-              ? { padding: '9px 12px 10px', background: 'var(--bg)' }
-              : {
-                  padding: '28px 12px 11px',
-                  background: 'linear-gradient(to bottom, transparent, var(--cast-scrim-mid) 38%, var(--cast-scrim-end))',
-                }
-          }
-        >
-          <span
-            className="truncate text-15 font-medium tracking-title"
-            style={{ color: portrait === null ? 'var(--ink)' : 'var(--cast-face-name)' }}
-            data-card-name
-          >
+          className="folio-tone-fill h-[6px] w-[6px] flex-none rounded-full"
+          data-tone={statusTone(figure.status)}
+          data-card-status={figure.status}
+          title={CHARACTER_STATUS_LABELS[figure.status]}
+        />
+        <span className="flex min-w-0 flex-1 flex-col gap-[1px]">
+          <Link href={href} className="folio-record-link truncate text-14-5 font-medium tracking-title" data-card-link data-card-name>
             {figure.name}
-          </span>
-          <span className="truncate text-11" style={{ color: portrait === null ? 'var(--ink3)' : 'var(--cast-face-sub)' }}>
-            {figure.role ?? 'No role yet'}
-          </span>
+          </Link>
+          <span className="truncate text-11 text-ink3">{figure.role ?? 'No role yet'}</span>
         </span>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-[11px] p-[12px]">
-        <p
-          className={`m-0 line-clamp-3 text-12-5 leading-[1.5] ${figure.bio === null ? 'text-ink3' : 'text-ink2'}`}
-          style={{ textWrap: 'pretty' }}
-          data-card-line
-        >
-          {figure.bio ?? 'No description yet.'}
-        </p>
-        {conflict === undefined ? null : (
+      {cues.length === 0 ? (
+        figure.presence === 'absent' ? (
+          <span className="text-11 text-ink3" data-card-cues="none">
+            Not on the page yet
+          </span>
+        ) : null
+      ) : (
+        <span className="flex flex-wrap items-center gap-[4px]" data-card-cues={cues.length} title={cues.join(' · ')}>
+          {shownCues.map((cue) => (
+            <span key={cue} className="folio-cite">
+              {cue}
+            </span>
+          ))}
+          {cues.length > CUES_SHOWN ? <span className="tabular text-10-5 text-ink3">+ {cues.length - CUES_SHOWN} more</span> : null}
+        </span>
+      )}
+
+      {quote}
+
+      {conflict === undefined ? null : (
+        <div data-raised>
           <ConflictBlock
-            title={`${conflict.cue} in the script reads like ${figure.short}.`}
-            detail={`${String(conflict.occurrences)} ${conflict.occurrences === 1 ? 'cue' : 'cues'} under that spelling point at no record. Binding it makes them ${figure.short}'s; the script is not changed.`}
-            accept={`It's ${figure.short}`}
+            title={`${conflict.cue} in the script reads like ${figure.name}.`}
+            detail={`${String(conflict.occurrences)} ${conflict.occurrences === 1 ? 'cue' : 'cues'} under that spelling point at no record. Binding it makes them ${figure.name}'s; the script is not changed.`}
+            accept={`It's ${figure.name}`}
             busy={busy}
             onAccept={() => {
               decide(conflict, { kind: 'proposal' })
@@ -176,20 +192,39 @@ export const CharacterCard = ({
               decide(conflict, { kind: 'not-this', id: figure.id })
             }}
           >
-            <CitationChips refs={conflict.scenes.map(formatSceneRef)} className="mt-[4px]" />
+            <CitationChips refs={conflict.scenes.map((ref) => citeOf(projectId, shape, ref))} className="mt-[4px]" />
             {figure.conflicts.length > 1 ? (
               <span className="tabular mt-[4px] text-11 text-ink3" data-conflicts-more={figure.conflicts.length - 1}>
                 + {figure.conflicts.length - 1} more in the queue
               </span>
             ) : null}
           </ConflictBlock>
-        )}
-        <div className="mt-auto flex items-center gap-[10px]">
-          <span className={`tabular min-w-0 flex-1 font-mono text-10-5 text-ink3`} data-card-scenes>
-            {sceneLabel(figure.appearances)}
-          </span>
-          <EpisodeBars counts={figure.perEpisode} />
         </div>
+      )}
+
+      {figure.presence === 'present' ? (
+        fitsStrip('card', index.length) ? (
+          <PresenceStrip groups={stripGroups(figure.strip, index)} size="card" />
+        ) : (
+          <EpisodeBars counts={figure.perEpisode} />
+        )
+      ) : null}
+
+      <div className="mt-auto flex flex-wrap items-center gap-x-[8px] gap-y-[4px]" data-raised>
+        <span className="tabular min-w-0 flex-1 font-mono text-10-5 text-ink3" data-card-scenes={figure.appearances}>
+          {count(figure.speaks)} speaks · {count(figure.mentionedIn)} mentioned · {count(figure.lines)} {figure.lines === 1 ? 'line' : 'lines'}
+        </span>
+        {first === null || last === null ? null : (
+          <span className="flex items-center gap-[4px]" data-card-span>
+            <Link href={first.href} data-cite-link className="folio-cite no-underline hover:border-accent hover:text-accent hover:no-underline">
+              {first.label}
+            </Link>
+            <span className="text-10-5 text-ink3">→</span>
+            <Link href={last.href} data-cite-link className="folio-cite no-underline hover:border-accent hover:text-accent hover:no-underline">
+              {last.label}
+            </Link>
+          </span>
+        )}
       </div>
     </article>
   )

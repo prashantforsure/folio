@@ -169,11 +169,11 @@ export const SceneWorkspace = ({
       )}
 
       {view === 'cards' ? (
-        <SceneCanvas scenes={scenes} synopsisOf={synopsisOf} selected={selected} productionHref={productionHref} onSelect={select} onEdit={edit} onRead={read} />
+        <SceneCanvas projectId={projectId} scenes={scenes} synopsisOf={synopsisOf} selected={selected} productionHref={productionHref} onSelect={select} onEdit={edit} onRead={read} />
       ) : view === 'index' ? (
-        <IndexView scenes={scenes} synopsisOf={synopsisOf} selected={selected} onOpen={edit} />
+        <IndexView projectId={projectId} scenes={scenes} synopsisOf={synopsisOf} selected={selected} onOpen={edit} />
       ) : (
-        <ListView scenes={scenes} synopsisOf={synopsisOf} selected={selected} onOpen={edit} />
+        <ListView projectId={projectId} scenes={scenes} synopsisOf={synopsisOf} selected={selected} onOpen={edit} />
       )}
 
       {editing === null || editingCard === null ? null : (

@@ -1,14 +1,16 @@
-import type { LocationKind, LocationRow, LocationStatus, SceneRef } from '@folio/contracts'
+import type { LocationKind, LocationRow, LocationSceneRow, LocationStatus, SceneRef } from '@folio/contracts'
 import { LOCATION_STATUS_LABELS } from '@folio/contracts'
-import type { InteriorExterior, LocationId } from '@folio/script'
+import type { InteriorExterior, LocationId, Quadrant } from '@folio/script'
+import type { PresenceGroup } from '@folio/ui'
 
 import { eighths } from '../workspace/format'
 
 /**
- * The derived fields the v2 Locations route prints, each a pure function
- * over the rows the loader joins - `docs/ui design/Route - Locations
- * v2.dc.html`'s `data()` read for the shape the UI needs, then computed
- * from the real tables rather than authored. Tested in
+ * The derived fields the Locations route prints, each a pure function over
+ * the rows the loader joins - first read off the v2 mockup's `data()`, then
+ * (the rebuild, 2026-09-18 - the plan is the spec) the lines the writer
+ * and the filmmaker actually read: the quadrant, the story day, the
+ * presence strip, the alias table's counts. Tested in
  * `tests/locations-view.test.ts`.
  *
  * Nothing here estimates and nothing calls a model. A kind is read off the
@@ -95,6 +97,44 @@ export const metaLong = (row: Pick<LocationRow, 'rollup' | 'eighths' | 'firstSee
 export const dayNightLabel = (counts: { readonly dayScenes: number; readonly nightScenes: number }): string =>
   `${String(counts.dayScenes)} d · ${String(counts.nightScenes)} n`
 
+/** `4 D · 5 N` - the card's and the sidebar row's split, from the quadrant. `—` with no lit heading. */
+export const dayNightShort = (quadrant: Quadrant): string => {
+  const day = quadrant.intDay + quadrant.extDay
+  const night = quadrant.intNight + quadrant.extNight
+  return day + night === 0 ? '—' : `${String(day)} D · ${String(night)} N`
+}
+
+/** `INT · 4 D · 5 N` - the sidebar row's second line; `—` for a record with no heading. */
+export const sidebarLine = (row: { readonly ie: InteriorExterior | null; readonly rollupQuadrant: Quadrant }): string =>
+  row.ie === null ? '—' : `${row.ie} · ${dayNightShort(row.rollupQuadrant)}`
+
+/** The breakdown's four boxes as the section head and the drawer print them, zeros included - a count that is one. */
+export const QUADRANT_BOXES: readonly { readonly key: keyof Quadrant; readonly label: string }[] = [
+  { key: 'intDay', label: 'INT D' },
+  { key: 'intNight', label: 'INT N' },
+  { key: 'extDay', label: 'EXT D' },
+  { key: 'extNight', label: 'EXT N' },
+]
+
+/** `INT D 3 · INT N 2 · EXT D 1 · EXT N 3`, plus ` · 1 unlit` when a heading says neither. */
+export const quadrantLabel = (quadrant: Quadrant): string => {
+  const boxes = QUADRANT_BOXES.map((box) => `${box.label} ${String(quadrant[box.key])}`)
+  return quadrant.unlit === 0 ? boxes.join(' · ') : `${boxes.join(' · ')} · ${String(quadrant.unlit)} unlit`
+}
+
+/** `Day 3 · 09:40 · flashback` - the Timeline's story time beside a scene row; empty when none was set. */
+export const storyTimeLabel = (row: Pick<LocationSceneRow, 'storyDay' | 'storyClock' | 'flashback'>): string =>
+  [row.storyDay === null ? null : `Day ${String(row.storyDay)}`, row.storyClock, row.flashback ? 'flashback' : null]
+    .filter((part): part is string => part !== null)
+    .join(' · ')
+
+/** `2 days · roll-up 5` when the subtree has more; `2 days` when it is all this set; `—` with none. */
+export const daysLabel = (own: number, rollup: number): string => {
+  if (rollup === 0) return '—'
+  const days = `${String(own)} ${own === 1 ? 'day' : 'days'}`
+  return rollup === own ? days : `${days} · roll-up ${String(rollup)}`
+}
+
 /** `15 in the script` - the drawer's slugline note; the README's line with none. */
 export const sluglineNote = (sluglines: readonly { readonly occurrences: number }[]): string => {
   const total = sluglines.reduce((sum, row) => sum + row.occurrences, 0)
@@ -126,6 +166,12 @@ export const scoutedOf = (
     percent: total === 0 ? 0 : Math.round((scouted / total) * 100),
     note: total === 0 ? 'No locations yet' : pending === 0 ? 'Nothing still pending' : `${String(pending)} still pending`,
   }
+}
+
+/** `Scouted · 4 of 6` - the widget's second row, from `scoutedOf`. */
+export const scoutedLine = (rows: readonly { readonly status: LocationStatus }[]): string => {
+  const scouted = scoutedOf(rows)
+  return `${String(scouted.scouted)} of ${String(scouted.total)}`
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +260,71 @@ export const hueOf = (id: string): number => {
   return hash
 }
 
+// ---------------------------------------------------------------------------
+// The presence strip
+// ---------------------------------------------------------------------------
+
+/**
+ * Every present scene in the project as the strip's cells, grouped by
+ * episode: `full` where the scene is at this set or below, `none`
+ * elsewhere - a set has no half presence. The cell's title is the scene's
+ * ref and heading, so a hover names the scene.
+ */
+export const stripGroupsOf = (
+  here: ReadonlySet<string>,
+  index: readonly SceneRef[],
+  episodes: readonly { readonly ordinal: number }[],
+): readonly PresenceGroup[] =>
+  episodes
+    .map((episode) => ({
+      label: episodes.length > 1 ? `E${String(episode.ordinal)}` : '',
+      cells: index
+        .filter((ref) => ref.episodeOrdinal === episode.ordinal)
+        .map((ref) => ({
+          key: ref.sceneNodeId,
+          state: here.has(ref.sceneNodeId) ? ('full' as const) : ('none' as const),
+          title: `${refLabel(ref)}${ref.heading === '' ? '' : ` · ${ref.heading}`}${here.has(ref.sceneNodeId) ? ' · here' : ''}`,
+        })),
+    }))
+    .filter((group) => group.cells.length > 0)
+
+/** The longest run of scenes the set is away for, when it is five or more; the drawer's gap line. */
+export const GAP_SCENES = 5
+
+export const longestGap = (
+  here: ReadonlySet<string>,
+  index: readonly SceneRef[],
+): { readonly scenes: number; readonly from: SceneRef; readonly to: SceneRef } | null => {
+  let best: { scenes: number; from: SceneRef; to: SceneRef } | null = null
+  let last: SceneRef | null = null
+  let run = 0
+  for (const ref of index) {
+    if (here.has(ref.sceneNodeId)) {
+      if (last !== null && run >= GAP_SCENES && (best === null || run > best.scenes)) best = { scenes: run, from: last, to: ref }
+      last = ref
+      run = 0
+      continue
+    }
+    if (last !== null) run += 1
+  }
+  return best
+}
+
+// ---------------------------------------------------------------------------
+// The queue and the status bar
+// ---------------------------------------------------------------------------
+
+/** Past this many open rows the queue folds to the first five with `Show all N`. */
+export const QUEUE_FOLD = 5
+
+/** The status bar's mono route id: `locations`, or `locations/3f2a9c1e` - the record's UUID prefix. */
+export const routeIdOf = (selected: { readonly id: string } | null): string =>
+  selected === null ? 'locations' : `locations/${selected.id.slice(0, 8)}`
+
+/** `INT. TANK ROOM is Kamathi Chawl's now.` and the rest of the queue's toasts. */
+export const decisionToast = (slugline: string, decision: { readonly kind: 'bound'; readonly name: string } | { readonly kind: 'new-record' }): string =>
+  decision.kind === 'bound' ? `${slugline} is ${decision.name}'s now.` : `${slugline} is a new location.`
+
 /**
  * What a sidebar row prints: the row minus the scene list and the rest the
  * list never reads (`_locations/location-sidebar.tsx`). Here, not in that
@@ -222,7 +333,7 @@ export const hueOf = (id: string): number => {
  * be *called* from the server, only rendered (found 2026-09-16 in the user
  * walk: "Locations route crashes"; moved 2026-09-17).
  */
-export type LocationSidebarRow = Pick<LocationRow, 'id' | 'name' | 'ie' | 'status' | 'kind' | 'parentId' | 'depth' | 'rollup' | 'sluglines' | 'boundSluglines'>
+export type LocationSidebarRow = Pick<LocationRow, 'id' | 'name' | 'ie' | 'status' | 'kind' | 'parentId' | 'depth' | 'rollup' | 'rollupQuadrant' | 'sluglines' | 'boundSluglines'>
 
 export const sidebarRowOf = (row: LocationRow): LocationSidebarRow => ({
   id: row.id,
@@ -233,6 +344,7 @@ export const sidebarRowOf = (row: LocationRow): LocationSidebarRow => ({
   parentId: row.parentId,
   depth: row.depth,
   rollup: row.rollup,
+  rollupQuadrant: row.rollupQuadrant,
   sluglines: row.sluglines,
   boundSluglines: row.boundSluglines,
 })

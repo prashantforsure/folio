@@ -1,6 +1,6 @@
 'use client'
 
-import type { Project, TitlePage } from '@folio/contracts'
+import type { CueBookEntry, Project, ProjectId, TitlePage } from '@folio/contracts'
 import type {
   LockedPage,
   MeasurementRecord,
@@ -30,11 +30,13 @@ import type { MeasureOutcome, SaveConflict, SimpleResult } from '../../../../../
 import type { ScriptStats } from '../../../../../../lib/script/stats'
 import type { PaginationControl, ProjectPagination } from '../../../../../../lib/state/project-preferences'
 import { controlFromPagination, paginationFromControl } from '../../../../../../lib/state/project-preferences'
+import { useSession } from '../../../../../../lib/state/session'
 import { ThreadCards } from './comments/thread-cards'
 import type { EditorStore } from './editor/editor-store'
 import { createEditorStore, useSlice } from './editor/editor-store'
 import type { SheetInputs } from './editor/extensions'
 import { ScriptEditor, updateSheet } from './editor/tiptap-editor'
+import { CueCard } from './floating/cue-card'
 import { CoverSheet } from './sheet/cover-sheet'
 import { EmptySheet } from './sheet/empty-sheet'
 import { IMPORT_INPUT_ID, ImportForm } from './sheet/import-form'
@@ -129,6 +131,8 @@ export type ScriptDraft = {
   readonly measurement: MeasureOutcome
   readonly stats: ScriptStats
   readonly labels: readonly MentionLabel[]
+  /** The cue book: which record each cue's key resolves to, for the identity decorations and the hover card. */
+  readonly cues: readonly CueBookEntry[]
   /** The engine's other inputs, so a local pass equals the server's. */
   readonly lockedPages: readonly LockedPage[]
   readonly revision: RevisionColour
@@ -233,6 +237,33 @@ const threadsByNodeOf = (threads: readonly ThreadView[]): ReadonlyMap<string, re
     else list.push(thread.id)
   }
   return out
+}
+
+/** How long a landed-on block is tinted. The README allows a `.14s` background transition and nothing else animates. */
+const LANDING_MS = 1200
+
+/**
+ * Land on the `#n-<node id>` fragment a citation chip on a record route
+ * points at (`lib/workspace/hrefs.ts`, `sceneHref`). The static sheet
+ * carries `id="n-<id>"` so the browser's own hash scroll lands before
+ * hydration; Tiptap then replaces the DOM, so the block is found again in
+ * the editor's view, centred, and tinted for a second. Read-only: no node,
+ * no attribute, no CSS - two inline styles that are cleared.
+ */
+const landOnHash = (editor: Editor): void => {
+  const hash = window.location.hash
+  if (!hash.startsWith('#n-')) return
+  const target = editor.view.dom.querySelector<HTMLElement>(`[id="${CSS.escape(hash.slice(1))}"]`)
+  if (target === null) return
+  target.scrollIntoView({ block: 'center' })
+  target.style.transition = 'background-color .14s'
+  target.style.backgroundColor = 'var(--accent-bg)'
+  window.setTimeout(() => {
+    target.style.backgroundColor = ''
+    window.setTimeout(() => {
+      target.style.transition = ''
+    }, 200)
+  }, LANDING_MS)
 }
 
 export const ScriptWorkspace = ({
@@ -340,6 +371,12 @@ export const ScriptWorkspace = ({
   }, [measurement])
   const labelFor = useMemo(() => labelBookOf(labels), [labels])
   const threadsByNode = useMemo(() => threadsByNodeOf(threads), [threads])
+  const colourCues = useSession((state) => state.colourCues)
+  const cueFor = useMemo(() => {
+    const book = new Map((draft?.cues ?? []).map((entry) => [entry.key, entry]))
+    return (key: string): CueBookEntry | undefined => book.get(key)
+  }, [draft?.cues])
+  const [editorRoot, setEditorRoot] = useState<HTMLElement | null>(null)
 
   const paged = preferences.pageMode === 'paged'
   const record: MeasurementRecord | null = measurement?.ok === true ? measurement.record : null
@@ -348,8 +385,8 @@ export const ScriptWorkspace = ({
   const ids = useSlice(store.ids)
 
   const sheetInputs = useMemo<SheetInputs>(
-    () => ({ sheet, record, paged, labelFor, threadsByNode, composerAt }),
-    [composerAt, labelFor, paged, record, sheet, threadsByNode],
+    () => ({ sheet, record, paged, labelFor, cueFor, colourCues, threadsByNode, composerAt }),
+    [colourCues, composerAt, cueFor, labelFor, paged, record, sheet, threadsByNode],
   )
   const initialSheetInputs = useRef(sheetInputs)
   const sheetInputsRef = useRef(sheetInputs)
@@ -367,6 +404,8 @@ export const ScriptWorkspace = ({
     if (sheetInputs.labelFor !== last.labelFor) partial.labelFor = sheetInputs.labelFor
     if (sheetInputs.threadsByNode !== last.threadsByNode) partial.threadsByNode = sheetInputs.threadsByNode
     if (sheetInputs.composerAt !== last.composerAt) partial.composerAt = sheetInputs.composerAt
+    if (sheetInputs.cueFor !== last.cueFor) partial.cueFor = sheetInputs.cueFor
+    if (sheetInputs.colourCues !== last.colourCues) partial.colourCues = sheetInputs.colourCues
     sentSheetInputs.current = sheetInputs
     if (Object.keys(partial).length > 0) updateSheet(editor, partial)
   }, [sheetInputs])
@@ -617,10 +656,12 @@ export const ScriptWorkspace = ({
 
   const onEditor = useCallback((editor: Editor | null) => {
     editorRef.current = editor
+    setEditorRoot(editor === null ? null : editor.view.dom)
     if (editor !== null && sheetInputsRef.current !== sentSheetInputs.current) {
       sentSheetInputs.current = sheetInputsRef.current
       updateSheet(editor, sheetInputsRef.current)
     }
+    if (editor !== null) landOnHash(editor)
   }, [])
 
   // ---------------------------------------------------------------------------
@@ -805,7 +846,13 @@ export const ScriptWorkspace = ({
   ])
 
   return (
-    <main data-route="script" data-doc-tab={doc} data-script-state={scriptState} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <main
+      data-route="script"
+      data-doc-tab={doc}
+      data-script-state={scriptState}
+      data-colour-cues={colourCues ? 'true' : undefined}
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+    >
       <div data-script-header data-mounted={mounted ? 'true' : 'false'} className="flex flex-none items-center gap-[10px] px-[20px] pb-[4px] pt-[14px]">
         <DocumentMenu title={documentTitle} doc={doc} onPickDoc={setDoc} revisions={draft?.revisions ?? []} />
         <div className="flex-1" />
@@ -834,6 +881,7 @@ export const ScriptWorkspace = ({
           canUndo={draft !== null}
         />
       </div>
+      <CueCard root={editorRoot} projectId={projectId as ProjectId} />
 
       {conflict === null ? null : (
         <div role="status" className="folio-banner" data-tone="warn" data-conflict-banner>

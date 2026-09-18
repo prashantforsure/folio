@@ -47,6 +47,7 @@ const ProjectLayout = async ({
       projectId={context.project.id}
       shape={context.shape}
       fallbackEpisode={fallback.slug}
+      episodes={context.episodes.map((episode) => ({ slug: episode.slug, ordinal: episode.ordinal, title: episode.title }))}
       badges={badges}
       user={context.user}
       assistantConnected={assistantConnected()}

@@ -73,8 +73,8 @@ export const EMPTY_NAV_META: Readonly<Record<string, string>> = {
  * The header's centre since 2026-09-17: the route's views, each tab its
  * name and - where the mockup draws one - its icon. `null` where the route
  * has one view (Script, Outline) or no header of its own yet (Timeline,
- * still on its pre-redesign chrome). Characters', the Storyboard's and
- * Scenes' tabs are buttons over state; the rest are links over `?view=`.
+ * still on its pre-redesign chrome). Characters', the Storyboard's, Scenes'
+ * and Locations' tabs are buttons over state; the rest are links over `?view=`.
  */
 export const HEADER_VIEWS: Readonly<Record<string, { readonly tabs: readonly string[]; readonly icons: number } | null>> = {
   script: null,
@@ -82,7 +82,7 @@ export const HEADER_VIEWS: Readonly<Record<string, { readonly tabs: readonly str
   storyboard: { tabs: ['Boards', 'Canvas', 'Shot list'], icons: 3 },
   scenes: { tabs: ['Cards', 'Index cards', 'Scene list'], icons: 3 },
   production: { tabs: ['Scene', 'Episode'], icons: 0 },
-  characters: { tabs: ['Cast', 'Relationships', 'Sheet'], icons: 0 },
+  characters: { tabs: ['Cast', 'Presence', 'Sheet'], icons: 0 },
   locations: { tabs: ['Places', 'Scenes here', 'Sheet'], icons: 0 },
   timeline: null,
   research: { tabs: ['Library', 'Source', 'Clips'], icons: 0 },
@@ -121,8 +121,9 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     scope: 'project',
     rail: 'locations',
     title: 'Locations',
+    /** The views are state since 2026-09-18; the bare path still writes `data-sub-view="places"`. */
     defaults: { view: 'places' },
-    /** The v2 pass (2026-09-16): the sidebar card is the location list - groups and the Scouted widget. */
+    /** The rebuild (2026-09-18): the sidebar card is the location list - groups and the counts widget. */
     column: { kind: 'card', width: SIDEBAR_WIDTH },
     emptyState: { text: 'No locations yet' },
   },

@@ -18,7 +18,7 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0020` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0022` are applied to the dev Supabase project** and are forward-only.
   (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
   pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
   `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
@@ -44,6 +44,13 @@ authored / derived-cache / measurement. Touching `episodes` needs
   writer uploaded, a URL like `frame_generations.frame_url`) - additive, generated with
   placeholder env values as `0017` was, applied in its own run on 2026-09-17. `foldUpload` in
   `repositories/storyboard.ts` is where an upload beats a generation.
+  `0021` (the Characters rebuild, phase 3) adds `character_origin` and `characters.origin`, the
+  voice columns on `character_derivations` (`words`, `speeches`, `parens`, `named_in`, four
+  jsonb positions, `scene_counts` and `exchanges` as jsonb lists), `character_cue_tallies.words`
+  and `scene_derivations.words` - additive, DERIVED CACHE except `origin`. `0022` (phase 4)
+  adds `character_findings` and its two enums, AUTHORED on the assistant's word, RLS block
+  hand-written on the `0016` pattern. Both went in one `db:migrate` run on 2026-09-18 (both were
+  pending; drizzle-kit applies every pending entry).
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`
   when none is set. The only reader is `apps/web/lib/storage/r2.ts`. And `assistantEnv` -
   `ANTHROPIC_API_KEY`, optional, `null` when unset; the only reader is

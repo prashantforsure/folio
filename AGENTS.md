@@ -49,7 +49,7 @@ days.
 | Storage | Supabase Storage | Signed URLs for everything |
 | Jobs | BullMQ + Redis on a long-running Railway service | |
 | Payments | Dodo Payments | Merchant of record; webhooks reconciled idempotently |
-| AI | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script today (ruled 2026-09-16); tool use and proposals are its next life |
+| AI | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) use structured outputs (`messages.parse` + `zodOutputFormat`) and write only into an unsaved field or the `character_findings` rows; tool use and proposals are still its next life |
 | PDF | `pdf-lib` or `pdfkit` on our own layout engine | |
 | FDX | `fast-xml-parser` + custom mapping | |
 | Fountain | Custom, in `packages/script` | |
@@ -156,7 +156,7 @@ Stop and ask before you:
 | 10 | Whether `SCENE_xxx` is a node id or the derived scene record's id. ADR 0001 ruled the latter, in a separate id space — but `packages/script`'s `SceneRecord.id` is implemented as the heading node's own id, so the ADR and the code contradict each other | `?selected=`, any URL naming a scene |
 | 11 | The revision colour sequence past green (`nextRevisionColour` refuses at green) | Issuing a sixth revision |
 | 12 | Locked-page numbering past the last lock — a judgement call is implemented (the sequence continues unprotected), not ruled | Export, revision compare |
-| 13 | Whether an assistant message costs credits, and how much. The panel is real and read-only (2026-09-16) and writes no ledger row | Charging the assistant; "cost named before it is spent" on its send button |
+| 13 | Whether an assistant message costs credits, and how much. The panel is real and read-only (2026-09-16) and writes no ledger row; the Characters drawer's `Draft from the script` and `Check for contradictions` (2026-09-18) take the same standing | Charging the assistant; "cost named before it is spent" on its send button and on the two Characters buttons; a rate limit on either |
 
 ---
 
@@ -274,13 +274,21 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   Script route's precedent): the URL stays `/characters`, the view is React state in the route's
   layout. The Storyboard's `Boards · Canvas · Shot list` and Scenes' `Cards · Index cards · Scene
   list` took the same ruling on 2026-09-17: the URL stays `/storyboard` or `/scenes`, the view is
-  a client cell the header and the body share. See the exception table.
+  a client cell the header and the body share. Locations' `Places · Scenes here · Sheet` took it
+  on 2026-09-18: the URL stays `/locations`, the view is React state in the route's layout
+  (`_locations/view-state.tsx`). See the exception table.
 
 ### UI fidelity
 
 - **The design package is the spec.** `docs/ui design/README.md` and the nine `Route - * v2.dc.html`
   mockups (2026-09-16). Its `:root` token block is `packages/ui/src/tokens/palette.css`, copied
-  verbatim; the older token names alias onto it until every route is rebuilt.
+  verbatim; the older token names alias onto it until every route is rebuilt. **Two exceptions:
+  ruled 2026-09-17, `Route - Characters v2.dc.html` no longer binds the Characters route** - the
+  client retired it (too close to laper.ai, visually weak, not useful); the route is being rebuilt
+  in four phases to a written plan, recorded pass by pass in `docs/build-decisions.md`
+  ("Characters rebuild") - **and ruled 2026-09-18, `Route - Locations v2.dc.html` no longer binds
+  the Locations route** (the same audit found the same shape; "Locations rebuild" in
+  `docs/build-decisions.md`). The README's language, tokens and patterns still apply on both.
 - **Icons are inline stroke SVGs** from `packages/ui/src/icons.tsx` - 18px, 1.35 stroke, the
   mockups' own paths. The routes built before the redesign still print the older Unicode glyph
   set as text: `✎ ◍ ⌖ ◷ ▧ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝` (`⧗` left with Beats, `◈` with Bible, `◎` with
@@ -315,7 +323,13 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   README's; in flow at ≥1200px, over the content below), `⌘J` toggles it, and it persists across
   route changes. It is not a route. Today it is a **read-only chat** over the episode's script
   (`apps/web/lib/assistant/`, `assistant_chats` / `assistant_messages`, migration `0016`): it
-  reads, it answers, it writes nothing. The lifecycle below is where it goes next.
+  reads, it answers, it writes nothing. On `/characters` it reads the whole project and, with a
+  record open, a Focus block for it (ruled 2026-09-17). The Characters drawer's two model actions
+  (2026-09-18) are the first steps past the chat and stay inside the rule below: `Draft from the
+  script` lands two or three cited sentences in an **unsaved** field the writer keeps with Save,
+  and `Check for contradictions` returns pairs of quotes that are kept as rows the writer waves
+  through or not (`character_findings`); neither edits a node, and a draft that cites no scene it
+  was shown is refused. The lifecycle below is where it goes next.
 - Lifecycle: **Brief → Plan → Run → Review → Commit.** One run produces one revision entry.
 - **Every write returns a proposal, never a mutation.** Proposals are anchored to node ids and
   rendered as hunks against current node state.
@@ -412,6 +426,7 @@ share a file.
 | Credit balance | The ledger is the truth | Compute from the append-only ledger. Never store a balance |
 | Derived entity rows | Cross-episode queryability | Treat as a cache. Must be reproducible by re-derivation |
 | Resolve-queue decisions | Must survive re-derivation | These are **authored input**, not derived output. Real rows |
+| Continuity findings (`character_findings`, 2026-09-18) | A model's answer, not a function of the node list; the writer's verdict on it must survive a re-check | Store the two quotes, the claim and the verdict as rows, marked as the assistant's. Never treat them as derived, never as a bible |
 
 ### Generated text is never in the node stream — except
 
@@ -429,9 +444,10 @@ share a file.
 | `production.state` | The generation job's status | Drive it from the job row. All six states get built |
 | theme, zoom, panels, palette, aiScope | Per user or per session | localStorage or session state |
 | the assistant panel | The same panel on every route | `assistantOpen` is session state |
-| Characters' `cast \| relationships \| sheet` | Ruled 2026-09-16 (the client): switching must be instant and the URL must stay `/characters`, as the Script's switches were ruled 2026-09-11 | React state in the route's layout (`_characters/view-state.tsx`), so it survives opening the drawer; `?view=` is an unknown key there |
+| Characters' `cast \| presence \| sheet` | Ruled 2026-09-16 (the client; Presence replaced the Relationships graph 2026-09-18): switching must be instant and the URL must stay `/characters`, as the Script's switches were ruled 2026-09-11 | React state in the route's layout (`_characters/view-state.tsx`), so it survives opening the drawer; `?view=` is an unknown key there |
 | the Storyboard's `board \| canvas \| list` | Ruled 2026-09-17 (the client): the same ask - a tab must switch smoothly and the URL must stay `/storyboard`; as a param each click re-ran the page's server read | A client cell the header's tabs and the workspace both reach (`_storyboard/view-state.tsx`, the `coverage.ts` shape - the shared writing layout cannot host one route's provider); resets to the board when the workspace unmounts; `?view=` is an unknown key there |
 | Scenes' `cards \| index \| list` | Ruled 2026-09-17 (the client): the same ask again, in the same words - smooth, and the URL must stay `/scenes` | The Storyboard's cell shape (`_scenes/view-state.tsx`); the route's own client `<main>` (`_scenes/scenes-main.tsx`) writes `data-sub-view` and resets the cell to the cards on unmount; `?view=` is an unknown key there |
+| Locations' `places \| scenes \| sheet` | Ruled 2026-09-18 (the client), with the rebuild: the same ask, and the URL must stay `/locations` | React state in the route's layout (`_locations/view-state.tsx`, the Characters shape - the route has a layout of its own), so it survives opening the drawer; `?view=` is an unknown key there |
 | which document the Script shows, the title-page or the script | Component state (ruled 2026-09-11); a scene the sidebar scrolls to is a `#n-<node id>` fragment, never `?selected=` | Not a param |
 
 ### The agent may write anywhere — except

@@ -1,4 +1,12 @@
-import { CHARACTER_COLOR_IDS, CHARACTER_GENDERS, CHARACTER_STATUSES, LOCATION_STATUSES } from '@folio/contracts'
+import {
+  CHARACTER_COLOR_IDS,
+  CHARACTER_FINDING_KINDS,
+  CHARACTER_FINDING_STATUSES,
+  CHARACTER_GENDERS,
+  CHARACTER_ORIGINS,
+  CHARACTER_STATUSES,
+  LOCATION_STATUSES,
+} from '@folio/contracts'
 import { CONFIDENCES, INTERIOR_EXTERIOR, LIGHT_STATES, PRESENCE_STATES, RESOLVE_ROW_STATES } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import {
@@ -39,10 +47,11 @@ import { projects, users } from './tenancy'
  * this side the guarantee has to be re-established by a different mechanism,
  * and the mechanism is that authored and derived live in **different tables**:
  *
- *   characters                  AUTHORED       name, bio, notes, the profile
+ *   characters                  AUTHORED       name, bio, notes, the profile, the origin
  *   character_bound_cues        AUTHORED       the alias table's authored half
  *   character_relationships     AUTHORED       kept as a derivation read; no screen writes it since 0013
- *   character_derivations       DERIVED CACHE  counts, presence, scenes
+ *   character_findings          AUTHORED       the assistant's contradictions and the writer's verdicts (0022)
+ *   character_derivations       DERIVED CACHE  counts, presence, scenes, the voice (0021)
  *   character_cue_tallies       DERIVED CACHE  the counted spellings
  *
  * and the same shape for locations, scenes and the resolve queue. The
@@ -74,6 +83,9 @@ export const interiorExteriorEnum = pgEnum('interior_exterior', INTERIOR_EXTERIO
 export const lightEnum = pgEnum('light', LIGHT_STATES)
 export const characterGenderEnum = pgEnum('character_gender', CHARACTER_GENDERS)
 export const characterStatusEnum = pgEnum('character_status', CHARACTER_STATUSES)
+export const characterOriginEnum = pgEnum('character_origin', CHARACTER_ORIGINS)
+export const characterFindingKindEnum = pgEnum('character_finding_kind', CHARACTER_FINDING_KINDS)
+export const characterFindingStatusEnum = pgEnum('character_finding_status', CHARACTER_FINDING_STATUSES)
 export const locationStatusEnum = pgEnum('location_status', LOCATION_STATUSES)
 
 // ---------------------------------------------------------------------------
@@ -138,6 +150,13 @@ export const characters = pgTable(
     status: characterStatusEnum('status').notNull().default('draft'),
     wants: text('wants'),
     needs: text('needs'),
+    /**
+     * Where the record came from (`0021`): a pass, a hand, an `@` mention,
+     * the assistant. Written once at creation, never changed, never
+     * derived; null on every record made before the column existed - no
+     * backfill guesses at a history nobody recorded.
+     */
+    origin: characterOriginEnum('origin'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
@@ -232,6 +251,28 @@ export const characterDerivations = pgTable(
     presence: presenceEnum('presence').notNull(),
     /** Heading node ids, in document order. */
     scenes: uuid('scenes').array().notNull().default(sql`ARRAY[]::uuid[]`),
+    /**
+     * The voice (`0021`) - what the pass counts beyond scenes and lines, all
+     * of it a function of the node list and rebuilt every pass: dialogue
+     * words, speeches (cue nodes), parentheticals, action lines naming the
+     * record; the first, last and longest line and the introducing action
+     * line as JSON `{ nodeId, scene }` (no foreign key, on the
+     * `scenes.threads` convention - a node that has left the script is
+     * dropped on read); what is said per scene and who is talked to as JSON
+     * lists. JSON rather than two more tables because the loader already
+     * joins this one row per record, `commitDerivation` stays one statement,
+     * and a new table needs an RLS block.
+     */
+    words: integer('words').notNull().default(0),
+    speeches: integer('speeches').notNull().default(0),
+    parens: integer('parens').notNull().default(0),
+    namedIn: integer('named_in').notNull().default(0),
+    firstLine: jsonb('first_line'),
+    lastLine: jsonb('last_line'),
+    longest: jsonb('longest'),
+    introducedAt: jsonb('introduced_at'),
+    sceneCounts: jsonb('scene_counts').notNull().default(sql`'[]'::jsonb`),
+    exchanges: jsonb('exchanges').notNull().default(sql`'[]'::jsonb`),
     derivedAt: timestampColumn('derived_at').notNull().defaultNow(),
   },
   (table) => [
@@ -240,6 +281,61 @@ export const characterDerivations = pgTable(
     check(
       'character_derivations_counts_not_negative',
       sql`${table.appearances} >= 0 AND ${table.lines} >= 0 AND ${table.mentions} >= 0`,
+    ),
+    check(
+      'character_derivations_voice_counts_not_negative',
+      sql`${table.words} >= 0 AND ${table.speeches} >= 0 AND ${table.parens} >= 0 AND ${table.namedIn} >= 0`,
+    ),
+  ],
+)
+
+/**
+ * A continuity finding on a character. AUTHORED, on the assistant's word
+ * and the writer's verdict (`0022`).
+ *
+ * The one kind is a contradiction: two quotes from the script that cannot
+ * both be true of the character - the script against itself, never against
+ * a note or a bible (`docs/build-decisions.md`, "Bible route removed").
+ * The assistant returns the pair; `replaceOpenFindings` keeps it as a row
+ * so the writer's `It's deliberate` survives a re-check, and so a finding
+ * has two citations rather than being prose in a chat. `a_ref` / `b_ref`
+ * are heading node ids stored sorted, no key (the `shots.scene_node_id`
+ * convention); `claim_hash` is the normalised claim's FNV-1a, a column
+ * because the dedupe index needs a plain target. Cascades with the record.
+ *
+ * AGENTS.md's "nothing is stored that can be computed" exception row: a
+ * finding is a model's answer, not a function of the node list, so it is
+ * stored - and marked as the assistant's, never the derivation's.
+ */
+export const characterFindings = pgTable(
+  'character_findings',
+  {
+    id: idColumn(),
+    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
+    kind: characterFindingKindEnum('kind').notNull(),
+    status: characterFindingStatusEnum('status').notNull().default('open'),
+    /** Heading node ids, `a_ref < b_ref`. No key: a scene that leaves the script drops the finding on read. */
+    aRef: uuid('a_ref').notNull(),
+    bRef: uuid('b_ref').notNull(),
+    aQuote: text('a_quote').notNull(),
+    bQuote: text('b_quote').notNull(),
+    claim: text('claim').notNull(),
+    /** FNV-1a 64 of the normalised claim, 16 hex characters. The dedupe key's plain column. */
+    claimHash: text('claim_hash').notNull(),
+    createdAt: createdAtColumn(),
+  },
+  (table) => [
+    index('character_findings_character_status_idx').on(table.characterId, table.status),
+    index('character_findings_project_idx').on(table.projectId),
+    uniqueIndex('character_findings_dedupe_key').on(table.projectId, table.characterId, table.aRef, table.bRef, table.claimHash),
+    check('character_findings_two_scenes', sql`${table.aRef} <> ${table.bRef}`),
+    check('character_findings_refs_sorted', sql`${table.aRef} < ${table.bRef}`),
+    check(
+      'character_findings_text_not_empty',
+      sql`length(btrim(${table.aQuote})) > 0 AND length(btrim(${table.bQuote})) > 0 AND length(btrim(${table.claim})) > 0`,
     ),
   ],
 )
@@ -266,6 +362,8 @@ export const characterCueTallies = pgTable(
     occurrences: integer('occurrences').notNull().default(0),
     /** Dialogue *nodes* under this spelling. Not a rendered-line count. */
     lines: integer('lines').notNull().default(0),
+    /** Dialogue words under this spelling (`0021`). */
+    words: integer('words').notNull().default(0),
   },
   (table) => [
     primaryKey({ columns: [table.characterId, table.cue] }),
@@ -526,6 +624,8 @@ export const sceneDerivations = pgTable(
     castSize: integer('cast_size').notNull().default(0),
     /** Dialogue *nodes*, not rendered lines. */
     lines: integer('lines').notNull().default(0),
+    /** Dialogue words under the heading, every cue counted (`0021`) - the share denominator. */
+    words: integer('words').notNull().default(0),
     presence: presenceEnum('presence').notNull(),
     derivedAt: timestampColumn('derived_at').notNull().defaultNow(),
   },
@@ -533,6 +633,7 @@ export const sceneDerivations = pgTable(
     index('scene_derivations_project_number_idx').on(table.projectId, table.number),
     index('scene_derivations_location_idx').on(table.locationId),
     check('scene_derivations_number_not_negative', sql`${table.number} >= 0`),
+    check('scene_derivations_words_not_negative', sql`${table.words} >= 0`),
     /**
      * An absent scene has no number; a present one has one.
      *

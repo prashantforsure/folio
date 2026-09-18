@@ -1,5 +1,6 @@
 'use client'
 
+import type { ProjectId } from '@folio/contracts'
 import type { NodeId } from '@folio/script'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
@@ -45,6 +46,7 @@ import { SceneNode } from './scene-node'
  * which is what it says.
  */
 export const SceneCanvas = ({
+  projectId,
   scenes,
   synopsisOf,
   selected,
@@ -53,6 +55,7 @@ export const SceneCanvas = ({
   onEdit,
   onRead,
 }: {
+  readonly projectId: ProjectId
   readonly scenes: readonly SceneCard[]
   readonly synopsisOf: (card: SceneCard) => string | null
   readonly selected: NodeId | null
@@ -136,6 +139,7 @@ export const SceneCanvas = ({
             return (
               <SceneNode
                 key={id}
+                projectId={projectId}
                 card={card}
                 synopsis={synopsisOf(card)}
                 position={{ x: entry.rect.x, y: entry.rect.y }}

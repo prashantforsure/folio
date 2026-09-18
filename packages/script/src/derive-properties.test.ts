@@ -271,6 +271,31 @@ describe('a rejected proposal', () => {
   })
 })
 
+describe('the voice is arithmetic over the lines', () => {
+  it('per-scene lines never exceed the total, a first line exists exactly when lines do, exchanges are symmetric', () => {
+    fc.assert(
+      fc.property(scriptArb, (scenes) => {
+        const derivation = derived(nodesOf(linesOfScenes(scenes)), boundCast(), 'a')
+        const byId = new Map(derivation.entities.characters.map((record) => [String(record.id), record]))
+        for (const record of derivation.entities.characters) {
+          const perScene = record.sceneCounts.reduce((total, count) => total + count.lines, 0)
+          expect(perScene).toBeLessThanOrEqual(record.lines)
+          expect(record.sceneCounts.reduce((total, count) => total + count.words, 0)).toBeLessThanOrEqual(record.words)
+          expect(record.firstLine !== null).toBe(record.lines > 0)
+          expect(record.lastLine !== null).toBe(record.lines > 0)
+          expect(record.longest !== null).toBe(record.lines > 0)
+          expect(record.speeches).toBe(record.cues.reduce((total, cue) => total + cue.occurrences, 0))
+          for (const exchange of record.exchanges) {
+            const other = byId.get(String(exchange.other))
+            expect(other?.exchanges.find((back) => back.other === record.id)?.count).toBe(exchange.count)
+          }
+        }
+      }),
+      { numRuns: 60 },
+    )
+  })
+})
+
 describe('purity', () => {
   it('gives the same answer twice and leaves its inputs alone', () => {
     fc.assert(

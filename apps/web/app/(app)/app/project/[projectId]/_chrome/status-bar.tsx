@@ -16,6 +16,11 @@ import { SIDEBAR_OPEN_MIN } from '../../../../../../lib/workspace/routes'
  * and read by `project-shell.tsx`, which writes `html[data-nav-open]`. The
  * dot is green when saved, amber while a write is in flight, orange when
  * one failed - the same three the Script and Outline toolbars print.
+ *
+ * `toast` is a line after the counts for a few seconds after an act that
+ * can be taken back - a queue decision, a rename - with the one word that
+ * takes it back. The Characters route passes it; the bar draws nothing
+ * without it.
  */
 /** `idle` is the page as loaded - drawn as Saved; a walk can tell it from a write that finished. */
 export type SaveIndicator = 'idle' | 'saved' | 'saving' | 'error'
@@ -34,16 +39,23 @@ const WORD: Record<SaveIndicator, string> = {
   error: 'Not saved',
 }
 
+export type StatusToast = {
+  readonly message: string
+  readonly action?: { readonly label: string; readonly onClick: () => void }
+}
+
 export const StatusBar = ({
   left,
   save,
   routeId,
+  toast,
 }: {
   /** The counts, already formatted: `Ep 1 · 3 scenes · 2 reels · Scene 1 · Writing shots`. */
   readonly left: string
   readonly save: SaveIndicator
   /** The mono route path: `ep_001/production`. */
   readonly routeId: string
+  readonly toast?: StatusToast | null
 }) => {
   const session = useSession()
   const { mounted, width } = useViewport()
@@ -53,6 +65,21 @@ export const StatusBar = ({
       <span className="tabular min-w-0 truncate whitespace-nowrap" data-status-left>
         {left}
       </span>
+      {toast === undefined || toast === null ? null : (
+        <span role="status" data-status-toast className="flex min-w-0 items-center gap-[8px] truncate whitespace-nowrap text-11 text-ink2">
+          <span className="truncate">{toast.message}</span>
+          {toast.action === undefined ? null : (
+            <button
+              type="button"
+              data-status-undo
+              onClick={toast.action.onClick}
+              className="folio-ghost-button rounded-[5px] px-[4px] text-11 text-accent hover:!bg-transparent hover:underline"
+            >
+              {toast.action.label}
+            </button>
+          )}
+        </span>
+      )}
       <div className="flex-1" />
       <button
         type="button"

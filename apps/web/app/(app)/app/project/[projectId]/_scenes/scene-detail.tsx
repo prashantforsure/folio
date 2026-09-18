@@ -12,7 +12,9 @@ import { saveSynopsis } from '../../../../../../lib/scenes/actions'
 import type { SynopsisResult } from '../../../../../../lib/scenes/result'
 import type { SceneCard } from '../../../../../../lib/scenes/server'
 import { ABSENT, count } from '../../../../../../lib/workspace/format'
+import { setQueueIntent } from '../../../../../../lib/characters/compose'
 import type { EpisodeRoutePath } from '../../../../../../lib/workspace/hrefs'
+import { characterHref, locationHref, projectRouteHref } from '../../../../../../lib/workspace/hrefs'
 import { CastChip, eighthsLabel, pageRange, sceneNo, timeLabel } from './scene-parts'
 
 /**
@@ -151,8 +153,8 @@ export const SceneDetail = ({
   }, [onClose])
 
   const nameOf = new Map(card.cast.map((member) => [member.id, member.name]))
-  const speaking = card.derived.speaking.map((id) => nameOf.get(id) ?? '(record missing)')
-  const mentioned = card.derived.mentioned.map((id) => nameOf.get(id) ?? '(record missing)')
+  const speaking = card.derived.speaking.map((id) => ({ id, name: nameOf.get(id) ?? '(record missing)' }))
+  const mentioned = card.derived.mentioned.map((id) => ({ id, name: nameOf.get(id) ?? '(record missing)' }))
 
   if (!mounted) return null
   return createPortal(
@@ -182,7 +184,17 @@ export const SceneDetail = ({
         <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-auto px-[18px] pb-[18px]">
           <div className="grid grid-cols-4 gap-[12px]">
             <Field label="Int / Ext">{card.derived.reading.ie}</Field>
-            <Field label="Set">{card.derived.reading.set === '' ? ABSENT : card.derived.reading.set}</Field>
+            <Field label="Set">
+              {card.derived.reading.set === '' ? (
+                ABSENT
+              ) : card.derived.locationId === null ? (
+                card.derived.reading.set
+              ) : (
+                <Link href={locationHref(projectId, card.derived.locationId)} data-scene-set-link className="text-ink no-underline hover:text-accent hover:underline">
+                  {card.derived.reading.set}
+                </Link>
+              )}
+            </Field>
             <Field label="Time">{timeLabel(card)}</Field>
             <Field label="Light">{card.derived.reading.light}</Field>
             <Field label="Page">{pageRange(card)}</Field>
@@ -199,19 +211,30 @@ export const SceneDetail = ({
           <div className="flex flex-col gap-[7px]">
             <span className="folio-eyebrow">Cast · {count(card.derived.castSize)}</span>
             <div className="flex flex-wrap items-center gap-[6px]">
-              {speaking.map((name, index) => (
-                <CastChip key={`s-${String(index)}`} name={name} />
+              {speaking.map((person, index) => (
+                <CastChip key={`s-${String(index)}`} name={person.name} href={characterHref(projectId, person.id)} />
               ))}
               {mentioned.length === 0 ? null : <span className="text-10-5 text-ink3">mentioned</span>}
-              {mentioned.map((name, index) => (
-                <CastChip key={`m-${String(index)}`} name={name} small />
+              {mentioned.map((person, index) => (
+                <CastChip key={`m-${String(index)}`} name={person.name} href={characterHref(projectId, person.id)} small />
               ))}
               {card.derived.castSize === 0 ? <span className="text-11-5 text-ink3">Nobody speaks or is mentioned.</span> : null}
             </div>
             {card.derived.unresolvedCues.length === 0 ? null : (
               <p className="m-0 text-11-5 leading-[1.5] text-warn">
                 {count(card.derived.unresolvedCues.length)} cue{card.derived.unresolvedCues.length === 1 ? '' : 's'} not yet matched to a record:{' '}
-                <span className="font-mono">{card.derived.unresolvedCues.join(', ')}</span>. Resolve them on Characters.
+                <span className="font-mono">{card.derived.unresolvedCues.join(', ')}</span>. Resolve them on{' '}
+                <Link
+                  href={projectRouteHref(projectId, 'characters')}
+                  data-resolve-link
+                  className="text-warn underline hover:text-ink"
+                  onClick={() => {
+                    setQueueIntent('rows')
+                  }}
+                >
+                  Characters
+                </Link>
+                .
               </p>
             )}
           </div>

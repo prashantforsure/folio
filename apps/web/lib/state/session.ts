@@ -60,11 +60,18 @@ type SessionState = {
    * route, so whether it is open belongs to the window, like the sidebar.
    */
   readonly assistantOpen: PanelState
+  /**
+   * The Script route's `Colour cues` (the Characters rebuild, phase 3): each
+   * cue in the record's own colour. A way of looking, per tab, like the
+   * zoom - off by default so the sheet reads as a sheet.
+   */
+  readonly colourCues: boolean
   readonly setZoom: (zoom: Zoom) => void
   readonly setNavOpen: (open: PanelState) => void
   readonly setSideOpen: (open: PanelState) => void
   readonly setSideTab: (tab: SideTab) => void
   readonly setAssistantOpen: (open: PanelState) => void
+  readonly setColourCues: (on: boolean) => void
   readonly toggleNav: () => void
   readonly toggleSide: () => void
 }
@@ -101,6 +108,7 @@ export const useSession = create<SessionState>()(
       sideOpen: null,
       sideTab: 'info',
       assistantOpen: null,
+      colourCues: false,
       setZoom: (zoom) => {
         set({ zoom })
       },
@@ -115,6 +123,9 @@ export const useSession = create<SessionState>()(
       },
       setAssistantOpen: (assistantOpen) => {
         set({ assistantOpen })
+      },
+      setColourCues: (colourCues) => {
+        set({ colourCues })
       },
       toggleNav: () => {
         set((state) => ({ navOpen: flip(state.navOpen) }))
@@ -149,6 +160,7 @@ export const useSession = create<SessionState>()(
         sideOpen: state.sideOpen,
         sideTab: state.sideTab,
         assistantOpen: state.assistantOpen,
+        colourCues: state.colourCues,
       }),
     },
   ),

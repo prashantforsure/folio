@@ -1,7 +1,7 @@
-import type { CharacterId, Confidence, InteriorExterior, Light, LocationId, Presence } from '@folio/script'
+import type { CharacterId, Confidence, InteriorExterior, Light, LocationId, MatchReason, NodeId, Presence, Quadrant } from '@folio/script'
 import { z } from 'zod'
 
-import type { SceneRef } from './characters'
+import type { AliasProvenance, SceneRef } from './characters'
 import { LocationIdSchema } from './ids'
 
 /**
@@ -25,6 +25,17 @@ import { LocationIdSchema } from './ids'
  * photo. Migration `0018` adds the three columns. The arc note per episode
  * ("How this place changes") is gone with the same migration: nothing in
  * the v2 package draws one and nothing else read the table.
+ *
+ * ## The rebuild (2026-09-18)
+ *
+ * The route was rebuilt to a written plan, not the mockup (the client's
+ * ruling, as for Characters): every fact the loader already read is drawn,
+ * every scene ref is a link into the script, and what the script says
+ * about a place is read at request time (`@folio/script`, `sets.ts`) -
+ * the establishing line, the interior / exterior against day / night
+ * quadrant, two records that read as one set. `scheduled_days` is
+ * authored here at last (`LocationEditSchema.scheduledDays`): the one
+ * number AGENTS.md says the tree exists to roll up.
  *
  * ## Counts are the roll-up
  *
@@ -77,9 +88,8 @@ const line = (max: number) => z.string().trim().max(max).nullable()
 
 /**
  * The record's authored fields. Optional on the way in so one save writes
- * what changed; an empty string is stored as `null`. `scheduled_days` is
- * not here: the v2 drawer has no field for it (see `docs/build-decisions.md`,
- * "Redesign phase 4").
+ * what changed; an empty string is stored as `null`. `scheduledDays` joined
+ * on 2026-09-18 - the drawer's Production fold authors it.
  */
 export const LocationEditSchema = z
   .object({
@@ -87,6 +97,8 @@ export const LocationEditSchema = z
     /** "Actual or fictional address…" - one line. */
     address: line(400),
     status: LocationStatusSchema,
+    /** Shooting days scheduled at this set alone; the roll-up is derived. */
+    scheduledDays: z.int().min(0).max(9999),
   })
   .partial()
 
@@ -123,8 +135,13 @@ export type SluglineVariantRow = {
 /** One scene at this set or a descendant, as the "Scenes here" view prints it. */
 export type LocationSceneRow = {
   readonly scene: SceneRef
+  readonly ie: InteriorExterior
   readonly light: Light
   readonly timeOfDay: string | null
+  /** The Timeline's authored story time, when the writer set one (`scenes.story_day`). */
+  readonly storyDay: number | null
+  readonly storyClock: string | null
+  readonly flashback: boolean
   /** The authored synopsis, when the writer wrote one. */
   readonly gist: string | null
   readonly cast: readonly { readonly id: CharacterId; readonly name: string; readonly hue: number }[]
@@ -162,6 +179,39 @@ export type StructureResolveItem = {
   readonly proposal: StructureResolveProposal
 }
 
+/** One bound set text as the drawer's alias table prints it. */
+export type BoundSetView = {
+  readonly slugline: string
+  readonly provenance: AliasProvenance
+  /** Headings reading down to this set text, here or below. `0` for a spelling nothing uses yet. */
+  readonly occurrences: number
+  /** The first heading that reads down to it, or null when none does. */
+  readonly firstRef: SceneRef | null
+}
+
+/** A research clip filed to this place (`research_clip_filings.location_id`). */
+export type FiledClip = {
+  readonly id: string
+  readonly text: string
+  readonly sourceId: string
+  readonly sourceTitle: string
+}
+
+/** The first action the page writes under a heading at this set, as evidence the drawer quotes. */
+export type EstablishingRow = {
+  readonly nodeId: NodeId
+  readonly text: string
+  readonly scene: SceneRef
+}
+
+/** Another record whose spellings read as this one's - the `Same place?` finding. */
+export type SimilarSetRow = {
+  readonly id: LocationId
+  readonly name: string
+  readonly confidence: Confidence
+  readonly reason: MatchReason
+}
+
 /**
  * One location, whole: what the sidebar row, the card, the sheet row, the
  * "Scenes here" section and the drawer print. One shape, because the drawer
@@ -187,15 +237,29 @@ export type LocationRow = {
   readonly status: LocationStatus
   readonly address: string | null
   readonly description: string | null
+  /** Shooting days the writer scheduled at this set alone; `rollup.shootingDays` sums the subtree. */
+  readonly scheduledDays: number
   /** A public URL for the photo, or null with none set or no storage. */
   readonly photoUrl: string | null
   /** Counted heading spellings here or below, first-appearance order. Derived. */
   readonly sluglines: readonly SluglineVariantRow[]
   /** Every bound set text of this record, counted or not - the alias table's authored half. */
   readonly boundSluglines: readonly string[]
+  /** The alias table as drawn: each bound set text with who bound it, its count and its first heading. */
+  readonly bound: readonly BoundSetView[]
+  /** The first action line under any heading at this set or below, or null when the page has none. */
+  readonly intro: EstablishingRow | null
+  /** Interior / exterior against day / night, this set alone. */
+  readonly quadrant: Quadrant
+  /** The same, this set plus every descendant - what the card and the sheet print. */
+  readonly rollupQuadrant: Quadrant
+  /** Research clips filed to this place, oldest first. */
+  readonly clips: readonly FiledClip[]
+  /** Records this one reads as one place with, best first; empty when the writer said they differ. */
+  readonly similar: readonly SimilarSetRow[]
   /** Every scene here or below, in reading order. */
   readonly scenes: readonly LocationSceneRow[]
-  /** Who is here, most scenes first. */
+  /** Everyone named in a scene here or below, most scenes first - the card draws three, the drawer all. */
   readonly people: readonly LocationPersonRow[]
   /** Scenes here or below per episode, in running order - the README's episode bars. */
   readonly perEpisode: readonly number[]
@@ -215,8 +279,18 @@ export type SluglineResolveProposal =
       readonly id: LocationId
       readonly name: string
       readonly confidence: Confidence
+      /** Why the pass proposed this record - the queue's reason chip. Null when the pass did not say. */
+      readonly reason: MatchReason | null
     }
   | { readonly kind: 'new-record'; readonly confidence: Confidence }
+
+/** A record a queued set text resembles, for the `Somewhere else…` menu: best first. */
+export type SluglineCandidate = {
+  readonly id: LocationId
+  readonly name: string
+  readonly confidence: Confidence
+  readonly reason: MatchReason
+}
 
 /** One open row of the resolve queue, for a slugline pointing at no record. */
 export type SluglineResolveItem = {
@@ -226,4 +300,6 @@ export type SluglineResolveItem = {
   readonly occurrences: number
   readonly scenes: readonly SceneRef[]
   readonly proposal: SluglineResolveProposal | null
+  /** Every record the set text resembles, best first (at most three). */
+  readonly candidates: readonly SluglineCandidate[]
 }

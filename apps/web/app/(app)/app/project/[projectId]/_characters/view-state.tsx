@@ -10,10 +10,11 @@ import type { ViewPillItem } from '../_chrome/view-pill'
 
 /**
  * Which of the Characters route's three views is showing: `Cast ·
- * Relationships · Sheet` - the mockup's toolbar pill (`Route - Characters
- * v2.dc.html`), drawn in the header's centre since 2026-09-17 like every
- * route's views (`_chrome/writing-header.tsx`; `CharactersHeaderViews`
- * below is what the layout hands it).
+ * Presence · Sheet` - drawn in the header's centre since 2026-09-17 like
+ * every route's views (`_chrome/writing-header.tsx`; `CharactersHeaderViews`
+ * below is what the layout hands it). Presence replaced the Relationships
+ * graph on 2026-09-18 (ruled 2026-09-17: a character × scene grid, the
+ * pairs list and the findings under it).
  *
  * ## State, not a URL - ruled 2026-09-16
  *
@@ -31,7 +32,7 @@ import type { ViewPillItem } from '../_chrome/view-pill'
  *
  * Opening a record is a navigation, `/characters` → `/characters/:id`, and
  * the page's subtree remounts under `characters/layout.tsx`. State held in
- * the workspace would fall back to the cast every time a graph node or a
+ * the workspace would fall back to the cast every time a presence row or a
  * sheet row was clicked - which is what the URL-borne view did too, since
  * `characterHref` carries no query. The layout wraps the route in this
  * provider beside `CastSidebarProvider`, and the view rides across the
@@ -39,11 +40,11 @@ import type { ViewPillItem } from '../_chrome/view-pill'
  * a peek that must not survive a navigation away.
  */
 
-export type CharactersView = 'cast' | 'relationships' | 'sheet'
+export type CharactersView = 'cast' | 'presence' | 'sheet'
 
 export const CHARACTERS_VIEWS: readonly ViewPillItem<CharactersView>[] = [
   { id: 'cast', title: 'Cast' },
-  { id: 'relationships', title: 'Relationships' },
+  { id: 'presence', title: 'Presence' },
   { id: 'sheet', title: 'Sheet' },
 ]
 

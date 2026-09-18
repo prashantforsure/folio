@@ -11,6 +11,7 @@ import type {
   ResearchSourceRow,
 } from '@folio/contracts'
 import { RESEARCH_COLLECTION_NAME_MAX, RESEARCH_SOURCE_KINDS, RESEARCH_SOURCE_KIND_LABELS, RESEARCH_TITLE_MAX } from '@folio/contracts'
+import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -21,7 +22,7 @@ import { setResearchDrawer, useResearchDrawer } from '../../../../../../lib/rese
 import type { FilingTargets } from '../../../../../../lib/research/server'
 import { clipsLabel, drawerMeta, filingLabel } from '../../../../../../lib/research/view'
 import type { ProjectRoutePath } from '../../../../../../lib/workspace/hrefs'
-import { researchSourceHref } from '../../../../../../lib/workspace/hrefs'
+import { characterHref, researchSourceHref } from '../../../../../../lib/workspace/hrefs'
 import { DrawerShell, Field, Section } from '../_chrome/drawer-shell'
 import { useRun } from '../_chrome/use-run'
 import { ClipMenu } from './clip-menu'
@@ -375,11 +376,23 @@ const SourceForm = ({
                   {clip.text}
                 </span>
                 <span className="relative flex flex-wrap items-center gap-[6px]">
-                  {clip.filings.map((filing) => (
-                    <span key={filing.id} className="folio-filing-chip cursor-default" data-size="small">
-                      {filingLabel(filing)}
-                    </span>
-                  ))}
+                  {clip.filings.map((filing) =>
+                    filing.kind === 'character' ? (
+                      <Link
+                        key={filing.id}
+                        href={characterHref(projectId, filing.characterId)}
+                        data-filing-link={filing.characterId}
+                        className="folio-filing-chip no-underline hover:text-accent hover:no-underline"
+                        data-size="small"
+                      >
+                        {filingLabel(filing)}
+                      </Link>
+                    ) : (
+                      <span key={filing.id} className="folio-filing-chip cursor-default" data-size="small">
+                        {filingLabel(filing)}
+                      </span>
+                    ),
+                  )}
                   {clip.filings.length === 0 ? <span className="text-10-5 text-ink3">Not filed yet</span> : null}
                   <span className="flex-1" />
                   <button

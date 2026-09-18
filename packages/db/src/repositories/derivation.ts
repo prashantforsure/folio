@@ -123,6 +123,16 @@ export const readDerivationInput = async (scope: ProjectScope): Promise<DerivedE
       lines: 0,
       mentions: 0,
       presence: 'absent',
+      words: 0,
+      speeches: 0,
+      parens: 0,
+      namedIn: 0,
+      firstLine: null,
+      lastLine: null,
+      longest: null,
+      sceneCounts: [],
+      exchanges: [],
+      introducedAt: null,
     }))
 
   const sluglinesByLocation = new Map<string, string[]>()
@@ -169,6 +179,7 @@ export const readDerivationInput = async (scope: ProjectScope): Promise<DerivedE
       unresolvedCues: [],
       castSize: 0,
       lines: 0,
+      words: 0,
       presence: 'absent',
       authored: {
         synopsis: authored?.synopsis ?? null,
@@ -222,17 +233,28 @@ export const readDerivationInput = async (scope: ProjectScope): Promise<DerivedE
 export const persistMintedRecords = async (
   scope: ProjectScope,
   minted: readonly MintedRecord[],
+  /**
+   * Existing records that had no bound cue and were handed their name's
+   * spelling for this pass (`apps/web/lib/characters/heal.ts`) - the rows a
+   * record made by `@mention` before 2026-09-17 was missing. They ride the
+   * same insert, under the same `on conflict do nothing`, so a spelling
+   * somebody else claimed meanwhile is left with them.
+   */
+  healed: readonly { readonly id: CharacterId; readonly cue: string }[] = [],
 ): Promise<void> => {
   const characterRowsToAdd = minted.flatMap((record) =>
     record.kind === 'character'
       ? [{ ...tenant(scope), id: record.id as string, name: record.from }]
       : [],
   )
-  const cueRowsToAdd = minted.flatMap((record) =>
-    record.kind === 'character'
-      ? [{ ...tenant(scope), characterId: record.id as string, cue: record.from }]
-      : [],
-  )
+  const cueRowsToAdd = [
+    ...minted.flatMap((record) =>
+      record.kind === 'character'
+        ? [{ ...tenant(scope), characterId: record.id as string, cue: record.from }]
+        : [],
+    ),
+    ...healed.map((record) => ({ ...tenant(scope), characterId: record.id as string, cue: record.cue })),
+  ]
   const locationRowsToAdd = minted.flatMap((record) =>
     record.kind === 'location'
       ? [{ ...tenant(scope), id: record.id as string, name: record.from, parentId: null }]
@@ -243,7 +265,7 @@ export const persistMintedRecords = async (
       ? [{ ...tenant(scope), locationId: record.id as string, slugline: record.from }]
       : [],
   )
-  if (characterRowsToAdd.length === 0 && locationRowsToAdd.length === 0) return
+  if (characterRowsToAdd.length === 0 && locationRowsToAdd.length === 0 && healed.length === 0) return
   // One statement rather than a transaction of four: the request path pays
   // two round trips per parameterised statement (`client.ts`). The cue and
   // slugline rows reference the records inserted beside them; a foreign key
@@ -251,8 +273,8 @@ export const persistMintedRecords = async (
   await dbOf(scope).execute(sql`
     with
     minted_characters as (
-      insert into ${characters} (project_id, id, name)
-      select ${scope.projectId}, r.id, r.name
+      insert into ${characters} (project_id, id, name, origin)
+      select ${scope.projectId}, r.id, r.name, 'derived'::character_origin
       from jsonb_to_recordset(${jsonb(characterRowsToAdd.map((row) => ({ id: row.id, name: row.name })))}) as r(id uuid, name text)
       on conflict do nothing
       returning id
@@ -324,19 +346,44 @@ export const readMentionLabels = async (
  * how a character who is discussed but never speaks gets a record." A person
  * who never speaks has no cue for derivation to mint from, so the record is
  * authored here, once, and derivation counts the mention edge from then on.
+ *
+ * ## A character gets its name's spelling bound, in the same statement
+ *
+ * Until 2026-09-17 this inserted the bare row and nothing else, while
+ * `createCharacter` and a pass's mint both bind `cueSpelling(name)` as the
+ * record's first alias. `resolveSubject` matches exact keys against bound
+ * cues only, so `@Hale` in action followed by a `HALE` cue produced a queue
+ * row *proposing* the record the writer had just made - and, on `New
+ * character`, a duplicate. `cue` is the spelling to bind (`null` for a
+ * location); the `(project_id, cue)` unique index makes a held spelling a
+ * silent no-row, so the record is still made, cue-less, exactly as
+ * `createCharacter` behaves when the spelling is somebody else's. `bound_by`
+ * is null: the binding is the name's, not a hand bind.
  */
 export const createMentionTarget = async (
   scope: ProjectScope,
   entity: 'character' | 'location',
   name: string,
+  cue: string | null,
 ): Promise<MentionLabel> => {
   const db = dbOf(scope)
   if (entity === 'character') {
-    const rows = await db
-      .insert(characters)
-      .values({ ...tenant(scope), name })
-      .returning({ id: characters.id, name: characters.name })
-    const row = rows[0]
+    const rows = await db.execute(sql`
+      with created as (
+        insert into ${characters} (project_id, name, origin)
+        values (${scope.projectId}, ${name}, 'mention'::character_origin)
+        returning id, name
+      ),
+      bound as (
+        insert into ${characterBoundCues} (project_id, character_id, cue)
+        select ${scope.projectId}, created.id, ${cue} from created
+        where ${cue}::text is not null
+        on conflict do nothing
+        returning cue
+      )
+      select id, name from created
+    `)
+    const row = rows[0] as { readonly id: string; readonly name: string } | undefined
     if (row === undefined) throw new Error('Folio: inserting a character returned no row.')
     return { entity, id: characterId(row.id), label: row.name }
   }

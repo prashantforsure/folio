@@ -1,13 +1,24 @@
 'use client'
 
-import type { EpisodeSlug, ProjectId } from '@folio/contracts'
+import type { AskRequest, EpisodeSlug, ProjectId } from '@folio/contracts'
 import { Icon } from '@folio/ui'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import Link from 'next/link'
+import type { ReactNode } from 'react'
+
 import { listAssistantChats, openAssistantChat, startAssistantChat } from '../../../../../../lib/assistant/actions'
 import type { ChatRow, MessageRow } from '../../../../../../lib/assistant/result'
+import type { CharacterFacts } from '../../../../../../lib/characters/facts'
+import { useCharacterFacts } from '../../../../../../lib/characters/facts'
+import { citeOf } from '../../../../../../lib/characters/figures'
+import type { LocationFacts } from '../../../../../../lib/locations/facts'
+import { useLocationFacts } from '../../../../../../lib/locations/facts'
 import { useEphemeral } from '../../../../../../lib/state/ephemeral'
+import { characterHref } from '../../../../../../lib/workspace/hrefs'
 import type { RailSection, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
+import type { CitationChip } from './citation-chips'
+import { CitationChips } from './citation-chips'
 import { Orb } from './orb'
 
 /**
@@ -38,9 +49,33 @@ import { Orb } from './orb'
  * Above 1200px the panel is a flex sibling and the layout shrinks; below it
  * is absolutely positioned over the content with the README's shadow. The
  * shell decides which and forces the sidebar closed in the second case.
+ *
+ * ## Two kinds of chip
+ *
+ * An `ask` chip prefills the composer - a question typed for the writer.
+ * A `report` chip is answered by the route itself: AGENTS.md, The AI agent -
+ * "A report never calls a model. Reports are arithmetic over the node list
+ * and derived entities." The Characters route publishes what its chips
+ * count (`lib/characters/facts.ts`), and the panel prints the sentence with
+ * a mono `report · no model` chip and the citations - it works with the
+ * assistant disconnected. The labels stay verbatim; the first chip names the
+ * open record when the drawer has one.
+ *
+ * ## What the model read
+ *
+ * On Locations the panel still reads one episode - the shell's fallback -
+ * while the route is project-wide, so the subhead says which (`Reading
+ * Episode 2.`). On Characters (ruled 2026-09-17, the rebuild's phase 4)
+ * it reads the whole project - `scope: 'project'`, every episode under
+ * `[E2 Sc 9]` headers - and, with the drawer open, sends the record as
+ * `focus` so the model knows who "she" is; the subhead says `Reading all
+ * 3 episodes.` and `data-assistant-focus` names the record. A `Scene N`
+ * or `E2 Sc 9` in an answer becomes a citation chip, and on `/characters`
+ * a link into the script. Project scope is sent on `/characters` only -
+ * the widening is per route, and AGENTS.md puts each one behind a question.
  */
 
-type Chip = { readonly label: string; readonly tone: 'live' | 'warn' | 'accent' | 'ok' | 'ink3' }
+type Chip = { readonly label: string; readonly tone: 'live' | 'warn' | 'accent' | 'ok' | 'ink3'; readonly kind?: 'report' }
 
 const CHIPS: readonly Chip[] = [
   { label: 'Punch up this scene', tone: 'live' },
@@ -99,36 +134,46 @@ const PRODUCTION_CHIPS: readonly Chip[] = [
 const PRODUCTION_SUBHEAD = 'Ask about this reel, or have me propose shots from the scene.'
 
 /**
- * The Characters route's chips and subhead - `docs/ui design/Route -
- * Characters v2.dc.html`. The mockup names the selected character
- * ("Draft Meera's needs", "...what Meera wants and needs"); the panel is
- * the shell's and cannot see the drawer's record, so the first chip and
- * the subhead say "a character". The other two are verbatim.
+ * The Characters route's chips and subhead. The first names the open
+ * record when the drawer has one (the mockup's "Draft Meera's needs"),
+ * read from the facts cell the workspace publishes; the other two are
+ * reports - the route already counts them (`neverShare`, `bio === null`),
+ * so the panel answers without a model.
  */
-const CHARACTERS_CHIPS: readonly Chip[] = [
-  { label: "Draft a character's needs", tone: 'accent' },
-  { label: 'Who never shares a scene?', tone: 'warn' },
-  { label: 'Find characters with no description', tone: 'ok' },
+const charactersChips = (facts: CharacterFacts | null): readonly Chip[] => [
+  { label: facts?.open == null ? "Draft a character's needs" : `Draft ${facts.open.name}'s needs`, tone: 'accent' },
+  { label: 'Who never shares a scene?', tone: 'warn', kind: 'report' },
+  { label: 'Find characters with no description', tone: 'ok', kind: 'report' },
 ]
 
-const CHARACTERS_SUBHEAD = 'Ask about the cast, or have me draft what a character wants and needs.'
+const charactersSubhead = (facts: CharacterFacts | null): string =>
+  facts?.open == null
+    ? 'Ask about the cast, or have me draft what a character wants and needs.'
+    : `Ask about the cast, or have me draft what ${facts.open.name} wants and needs.`
 
 /**
- * The Locations route's chips and subhead - `docs/ui design/Route -
- * Locations v2.dc.html`. The same shape as the Characters': the mockup
- * names the selected place ("Describe Kamathi Chawl", "...describe Kamathi
- * Chawl from its scenes"); the panel cannot see the drawer's record, so the
- * first chip and the subhead say "a location". The other two are verbatim.
+ * The Locations route's chips and subhead - the v2 mockup's words where
+ * they still fit (`Describe a location from its scenes`, `Find locations
+ * used only once`), the third re-worded as the report it is.
  */
-const LOCATIONS_CHIPS: readonly Chip[] = [
-  { label: 'Describe a location from its scenes', tone: 'accent' },
-  { label: 'Find locations used only once', tone: 'warn' },
-  { label: 'Group night scenes by place', tone: 'ok' },
-]
-
 const LOCATIONS_SUBHEAD = 'Ask about the locations, or have me describe one from its scenes.'
 
-const chipsFor = (route: WorkspaceRoute | null): readonly Chip[] =>
+/**
+ * Since the Locations rebuild (2026-09-18) the panel can see the drawer's
+ * record through the facts cell the workspace publishes
+ * (`lib/locations/facts.ts`), so the first chip names it; the other two are
+ * reports the route already counts (`oneOffs`, `nightExteriors`).
+ */
+const locationsChips = (places: LocationFacts | null): readonly Chip[] => [
+  { label: places?.open == null ? 'Describe a location from its scenes' : `Describe ${places.open.name} from its scenes`, tone: 'accent' },
+  { label: 'Find locations used only once', tone: 'warn', kind: 'report' },
+  { label: 'Which sets have night exteriors?', tone: 'ok', kind: 'report' },
+]
+
+const locationsSubhead = (places: LocationFacts | null): string =>
+  places?.open == null ? LOCATIONS_SUBHEAD : `Ask about the locations, or have me describe ${places.open.name} from its scenes.`
+
+const chipsFor = (route: WorkspaceRoute | null, facts: CharacterFacts | null, places: LocationFacts | null): readonly Chip[] =>
   route === 'outline'
     ? OUTLINE_CHIPS
     : route === 'storyboard'
@@ -136,12 +181,12 @@ const chipsFor = (route: WorkspaceRoute | null): readonly Chip[] =>
       : route === 'production'
         ? PRODUCTION_CHIPS
         : route === 'characters'
-          ? CHARACTERS_CHIPS
+          ? charactersChips(facts)
           : route === 'locations'
-            ? LOCATIONS_CHIPS
+            ? locationsChips(places)
             : CHIPS
 
-const subheadFor = (route: WorkspaceRoute | null, section: RailSection | null): string =>
+const subheadFor = (route: WorkspaceRoute | null, section: RailSection | null, facts: CharacterFacts | null, places: LocationFacts | null): string =>
   route === 'outline'
     ? OUTLINE_SUBHEAD
     : route === 'storyboard'
@@ -149,10 +194,149 @@ const subheadFor = (route: WorkspaceRoute | null, section: RailSection | null): 
       : route === 'production'
         ? PRODUCTION_SUBHEAD
         : route === 'characters'
-          ? CHARACTERS_SUBHEAD
+          ? charactersSubhead(facts)
           : route === 'locations'
-            ? LOCATIONS_SUBHEAD
+            ? locationsSubhead(places)
             : SUBHEAD[section ?? 'writing']
+
+/** The project-scoped routes: the panel says what it reads - the whole project on both since 2026-09-18. */
+const PROJECT_ROUTES: readonly WorkspaceRoute[] = ['characters', 'locations']
+
+/** The routes the model reads the whole project on: Characters by the 2026-09-17 ruling, Locations by the 2026-09-18 one (with the location records beside the cast). */
+const WHOLE_PROJECT_ROUTES: readonly WorkspaceRoute[] = ['characters', 'locations']
+
+/** A report's answer, printed by the panel: the sentence, its citations, the records it names. */
+type Report = {
+  readonly id: string
+  readonly role: 'report'
+  readonly label: string
+  readonly sentence: string
+  readonly cites: readonly CitationChip[]
+  readonly people: readonly { readonly id: string; readonly name: string }[]
+  readonly createdAt: string
+}
+
+const reportFor = (label: string, facts: CharacterFacts): Omit<Report, 'id' | 'createdAt'> | null => {
+  const cite = (ref: CharacterFacts['index'][number] | null): readonly CitationChip[] =>
+    ref === null ? [] : [citeOf(facts.projectId, facts.shape, ref)]
+  if (label === 'Who never shares a scene?') {
+    const pair = facts.neverShare
+    if (pair === null) {
+      return { role: 'report', label, sentence: 'Every pair of principals shares at least one scene.', cites: [], people: [] }
+    }
+    return {
+      role: 'report',
+      label,
+      sentence: `${pair.a.name} and ${pair.b.name} never share a scene. Two principals - ${String(pair.a.scenes)} and ${String(pair.b.scenes)} scenes - with no contact across ${String(pair.episodes)} ${pair.episodes === 1 ? 'episode' : 'episodes'}.`,
+      cites: [...cite(pair.a.first), ...cite(pair.b.first)],
+      people: [pair.a, pair.b].map((person) => ({ id: person.id, name: person.name })),
+    }
+  }
+  if (label === 'Find characters with no description') {
+    const people = facts.noDescription
+    return {
+      role: 'report',
+      label,
+      sentence:
+        people.length === 0
+          ? 'Every character has a description.'
+          : `${String(people.length)} ${people.length === 1 ? 'character has' : 'characters have'} no description.`,
+      cites: [],
+      people,
+    }
+  }
+  return null
+}
+
+/** The Locations route's reports, over the facts its workspace publishes: arithmetic, no model. */
+const placeReportFor = (label: string, places: LocationFacts): Omit<Report, 'id' | 'createdAt'> | null => {
+  const cite = (ref: LocationFacts['index'][number] | null): readonly CitationChip[] =>
+    ref === null ? [] : [citeOf(places.projectId, places.shape, ref)]
+  if (label === 'Find locations used only once') {
+    const once = places.oneOffs
+    return {
+      role: 'report',
+      label,
+      sentence:
+        once.length === 0
+          ? 'Every place the script names is used more than once.'
+          : `${String(once.length)} ${once.length === 1 ? 'place is' : 'places are'} used once: ${once.map((place) => place.name).join(', ')}. A one-off set is a day the schedule pays for one scene.`,
+      cites: once.flatMap((place) => cite(place.first)),
+      people: [],
+    }
+  }
+  if (label === 'Which sets have night exteriors?') {
+    const nights = places.nightExteriors
+    return {
+      role: 'report',
+      label,
+      sentence:
+        nights.length === 0
+          ? 'No heading is an exterior at night.'
+          : `${String(nights.length)} ${nights.length === 1 ? 'set has' : 'sets have'} night exteriors: ${nights.map((place) => `${place.name} (${String(place.nights)})`).join(', ')}.`,
+      cites: nights.flatMap((place) => cite(place.first)),
+      people: [],
+    }
+  }
+  return null
+}
+
+/**
+ * An answer's body with every `Scene N` / `Sc N` turned into a citation chip
+ * for the episode the model read - a link into the script where the scene
+ * index says the number exists (the Characters route publishes it), a plain
+ * chip elsewhere. Presentation only; the text is the model's.
+ */
+const SCENE_REF = /\b(?:E(\d+)\s+)?(?:Scene|Sc\.?)\s+(\d+)\b/gu
+
+const CitedBody = ({
+  body,
+  ordinal,
+  facts,
+  episode,
+}: {
+  readonly body: string
+  readonly ordinal: number | null
+  /** The scene index and the address a `Scene N` links with - the Characters or Locations facts cell. */
+  readonly facts: Pick<CharacterFacts, 'projectId' | 'shape' | 'index'> | null
+  readonly episode: EpisodeSlug
+}) => {
+  const parts: ReactNode[] = []
+  let last = 0
+  for (const match of body.matchAll(SCENE_REF)) {
+    const index = match.index
+    const number = Number(match[2])
+    if (index === undefined || Number.isNaN(number)) continue
+    parts.push(body.slice(last, index))
+    // `E2 Sc 9` names its episode (project scope); a bare `Scene 9` is the read episode's.
+    const cited = match[1] === undefined ? null : Number(match[1])
+    const citedOrdinal = cited ?? ordinal
+    const label = citedOrdinal === null ? match[0] : `E${String(citedOrdinal)} Sc ${String(number)}`
+    const ref =
+      cited === null
+        ? facts?.index.find((entry) => entry.episode === episode && entry.number === number)
+        : facts?.index.find((entry) => entry.episodeOrdinal === cited && entry.number === number)
+    parts.push(
+      ref === undefined || facts === null ? (
+        <span key={index} className="folio-cite mx-[2px] align-baseline">
+          {label}
+        </span>
+      ) : (
+        <Link
+          key={index}
+          href={citeOf(facts.projectId, facts.shape, ref).href}
+          data-cite-link
+          className="folio-cite mx-[2px] align-baseline no-underline hover:border-accent hover:text-accent hover:no-underline"
+        >
+          {label}
+        </Link>
+      ),
+    )
+    last = index + match[0].length
+  }
+  parts.push(body.slice(last))
+  return <>{parts}</>
+}
 
 const TONE_CLASS: Record<Chip['tone'], string> = {
   live: 'bg-live',
@@ -173,11 +357,13 @@ const SUBHEAD: Record<RailSection, string> = {
 
 const OUTLINE_SUBHEAD = 'Ask about the outline, or have me expand a beat, a synopsis or an act turn.'
 
-type Turn = MessageRow | { readonly id: 'pending'; readonly role: 'assistant'; readonly body: string; readonly createdAt: '' }
+type Turn = MessageRow | { readonly id: 'pending'; readonly role: 'assistant'; readonly body: string; readonly createdAt: '' } | Report
 
 export const AssistantPanel = ({
   projectId,
   episode,
+  episodeCount,
+  reading,
   section,
   route,
   connected,
@@ -186,6 +372,10 @@ export const AssistantPanel = ({
 }: {
   readonly projectId: ProjectId
   readonly episode: EpisodeSlug
+  /** How many episodes the project has - `Reading all 3 episodes.` on Characters. */
+  readonly episodeCount: number
+  /** The read episode's label (`Episode 2 · Standpipe`), for the project-scoped routes' subhead. */
+  readonly reading: string | null
   readonly section: RailSection | null
   /** The route under the section, when the URL names one: the Outline has its own copy. */
   readonly route: WorkspaceRoute | null
@@ -203,7 +393,16 @@ export const AssistantPanel = ({
   const scroller = useRef<HTMLDivElement>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
   const abort = useRef<AbortController | null>(null)
-  const { assistantPrompt, setAssistantPrompt } = useEphemeral()
+  const { assistantPrompt, setAssistantPrompt, assistantFocus } = useEphemeral()
+  const facts = useCharacterFacts()
+  const places = useLocationFacts()
+  const readOrdinal = (facts ?? places)?.episodes.find((entry) => entry.slug === episode)?.ordinal ?? null
+  const projectScoped = route !== null && PROJECT_ROUTES.includes(route)
+  const wholeProject = route !== null && WHOLE_PROJECT_ROUTES.includes(route)
+  const focus =
+    wholeProject && assistantFocus !== null && ((route === 'characters' && assistantFocus.kind === 'character') || (route === 'locations' && assistantFocus.kind === 'location'))
+      ? assistantFocus
+      : null
 
   // A route handed a question in (Production's `Suggest rewrite`): it becomes the draft, once.
   useEffect(() => {
@@ -287,10 +486,19 @@ export const AssistantPanel = ({
     const controller = new AbortController()
     abort.current = controller
     try {
+      const request: AskRequest = {
+        projectId,
+        episode,
+        chatId,
+        message,
+        scope: wholeProject ? 'project' : 'episode',
+        ...(focus === null ? {} : { focus: { kind: focus.kind, id: focus.id } }),
+        ...(route === 'locations' ? { places: true } : {}),
+      }
       const response = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, episode, chatId, message }),
+        body: JSON.stringify(request),
         signal: controller.signal,
       })
       if (!response.ok || response.body === null) {
@@ -327,7 +535,7 @@ export const AssistantPanel = ({
       abort.current = null
       setBusy(false)
     }
-  }, [busy, chat, connected, draft, episode, projectId])
+  }, [busy, chat, connected, draft, episode, focus, projectId, wholeProject])
 
   const empty = turns.length === 0
 
@@ -335,6 +543,8 @@ export const AssistantPanel = ({
     <aside
       data-assistant-panel
       data-in-flow={inFlow ? 'true' : 'false'}
+      data-assistant-scope={wholeProject ? 'project' : 'episode'}
+      data-assistant-focus={focus === null ? undefined : focus.id}
       aria-label="Assistant"
       className={`folio-assistant-panel ${inFlow ? 'relative' : 'absolute inset-y-0 right-0'} z-[3] flex flex-none flex-col`}
     >
@@ -399,35 +609,83 @@ export const AssistantPanel = ({
           <Orb size={124} drift />
           <div className="flex flex-col gap-[7px] text-center">
             <span className="text-17 font-medium tracking-title">How can I help?</span>
-            <span className="text-13-5 leading-[1.55] text-ink2">{subheadFor(route, section)}</span>
+            <span className="text-13-5 leading-[1.55] text-ink2">
+              {wholeProject ? (
+                <span data-assistant-reading>Reading {episodeCount === 1 ? 'the script' : `all ${String(episodeCount)} episodes`}. </span>
+              ) : projectScoped && reading !== null ? (
+                <span data-assistant-reading>Reading {reading}. </span>
+              ) : null}
+              {subheadFor(route, section, facts, places)}
+            </span>
           </div>
         </div>
       ) : (
         <div ref={scroller} data-assistant-turns className="flex min-h-0 flex-1 flex-col gap-[14px] overflow-y-auto px-[16px] py-[16px]">
-          {turns.map((turn) => (
-            <div
-              key={turn.id}
-              data-turn={turn.role}
-              className={
-                turn.role === 'user'
-                  ? 'max-w-[86%] self-end whitespace-pre-wrap rounded-[14px] rounded-br-[4px] bg-s2 px-[12px] py-[8px] text-13-5 leading-[1.55] text-ink'
-                  : 'whitespace-pre-wrap text-13-5 leading-[1.65] text-read'
-              }
-            >
-              {turn.body.length === 0 && turn.id === 'pending' ? <span className="folio-thinking">Thinking</span> : turn.body}
-            </div>
-          ))}
+          {turns.map((turn) =>
+            turn.role === 'report' ? (
+              <div key={turn.id} data-turn="report" data-report-note className="flex flex-col gap-[6px] rounded-[12px] border border-line2 bg-s1 px-[12px] py-[10px]">
+                <span className="flex items-center gap-[8px]">
+                  <span className="folio-cite">report · no model</span>
+                  <span className="min-w-0 truncate text-11 text-ink3">{turn.label}</span>
+                </span>
+                <span className="text-13-5 leading-[1.6] text-read" style={{ textWrap: 'pretty' }}>
+                  {turn.sentence}
+                </span>
+                {turn.people.length === 0 ? null : (
+                  <span className="flex flex-wrap items-center gap-[4px]">
+                    {turn.people.map((person) => (
+                      <Link
+                        key={person.id}
+                        href={characterHref(projectId, person.id)}
+                        className="folio-cite no-underline hover:border-accent hover:text-accent hover:no-underline"
+                      >
+                        {person.name}
+                      </Link>
+                    ))}
+                  </span>
+                )}
+                {turn.cites.length === 0 ? null : <CitationChips refs={turn.cites} />}
+              </div>
+            ) : (
+              <div
+                key={turn.id}
+                data-turn={turn.role}
+                className={
+                  turn.role === 'user'
+                    ? 'max-w-[86%] self-end whitespace-pre-wrap rounded-[14px] rounded-br-[4px] bg-s2 px-[12px] py-[8px] text-13-5 leading-[1.55] text-ink'
+                    : 'whitespace-pre-wrap text-13-5 leading-[1.65] text-read'
+                }
+              >
+                {turn.body.length === 0 && turn.id === 'pending' ? (
+                  <span className="folio-thinking">Thinking</span>
+                ) : turn.role === 'assistant' ? (
+                  <CitedBody body={turn.body} ordinal={readOrdinal} facts={route === 'characters' ? facts : route === 'locations' ? places : null} episode={episode} />
+                ) : (
+                  turn.body
+                )}
+              </div>
+            ),
+          )}
         </div>
       )}
 
       {empty ? (
         <div className="flex flex-none flex-col items-start gap-[7px] px-[20px] pb-[14px]">
-          {chipsFor(route).map((chip) => (
+          {chipsFor(route, facts, places).map((chip) => (
             <button
               key={chip.label}
               type="button"
               className="folio-chip-button"
+              data-chip-kind={chip.kind ?? 'ask'}
               onClick={() => {
+                if (chip.kind === 'report' && (facts !== null || places !== null)) {
+                  const report = route === 'locations' && places !== null ? placeReportFor(chip.label, places) : facts === null ? null : reportFor(chip.label, facts)
+                  if (report !== null) {
+                    const stamp = new Date().toISOString()
+                    setTurns((existing) => [...existing, { ...report, id: `report:${stamp}`, createdAt: stamp }])
+                    return
+                  }
+                }
                 setDraft(chip.label)
                 composer.current?.focus()
               }}

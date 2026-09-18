@@ -1,4 +1,5 @@
-import type { InlineContent, MentionLabel, ScreenplayNode } from '@folio/script'
+import type { SceneRef } from '@folio/contracts'
+import type { InlineContent, MentionLabel, NodeId, ScreenplayNode } from '@folio/script'
 
 import type { LabelFor } from '../script/inline'
 import { CONTEXT_CHAR_CAP } from './model'
@@ -16,29 +17,44 @@ import { CONTEXT_CHAR_CAP } from './model'
  * included and marked, because a writer asking "what did I leave myself a
  * note about" expects them; nothing here is an export.
  *
+ * ## Two scopes
+ *
+ * `episode` is the panel's standing since 2026-09-16: one episode's script,
+ * byte-identical to what it was (the snapshot test guards the writing
+ * routes). `project` is every episode, in order, under `[Episode N]`
+ * markers with `[E2 Sc 9]` headers so an answer cites across them - the
+ * Characters route's, by the 2026-09-17 ruling. The cap is shared across
+ * the episodes by water-filling: each is cut at a scene boundary and says
+ * so, so a cut is never silent.
+ *
+ * ## Focus
+ *
+ * On `/characters` with a record open the system prompt ends with a Focus
+ * block - the record as the drawer shows it - so "what does she want" has
+ * a "she". Volatile, so it is its own block after the cacheable prefix.
+ *
  * ## Read-only, and said so
  *
  * The system prompt tells the model it cannot edit the script. AGENTS.md,
- * The AI agent: "Every write returns a proposal, never a mutation" - and
- * this pass builds no proposal surface, so the honest instruction is that
- * suggestions are text the writer applies by hand.
- *
- * ## Stable first, volatile last
- *
- * The system prompt is one block: instructions, then the cast, then the
- * script. Between turns of one chat only the messages change, so the whole
- * block is a cacheable prefix; `cache_control` goes on it in `route.ts`.
+ * The AI agent: "Every write returns a proposal, never a mutation" - the
+ * chat builds no proposal surface, so the honest instruction is that
+ * suggestions are text the writer applies by hand. A draft that lands in
+ * a field lands unsaved, through the drawer's own button, not from here.
  */
 
 export type AssistantContext = {
   readonly system: string
+  /** The Focus block, when the writer has a record open; sent as its own, uncached block. */
+  readonly focus: string | null
   /** True when the script was cut to fit `CONTEXT_CHAR_CAP`. */
   readonly truncated: boolean
+  /** In project scope: the ordinals of the episodes that were cut. */
+  readonly cut: readonly number[]
 }
 
 const INSTRUCTIONS = `You are the writing assistant inside Folio, a screenwriting workspace. You are talking to the writer of the screenplay below.
 
-What you can do: read the script and the cast list, answer questions about them, point out continuity gaps, suggest lines, beats, scenes or character notes, and talk through the draft.
+What you can do: read the script, the cast list and (on the Locations route) the location records, answer questions about them, point out continuity gaps, suggest lines, beats, scenes, character or location notes, and talk through the draft.
 
 What you cannot do: change the script. You have no way to edit it. When you suggest a change, write it out plainly so the writer can put it in themselves; do not claim to have made it.
 
@@ -47,6 +63,8 @@ How to answer:
 - Match the writer's language when quoting dialogue; the script may mix languages.
 - Keep answers as short as the question allows. A yes-or-no question gets a short answer; a "punch up this scene" request gets the scene.
 - Never summarise the whole script unless asked. The writer wrote it.`
+
+const PROJECT_CITING = `- The script below spans every episode. Cite a scene as "E2 Sc 9" - the episode and the scene number as the headers write them - so the writer can find it.`
 
 const labelBookOf = (labels: readonly MentionLabel[]): LabelFor => {
   const book = new Map<string, string>()
@@ -60,11 +78,11 @@ const runsText = (content: InlineContent, labelFor: LabelFor): string =>
     .map((run) => (run.kind === 'text' ? run.text : (labelFor(run.target.entity, run.target.id) ?? '?')))
     .join('')
 
-const renderNode = (node: ScreenplayNode, labelFor: LabelFor, sceneNumber: number): string => {
+const renderNode = (node: ScreenplayNode, labelFor: LabelFor, heading: string): string => {
   const text = runsText(node.content, labelFor).trim()
   switch (node.type) {
     case 'scene':
-      return `\n[Scene ${String(sceneNumber)}] ${text.toUpperCase()}`
+      return `\n${heading} ${text.toUpperCase()}`
     case 'character':
       return `\n${text.toUpperCase()}${node.modifiers.length > 0 ? ` (${node.modifiers.join(', ')})` : ''}`
     case 'paren':
@@ -93,7 +111,7 @@ export const renderScript = (
   let truncated = false
   for (const node of nodes) {
     if (node.type === 'scene') scene += 1
-    const line = renderNode(node, labelFor, scene)
+    const line = renderNode(node, labelFor, `[Scene ${String(scene)}]`)
     if (length + line.length > CONTEXT_CHAR_CAP && node.type === 'scene') {
       truncated = true
       break
@@ -104,40 +122,290 @@ export const renderScript = (
   return { text: lines.join('\n').trim(), truncated }
 }
 
+// ---------------------------------------------------------------------------
+// The project, by scene
+// ---------------------------------------------------------------------------
+
+export type EpisodeNodes = {
+  readonly ordinal: number
+  readonly title: string
+  readonly nodes: readonly ScreenplayNode[]
+}
+
+/** One scene's text as the model reads it: the ref, its label, the text under the heading (the heading itself excluded). */
+export type SceneText = {
+  readonly ref: SceneRef
+  readonly label: string
+  readonly text: string
+}
+
+/**
+ * The project cut into scenes, **keyed on the scene index's heading ids**,
+ * never on every `scene` node: `derive.ts` demotes an unreadable heading
+ * into the previous scene, and the index is the list of headings the pass
+ * accepted. Nodes before the first indexed heading are dropped; comments
+ * are skipped - a note is not evidence about a character.
+ */
+export const sliceScenes = (
+  episodes: readonly EpisodeNodes[],
+  labels: readonly MentionLabel[],
+  index: readonly SceneRef[],
+): ReadonlyMap<NodeId, SceneText> => {
+  const labelFor = labelBookOf(labels)
+  const refs = new Map<NodeId, SceneRef>(index.map((ref) => [ref.sceneNodeId, ref]))
+  const out = new Map<NodeId, SceneText>()
+  for (const episode of episodes) {
+    let current: { ref: SceneRef; lines: string[] } | null = null
+    const flush = (): void => {
+      if (current === null) return
+      out.set(current.ref.sceneNodeId, {
+        ref: current.ref,
+        label: `E${String(current.ref.episodeOrdinal)} Sc ${String(current.ref.number)}`,
+        text: current.lines.join('\n').trim(),
+      })
+    }
+    for (const node of episode.nodes) {
+      if (node.type === 'scene') {
+        const ref = refs.get(node.id)
+        if (ref !== undefined) {
+          flush()
+          current = { ref, lines: [] }
+          continue
+        }
+      }
+      if (current === null || node.type === 'comment') continue
+      // A heading the pass did not accept belongs to the scene it is in, as a line of it.
+      current.lines.push(node.type === 'scene' ? `\n${runsText(node.content, labelFor).trim()}` : renderNode(node, labelFor, ''))
+    }
+    flush()
+  }
+  return out
+}
+
+/**
+ * Every episode's script, in order, `[Episode N · Title]` markers between,
+ * `[E2 Sc 9] HEADING` on each accepted heading, the cap shared by
+ * water-filling: every episode gets an equal share, an episode that needs
+ * less gives its remainder to the rest, and an episode over its share is
+ * cut at a scene boundary with a line saying so. Returns which were cut.
+ */
+export const renderProject = (
+  episodes: readonly EpisodeNodes[],
+  labels: readonly MentionLabel[],
+  index: readonly SceneRef[],
+  cap: number,
+): { readonly text: string; readonly cut: readonly number[] } => {
+  const labelFor = labelBookOf(labels)
+  const refs = new Map<NodeId, SceneRef>(index.map((ref) => [ref.sceneNodeId, ref]))
+  const rendered = episodes.map((episode) => {
+    const lines: { text: string; scene: boolean }[] = []
+    for (const node of episode.nodes) {
+      const ref = node.type === 'scene' ? refs.get(node.id) : undefined
+      const heading = ref === undefined ? '[Scene]' : `[E${String(ref.episodeOrdinal)} Sc ${String(ref.number)}]`
+      lines.push({ text: renderNode(node, labelFor, heading), scene: node.type === 'scene' })
+    }
+    return { episode, lines, length: lines.reduce((total, line) => total + line.text.length + 1, 0) }
+  })
+
+  // Water-filling: shares are handed out smallest need first, so a short
+  // episode never takes more than it needs and the rest share the remainder.
+  const budget = new Map<number, number>()
+  let remaining = cap
+  const bySize = [...rendered].sort((a, b) => a.length - b.length)
+  bySize.forEach((entry, at) => {
+    const share = Math.floor(remaining / (bySize.length - at))
+    const given = Math.min(share, entry.length)
+    budget.set(entry.episode.ordinal, given)
+    remaining -= given
+  })
+
+  const cut: number[] = []
+  const blocks = rendered.map(({ episode, lines }) => {
+    const allowed = budget.get(episode.ordinal) ?? 0
+    const kept: string[] = []
+    let length = 0
+    let stopped = false
+    for (const line of lines) {
+      if (length + line.text.length > allowed && line.scene && kept.length > 0) {
+        stopped = true
+        break
+      }
+      kept.push(line.text)
+      length += line.text.length + 1
+    }
+    if (stopped) {
+      cut.push(episode.ordinal)
+      kept.push(`\n[Episode ${String(episode.ordinal)} continues; it was cut here to fit. Say so if the writer asks about a later scene.]`)
+    }
+    const marker = episode.title.trim() === '' ? `[Episode ${String(episode.ordinal)}]` : `[Episode ${String(episode.ordinal)} · ${episode.title}]`
+    return `${marker}\n${kept.join('\n').trim()}`
+  })
+  return { text: blocks.join('\n\n').trim(), cut }
+}
+
+// ---------------------------------------------------------------------------
+// Focus
+// ---------------------------------------------------------------------------
+
+/**
+ * The Locations drawer's record as the Focus block reads it (the Locations
+ * rebuild, 2026-09-18): the name and its set texts, where it is in the
+ * script, what the page says about it, and the production fields.
+ */
+export type LocationFocusInput = {
+  readonly kind: 'location'
+  readonly name: string
+  readonly sluglines: readonly string[]
+  readonly parent: string | null
+  readonly subSets: readonly string[]
+  readonly scenes: number
+  readonly perEpisode: readonly { readonly ordinal: number; readonly scenes: number }[]
+  /** `INT D 3 · INT N 2 · EXT D 1 · EXT N 3`. */
+  readonly quadrant: string
+  readonly first: string | null
+  readonly last: string | null
+  readonly intro: string | null
+  readonly status: string
+  readonly address: string | null
+  readonly description: string | null
+  readonly shootingDays: number
+}
+
+/** One location as the Locations route's system block lists it. */
+export type PlaceInput = {
+  readonly name: string
+  readonly sluglines: readonly string[]
+  readonly parent: string | null
+  readonly scenes: number
+  /** `4 D · 5 N`, or null with no lit heading. */
+  readonly dayNight: string | null
+  readonly status: string
+  readonly line: string | null
+}
+
+export type FocusInput = {
+  readonly kind?: 'character'
+  readonly name: string
+  readonly cues: readonly string[]
+  readonly status: string
+  readonly role: string | null
+  readonly bio: string | null
+  readonly wants: string | null
+  readonly needs: string | null
+  readonly scenes: number
+  readonly perEpisode: readonly { readonly ordinal: number; readonly scenes: number }[]
+  readonly lines: number
+}
+
+const written = (value: string | null): string => (value === null || value.trim() === '' ? 'not written' : value.trim())
+
+/** The Locations drawer's Focus block. */
+const locationFocusBlock = (focus: LocationFocusInput): string =>
+  [
+    `Focus: the writer has ${focus.name}'s record open on the Locations route.`,
+    `Name: ${focus.name}`,
+    `In the script as: ${focus.sluglines.length === 0 ? 'no set text bound yet' : focus.sluglines.join(', ')}`,
+    `Part of: ${focus.parent ?? 'a primary set of its own'}`,
+    `Sub-sets: ${focus.subSets.length === 0 ? 'none' : focus.subSets.join(', ')}`,
+    `Scenes: ${String(focus.scenes)}${focus.perEpisode.length > 1 ? ` (${focus.perEpisode.map((entry) => `E${String(entry.ordinal)} ${String(entry.scenes)}`).join(' · ')})` : ''} · ${focus.quadrant}`,
+    `First: ${focus.first ?? 'not on the page'} · Last: ${focus.last ?? 'not on the page'}`,
+    `First action under one of its headings: ${focus.intro === null ? 'none' : `"${focus.intro}"`}`,
+    `Scouting status: ${focus.status}`,
+    `Address: ${written(focus.address)}`,
+    `Description: ${written(focus.description)}`,
+    `Shooting days scheduled: ${String(focus.shootingDays)}`,
+    '',
+    `When the writer asks you to describe ${focus.name}, answer from the action lines under its headings, one or two sentences they can paste into the description, each citing the scene it comes from. You cannot write into the record yourself.`,
+  ].join('\n')
+
+/** The Focus block: the open record as the drawer shows it, and what a draft for it should be. */
+export const focusBlock = (focus: FocusInput | LocationFocusInput): string =>
+  'kind' in focus && focus.kind === 'location'
+    ? locationFocusBlock(focus)
+    : [
+    `Focus: the writer has ${focus.name}'s record open on the Characters route.`,
+    `Name: ${focus.name}`,
+    `In the script as: ${focus.cues.length === 0 ? 'no spelling bound yet' : focus.cues.join(', ')}`,
+    `Status: ${focus.status}`,
+    `Role: ${written(focus.role)}`,
+    `Description: ${written(focus.bio)}`,
+    `Wants: ${written(focus.wants)}`,
+    `Needs: ${written(focus.needs)}`,
+    `Scenes: ${String(focus.scenes)}${focus.perEpisode.length > 1 ? ` (${focus.perEpisode.map((entry) => `E${String(entry.ordinal)} ${String(entry.scenes)}`).join(' · ')})` : ''} · ${String(focus.lines)} lines`,
+    '',
+    `When the writer asks you to draft something for ${focus.name}, answer with one or two sentences they can paste into the record, each citing the scene it comes from. You cannot write into the record yourself.`,
+  ].join('\n')
+
+// ---------------------------------------------------------------------------
+// The whole prompt
+// ---------------------------------------------------------------------------
+
+export type ScriptInput =
+  | { readonly kind: 'episode'; readonly episodeTitle: string; readonly nodes: readonly ScreenplayNode[] }
+  | { readonly kind: 'project'; readonly episodes: readonly EpisodeNodes[]; readonly index: readonly SceneRef[] }
+
 export const buildContext = ({
   projectTitle,
-  episodeTitle,
-  nodes,
+  script,
   labels,
   cast,
+  places,
+  focus,
 }: {
   readonly projectTitle: string
-  readonly episodeTitle: string
-  readonly nodes: readonly ScreenplayNode[]
+  readonly script: ScriptInput
   readonly labels: readonly MentionLabel[]
   /** Character names, with a short line each when the record has one. */
   readonly cast: readonly { readonly name: string; readonly line: string | null }[]
+  /** The location records, on the Locations route only (ruled 2026-09-18); absent elsewhere. */
+  readonly places?: readonly PlaceInput[]
+  readonly focus?: FocusInput | LocationFocusInput
 }): AssistantContext => {
-  const script = renderScript(nodes, labels)
   const castLines =
     cast.length === 0
       ? 'No character records yet - the cast is whoever the cues name.'
       : cast.map((person) => (person.line === null ? `- ${person.name}` : `- ${person.name}: ${person.line}`)).join('\n')
-  const scriptBlock =
-    nodes.length === 0
-      ? 'The script is empty. Nothing has been written yet.'
-      : `${script.text}${script.truncated ? '\n\n[The script continues; it was cut here to fit. Say so if the writer asks about a later scene.]' : ''}`
+  const placeLines =
+    places === undefined
+      ? []
+      : [
+          '',
+          'Locations (each with its set texts as the headings spell it, its scene count and day / night split, its scouting status):',
+          places.length === 0
+            ? 'No location records yet - the places are whatever the headings name.'
+            : places
+                .map((place) => {
+                  const head = `- ${place.name} (${place.sluglines.join(', ')})${place.parent === null ? '' : `, inside ${place.parent}`}: ${String(place.scenes)} ${place.scenes === 1 ? 'scene' : 'scenes'}${place.dayNight === null ? '' : ` · ${place.dayNight}`} · ${place.status}`
+                  return place.line === null ? head : `${head}\n  "${place.line}"`
+                })
+                .join('\n'),
+        ]
+
+  if (script.kind === 'episode') {
+    const rendered = renderScript(script.nodes, labels)
+    const scriptBlock =
+      script.nodes.length === 0
+        ? 'The script is empty. Nothing has been written yet.'
+        : `${rendered.text}${rendered.truncated ? '\n\n[The script continues; it was cut here to fit. Say so if the writer asks about a later scene.]' : ''}`
+    const system = [INSTRUCTIONS, '', `Project: ${projectTitle}`, `Episode: ${script.episodeTitle}`, '', 'Cast:', castLines, ...placeLines, '', 'Script:', scriptBlock].join('\n')
+    return { system, focus: focus === undefined ? null : focusBlock(focus), truncated: rendered.truncated, cut: [] }
+  }
+
+  const empty = script.episodes.every((episode) => episode.nodes.length === 0)
+  const rendered = empty ? { text: '', cut: [] } : renderProject(script.episodes, labels, script.index, CONTEXT_CHAR_CAP)
+  const scriptBlock = empty ? 'The script is empty. Nothing has been written yet.' : rendered.text
   const system = [
-    INSTRUCTIONS,
+    `${INSTRUCTIONS}\n${PROJECT_CITING}`,
     '',
     `Project: ${projectTitle}`,
-    `Episode: ${episodeTitle}`,
+    `Episodes: ${String(script.episodes.length)}`,
     '',
     'Cast:',
     castLines,
+    ...placeLines,
     '',
     'Script:',
     scriptBlock,
   ].join('\n')
-  return { system, truncated: script.truncated }
+  return { system, focus: focus === undefined ? null : focusBlock(focus), truncated: rendered.cut.length > 0, cut: rendered.cut }
 }

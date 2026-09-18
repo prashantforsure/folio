@@ -1,6 +1,9 @@
+import Link from 'next/link'
+
 import type { ExcerptLine } from '../../../../../../lib/scenes/excerpt'
 import type { SceneCard } from '../../../../../../lib/scenes/server'
 import { ABSENT, eighths as formatEighths } from '../../../../../../lib/workspace/format'
+import type { CharacterPath } from '../../../../../../lib/workspace/hrefs'
 
 /**
  * What every Scenes view prints and how: the number, the page, the eighths,
@@ -34,12 +37,28 @@ export const hasSynopsis = (value: string | null): value is string => value !== 
 /** What a card says where a synopsis would be. The mockup's line, as a button that opens the editor. */
 export const NO_SYNOPSIS = 'No synopsis yet · write one'
 
-/** `@MAYA` - the label book's casing, as the Storyboard's mention chips print it. */
-export const CastChip = ({ name, small }: { readonly name: string; readonly small?: boolean }) => (
-  <span className={`whitespace-nowrap rounded-pill bg-accent-bg text-accent ${small === true ? 'px-[7px] py-[1px] text-10-5' : 'px-[8px] py-[2px] text-11'}`}>
-    @{name}
-  </span>
-)
+/**
+ * `@MAYA` - the label book's casing, as the Storyboard's mention chips print
+ * it. With an `href` (`/characters/:id`, 2026-09-17) the chip is a link to
+ * the record; the click stops at the chip, not the card around it.
+ */
+export const CastChip = ({ name, small, href }: { readonly name: string; readonly small?: boolean; readonly href?: CharacterPath }) => {
+  const className = `whitespace-nowrap rounded-pill bg-accent-bg text-accent ${small === true ? 'px-[7px] py-[1px] text-10-5' : 'px-[8px] py-[2px] text-11'}`
+  return href === undefined ? (
+    <span className={className}>@{name}</span>
+  ) : (
+    <Link
+      href={href}
+      data-cast-link
+      className={`${className} no-underline hover:underline`}
+      onClick={(event) => {
+        event.stopPropagation()
+      }}
+    >
+      @{name}
+    </Link>
+  )
+}
 
 /** How many lines a node's tile shows before the fade. The mockup's preview draws six to eight. */
 export const TILE_EXCERPT_LINES = 8

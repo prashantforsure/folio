@@ -10,6 +10,7 @@ import type { RevisionRow } from '../../../../../../lib/script/panel'
 import type { ScriptStats } from '../../../../../../lib/script/stats'
 import { PAGINATION_CONTROLS, PAGINATION_CONTROL_COPY } from '../../../../../../lib/state/project-preferences'
 import type { PaginationControl } from '../../../../../../lib/state/project-preferences'
+import { useSession } from '../../../../../../lib/state/session'
 import { useDismiss } from '../_chrome/use-dismiss'
 
 /**
@@ -30,7 +31,10 @@ import { useDismiss } from '../_chrome/use-dismiss'
  *   the actions menu   Import, Export as .fdx, Undo; then the project row's
  *                      Pagination (Minimal / Paged / Live) and Format
  *                      (Hollywood / Asian), decided in the workspace and drawn
- *                      here; then the statistics, counted from the document.
+ *                      here; `Colour cues` (the Characters rebuild, phase 3 -
+ *                      each cue in its record's colour, a per-tab way of
+ *                      looking in `lib/state/session.ts`); then the
+ *                      statistics, counted from the document.
  *
  * Neither menu takes focus from the editor for longer than a click: every
  * button swallows `mousedown` so the caret stays where it was.
@@ -159,6 +163,29 @@ const Segment = ({ label, children }: { readonly label: string; readonly childre
   </div>
 )
 
+/** `Colour cues`: the session flag as a checkbox row, the caret kept. */
+const ColourCuesRow = () => {
+  const colourCues = useSession((state) => state.colourCues)
+  const setColourCues = useSession((state) => state.setColourCues)
+  return (
+    <div className="mt-[4px] border-t border-line2 px-[9px] pb-[6px] pt-[8px]">
+      <label className="flex cursor-pointer items-center gap-[8px] text-12 text-ink2" onMouseDown={keepCaret}>
+        <input
+          type="checkbox"
+          data-colour-cues-toggle
+          checked={colourCues}
+          onChange={(event) => {
+            setColourCues(event.target.checked)
+          }}
+          className="h-[13px] w-[13px] accent-[var(--accent)]"
+        />
+        Colour cues
+        <span className="ml-auto text-11 text-ink3">each cue in its record's colour</span>
+      </label>
+    </div>
+  )
+}
+
 export const ActionsMenu = memo(
   ({
     project,
@@ -273,6 +300,8 @@ export const ActionsMenu = memo(
                 </p>
               )}
             </div>
+
+            <ColourCuesRow />
 
             <div className="mt-[4px] border-t border-line2 px-[9px] pb-[4px] pt-[8px]">
               <span className="folio-eyebrow">Statistics</span>

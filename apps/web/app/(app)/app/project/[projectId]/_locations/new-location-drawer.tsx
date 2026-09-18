@@ -8,26 +8,24 @@ import { createLocation, saveLocation } from '../../../../../../lib/locations/ac
 import { setNewLocationOpen, useNewLocationOpen } from '../../../../../../lib/locations/compose'
 import { locationHref } from '../../../../../../lib/workspace/hrefs'
 import { DrawerNotice } from '../_chrome/drawer-parts'
-import { DrawerShell } from '../_chrome/drawer-shell'
+import { DrawerShell, Section } from '../_chrome/drawer-shell'
 import type { LocationDraft } from './location-fields'
-import { LocationFields } from './location-fields'
+import { EMPTY_DRAFT, NameField, PartOfField, ProductionFields, daysOf } from './location-fields'
 
 /**
- * `New location` - the edit drawer's shape with nothing to edit yet
- * (`Route - Locations v2.dc.html` opens the same drawer for `+`). The
- * fields, then `Cancel` / `Create`; no photo tile, no sluglines, no cast -
- * a record that is not yet in the script has none. On create the drawer
- * becomes the record's own: the router goes to `/locations/:id`.
+ * `New location` - the edit drawer's shape with nothing to edit yet: the
+ * name, `Part of`, then the Production fields; `Cancel` / `Create`. No
+ * evidence sections - a record that is not yet in the script has none. On
+ * create the drawer becomes the record's own: the router goes to
+ * `/locations/:id`.
  *
  * Opened through `lib/locations/compose.ts` from the sidebar's `+`, the
  * toolbar's `＋ New`, the grid's dashed tile and the empty card's `＋ By
  * hand`; mounted by the layout so every door reaches it. `createLocation`
  * mints the record with its name bound as its set text and the parent
- * chosen; the address, description and status are one `saveLocation` after
- * it, so a record is never half-made.
+ * chosen; the address, description, status and days are one `saveLocation`
+ * after it, so a record is never half-made.
  */
-const EMPTY: LocationDraft = { name: '', address: '', description: '', status: 'pending', parentId: '' }
-
 export const NewLocationDrawer = ({
   projectId,
   parents,
@@ -42,7 +40,7 @@ export const NewLocationDrawer = ({
 
 const NewLocationForm = ({ projectId, parents }: { readonly projectId: ProjectId; readonly parents: readonly { readonly id: string; readonly name: string }[] }) => {
   const router = useRouter()
-  const [draft, setDraft] = useState<LocationDraft>(EMPTY)
+  const [draft, setDraft] = useState<LocationDraft>(EMPTY_DRAFT)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const close = useCallback(() => {
@@ -55,6 +53,11 @@ const NewLocationForm = ({ projectId, parents }: { readonly projectId: ProjectId
       setNotice('A location needs a name.')
       return
     }
+    const days = daysOf(draft.scheduledDays)
+    if (days === null) {
+      setNotice('Shooting days is a whole number.')
+      return
+    }
     setBusy(true)
     setNotice(null)
     void (async () => {
@@ -64,8 +67,8 @@ const NewLocationForm = ({ projectId, parents }: { readonly projectId: ProjectId
         setNotice(created.message)
         return
       }
-      if (draft.address.trim() !== '' || draft.description.trim() !== '' || draft.status !== 'pending') {
-        const saved = await saveLocation(projectId, created.id, { address: draft.address, description: draft.description, status: draft.status })
+      if (draft.address.trim() !== '' || draft.description.trim() !== '' || draft.status !== 'pending' || days > 0) {
+        const saved = await saveLocation(projectId, created.id, { address: draft.address, description: draft.description, status: draft.status, scheduledDays: days })
         if (saved.status !== 'saved') {
           setBusy(false)
           setNotice(saved.message)
@@ -98,7 +101,27 @@ const NewLocationForm = ({ projectId, parents }: { readonly projectId: ProjectId
         </>
       }
     >
-      <LocationFields draft={draft} onChange={setDraft} busy={busy} row={null} parents={parents} />
+      <div className="flex flex-col gap-[11px]">
+        <NameField
+          value={draft.name}
+          busy={busy}
+          onChange={(name) => {
+            setDraft((current) => ({ ...current, name }))
+          }}
+        />
+        <PartOfField
+          value={draft.parentId}
+          parents={parents}
+          busy={busy}
+          onChange={(parentId) => {
+            setDraft((current) => ({ ...current, parentId }))
+          }}
+        />
+      </div>
+      <Section>
+        <span className="text-11-5 text-ink2">Production</span>
+        <ProductionFields draft={draft} onChange={setDraft} busy={busy} rollupDays={null} />
+      </Section>
     </DrawerShell>
   )
 }

@@ -7,7 +7,7 @@ import type {
 } from '@folio/script'
 import { z } from 'zod'
 
-import { CharacterColorSchema, CharacterGenderSchema } from './characters'
+import { CharacterColorSchema, CharacterGenderSchema, CharacterOriginSchema } from './characters'
 import {
   ConfidenceSchema,
   InteriorExteriorSchema,
@@ -83,6 +83,8 @@ export const CharacterAuthoredSchema = z.object({
   portraitKey: z.string().max(500).nullable(),
   /** Set when the writer merged this record into another. The row is kept. */
   mergedInto: CharacterIdSchema.nullable(),
+  /** Where the record came from, written once at creation (`0021`). Null before it. */
+  origin: CharacterOriginSchema.nullable(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 })
@@ -129,6 +131,8 @@ export type CharacterRelationshipRow = z.infer<typeof CharacterRelationshipSchem
  * record kept` is a designed, valid state." A route reading a zero has no way
  * to tell the designed state from a derivation bug; this column tells it.
  */
+const SpokenLineSchema = z.object({ nodeId: NodeIdSchema, scene: NodeIdSchema.nullable() })
+
 export const CharacterDerivationSchema = z.object({
   projectId: ProjectIdSchema,
   characterId: CharacterIdSchema,
@@ -138,6 +142,25 @@ export const CharacterDerivationSchema = z.object({
   presence: PresenceSchema,
   /** Heading node ids, in document order. */
   scenes: z.array(NodeIdSchema),
+  /**
+   * The voice (`0021`): every one a function of the node list, rebuilt each
+   * pass. The four positions are JSON of `{ nodeId, scene }` - a node id
+   * and the heading it sits under, no foreign key, dropped on read when the
+   * node is gone (the `scenes.threads` convention). `sceneCounts` and
+   * `exchanges` are JSON lists on the same row rather than tables: the
+   * loader already joins one derivation row per record, `commitDerivation`
+   * stays one statement, and a new table would need an RLS block.
+   */
+  words: z.int().min(0),
+  speeches: z.int().min(0),
+  parens: z.int().min(0),
+  namedIn: z.int().min(0),
+  firstLine: SpokenLineSchema.nullable(),
+  lastLine: SpokenLineSchema.nullable(),
+  longest: SpokenLineSchema.extend({ words: z.int().min(0) }).nullable(),
+  introducedAt: SpokenLineSchema.nullable(),
+  sceneCounts: z.array(z.object({ scene: NodeIdSchema, lines: z.int().min(0), words: z.int().min(0) })),
+  exchanges: z.array(z.object({ other: CharacterIdSchema, count: z.int().min(0), scenes: z.array(NodeIdSchema) })),
   derivedAt: TimestampSchema,
 })
 
@@ -158,6 +181,7 @@ export const CharacterCueTallySchema = z.object({
   key: z.string().min(1).max(200),
   occurrences: z.int().min(0),
   lines: z.int().min(0),
+  words: z.int().min(0),
 })
 
 export type CharacterCueTally = z.infer<typeof CharacterCueTallySchema>
@@ -329,6 +353,8 @@ export const SceneDerivationSchema = z.object({
   castSize: z.int().min(0),
   /** Dialogue *nodes*, not rendered lines. */
   lines: z.int().min(0),
+  /** Dialogue words under the heading, every cue counted - the share denominator (`0021`). */
+  words: z.int().min(0),
   presence: PresenceSchema,
   derivedAt: TimestampSchema,
 })
@@ -461,6 +487,16 @@ type AccountedCharacter =
   | 'lines'
   | 'mentions'
   | 'presence'
+  | 'words'
+  | 'speeches'
+  | 'parens'
+  | 'namedIn'
+  | 'firstLine'
+  | 'lastLine'
+  | 'longest'
+  | 'sceneCounts'
+  | 'exchanges'
+  | 'introducedAt'
   | 'name'
   | 'boundCues'
   | 'bio'
@@ -496,6 +532,7 @@ type AccountedScene =
   | 'unresolvedCues'
   | 'castSize'
   | 'lines'
+  | 'words'
   | 'presence'
   | 'authored'
   | 'synopsis'

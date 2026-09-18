@@ -130,6 +130,52 @@ export type CueTally = {
   readonly occurrences: number
   /** Dialogue nodes spoken under this spelling. Not a rendered-line count. */
   readonly lines: number
+  /** Words in those dialogue nodes - whitespace-split, a mention run counting as one. */
+  readonly words: number
+}
+
+/**
+ * A dialogue node a character spoke, and the scene it sits in - `null` for a
+ * line before the first accepted heading. The route quotes it by id.
+ */
+export type SpokenLine = {
+  readonly nodeId: NodeId
+  readonly scene: NodeId | null
+}
+
+/** The character's longest single dialogue node, by words. Ties go to the earlier one. */
+export type LongestLine = SpokenLine & {
+  readonly words: number
+}
+
+/** What a character says in one scene. Only scenes they speak in, document order. */
+export type SceneCount = {
+  readonly scene: NodeId
+  readonly lines: number
+  readonly words: number
+}
+
+/**
+ * Who a character talks to: two cues following one another under one
+ * heading - action between them does not break the exchange, a heading
+ * does. Counted per pair from both sides, so A's row for B and B's row for
+ * A carry the same count. A cue that resolves to no record is nobody.
+ */
+export type Exchange = {
+  readonly other: CharacterId
+  readonly count: number
+  /** The scenes the two exchange in, document order. */
+  readonly scenes: readonly NodeId[]
+}
+
+/**
+ * The action line that introduces a character: the first action node naming
+ * them by a key of theirs (`introductions.ts`). Evidence, never a binding -
+ * nothing resolves through it, and `rename.ts` never reads it.
+ */
+export type Introduction = {
+  readonly nodeId: NodeId
+  readonly scene: NodeId | null
 }
 
 export type CharacterRecord = {
@@ -144,6 +190,24 @@ export type CharacterRecord = {
   /** `@mention` edges pointing at this record. Same resolution path as a cue. */
   readonly mentions: number
   readonly presence: Presence
+  /**
+   * The voice, since 2026-09-18 - what a writer recognises a character by
+   * before any note is written. All of it is arithmetic over the node list:
+   * words spoken, speeches (cue nodes), parentheticals, action lines naming
+   * them, the first and last and longest line, what they say per scene, who
+   * they talk to, and where the action introduces them. `namedIn` and
+   * `introducedAt` are read-only evidence beside open decision 3.
+   */
+  readonly words: number
+  readonly speeches: number
+  readonly parens: number
+  readonly namedIn: number
+  readonly firstLine: SpokenLine | null
+  readonly lastLine: SpokenLine | null
+  readonly longest: LongestLine | null
+  readonly sceneCounts: readonly SceneCount[]
+  readonly exchanges: readonly Exchange[]
+  readonly introducedAt: Introduction | null
 }
 
 // ---------------------------------------------------------------------------
@@ -294,6 +358,8 @@ export type SceneRecord = {
   readonly unresolvedCues: readonly string[]
   readonly castSize: number
   readonly lines: number
+  /** Dialogue words under this heading, every cue counted, resolved or not - the share denominator. */
+  readonly words: number
   /**
    * `absent` once the heading node has left the script.
    *
@@ -314,6 +380,21 @@ export type SceneRecord = {
 export const CONFIDENCES = ['certain', 'likely', 'possible'] as const
 
 export type Confidence = (typeof CONFIDENCES)[number]
+
+/**
+ * The branch `compare` took to score a candidate - additive beside the
+ * confidence, so the queue can say *why* it is asking (`first name`,
+ * `contains MEERA`, `2 letters off`) rather than dressing a two-edit guess in
+ * the same button as an exact key match. Never persisted: `resolve_rows` has
+ * no column for it and the loader recomputes it from the same pure function.
+ */
+export type MatchReason =
+  | { readonly kind: 'exact' }
+  /** One key's tokens are a leading run of the other's; `shorter` is the shorter key. */
+  | { readonly kind: 'leading'; readonly shorter: string }
+  /** One key's tokens are all in the other, not as a leading run; `inner` is the contained key. */
+  | { readonly kind: 'contains'; readonly inner: string }
+  | { readonly kind: 'edits'; readonly distance: number }
 
 export type ProposalTarget =
   | { readonly kind: 'character'; readonly id: CharacterId }

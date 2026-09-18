@@ -1,12 +1,15 @@
 import type {
   CharacterColor,
+  CharacterFindingId,
+  CharacterFindingStatus,
   CharacterGender,
+  CharacterOrigin,
   CharacterProfileEdit,
   CharacterStatus,
   EpisodeSlug,
   Timestamp,
 } from '@folio/contracts'
-import { episodeSlug as brandEpisodeSlug } from '@folio/contracts'
+import { CHARACTER_ORIGINS, characterFindingId as brandFindingId, episodeSlug as brandEpisodeSlug } from '@folio/contracts'
 import type {
   CharacterId,
   InteriorExterior,
@@ -22,12 +25,13 @@ import {
   characterId as brandCharacterId,
   locationId as brandLocationId,
 } from '@folio/script'
-import { asc, eq, sql } from 'drizzle-orm'
+import { asc, desc, eq, sql } from 'drizzle-orm'
 
 import {
   characterBoundCues,
   characterCueTallies,
   characterDerivations,
+  characterFindings,
   characterRelationships,
   characters,
   documents,
@@ -94,6 +98,8 @@ export type CharacterRecordRow = {
   readonly wants: string | null
   readonly needs: string | null
   readonly portraitKey: string | null
+  /** Where the record came from; null on a record made before `0021`. */
+  readonly origin: CharacterOrigin | null
   readonly createdAt: Timestamp
   /** Null until the first derivation pass after the record was made by hand. */
   readonly derived: {
@@ -102,8 +108,68 @@ export type CharacterRecordRow = {
     readonly mentions: number
     readonly presence: Presence
     readonly scenes: readonly NodeId[]
+    readonly words: number
+    readonly speeches: number
+    readonly parens: number
+    readonly namedIn: number
+    readonly firstLine: SpokenAt | null
+    readonly lastLine: SpokenAt | null
+    readonly longest: (SpokenAt & { readonly words: number }) | null
+    readonly introducedAt: SpokenAt | null
+    readonly sceneCounts: readonly { readonly scene: NodeId; readonly lines: number; readonly words: number }[]
+    readonly exchanges: readonly { readonly other: CharacterId; readonly count: number; readonly scenes: readonly NodeId[] }[]
   } | null
 }
+
+/** A node and the heading it sits under, as the derivation row stores it. */
+export type SpokenAt = { readonly nodeId: NodeId; readonly scene: NodeId | null }
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isOrigin = (value: unknown): value is CharacterOrigin =>
+  typeof value === 'string' && (CHARACTER_ORIGINS as readonly string[]).includes(value)
+
+/** A stored `{ nodeId, scene }`, read defensively: the JSON column is a cache the next pass rewrites. */
+const spokenAtOf = (value: unknown): SpokenAt | null => {
+  if (!isRecord(value) || typeof value['nodeId'] !== 'string') return null
+  return { nodeId: value['nodeId'] as NodeId, scene: typeof value['scene'] === 'string' ? (value['scene'] as NodeId) : null }
+}
+
+const longestOf = (value: unknown): (SpokenAt & { readonly words: number }) | null => {
+  const at = spokenAtOf(value)
+  if (at === null || !isRecord(value)) return null
+  return { ...at, words: typeof value['words'] === 'number' ? value['words'] : 0 }
+}
+
+const sceneCountsOf = (value: unknown): readonly { readonly scene: NodeId; readonly lines: number; readonly words: number }[] =>
+  Array.isArray(value)
+    ? value.flatMap((entry: unknown) =>
+        isRecord(entry) && typeof entry['scene'] === 'string'
+          ? [
+              {
+                scene: entry['scene'] as NodeId,
+                lines: typeof entry['lines'] === 'number' ? entry['lines'] : 0,
+                words: typeof entry['words'] === 'number' ? entry['words'] : 0,
+              },
+            ]
+          : [],
+      )
+    : []
+
+const exchangesOf = (value: unknown): readonly { readonly other: CharacterId; readonly count: number; readonly scenes: readonly NodeId[] }[] =>
+  Array.isArray(value)
+    ? value.flatMap((entry: unknown) =>
+        isRecord(entry) && typeof entry['other'] === 'string'
+          ? [
+              {
+                other: brandCharacterId(entry['other']),
+                count: typeof entry['count'] === 'number' ? entry['count'] : 0,
+                scenes: Array.isArray(entry['scenes']) ? (entry['scenes'].filter((id: unknown) => typeof id === 'string') as NodeId[]) : [],
+              },
+            ]
+          : [],
+      )
+    : []
 
 /**
  * Every live record - `merged_into IS NULL` - in creation order, with its
@@ -133,6 +199,7 @@ export const listCharacterRecords = async (
     wants: record.wants,
     needs: record.needs,
     portraitKey: record.portraitKey,
+    origin: isOrigin(record.origin) ? record.origin : null,
     createdAt: stamp(record.createdAt),
     derived:
       derived === null
@@ -143,6 +210,16 @@ export const listCharacterRecords = async (
             mentions: derived.mentions,
             presence: derived.presence,
             scenes: derived.scenes as NodeId[],
+            words: derived.words,
+            speeches: derived.speeches,
+            parens: derived.parens,
+            namedIn: derived.namedIn,
+            firstLine: spokenAtOf(derived.firstLine),
+            lastLine: spokenAtOf(derived.lastLine),
+            longest: longestOf(derived.longest),
+            introducedAt: spokenAtOf(derived.introducedAt),
+            sceneCounts: sceneCountsOf(derived.sceneCounts),
+            exchanges: exchangesOf(derived.exchanges),
           },
   }))
 }
@@ -167,6 +244,7 @@ export type CueTallyRow = {
   readonly key: string
   readonly occurrences: number
   readonly lines: number
+  readonly words: number
 }
 
 /** The counted spellings of every record, in insertion order. DERIVED. */
@@ -181,22 +259,33 @@ export const listCueTallies = async (scope: ProjectScope): Promise<readonly CueT
     key: row.key,
     occurrences: row.occurrences,
     lines: row.lines,
+    words: row.words,
   }))
 }
 
 export type BoundCueRow = {
   readonly characterId: CharacterId
   readonly cue: string
+  /** Null when derivation bound it (a mint, or the name's own spelling); a user id when a person did. */
+  readonly boundBy: string | null
 }
 
 /** The alias table's authored half, whole. AUTHORED. */
 export const listBoundCues = async (scope: ProjectScope): Promise<readonly BoundCueRow[]> => {
   const rows = await dbOf(scope)
-    .select({ characterId: characterBoundCues.characterId, cue: characterBoundCues.cue })
+    .select({
+      characterId: characterBoundCues.characterId,
+      cue: characterBoundCues.cue,
+      boundBy: characterBoundCues.boundBy,
+    })
     .from(characterBoundCues)
     .where(scoped(scope, characterBoundCues))
     .orderBy(asc(characterBoundCues.boundAt))
-  return rows.map((row) => ({ characterId: brandCharacterId(row.characterId), cue: row.cue }))
+  return rows.map((row) => ({
+    characterId: brandCharacterId(row.characterId),
+    cue: row.cue,
+    boundBy: row.boundBy,
+  }))
 }
 
 /**
@@ -216,8 +305,11 @@ export type SceneIndexRow = {
   readonly heading: string
   readonly locationId: LocationId | null
   readonly lines: number
+  /** Dialogue words under the heading, every cue counted (`0021`). */
+  readonly words: number
   readonly cast: readonly CharacterId[]
   readonly speaking: readonly CharacterId[]
+  readonly mentioned: readonly CharacterId[]
   readonly episode: EpisodeSlug
   readonly episodeOrdinal: number
   /** The heading as read: interior/exterior and the day/night reduction (Locations route). */
@@ -253,8 +345,10 @@ export const listSceneIndex = async (scope: ProjectScope): Promise<readonly Scen
       reading: sceneDerivations.reading,
       locationId: sceneDerivations.locationId,
       lines: sceneDerivations.lines,
+      words: sceneDerivations.words,
       cast: sceneDerivations.cast,
       speaking: sceneDerivations.speaking,
+      mentioned: sceneDerivations.mentioned,
       episode: episodes.slug,
       episodeOrdinal: episodes.ordinal,
     })
@@ -280,8 +374,10 @@ export const listSceneIndex = async (scope: ProjectScope): Promise<readonly Scen
       heading: row.heading,
       locationId: row.locationId === null ? null : brandLocationId(row.locationId),
       lines: row.lines,
+      words: row.words,
       cast: row.cast as CharacterId[],
       speaking: row.speaking as CharacterId[],
+      mentioned: row.mentioned as CharacterId[],
       episode: brandEpisodeSlug(row.episode),
       episodeOrdinal: row.episodeOrdinal,
       ...readingOf(row.reading),
@@ -326,15 +422,16 @@ export const listOpenCueRows = async (scope: ProjectScope): Promise<readonly Ope
 // Writes - the record
 // ---------------------------------------------------------------------------
 
-/** Insert a record by hand, with whatever profile the modal filled in. */
+/** Insert a record by hand, with whatever profile the drawer filled in. `origin` is `hand` unless the assistant made it. */
 export const createCharacterRecord = async (
   scope: ProjectScope,
   name: string,
   edit: CharacterProfileEdit,
+  origin: Extract<CharacterOrigin, 'hand' | 'agent'> = 'hand',
 ): Promise<CharacterId> => {
   const rows = await dbOf(scope)
     .insert(characters)
-    .values({ ...tenant(scope), name, ...profileColumns(edit) })
+    .values({ ...tenant(scope), name, origin, ...profileColumns(edit) })
     .returning({ id: characters.id })
   const row = rows[0]
   if (row === undefined) throw new Error('Folio: inserting a character returned no row.')
@@ -591,6 +688,140 @@ export const unbindCue = async (
   return 'unbound'
 }
 
+export type MoveOutcome =
+  | { readonly status: 'moved'; readonly from: CharacterId | null }
+  /** Already bound to `toId`. Nothing to do. */
+  | { readonly status: 'already' }
+  /** The holder's last spelling; moving it would leave that record with none. */
+  | { readonly status: 'last'; readonly by: CharacterId }
+  | { readonly status: 'missing' }
+
+/**
+ * Move a spelling from whichever record holds it to `toId` - the alias
+ * table's `Move it here`, when a bind is refused as `taken`. One statement
+ * rather than an unbind and a bind: the request path pays two round trips
+ * per statement, and between two statements the spelling would be bound
+ * nowhere, which a concurrent pass would read as a cue to mint against. The
+ * holder keeps it when it is their last (the `unbindCue` rule). A spelling
+ * nobody holds is simply bound, so this is also a bind.
+ */
+export const moveBoundCue = async (
+  scope: ProjectScope,
+  cue: string,
+  toId: CharacterId,
+): Promise<MoveOutcome> => {
+  const rows = await dbOf(scope).execute(sql`
+    with holder as (
+      select ${characterBoundCues.characterId} as character_id from ${characterBoundCues}
+      where ${scoped(scope, characterBoundCues, eq(characterBoundCues.cue, cue))}
+    ),
+    held as (
+      select count(*)::int as n from ${characterBoundCues}
+      where ${scoped(scope, characterBoundCues)}
+        and ${characterBoundCues.characterId} = (select character_id from holder limit 1)
+    ),
+    target as (
+      select ${characters.id} as id from ${characters}
+      where ${scoped(scope, characters, eq(characters.id, toId))} and ${characters.mergedInto} is null
+    ),
+    removed as (
+      delete from ${characterBoundCues}
+      where ${scoped(scope, characterBoundCues, eq(characterBoundCues.cue, cue))}
+        and ${characterBoundCues.characterId} <> ${toId}
+        and (select n from held) > 1
+        and exists (select 1 from target)
+      returning cue
+    ),
+    bound as (
+      insert into ${characterBoundCues} (project_id, character_id, cue, bound_by)
+      select ${scope.projectId}, ${toId}, ${cue}, ${scope.actor}::uuid
+      where exists (select 1 from target)
+        and (not exists (select 1 from holder) or exists (select 1 from removed))
+      on conflict do nothing
+      returning cue
+    )
+    select
+      (select character_id from holder limit 1) as holder,
+      coalesce((select n from held), 0) as held,
+      (select count(*)::int from target) as target,
+      (select count(*)::int from removed) as removed,
+      (select count(*)::int from bound) as bound
+  `)
+  const row = rows[0] as
+    | {
+        readonly holder: string | null
+        readonly held: number
+        readonly target: number
+        readonly removed: number
+        readonly bound: number
+      }
+    | undefined
+  if (row === undefined) throw new Error('Folio: moving a cue returned no row. This is a bug in the repository.')
+  if (row.target === 0) return { status: 'missing' }
+  if (row.holder === (toId as string)) return { status: 'already' }
+  if (row.holder !== null && row.removed === 0) return { status: 'last', by: brandCharacterId(row.holder) }
+  if (row.bound === 0) return { status: 'missing' }
+  return { status: 'moved', from: row.holder === null ? null : brandCharacterId(row.holder) }
+}
+
+export type SplitOutcome =
+  | { readonly status: 'split'; readonly id: CharacterId }
+  /** The record's only spelling; splitting it off would leave the record with none. */
+  | { readonly status: 'last' }
+  | { readonly status: 'missing' }
+
+/**
+ * Split a bound spelling off into a record of its own - the alias table's
+ * `Split off`, for a cue the writer once accepted as an alias and now says
+ * is somebody else. Three writes in one statement (unbind here, insert the
+ * record, bind there) so a half-finished split cannot strand the spelling;
+ * the script is untouched, and the next pass counts the cues under the new
+ * record. Refused as `last` on the record's only spelling, as `unbindCue` is.
+ */
+export const splitBoundCue = async (
+  scope: ProjectScope,
+  fromId: CharacterId,
+  cue: string,
+  name: string,
+  color: CharacterColor,
+): Promise<SplitOutcome> => {
+  const rows = await dbOf(scope).execute(sql`
+    with held as (
+      select ${characterBoundCues.cue} as cue from ${characterBoundCues}
+      where ${scoped(scope, characterBoundCues, eq(characterBoundCues.characterId, fromId))}
+    ),
+    removed as (
+      delete from ${characterBoundCues}
+      where ${scoped(scope, characterBoundCues, eq(characterBoundCues.characterId, fromId), eq(characterBoundCues.cue, cue))}
+        and (select count(*) from held) > 1
+      returning cue
+    ),
+    created as (
+      insert into ${characters} (project_id, name, color, origin)
+      select ${scope.projectId}, ${name}, ${color}, 'hand'::character_origin
+      where exists (select 1 from removed)
+      returning id
+    ),
+    bound as (
+      insert into ${characterBoundCues} (project_id, character_id, cue, bound_by)
+      select ${scope.projectId}, created.id, ${cue}, ${scope.actor}::uuid from created
+      on conflict do nothing
+      returning cue
+    )
+    select
+      exists (select 1 from held where cue = ${cue}) as present,
+      (select count(*)::int from removed) as removed,
+      (select id from created limit 1) as id
+  `)
+  const row = rows[0] as
+    | { readonly present: boolean; readonly removed: number; readonly id: string | null }
+    | undefined
+  if (row === undefined) throw new Error('Folio: splitting a cue returned no row. This is a bug in the repository.')
+  if (!row.present) return { status: 'missing' }
+  if (row.removed === 0 || row.id === null) return { status: 'last' }
+  return { status: 'split', id: brandCharacterId(row.id) }
+}
+
 // ---------------------------------------------------------------------------
 // Writes - merge, delete
 // ---------------------------------------------------------------------------
@@ -693,4 +924,164 @@ export const deleteAbsentCharacter = async (
   if (row === undefined || row.found === 0) return 'missing'
   if (row.present) return 'present'
   return 'deleted'
+}
+
+/**
+ * Delete a record that has nothing on it: no profile field, no portrait,
+ * `draft`, at most one bound spelling - regardless of presence. The one
+ * caller is the queue's `Undo` of a `New character` decision within its few
+ * seconds: the record it minted is seconds old and empty, and the cue that
+ * minted it goes back to the queue. A record with anything written on it is
+ * `kept` (the caller unbinds instead), so nothing a writer typed is lost.
+ */
+export const deleteBlankCharacter = async (
+  scope: ProjectScope,
+  id: CharacterId,
+): Promise<'deleted' | 'kept' | 'missing'> => {
+  const rows = await dbOf(scope).execute(sql`
+    with record as (
+      select ${characters.id} as id,
+        (${characters.bio} is null and ${characters.role} is null and ${characters.age} is null
+          and ${characters.appearance} is null and ${characters.wants} is null and ${characters.needs} is null
+          and ${characters.portraitKey} is null and ${characters.status} = 'draft'
+          and (select count(*) from ${characterBoundCues} b
+            where b.project_id = ${scope.projectId} and b.character_id = ${characters.id}) <= 1) as blank
+      from ${characters}
+      where ${scoped(scope, characters, eq(characters.id, id))} and ${characters.mergedInto} is null
+    ),
+    gone as (
+      delete from ${characters}
+      where ${scoped(scope, characters, eq(characters.id, id))}
+        and exists (select 1 from record where blank)
+      returning id
+    )
+    select (select count(*)::int from record) as found,
+      coalesce((select blank from record limit 1), false) as blank,
+      (select count(*)::int from gone) as deleted
+  `)
+  const row = rows[0] as
+    | { readonly found: number; readonly blank: boolean; readonly deleted: number }
+    | undefined
+  if (row === undefined || row.found === 0) return 'missing'
+  if (!row.blank || row.deleted === 0) return 'kept'
+  return 'deleted'
+}
+
+// ---------------------------------------------------------------------------
+// Findings (the Characters rebuild, phase 4)
+// ---------------------------------------------------------------------------
+
+export type CharacterFindingRow = {
+  readonly id: CharacterFindingId
+  readonly characterId: CharacterId
+  readonly status: CharacterFindingStatus
+  readonly aRef: NodeId
+  readonly bRef: NodeId
+  readonly aQuote: string
+  readonly bQuote: string
+  readonly claim: string
+  readonly claimHash: string
+  readonly createdAt: Timestamp
+}
+
+const findingOf = (row: typeof characterFindings.$inferSelect): CharacterFindingRow => ({
+  id: brandFindingId(row.id),
+  characterId: brandCharacterId(row.characterId),
+  status: row.status,
+  aRef: row.aRef as NodeId,
+  bRef: row.bRef as NodeId,
+  aQuote: row.aQuote,
+  bQuote: row.bQuote,
+  claim: row.claim,
+  claimHash: row.claimHash,
+  createdAt: stamp(row.createdAt),
+})
+
+/** Every finding on a record, open first, newest first within a status. AUTHORED (the assistant's, and the writer's verdict). */
+export const listCharacterFindings = async (
+  scope: ProjectScope,
+  characterId: CharacterId,
+): Promise<readonly CharacterFindingRow[]> => {
+  const rows = await dbOf(scope)
+    .select()
+    .from(characterFindings)
+    .where(scoped(scope, characterFindings, eq(characterFindings.characterId, characterId)))
+    .orderBy(asc(characterFindings.status), desc(characterFindings.createdAt), asc(characterFindings.id))
+  return rows.map(findingOf)
+}
+
+export type FindingInsert = {
+  readonly aRef: NodeId
+  readonly bRef: NodeId
+  readonly aQuote: string
+  readonly bQuote: string
+  readonly claim: string
+  readonly claimHash: string
+}
+
+/**
+ * Replace the open findings on a record with a fresh check's. One
+ * statement: the open rows the re-check did not reproduce go, the new set
+ * is inserted `on conflict do nothing` against the dedupe key - so a row
+ * the writer marked deliberate keeps its verdict and blocks its own
+ * re-insert, and an open row that came back stays as it was. Not a
+ * delete-then-insert of the same key: a data-modifying CTE sees one
+ * snapshot, and deleting a key then inserting it in the same statement
+ * would conflict with the row the delete has not yet removed.
+ */
+export const replaceOpenFindings = async (
+  scope: ProjectScope,
+  characterId: CharacterId,
+  findings: readonly FindingInsert[],
+): Promise<{ readonly inserted: number; readonly removed: number }> => {
+  const rows = findings.map((finding) => ({
+    a_ref: finding.aRef,
+    b_ref: finding.bRef,
+    a_quote: finding.aQuote,
+    b_quote: finding.bQuote,
+    claim: finding.claim,
+    claim_hash: finding.claimHash,
+  }))
+  const result = await dbOf(scope).execute(sql`
+    with fresh as (
+      select * from jsonb_to_recordset(${jsonb(rows)})
+        as r(a_ref uuid, b_ref uuid, a_quote text, b_quote text, claim text, claim_hash text)
+    ),
+    gone as (
+      delete from ${characterFindings}
+      where ${scoped(scope, characterFindings, eq(characterFindings.characterId, characterId), eq(characterFindings.status, 'open'))}
+        and not exists (
+          select 1 from fresh
+          where fresh.a_ref = ${characterFindings.aRef} and fresh.b_ref = ${characterFindings.bRef}
+            and fresh.claim_hash = ${characterFindings.claimHash}
+        )
+      returning id
+    ),
+    added as (
+      insert into ${characterFindings} (project_id, character_id, kind, status, a_ref, b_ref, a_quote, b_quote, claim, claim_hash)
+      select ${scope.projectId}, ${characterId}, 'contradiction'::character_finding_kind, 'open'::character_finding_status,
+        fresh.a_ref, fresh.b_ref, fresh.a_quote, fresh.b_quote, fresh.claim, fresh.claim_hash
+      from fresh
+      on conflict (project_id, character_id, a_ref, b_ref, claim_hash) do nothing
+      returning id
+    )
+    select (select count(*)::int from added) as inserted, (select count(*)::int from gone) as removed
+  `)
+  const row = result[0] as { readonly inserted: number; readonly removed: number } | undefined
+  return { inserted: row?.inserted ?? 0, removed: row?.removed ?? 0 }
+}
+
+/** The writer's verdict on a finding: `deliberate`, or back to `open`. The row as it now stands, or null when it is not here. */
+export const setFindingStatus = async (
+  scope: ProjectScope,
+  id: CharacterFindingId,
+  status: CharacterFindingStatus,
+): Promise<CharacterFindingRow | null> => {
+  const rows = await dbOf(scope)
+    .update(characterFindings)
+    .set({ status })
+    .where(scoped(scope, characterFindings, eq(characterFindings.id, id)))
+    .returning()
+  const row = rows[0]
+  return row === undefined ? null : findingOf(row)
 }

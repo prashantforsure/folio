@@ -2,134 +2,126 @@
 
 import type { LocationStatus } from '@folio/contracts'
 import { LOCATION_STATUS_LABELS } from '@folio/contracts'
+import type { Quadrant } from '@folio/script'
 import { Glyph } from '@folio/ui'
-import type { CSSProperties, ReactNode } from 'react'
+import Link from 'next/link'
+import type { CSSProperties } from 'react'
 
 import { initialsOf } from '../../../../../../lib/characters/cast'
-import { hueOf, statusTone } from '../../../../../../lib/locations/view'
+import { QUADRANT_BOXES, hueOf, statusTone } from '../../../../../../lib/locations/view'
+import type { CharacterPath } from '../../../../../../lib/workspace/hrefs'
 import { CastMark } from '../_characters/cast-mark'
 
 /**
- * The pieces the Locations views share - `Route - Locations v2.dc.html`:
+ * The pieces the Locations views share since the rebuild (2026-09-18):
  *
- *   `setHue`      the record's hue as `--set-hue`, which `.folio-set-mark`
- *                 reads (`palette.css`: `--set-a/b/c`)
- *   `SetTile`     the 16:10 photo tile: the photo with the mockup's scrim,
- *                 or the dashed inset with the `⌖` and `Drop a photo`; the
- *                 status badge top right; the caller's foot over it
- *   `SetMark`     the sheet's 26px gradient square with the `⌖`
- *   `StatusBadge` the tile's badge: `--bg` on `--line2`, 6px radius, 10px,
- *                 in the status tone (`.folio-cast-badge` - the same badge
- *                 the Characters card draws)
- *   `CastStack`   the overlapping 20px avatars: `1.5px` of `--bg` around
- *                 each, `-5px` apart, the name and count in the title
+ *   `setHue`       the record's hue as `--set-hue`, which `.folio-set-mark`
+ *                  reads (`palette.css`: `--set-a/b/c`) - the sheet's mark
+ *                  and the thumbnail's stand-in, nothing larger
+ *   `SetMark`      the sheet's 26px gradient square with the `⌖`
+ *   `Thumb`        the 28px photo beside a name, when there is one; the
+ *                  mark otherwise. The 16:10 tile of the v2 pass is gone:
+ *                  without `R2_*` it was a dashed empty box on every card
+ *   `StatusDot`    the 6px dot in the status tone, its label in the title
+ *   `CastStack`    the overlapping 17px avatars with `+N` past `max`, each
+ *                  a link to the record; the click stops at the avatar
+ *   `QuadrantBoxes` the four `INT D 3` boxes in mono, zeros included
+ *
+ * A scene ref as a linked chip is `lib/characters/figures.ts`'s `citeOf`,
+ * the one function every record route's citation goes through.
  */
 
 export const setHue = (id: string): CSSProperties => ({ '--set-hue': String(hueOf(id)) }) as CSSProperties
 
-export const StatusBadge = ({ status }: { readonly status: LocationStatus }) => (
-  <span className="folio-cast-badge folio-tone-ink" data-tone={statusTone(status)} data-card-status>
-    {LOCATION_STATUS_LABELS[status]}
-  </span>
-)
-
-export const SetTile = ({
-  id,
-  name,
-  photoUrl,
-  status,
-  hint,
-  glyph = true,
-  over = false,
-  className = '',
-  children,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-}: {
-  readonly id: string
-  readonly name: string
-  readonly photoUrl: string | null
-  readonly status: LocationStatus | null
-  /** `Drop a photo` under the glyph; not drawn without storage. */
-  readonly hint: boolean
-  /** The `⌖` in the empty tile; the drawer's tile draws its buttons there instead. */
-  readonly glyph?: boolean
-  /** A file is over the tile: the dashed inset turns `--accent`. */
-  readonly over?: boolean
-  readonly className?: string
-  /** The foot: the name and the kind line, over the scrim. */
-  readonly children?: ReactNode
-  readonly onDragOver?: (event: React.DragEvent<HTMLDivElement>) => void
-  readonly onDragLeave?: () => void
-  readonly onDrop?: (event: React.DragEvent<HTMLDivElement>) => void
-}) => (
-  <div
-    data-set-tile
-    data-has-photo={photoUrl === null ? 'false' : 'true'}
-    className={`relative flex flex-none items-center justify-center overflow-hidden bg-sunk ${className}`}
-    style={{ aspectRatio: '16 / 10', ...setHue(id) }}
-    onDragOver={onDragOver}
-    onDragLeave={onDragLeave}
-    onDrop={onDrop}
-  >
-    {photoUrl === null ? (
-      <span aria-hidden="true" className="absolute inset-[10px] rounded-[9px] border border-dashed" style={{ borderColor: over ? 'var(--accent)' : 'var(--line)' }} />
-    ) : (
-      <img src={photoUrl} alt={`${name}, photographed`} className="absolute inset-0 h-full w-full object-cover" />
-    )}
-    {photoUrl === null && glyph ? (
-      <span className="relative flex flex-col items-center gap-[8px] pb-[30px]">
-        <Glyph name="locations" className="text-[34px] text-ink3" />
-        {hint ? <span className="text-11 text-ink3">Drop a photo</span> : null}
-      </span>
-    ) : null}
-    {status === null ? null : <StatusBadge status={status} />}
-    {children}
-  </div>
-)
-
-/** The foot over the tile: the name at 15px/500 and the mono kind line, on `--bg` or over the scrim. */
-export const TileFoot = ({ name, line, photo }: { readonly name: string; readonly line: string; readonly photo: boolean }) => (
-  <span
-    className="absolute inset-x-0 bottom-0 flex flex-col gap-[2px]"
-    style={
-      photo
-        ? { padding: '26px 12px 11px', background: 'linear-gradient(to bottom, transparent, var(--cast-scrim-mid) 38%, var(--cast-scrim-end))' }
-        : { padding: '9px 12px 10px', background: 'var(--bg)' }
-    }
-  >
-    <span className="truncate text-15 font-medium tracking-title" style={{ color: photo ? 'var(--cast-face-name)' : 'var(--ink)' }} data-card-name>
-      {name}
-    </span>
-    <span className="truncate font-mono text-10-5" style={{ color: photo ? 'var(--cast-face-sub)' : 'var(--ink3)' }} data-card-kind>
-      {line}
-    </span>
-  </span>
-)
-
-export const SetMark = ({ id }: { readonly id: string }) => (
-  <span aria-hidden="true" className="folio-set-mark" style={setHue(id)}>
+export const SetMark = ({ id, size = 26 }: { readonly id: string; readonly size?: number }) => (
+  <span aria-hidden="true" className="folio-set-mark" style={{ ...setHue(id), width: size, height: size }}>
     <Glyph name="locations" className="text-11" />
   </span>
+)
+
+export const Thumb = ({ id, name, photoUrl, size = 28 }: { readonly id: string; readonly name: string; readonly photoUrl: string | null; readonly size?: number }) =>
+  photoUrl === null ? (
+    <SetMark id={id} size={size} />
+  ) : (
+    <img
+      src={photoUrl}
+      alt={`${name}, photographed`}
+      data-thumb
+      className="flex-none rounded-[7px] object-cover"
+      style={{ width: size, height: size }}
+    />
+  )
+
+export const StatusDot = ({ status, attr }: { readonly status: LocationStatus; readonly attr?: `data-${string}` }) => (
+  <span
+    className="folio-tone-fill h-[6px] w-[6px] flex-none rounded-full"
+    data-tone={statusTone(status)}
+    title={LOCATION_STATUS_LABELS[status]}
+    {...(attr === undefined ? {} : { [attr]: status })}
+  />
 )
 
 export const CastStack = ({
   people,
   attr,
+  hrefOf,
+  max = 3,
 }: {
   readonly people: readonly { readonly id: string; readonly name: string; readonly hue: number; readonly scenes?: number }[]
   readonly attr?: `data-${string}`
-}) => (
-  <span className="flex flex-none items-center" {...(attr === undefined ? {} : { [attr]: people.length })}>
-    {people.map((person) => (
-      <span
-        key={person.id}
-        title={person.scenes === undefined ? person.name : `${person.name} · ${String(person.scenes)} ${person.scenes === 1 ? 'scene' : 'scenes'}`}
-        className="-ml-[5px] flex-none rounded-full border-[1.5px] border-bg first:ml-0"
-      >
-        <CastMark initial={initialsOf(person.name)} hue={person.hue} size={17} radius="full" fontSize={8.5} />
+  /** With it, each avatar links to the record (`/characters/:id`); the click stops at the avatar, not the card around it. */
+  readonly hrefOf?: (id: string) => CharacterPath
+  /** Past this many, the rest fold into `+N` with every name in the title. */
+  readonly max?: number
+}) => {
+  const shown = people.slice(0, max)
+  const rest = people.slice(max)
+  return (
+    <span className="flex flex-none items-center" {...(attr === undefined ? {} : { [attr]: people.length })}>
+      {shown.map((person) => {
+        const title = person.scenes === undefined ? person.name : `${person.name} · ${String(person.scenes)} ${person.scenes === 1 ? 'scene' : 'scenes'}`
+        const mark = <CastMark initial={initialsOf(person.name)} hue={person.hue} size={17} radius="full" fontSize={8.5} />
+        return hrefOf === undefined ? (
+          <span key={person.id} title={title} className="-ml-[5px] flex-none rounded-full border-[1.5px] border-bg first:ml-0">
+            {mark}
+          </span>
+        ) : (
+          <Link
+            key={person.id}
+            href={hrefOf(person.id)}
+            title={title}
+            aria-label={person.name}
+            data-cast-link={person.id}
+            data-raised
+            onClick={(event) => {
+              event.stopPropagation()
+            }}
+            className="-ml-[5px] flex-none rounded-full border-[1.5px] border-bg first:ml-0 hover:z-[1] hover:border-accent"
+          >
+            {mark}
+          </Link>
+        )
+      })}
+      {rest.length === 0 ? null : (
+        <span className="tabular ml-[4px] font-mono text-10-5 text-ink3" title={rest.map((person) => person.name).join(' · ')} data-cast-more={rest.length}>
+          +{rest.length}
+        </span>
+      )}
+    </span>
+  )
+}
+
+export const QuadrantBoxes = ({ quadrant, attr }: { readonly quadrant: Quadrant; readonly attr?: `data-${string}` }) => (
+  <span className="flex flex-wrap items-center gap-x-[10px] gap-y-[2px] font-mono text-10-5 text-ink3" {...(attr === undefined ? {} : { [attr]: '' })}>
+    {QUADRANT_BOXES.map((box) => (
+      <span key={box.key} className="tabular whitespace-nowrap" data-box={box.key}>
+        {box.label} <span className={quadrant[box.key] === 0 ? '' : 'text-ink2'}>{quadrant[box.key]}</span>
       </span>
     ))}
+    {quadrant.unlit === 0 ? null : (
+      <span className="tabular whitespace-nowrap" data-box="unlit" title="Headings that say neither DAY nor NIGHT">
+        unlit {quadrant.unlit}
+      </span>
+    )}
   </span>
 )

@@ -95,6 +95,7 @@ export const listSceneBoard = async (
     unresolvedCues: derivation.unresolvedCues,
     castSize: derivation.castSize,
     lines: derivation.lines,
+    words: derivation.words,
     presence: derivation.presence,
     derivedAt: stamp(derivation.derivedAt),
     synopsis: synopsis ?? null,

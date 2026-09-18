@@ -10,6 +10,7 @@ import type { ShellUser } from '../../../../../../lib/auth/session'
 import { useSession } from '../../../../../../lib/state/session'
 import { useViewport } from '../../../../../../lib/state/viewport'
 import { useDrawerOpen } from '../../../../../../lib/workspace/drawer'
+import { episodeLabel } from '../../../../../../lib/workspace/format'
 import type { WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
 import { PANEL_IN_FLOW_MIN, SIDEBAR_OPEN_MIN } from '../../../../../../lib/workspace/routes'
 import {
@@ -56,6 +57,7 @@ export const ProjectShell = ({
   projectId,
   shape,
   fallbackEpisode,
+  episodes,
   badges,
   user,
   assistantConnected,
@@ -64,6 +66,8 @@ export const ProjectShell = ({
   readonly projectId: ProjectId
   readonly shape: WorkspaceShape
   readonly fallbackEpisode: EpisodeSlug
+  /** Every episode, so the panel can say which one it is reading on a project route. */
+  readonly episodes: readonly { readonly slug: EpisodeSlug; readonly ordinal: number; readonly title: string }[]
   readonly badges: RailBadges
   readonly user: ShellUser
   readonly assistantConnected: boolean
@@ -75,6 +79,8 @@ export const ProjectShell = ({
   const current = episodeSegmentFromSegments(segments)
   const checked = current === null ? null : parseEpisodeSegment(current)
   const episode = checked !== null && checked.ok ? checked.slug : fallbackEpisode
+  const reading = episodes.find((entry) => entry.slug === episode)
+  const readingLabel = reading === undefined ? null : episodeLabel(reading.ordinal, reading.title)
 
   const session = useSession()
   const { mounted, width } = useViewport()
@@ -134,8 +140,10 @@ export const ProjectShell = ({
 
       {assistantOpen ? (
         <AssistantPanel
+          episodeCount={episodes.length}
           projectId={projectId}
           episode={episode}
+          reading={readingLabel}
           section={active}
           route={route}
           connected={assistantConnected}

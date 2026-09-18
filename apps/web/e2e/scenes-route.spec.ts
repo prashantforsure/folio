@@ -88,6 +88,24 @@ const setTheme = async (page: Page, theme: 'dark' | 'light'): Promise<void> => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
 }
 
+/**
+ * Two frames have painted. An attribute assertion passes on the DOM the moment React commits,
+ * which on a dev server busy hydrating can be well before Chrome recalculates style and paints:
+ * a screenshot taken straight after showed the previous tab lit under a DOM that said otherwise.
+ */
+const painted = async (page: Page): Promise<void> => {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve()
+          })
+        })
+      }),
+  )
+}
+
 /** The workspace has hydrated. A click before that is replayed only once hydration finishes, which on a dev server can be seconds. */
 const waitMounted = async (page: Page): Promise<void> => {
   await expect(page.locator('[data-scenes-header]')).toHaveAttribute('data-mounted', 'true', { timeout: 60_000 })
@@ -96,8 +114,10 @@ const waitMounted = async (page: Page): Promise<void> => {
 /** The view is state (ruled 2026-09-17): a full load starts on the cards, and the header's tab - not a `?view=` - opens the index or the list. */
 const toView = async (page: Page, view: 'cards' | 'index' | 'list'): Promise<void> => {
   await waitMounted(page)
-  await page.locator(`[data-writing-header] [data-view-tab="${view}"]`).click()
+  const tab = page.locator(`[data-writing-header] [data-view-tab="${view}"]`)
+  await tab.click()
   await expect(page.locator('main[data-route="scenes"]')).toHaveAttribute('data-sub-view', view)
+  await expect(tab).toHaveAttribute('aria-current', 'page')
 }
 
 let scriptUrl = ''
@@ -127,6 +147,7 @@ test('empty state, both themes; the tabs switch in place and a stale view is not
   await expect(headerPill.locator('[data-view-tab="cards"]')).toHaveAttribute('aria-current', 'page')
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
+    await painted(page)
     await page.screenshot({ path: `test-results/scenes-empty-${theme}.png`, fullPage: false })
   }
   // A tab switches the view and the URL does not move (ruled 2026-09-17).
@@ -218,6 +239,7 @@ test('the script tile opens the scene on the sheet; Asian is the refusal, not a 
     await waitMounted(page)
     await cards.nth(0).locator('[data-scene-script]').click()
     await expect(modal).toBeVisible()
+    await painted(page)
     await page.screenshot({ path: `test-results/scenes-modal-${theme}.png`, fullPage: false })
   }
 
@@ -266,12 +288,14 @@ test('index and list views draw the same scenes, both themes', async ({ page, ac
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme) // reloads, which lands on the cards; the tab brings the index back
     await toView(page, 'index')
+    await painted(page)
     await page.screenshot({ path: `test-results/scenes-index-${theme}.png`, fullPage: false })
   }
 
   await toView(page, 'list')
   await expect(page).toHaveURL(scenesUrl)
-  const rows = page.locator('[data-scene-row]')
+  // The list's rows; the writing sidebar's Scenes group marks its rows the same way.
+  const rows = page.locator('[data-scene-board] [data-scene-row]')
   await expect(rows).toHaveCount(2)
   await expect(rows.nth(0)).toContainText('Ready')
   await expect(rows.nth(1)).toContainText('Draft')
@@ -279,6 +303,7 @@ test('index and list views draw the same scenes, both themes', async ({ page, ac
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
     await toView(page, 'list')
+    await painted(page)
     await page.screenshot({ path: `test-results/scenes-list-${theme}.png`, fullPage: false })
   }
 
@@ -286,6 +311,7 @@ test('index and list views draw the same scenes, both themes', async ({ page, ac
   await expect(page.locator('[data-scene-card]')).toHaveCount(2)
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
+    await painted(page)
     await page.screenshot({ path: `test-results/scenes-cards-${theme}.png`, fullPage: false })
   }
 })

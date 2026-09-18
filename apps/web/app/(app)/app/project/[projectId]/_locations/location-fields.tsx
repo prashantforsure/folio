@@ -1,32 +1,26 @@
 'use client'
 
-import type { LocationRow, LocationStatus } from '@folio/contracts'
+import type { LocationStatus } from '@folio/contracts'
 import { LOCATION_STATUSES, LOCATION_STATUS_LABELS } from '@folio/contracts'
 
-import { kindLabel, statusTone } from '../../../../../../lib/locations/view'
-import { ABSENT } from '../../../../../../lib/workspace/format'
-import { Field, Section } from '../_chrome/drawer-shell'
+import { statusTone } from '../../../../../../lib/locations/view'
+import { Field } from '../_chrome/drawer-shell'
 import { StatusTabs } from '../_chrome/status-tabs'
 import type { StatusOption } from '../_chrome/status-tabs'
 
 /**
- * The fields both drawers author - `Route - Locations v2.dc.html`'s edit
- * drawer, top to bottom: Location name; Int / Ext beside Type (`96px
- * minmax(0,1fr)`); Address (`Actual or fictional address…`); Description
- * (88px min); then the Scouting status segmented control (`Pending ·
- * Scouted · Locked`). The photo tile above and the sluglines and cast below
- * are the edit drawer's alone.
+ * The fields both drawers author, in three pieces since the rebuild
+ * (2026-09-18): the name (`NameField`), the tree edge (`PartOfField`,
+ * under the drawer's `Inside` section - a primary set of its own, or
+ * inside one), and the Production fold (`ProductionFields`): the scouting
+ * status segmented control, the address, the shooting days scheduled at
+ * this set (with the roll-up printed beside it - AGENTS.md's "how many
+ * days in the chawl", authored here at last), and the description. The v2 pass's
+ * read-only `Int / Ext` and `Type` "fields" are gone: both are printed
+ * where they are read, on the card and in the drawer's head.
  *
- * Int / Ext and Type are read, not typed: a set is `INT.` in one heading
- * and `EXT.` in the next (`@folio/contracts`, `locations.ts`), and the kind
- * is the tree's and the count's (`lib/locations/view.ts`). The mockup draws
- * both as fields; here they are fields that print. `Part of` is the one
- * field the mockup does not draw: the tree edge (AGENTS.md, Entity
- * identity: "a location is a tree, not a list") has no other surface in
- * the v2 package, so it sits under Type - a primary set, or one of the
- * others. Flagged in `docs/build-decisions.md`.
- *
- * A draft until Save: nothing here writes.
+ * A draft until Save: nothing here writes. `scheduledDays` is kept as
+ * typed so the field can be emptied while editing; the save parses it.
  */
 export type LocationDraft = {
   readonly name: string
@@ -35,6 +29,18 @@ export type LocationDraft = {
   readonly status: LocationStatus
   /** The parent's id, or `''` for a primary set. */
   readonly parentId: string
+  /** Shooting days at this set, as typed. */
+  readonly scheduledDays: string
+}
+
+export const EMPTY_DRAFT: LocationDraft = { name: '', address: '', description: '', status: 'pending', parentId: '', scheduledDays: '0' }
+
+/** The typed days as a count, or null when the field does not read as one. */
+export const daysOf = (raw: string): number | null => {
+  const trimmed = raw.trim()
+  if (trimmed === '') return 0
+  if (!/^\d{1,4}$/u.test(trimmed)) return null
+  return Number(trimmed)
 }
 
 export const STATUS_OPTIONS: readonly StatusOption<LocationStatus>[] = LOCATION_STATUSES.map((status) => ({
@@ -43,101 +49,73 @@ export const STATUS_OPTIONS: readonly StatusOption<LocationStatus>[] = LOCATION_
   tone: statusTone(status),
 }))
 
-export const LocationFields = ({
+export const NameField = ({ value, busy, onChange }: { readonly value: string; readonly busy: boolean; readonly onChange: (value: string) => void }) => (
+  <Field label="Location name">
+    <input
+      type="text"
+      value={value}
+      disabled={busy}
+      data-field="name"
+      placeholder="Kamathi Chawl"
+      onChange={(event) => {
+        onChange(event.target.value)
+      }}
+      className="folio-drawer-field"
+    />
+  </Field>
+)
+
+export const PartOfField = ({
+  value,
+  parents,
+  busy,
+  onChange,
+}: {
+  readonly value: string
+  /** The records this one may hang under: every other root, and no descendant of its own. */
+  readonly parents: readonly { readonly id: string; readonly name: string }[]
+  readonly busy: boolean
+  readonly onChange: (value: string) => void
+}) => (
+  <Field label="Part of">
+    <select
+      value={value}
+      disabled={busy}
+      data-field="parent"
+      onChange={(event) => {
+        onChange(event.target.value)
+      }}
+      className="folio-drawer-field folio-select"
+    >
+      <option value="">A primary set of its own</option>
+      {parents.map((parent) => (
+        <option key={parent.id} value={parent.id}>
+          Inside {parent.name}
+        </option>
+      ))}
+    </select>
+  </Field>
+)
+
+export const ProductionFields = ({
   draft,
   onChange,
   busy,
-  row,
-  parents,
+  rollupDays,
 }: {
   readonly draft: LocationDraft
   readonly onChange: (next: LocationDraft) => void
   readonly busy: boolean
-  /** The record, for the two read fields; `null` in the New drawer. */
-  readonly row: LocationRow | null
-  /** The records this one may hang under: every other root, and no descendant of its own. */
-  readonly parents: readonly { readonly id: string; readonly name: string }[]
+  /** The subtree's shooting days from the last pass, or null in the New drawer. */
+  readonly rollupDays: number | null
 }) => {
   const set = <K extends keyof LocationDraft>(key: K, value: LocationDraft[K]): void => {
     onChange({ ...draft, [key]: value })
   }
+  const own = daysOf(draft.scheduledDays)
   return (
-    <>
-      <div className="flex flex-col gap-[11px]">
-        <Field label="Location name">
-          <input
-            type="text"
-            value={draft.name}
-            disabled={busy}
-            data-field="name"
-            placeholder="Kamathi Chawl"
-            onChange={(event) => {
-              set('name', event.target.value)
-            }}
-            className="folio-drawer-field"
-          />
-        </Field>
-        <div className="grid gap-[9px]" style={{ gridTemplateColumns: '96px minmax(0, 1fr)' }}>
-          <Field label="Int / Ext">
-            <span className="folio-drawer-field font-mono text-12" data-field="ie" aria-readonly="true">
-              {row?.ie ?? ABSENT}
-            </span>
-          </Field>
-          <Field label="Type">
-            <span className="folio-drawer-field truncate" data-field="kind" aria-readonly="true">
-              {row === null ? 'Not on the page yet' : kindLabel(row)}
-            </span>
-          </Field>
-        </div>
-        <Field label="Part of">
-          <select
-            value={draft.parentId}
-            disabled={busy}
-            data-field="parent"
-            onChange={(event) => {
-              set('parentId', event.target.value)
-            }}
-            className="folio-drawer-field folio-select"
-          >
-            <option value="">A primary set of its own</option>
-            {parents.map((parent) => (
-              <option key={parent.id} value={parent.id}>
-                Inside {parent.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Address">
-          <input
-            type="text"
-            value={draft.address}
-            disabled={busy}
-            data-field="address"
-            placeholder="Actual or fictional address…"
-            onChange={(event) => {
-              set('address', event.target.value)
-            }}
-            className="folio-drawer-field truncate"
-          />
-        </Field>
-        <Field label="Description">
-          <textarea
-            value={draft.description}
-            disabled={busy}
-            data-field="description"
-            data-kind="prose"
-            rows={4}
-            placeholder="No description yet"
-            onChange={(event) => {
-              set('description', event.target.value)
-            }}
-            className="folio-drawer-field text-ink2"
-            style={{ textWrap: 'pretty' }}
-          />
-        </Field>
-      </div>
-
-      <Section gap={8}>
+    <div className="flex flex-col gap-[11px]">
+      <div className="flex flex-col gap-[6px]">
         <span className="text-11-5 text-ink2">Scouting status</span>
         <StatusTabs
           label="Scouting status"
@@ -148,7 +126,61 @@ export const LocationFields = ({
             set('status', status)
           }}
         />
-      </Section>
-    </>
+      </div>
+      <Field label="Address">
+        <input
+          type="text"
+          value={draft.address}
+          disabled={busy}
+          data-field="address"
+          placeholder="Actual or fictional address…"
+          onChange={(event) => {
+            set('address', event.target.value)
+          }}
+          className="folio-drawer-field truncate"
+        />
+      </Field>
+      <div className="grid gap-[9px]" style={{ gridTemplateColumns: '120px minmax(0, 1fr)' }}>
+        <Field label="Shooting days">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={draft.scheduledDays}
+            disabled={busy}
+            data-field="days"
+            aria-invalid={own === null ? 'true' : undefined}
+            placeholder="0"
+            onChange={(event) => {
+              set('scheduledDays', event.target.value)
+            }}
+            className="folio-drawer-field tabular font-mono"
+          />
+        </Field>
+        <span className="flex flex-col justify-end pb-[9px] text-11 leading-[1.5] text-ink3" data-days-rollup={rollupDays ?? ''}>
+          {rollupDays === null
+            ? 'Scheduled at this set. Sub-sets roll up into the parent.'
+            : own !== null && rollupDays > own
+              ? `${String(rollupDays)} with its sub-sets, from the last pass.`
+              : own === null
+                ? 'A whole number of days.'
+                : 'At this set alone; its sub-sets roll up into it.'}
+        </span>
+      </div>
+      <Field label="Description">
+        <textarea
+          value={draft.description}
+          disabled={busy}
+          data-field="description"
+          data-kind="prose"
+          rows={4}
+          placeholder="The place in a line or two, or what the crew needs to know."
+          onChange={(event) => {
+            set('description', event.target.value)
+          }}
+          className="folio-drawer-field text-ink2"
+          style={{ textWrap: 'pretty' }}
+        />
+      </Field>
+    </div>
   )
 }

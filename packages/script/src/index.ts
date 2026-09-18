@@ -225,6 +225,10 @@ export type {
   CharacterRelationship,
   Confidence,
   CueTally,
+  Exchange,
+  Introduction,
+  LongestLine,
+  MatchReason,
   DerivedEntities,
   InteriorExterior,
   Light,
@@ -239,9 +243,11 @@ export type {
   ResolveRowState,
   ResolveSubject,
   SceneAuthored,
+  SceneCount,
   SceneRecord,
   SluglineReading,
   SluglineTally,
+  SpokenLine,
 } from './entities'
 export {
   CONFIDENCES,
@@ -257,23 +263,34 @@ export {
 export type { SluglineRejection } from './slugline'
 export { TIMES_OF_DAY, readSlugline } from './slugline'
 
-export { canonicalKey } from './alias'
+export type { MatchScore } from './alias'
+export { canonicalKey, scoreMatch } from './alias'
 
 export type {
   AmbiguousBinding,
   BrokenLocationEdge,
   CharacterMatch,
+  CharacterNamePool,
   DanglingMention,
   DeriveError,
   DeriveOptions,
   Derivation,
   MintedRecord,
   RejectedSceneHeading,
+  SimilarPair,
 } from './derive'
-export { countDerivationIds, derive, matchCharacters } from './derive'
+export { countDerivationIds, derive, dialogueWords, matchCharacterNames, matchCharacters, similarRecords } from './derive'
 
-export type { CueRewrite, HeadingRewrite } from './rename'
-export { cueSpelling, renameCharacterCues, renameLocationHeadings, setSpelling } from './rename'
+export type { Introduced, IntroductionSubject, NameMatch } from './introductions'
+export { ageOnThePage, findIntroductions, namedInText } from './introductions'
+
+export { sidesFor } from './sides'
+
+export type { EstablishingLine, MentionLabelFor, Quadrant, SetMatch, SetPool, SimilarSets } from './sets'
+export { NO_QUADRANT, addQuadrants, establishingLines, matchSetNames, quadrantOf, similarSets } from './sets'
+
+export type { CueRestore, CueRevert, CueRewrite, HeadingRewrite } from './rename'
+export { cueSpelling, renameCharacterCues, renameLocationHeadings, revertCueRewrites, setSpelling } from './rename'
 
 export type { HeadingParts } from './fountain-syntax'
 export { headingParts } from './fountain-syntax'

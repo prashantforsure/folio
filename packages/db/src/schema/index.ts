@@ -21,10 +21,12 @@
  *   versions                     immutable snapshots of authored data
  *   revisions
  *   locked_pages
- *   characters                   name, bio, notes, the profile the Characters route authors, and
- *                                since 0017 its status and wants / needs
+ *   characters                   name, bio, notes, the profile the Characters route authors,
+ *                                since 0017 its status and wants / needs, since 0021 its origin
  *   character_bound_cues         the alias table's authored half
  *   character_relationships
+ *   character_findings           a contradiction the assistant found between two lines of the script, and the
+ *                                writer's verdict on it (0022) - the model's answer, so stored, never derived
  *   locations                    name, parent, scheduled days, description, the merge tombstone, and
  *                                since 0018 its scouting status, address and photo key
  *   location_bound_sluglines

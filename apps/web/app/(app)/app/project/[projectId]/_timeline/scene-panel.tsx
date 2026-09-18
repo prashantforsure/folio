@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 
 import { linkThread, saveStoryTime, unlinkThread } from '../../../../../../lib/timeline/actions'
 import type { ProjectRoutePath } from '../../../../../../lib/workspace/hrefs'
+import { characterHref } from '../../../../../../lib/workspace/hrefs'
 import { sceneRef, threadColourVar } from './figures'
 import type { EpisodeLinks, Run } from './timeline-workspace'
 
@@ -335,9 +336,14 @@ export const ScenePanel = ({
               <span className="text-10-5 text-ink3">No one speaks or is mentioned.</span>
             ) : (
               scene.cast.map((person) => (
-                <span key={person.id} className="rounded-chrome bg-sel px-[8px] py-[2px] text-10-5">
+                <Link
+                  key={person.id}
+                  href={characterHref(projectId, person.id)}
+                  data-cast-link={person.id}
+                  className="rounded-chrome bg-sel px-[8px] py-[2px] text-10-5 no-underline hover:text-accent hover:no-underline"
+                >
                   {person.name}
-                </span>
+                </Link>
               ))
             )}
           </div>

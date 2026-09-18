@@ -13,7 +13,9 @@ at in the code today.
 
 - **Assistant cost (open decision 13).** `assistant_messages` has no cost column, the send button
   names no price, and nothing writes the ledger. "Cost is named before it is spent" is unmet
-  because there is no number to name.
+  because there is no number to name. The Characters drawer's `✦ Draft from the script` and
+  `✦ Check for contradictions` (2026-09-18) take the same standing: no price on the button, no
+  ledger row, no rate limit - three more places the number would go once there is one.
 - **Open decision 8, A4.** `resolveSheet('asian')` refuses; the Script route's banner says so.
 - **Open decision 10, `SCENE_xxx`.** Unchanged. The sidebar's scene rows are `#n-<node id>`
   fragments, which name a node, never a scene record; `?selected=` stays unwired.
@@ -25,6 +27,535 @@ at in the code today.
   `lib/assistant/model.ts`. A cheaper model is a product call about the answers, not a setting.
 - **Reordering episodes** is ADR 0002's open product claim and is not built; `ordinal` moves
   are the machinery, the ruling is missing.
+
+---
+
+## Locations rebuild - the script's evidence first (2026-09-18)
+
+The Locations route rebuilt end to end, four phases in one pass, to a written plan rather than
+the v2 mockup - the client's ruling, as for Characters. The audit that preceded it (the plan
+file, "Locations route - audit and rebuild plan") found the Characters diagnosis again: the data
+layer was right (the tree, the roll-ups, the alias table, the queue, the rename with snapshots,
+merge with tombstones) and the UI left it dark. Verified against the tree before a line changed:
+`peopleAt` defaulted to three so the drawer's `Who's here` listed three; `lastSeen`, `own` and
+the queue proposal's `confidence` were loaded and never drawn; `scheduled_days` and
+`rollup_shooting_days` were stored and shown nowhere; research clips filed to a place were never
+read; `sceneHref` had zero callers under `_locations/` - nothing on the route linked into the
+script; the card was an `<article onClick>`; the queue banner was dismissible with no undo and a
+native `<select>`; the sheet had no sort, scope, totals or CSV; a sub-set's scene printed twice.
+
+### Client rulings (2026-09-18)
+
+| Question | Ruling |
+| --- | --- |
+| How far past the script does the route go for the filmmaker | **Surface what exists.** Status, address, one photo and shooting days (`scheduled_days`, already a column); CSV per set and for the sheet. No new table, no scouting layer, not writer-only |
+| Does `Route - Locations v2.dc.html` still bind the route | **No - the plan is the spec**, the Characters ruling applied. The README's language, tokens and patterns still apply |
+| `Places · Scenes here · Sheet` as `?view=` or state | **Client state** (`_locations/view-state.tsx`, the Characters shape - the route has a layout of its own); the URL stays `/locations`; `?view=` is an unknown key, a stale link opens the places |
+| May the assistant read the location records on `/locations` | **Yes, records + Focus.** The panel sends `scope: 'project'` and `places: true`; the open drawer's record is the Focus block; two chips are client-side reports |
+
+### Nothing is stored that can be computed - so no migration
+
+The plan reserved an additive migration for the establishing line, the quadrant and the last
+scene. AGENTS.md's exception table makes storing the exception, not the rule, and every one of
+these is a reading over rows the loader already has: the establishing line over the project's
+node list (`readProjectScreenplayNodes` - the read the Script route makes on every load), the
+quadrant over the scene index's `ie` and `light`, the last scene over the same order the first
+came from, the similar-set pairs over the records and their bound set texts. So they live in a
+new pure module, `packages/script/src/sets.ts` (`matchSetNames`, `similarSets`,
+`establishingLines`, `quadrantOf`, `addQuadrants`; 11 tests), and are computed in
+`lib/locations/server.ts` at request time. `derive.ts`, `entities.ts`, `schema/derived.ts` and
+`contracts/derived.ts` are untouched - which also kept this pass out of the four files the
+concurrent Characters session was editing. A later pass that wants to cache one of them stores
+what these return.
+
+### What was built
+
+**Core** - `packages/script/src/sets.ts`, exported from the index. `INT` is interior; `EXT`,
+`INT/EXT` and `EST` count as exterior (an I/E scene and an establishing shot both need the
+outside); a heading with no `DAY`/`NIGHT` is `unlit`, in neither box. `similarSets` keeps
+`certain | likely` only and never pairs a sub-set with its own parent.
+
+**Contract** (`packages/contracts/src/locations.ts`, additive) - `LocationSceneRow` + `ie`,
+`storyDay`, `storyClock`, `flashback`; `LocationRow` + `scheduledDays`, `bound` (each set text
+with provenance, count and first heading), `intro`, `quadrant`, `rollupQuadrant`, `clips`,
+`similar`; `people` uncapped; `SluglineResolveProposal.reason`; `SluglineResolveItem.candidates`;
+`LocationEditSchema.scheduledDays`.
+
+**Repositories** - `listBoundSluglines` selects `bound_by`; `listSceneStoryTime` (the Timeline's
+`0011` columns, read by the route at last); `moveBoundSlugline` (one CTE on `moveBoundCue`'s
+pattern); `deleteBlankLocation` (the `New location` undo - a minted record is present the moment
+the heading resolves to it, so `deleteAbsentLocation` would refuse); `updateLocationRecord` takes
+`scheduledDays`; `listClipsFiledToLocations` in `research.ts` (the reverse read its header
+promised).
+
+**Loader** (`lib/locations/server.ts`) - twelve statements once for every row; ranks every open
+slugline against the records with `matchSetNames` (the reason chip, the menu's candidates);
+hides similar-set pairs the writer rejected (`resolve_decisions` under `set:<a>:<b>`, a key no
+pass writes); the establishing line is the set's own first, else the earliest under a sub-set.
+
+**Actions** - `renameLocation` returns the undo (every rewritten heading's two readings);
+`previewRename` (the confirm's numbers); `undoRename` (puts back only headings still reading
+what the rename left; the record's old name and set text first; refused as `taken` when the old
+set text was rebound meanwhile); `moveAlias`; `revokeDecision` (`bound` unbinds, `new-record`
+deletes the blank record or unbinds, `attached` clears the edge and deletes a blank minted parent,
+`not-inside` deletes the rejection); `decideSimilar` (merge, or "they're different").
+
+**Views** - `Places`: the queue first while it has rows (non-dismissible, reason chip,
+confidence-weighted buttons, a `.folio-menu` with the candidates and their reasons, toast +
+`Undo`), then content-first cards on `.folio-record-card`: 28px thumbnail or hue mark (the 16:10
+tile is gone), status dot, the name as the stretched link, `INT · 4 D · 5 N`, the establishing
+line or the description, the `Inside` strip of sub-sets (each a link) on a primary set, the
+conflict block, the presence strip, the foot with the linked span and `+N` on the cast. **A
+sub-set is drawn inside its parent's card and gets no card of its own** (reachable from the strip,
+the sidebar and the sheet). `Scenes here`: one section per primary set, its sub-sets' scenes
+listed once with the sub-set named on the row; the head carries the quadrant, the pages and the
+days; rows link into the script and print `INT`/`EXT`, the time of day as text, the story day;
+`CSV` per set. `Sheet`: sortable (`aria-sort`), episode scope, `Days` (roll-up), `Cast`, `First`
+/ `Last` as linked chips, a totals row over the primary sets, `Export CSV`.
+
+**Drawer** - evidence first, on the Characters order: linked meta, `Ask`, `Open in script`; the
+name; `On the page` (the establishing line quoted, its ref linked, `Use as description` into the
+unsaved field); `Presence` (the strip, `first · last`, the longest gap of five or more);
+`Sluglines here` as the alias table (`slugline-table.tsx`: each set text linked to its first
+heading, `name` pill, provenance `derived | you | member`, count, `×`, `+ bind a set text`, a taken
+set text as a conflict block with `Move it here`); `Scenes` by episode with the quadrant and `+ N
+more`; `Who's here` - everyone; `Inside` (sub-sets with counts and days, `+ Add a sub-set`
+inline, `Part of`); `Research` (clips filed here, each a link to its source); `Same place?`
+(similar records as conflict blocks: `Merge into …` / `They're different`). Last, the
+**Production** fold (`<details open>`): status, address, shooting days with the roll-up printed
+beside it, description, photo (thumbnail, Upload / Replace / Remove). Foot: `In N scenes · Merge
+into…` on a present record, `Delete` on an absent one; the rename confirm (`rename-confirm.tsx`)
+fed by `previewRename`, listing the set texts that stay; after a rename the toast carries `Undo`.
+
+**Sidebar** - `Needs a decision` (amber, the open set texts; a click unfolds the queue) ·
+`Primary set` (sub-sets indented) · `Recurring` · `One-off` · `Not on the page yet`; rows print
+`INT · 4 D · 5 N` and `9 sc`; the foot is `CountsWidget` with `Needs a decision · N` (a button
+when > 0) and `Scouted · 4 of 6`. The find field narrows the body too.
+
+**Shared** - `PresenceStrip` in `@folio/ui` (built here; the Characters session's card and
+Presence view consume it - states `full | half | none`, the picture's words, each route maps its
+own; `PRESENCE_STRIP_LIMIT` per size). The Scenes detail's `Set` field links to
+`/locations/:id`. The assistant: `AskFocusSchema` is a union (`character | location`),
+`AskInputSchema.places`, `LocationFocusInput` + `PlaceInput` in `lib/assistant/context.ts`,
+`placesOf` in `lib/assistant/server.ts`; the panel's `Describe {name} from its scenes`, and two
+reports over `lib/locations/facts.ts` - `Find locations used only once`, `Which sets have night
+exteriors?` - answered without a model.
+
+### Judgement calls, flagged
+
+- **The find field narrows the body as well as the sidebar.** The v2 pass narrowed the sidebar
+  only, which read as a bug in the audit; Characters still narrows its sidebar alone.
+- **The sheet's totals are over the primary sets** so a sub-set's scene counts once; a sub-set
+  whose parent the filter hid counts for itself.
+- **`INT/EXT` and `EST` count as exterior in the quadrant.** A breakdown that wants them apart
+  reads the scene rows, which keep the heading's own `ie`.
+- **The `data-card-cast` attribute now counts everyone** at the set (the card draws three and
+  `+N`); the E2E reads it as a count.
+- **`hueOf` stays for the sheet's mark and the thumbnail's stand-in** - 22-32px, never a tile.
+- **The assistant's Focus on `/locations` is the same ephemeral cell** the Characters drawer
+  publishes into; the panel checks the kind against the route so a stale character focus never
+  rides a locations turn.
+- **`revokeDecision` on `attached` deletes a minted parent only when it is blank**
+  (`deleteBlankLocation`); a parent the writer has written on stays as a primary set.
+
+### Not built, by ruling or by absence
+
+- A scouting layer (notes, contact, candidates, several photos) - ruled out.
+- A PDF location report; a map. CSV per set and for the sheet only.
+- The Timeline's scene panel linking to a location - the Timeline is still on its pre-redesign
+  chrome and its rows carry no location id; left for its pass.
+- "Fix the spelling" across the script - a third write-back; escalated.
+
+### Verification
+
+- `pnpm --filter @folio/script exec vitest run` - 30 files, 532 tests (11 new in `sets.test.ts`).
+- `vitest run --environment node tests/locations-view.test.ts tests/locations-figures.test.ts
+  tests/locations-sheet.test.ts tests/workspace-routes.test.ts` in `apps/web` - 63 pass (new:
+  `locations-sheet.test.ts`, 9; `locations-view.test.ts` +7).
+- `tsc --noEmit` in `apps/web` clean outside the concurrent session's in-flight `_characters/`
+  files; `@folio/contracts`, `@folio/db`, `@folio/ui` typecheck clean. `eslint` over every file
+  this pass touched - clean.
+- `e2e/locations-route.spec.ts` rewritten to the new contract (`data-card-{link,line,inside,
+  sub,span}`, `data-unmatched-{reason,key}`, `data-status-{toast,undo}`, `data-alias-*`,
+  `data-drawer-{intro,span,gap,quadrant,scenes,subsets,subset,merge,production,ask,open-script}`,
+  `data-scenes-{quadrant,days,export}`, `data-scene-{at,ie,time,story}`, `data-sheet-{export,
+  totals}`, `data-sort`, `data-days-rollup`, `data-decisions-total`, `data-locations-widget`) and
+  **unrun** - no `E2E_EMAIL` / `E2E_PASSWORD` here. A browser check of the three views in both
+  themes, a queue decision and its undo, the rename and its undo, and the CSV downloads is the
+  next thing a human should do.
+
+---
+
+## Characters rebuild, phase 4 - the model, one action at a time (2026-09-18)
+
+The last of the four phases (the plan, "Characters rebuild, phase 1" below). The assistant reads
+the whole project on `/characters` and knows which record is open; the drawer gains two model
+actions that write nothing to the script and land only where the writer can see and undo them.
+Built in the same pass as phases 2 and 3 on the client's word ("build the entire character route
+at once"); the three sections are kept apart so each phase's rulings and flags stay findable.
+
+### Rulings taken
+
+- **The assistant reads the whole project on `/characters`, with a Focus block for the open
+  record** (the client, 2026-09-17). `AskInputSchema` (`@folio/contracts`) gains `scope:
+  episode | project` and `focus: { kind: 'character', id }`; `lib/assistant/context.ts` renders
+  every episode under `[Episode N · Title]` markers with `[E2 Sc 9]` headers, water-filling the
+  400k cap across the episodes and saying which it cut; `focusBlock` is the record as the drawer
+  shows it, sent as a second, uncached system block so the cacheable prefix stays stable. The panel
+  sends project scope on `/characters` **only** - the widening is per route (Locations, Timeline,
+  Research still read one episode) - and `data-assistant-scope` / `data-assistant-focus` say so.
+  The subhead reads `Reading all 3 episodes.`
+- **Model actions carry no price and write no ledger row** - the send button's standing, open
+  decision 13 stays open (the bullet above). A rate limiter belongs with that decision and is not
+  built.
+- **Model prose lands only in unsaved fields.** `draftField` returns text and citations and
+  writes nothing; the drawer puts it in the field with `drafted from E1 Sc 4 · not saved`, and
+  the existing Save keeps it or Cancel drops it. **Cite or drop**: a draft naming no scene it was
+  shown is refused as `Nothing on the page to draft from.`
+- **Findings are rows, not a bible.** `character_findings` (migration `0022`, AUTHORED on the
+  assistant's word and the writer's verdict): kind `contradiction`, status `open | deliberate`,
+  the two heading node ids stored sorted with no key, the two quotes, the claim, and the claim's
+  FNV-1a as a plain column so the dedupe index has a target. `replaceOpenFindings` is one CTE -
+  delete the open rows a re-check did not reproduce, insert the new set `on conflict do nothing`
+  - so a deliberate verdict blocks its own re-insert. AGENTS.md's storage exception table gains
+  the row. A finding whose quotes are not on the page (after NFC + straight quotes + one space)
+  is dropped and counted: `Checked 52 of 79 scenes · 2 findings · 1 dropped: it did not quote the
+  page`.
+- **Off the page, no model call.** `draftField` and `checkContradictions` refuse a record with
+  no scenes before the SDK is touched, and the buttons say why they are disabled.
+
+### Built
+
+- `lib/assistant/model.ts`: `EVIDENCE_CHAR_CAP`, `DRAFT_MAX_TOKENS`, `CHECK_MAX_TOKENS`,
+  `MODEL_ACTION_TIMEOUT_MS`, `FINDINGS_MAX`, `DRAFT_MAX_CHARS`. `lib/assistant/server.ts`
+  exports `assistantClient()` - the one door to the SDK; the key never leaves the file.
+- `lib/characters/evidence.ts` (pure, tested): `evidenceFor` (whole scenes, script order, a
+  visible cut line), `validateDraft`, `validateFindings`, `normaliseForMatch`, `claimHash`.
+- `lib/characters/model-actions.ts` (`'use server'`): `draftField`, `checkContradictions`,
+  `setFindingVerdict` - `messages.parse` with `zodOutputFormat`, `maxRetries: 1`, every model
+  failure a sentence in the writer's terms. No `revalidatePath`: the drawer holds the draft and
+  the findings as state, and a refresh under an unsaved draft would race it.
+- `packages/db`: `readProjectScreenplayByEpisode`, `listCharacterFindings`, `replaceOpenFindings`,
+  `setFindingStatus`.
+- The drawer: `✦ Draft from the script` under Description, Wants and Needs (`profile-fields.tsx`,
+  `draftFrom`), `Continuity` as the last section (`continuity-section.tsx`), the assistant Focus
+  published on mount (`lib/state/ephemeral.tsx`, `assistantFocus`).
+- `CitedBody` in the panel turns `E2 Sc 9` into a linked chip alongside `Scene 9`.
+
+### Not built, flagged
+
+- A connected walk: `ANTHROPIC_API_KEY` is not set here, so the two buttons were exercised only
+  in their disabled state and the code path against the SDK's types. Runtime checks still to make
+  on a connected server: structured outputs on `claude-opus-5` (if a 400 names
+  `output_config.format`, fall back to `thinking: { type: 'disabled' }`); a platform proxy timeout
+  under 90s.
+- The E2E's connected test (`E2E_ASSISTANT=1`) is not written; the disconnected assertions are.
+
+---
+
+## Characters rebuild, phase 3 - the script speaks (2026-09-18)
+
+The core computes what a writer recognises a character by, and the route quotes the page.
+Migration `0021`.
+
+### Rulings taken
+
+- **The voice is derived, on the derivation row.** `CharacterRecord` gains `words`, `speeches`,
+  `parens`, `namedIn`, `firstLine`, `lastLine`, `longest`, `sceneCounts`, `exchanges`,
+  `introducedAt`; `SceneRecord` and `CueTally` gain `words`. All of it arithmetic over the node
+  list in `scanNodes`, rebuilt every pass, and `assertExact` in `@folio/contracts` held the split
+  to it. The four positions are **JSON `{ nodeId, scene }`** rather than the plan's bare uuid
+  columns: the loader needs the scene to cite a line and re-walking the project to find it is the
+  cost the plan wanted to avoid. Flagged as the one deviation from the plan's column list.
+  `scene_counts` and `exchanges` are JSON lists on the row, not tables (the plan's reasoning).
+- **A word is a whitespace-split token; a mention run is one word** - `dialogueWords`, the same
+  reading `outlineWordCount` takes. **The longest line is the longest dialogue node**, not the
+  longest speech across parentheticals - it is what the drawer quotes, and quoting the first node
+  of a three-node speech would misdescribe it. Flagged.
+- **An exchange is two different cues in a row under one heading**; action between them does not
+  break it, a heading does; an unresolved cue exchanges with nobody; two spellings of one record
+  are not a conversation.
+- **Introductions read action nodes only, whole tokens, case as written.** A Fountain-typed CAPS
+  intro on its own line is a cue and lands in the queue, never here - the drawer says so. `DAY` or
+  `MILL` bound as a name will match an action line that uses the word; the test names the false
+  positive and accepts it, because the cost is a wrong quote the writer can see, never a wrong
+  binding. Open decision 3 is untouched.
+- **Rename undo is an inverse rewrite by node id** (`revertCueRewrites`), behind its own
+  `before_rename` snapshot, skipping and counting a cue edited since - never
+  `renameCharacterCues(to, from)`, which would also rewrite a cue that carried the new spelling
+  before. The offer lives in the status bar's toast for the route's lifetime
+  (`lib/characters/undo.ts`); `taken` (someone bound the old spelling meanwhile) is refused with
+  the merge named.
+- **Two records that read as one person** (`similarRecords`: every key of one against every key
+  of the other, `certain` / `likely` only) are a row of the queue - `MEERA PAWAR reads like Meera
+  - two records.` - with `Merge into <keep>` and `They're different people`. The rejection is a
+  `record:<a>:<b>` row in `resolve_decisions` under a plain-text key, as is `intro:<id>:<node>`
+  for a waved-through "speaks before introduced"; a pass never sees either key
+  (`recordDecisionByKey`). The sidebar's `Needs a decision` counts pairs; the rail badge stays
+  rows-only. Flagged.
+- **`characters.origin`** (`derived | hand | mention | agent`) is written once at creation and
+  never backfilled - records made before `0021` print no origin.
+- **The Script editor's touch is read-only decoration** (Script chrome, flagged as separable):
+  every cue block carries `data-character-id` / `data-cue-name` / `data-cue-scenes` or
+  `data-cue-unresolved` from a cue book `loadScript` reads once (`draft.cues`); `Colour cues` in
+  the actions menu (`lib/state/session.ts`, per tab) sets `--cue` to the record's colour; a
+  hover card (`_script/floating/cue-card.tsx`) says who a cue is with `Open`, or `No record yet ·
+  Resolve on Characters →`. No node attribute, no text change. The book is read per load: a
+  record a save mints shows its identity on the next load - flagged, cheap to change.
+
+### Built
+
+- Core: `derive.ts` (the voice scan, `similarRecords`, `dialogueWords`), `introductions.ts`,
+  `sides.ts`, `rename.ts` (`CueRewrite.before`, `revertCueRewrites`); tests `derive-voice`,
+  `introductions`, `sides`, the rename round trip, and three properties (per-scene lines never
+  exceed the total, a first line exists exactly when lines do, exchanges are symmetric).
+- `0021_characters_voice.sql` - applied to the dev project with `0022` in one `db:migrate` run
+  (drizzle-kit applies every pending entry; both were pending, so "one run each" was not
+  available).
+- Loader: the first line and the introduction of every record read by id
+  (`readScreenplayNodesById`, one query), `pairs`, the intro verdicts; the profile's `voice` and
+  `talksTo`. Actions: `undoRename`, `decidePair`, `dismissIntroFinding`, `readSides`.
+- The drawer: the stats row (`412 lines · 3,180 words · 14% of dialogue · 3 V.O.`), `Voice`
+  (`voice-section.tsx`, `All N lines →` opens `sides-modal.tsx` on the Script route's static
+  sheet), `Introduced` (`intro-section.tsx`, `Use this as the description`, the age hint under
+  Age, the timing finding as a conflict block with no accept), `Talks to · Anil 40 · Kadam 12`,
+  the origin in the meta. The card's quote slot: description, else the first line in quotes, else
+  the introduction under a `from the script` eyebrow. The sheet's `Words`, `Share` (a 40×4 bar),
+  `Intro`, `Eighths` columns and the `Balance` card (`E1 · Meera 62% of 1,240 words · 6 voices`).
+  The Presence view's `silent-pair` finding.
+- `thousands()` in `lib/workspace/format.ts` - no `Intl`, the same string in every locale.
+
+---
+
+## Characters rebuild, phase 2 - the shape (2026-09-18)
+
+The content-first card, the presence strip everywhere, the drawer reordered around the script's
+evidence, the Presence view in place of the graph, and the dead code out. No migration.
+
+### Rulings taken
+
+- **The Relationships graph is gone, replaced by a Presence view** (the client, 2026-09-17):
+  a character × scene grid by episode (`.folio-presence-grid`, 12px cells - filled speaks, hollow
+  mentioned, faint absent - sticky episode row and name column), a hover line, `Pairs` (every two
+  characters who share a scene, a bar scaled to the strongest, the scenes as linked chips), and
+  the finding cards. `relationships-view.tsx`, `graphEdges`, `graphLayout`, `edgeWidth`,
+  `.folio-cast-ground`, `.folio-cast-node` and the `--dot` token are deleted; `neverShare` stays
+  for the finding card and the panel's report chip. Views are `cast | presence | sheet`, still
+  client state.
+- **The card is content-first.** The 4:5 face, the scrim and the status badge went with the
+  mockup; the card is the name over the role with a 6px status dot (and a 28px thumbnail when
+  there is a portrait), the alias line (`MEERA 79 · MEERA (V.O.) 3 · + 2 more`), a quote slot, the
+  conflict block, the presence strip, and a foot of `52 speaks · 27 mentioned · 412 lines` with
+  the span as linked chips. The whole card is one stretched link (`.folio-record-link`), so a
+  middle-click and Space are the browser's; the conflict block sits above it (`[data-raised]`).
+- **The strip is one component** - `@folio/ui`'s `PresenceStrip`, written by the concurrent
+  Locations session in the same hour with three picture-named states (`full | half | none`) and
+  `PRESENCE_STRIP_LIMIT`; this route maps `speaks | mentioned | absent` onto them
+  (`cellStateOf`) and falls back to `EpisodeBars` past 96 scenes on a card, 240 in the drawer,
+  80 in the sheet. `IdentityChip` gains `shape="square"` for the grid and the drawer's relations.
+- **`SceneFacts` is a subtype of `SceneRef`**, never a widening of it: the reading, the set (by
+  name, through the location records), speaking and mentioned (as stored - derivation writes them
+  disjoint), the measured eighths, the dialogue words. `SceneIndexRow` gains `words` and
+  `mentioned`; Locations and Research construct `SceneRef` as before. `CastRow.cues` is required,
+  so Production's loader now reads `listCueTallies` for its cast rows too.
+- **The drawer is derived first, authored in a fold**: Name and the stats · In the script as ·
+  Voice · Introduced · Presence (the strip, `first · last`, `longest gap · 11 scenes · E2 Sc 3 →
+  E2 Sc 13`, threshold 5) · Scenes (per episode with a sticky eyebrow `E1 · 28 scenes · 41 2/8`,
+  rows `Sc 4 · INT · D · set → Locations · presence · 2/8`, eight then `+ N more`) · Shares scenes
+  with (`Presence →`) · Sets (→ Locations, `21 sc · 12 D · 9 N`) · a `Notes` fold (`<details
+  open>`) holding the profile fields, the status and the reference image · Continuity. The Arc
+  list and the 78×98 tile are gone; `DrawerShell` gains `lead` for the 32px thumbnail.
+- **The sheet** trades `Scenes` for `Speaks` and `Mentioned`, gains a `Presence` column, and
+  scopes the share against every dialogue word under the chosen episode's headings.
+- **Dead code out**: `definedOf`, the `Defined` widget, `CastMark`'s `face`, `.folio-cast-face`,
+  `--cast-l3` / `--cast-c3` / `--cast-face-ink`. `.folio-cast-row` is `.folio-record-row` in both
+  routes' sidebars; `.folio-cast-card` / `.folio-cast-badge` / `.folio-cast-mark` stay for the
+  Locations grid until its pass.
+
+### Verification, all three phases
+
+`pnpm typecheck` 6/6 · `pnpm lint` 7/7 · `@folio/script` 30 files / 532 tests · web 40 files /
+494 tests (Node 22.23, `--pool=threads`) · `pnpm build` compiled · `db:check` clean · `0021` and
+`0022` applied. The E2E (`e2e/characters-route.spec.ts`) is rewritten to the new contract
+(`data-presence-*`, `data-card-cues`, `data-scene-row`, `data-drawer-{strip,span,scenes,sets,
+notes,stats}`, `data-voice-*`, `data-sides-*`, `data-pair-*`, `data-draft-*`,
+`data-check-contradictions`, `data-assistant-{scope,focus}`; `data-graph-node`, `data-edge-label`,
+`data-defined-*`, `data-arc`, `data-card-face` retired) and **not run** - no `E2E_EMAIL` /
+`E2E_PASSWORD` here. The concurrent Locations session was mid-pass on `_locations/*`,
+`lib/locations/*` and `lib/assistant/{server,context}.ts` throughout; its files were re-read
+before every shared edit and are not this pass's.
+
+---
+
+## Characters rebuild, phase 1 - the identity layer gets a surface (2026-09-17)
+
+The client's verdict on the v2 Characters route (phase 5, 2026-09-16): too close to laper.ai,
+visually weak, not useful enough - "redesigning or recreating the entire route from scratch if
+needed". A 25-agent audit (six read-only mappers, six lenses, two refuters per lens, one
+synthesis) found why three builds had not improved it: every pass replaced the pixels and left
+the identity layer dark. `mergeCharacters`, `bindAlias` and `unbindAlias` had no caller in the
+UI; `CharacterProfile.cues` and `boundCues` were loaded into every drawer and drawn nowhere;
+`proposal.confidence` was never drawn; `resolve_decisions` had insert and select and no delete;
+`createMentionTarget` inserted a bare row with no bound cue while `createCharacter` bound one, so
+an `@`-made record's own cue landed in the queue proposing it - the duplicate factory. The plan
+that came out of the audit is four phases; this is the first.
+
+### Rulings taken (the client, 2026-09-17)
+
+| Question | Ruling |
+| --- | --- |
+| Does `Route - Characters v2.dc.html` still bind this route? | **No. The rebuild plan is the spec**; no new mockup. The mockup stays in the package as history. AGENTS.md, UI fidelity, carries the exception |
+| Scope | **All four phases**: identity surface and fixes (this pass); the shape (content-first card, presence strip, drawer reordered, Presence view); the script speaks (words, voice, introductions, exchanges, near-duplicate records, rename undo, migration `0021`); the model (`Draft from the script`, `Check for contradictions`, migration `0022`) |
+| The Relationships tab | **Replaced by a Presence view** in phase 2 - a character × scene grid by episode with the pairs list and findings beneath; the force graph, its ground and SVG go. `cast \| presence \| sheet`, still client state |
+| What the assistant reads on `/characters` | **The whole project**, every episode with `[Episode N]` markers, and a Focus block for the open drawer's record - phase 4. This pass only says which episode it reads today |
+
+### Assumptions this pass took (flagged; the plan lists them for the client)
+
+- The sidebar foot widget is `Needs a decision · N` / `On the page · N of M` on Characters
+  only; Locations and Research keep `ProgressWidget`. The mockup's `Defined N / M` filled with
+  accent blue - the README reserves accent for links, selection and AI - over a status the writer
+  sets by clicking; it went.
+- The status bar's route id is `characters/3f2a9c1e`, the record's first eight characters;
+  Locations and Research still print the whole UUID.
+- `short` is the full name until a short name is authored: `shortName` gave `Suresh` for
+  `Suresh Kadam` and `Kadam's` for `Kadam's man`, and the mockup's `Kadam` is recoverable by no
+  rule.
+- `Off the page` is the group's name and `0 scenes` the card's count; `Not on the page yet` stays
+  the citation line's phrase (README, "Empty meta": a count that reaches zero prints the zero).
+- The queue is never dismissed while it has rows (the mockup's `✕` and `Review` go); past five
+  rows it folds to five with `Show all N`.
+- `Rename Meera → MIRA` from a queue row is the sanctioned record-level rename to the cue's
+  spelling, behind the same confirm - not a third write-back. "Fix the spelling" (rewrite `MIRA`
+  cues to `MEERA`) and "rename the record only" are escalated, not built.
+- The `@`-mention backfill is a read-side heal on the next derive per project
+  (`lib/characters/heal.ts`), not a script and not a data migration: there is no script runner in
+  the repo, a cross-project listing is an unscoped read, and a migration that writes rows is a
+  decision. The same gap exists for `@`-made locations' sluglines and is left alone.
+- `Undo` on a `New character` decision deletes the minted record only while it is blank
+  (`deleteBlankCharacter`: no profile field, no portrait, `draft`, at most one binding);
+  otherwise it unbinds and the cue proposes the record.
+- Provenance on an alias row reads `derived` (`bound_by` null), `you` (the signed-in writer) or
+  `member`. A record's own origin (minted / by hand / from a mention) needs a column - phase 3.
+- `Create a new character instead` saves the other edited fields to the current record first, then
+  creates the new one under the typed name with the least-used colour, then navigates to it.
+- The `Someone else…` menu lists the three best-ranked records first (`matchCharacterNames`
+  over the cast and its bound cues), a hairline, the rest of the cast, a hairline, `+ New
+  character`.
+- The sheet's `Lines` in an episode scope prints the run's total with the header `Lines · all`;
+  per-episode line counts arrive with phase 3's core. Per-episode columns hide in a scoped view.
+- `Reading Episode N.` prefixes the assistant subhead on `/characters` and `/locations` - the
+  same shell prop, the same one-episode read behind a project-wide route.
+- Colour swatches are Tab-focusable radios without arrow-key roving.
+- The drawer still first-paints on the client (a portal into the layout's slot); full SSR needs a
+  parallel-route slot, an ask-first route change.
+- `.folio-cast-*` → `.folio-record-*` and every `globals.css` / token edit wait for phase 2; this
+  pass is Tailwind utilities and inline styles only, so it never touches the concurrent
+  session's files.
+- The Relationships view stays this pass with the filter applied to it; phase 2 replaces it.
+
+### What was built
+
+**Core** (`packages/script`, additive, behaviour unchanged) - `MatchReason` beside
+`Confidence` (`entities.ts`): `exact | leading {shorter} | contains {inner} | edits {distance}`;
+`scoreMatch` (`alias.ts`) is `compare` carrying the branch it took, and `compare` delegates;
+`scoreCandidates` keeps the best reason; `CharacterMatch.reason`; `CharacterNamePool` and
+`matchCharacterNames` rank a cue against `{ id, name, boundCues }` rows so the loader can rank
+without a derivation read, and `matchCharacters` delegates. Tests: `alias.test.ts` (new),
+`derive.test.ts` (the resolve-queue describe), `rename.test.ts` (the `matchCharacters` shape).
+
+**Contracts** - `CastRow.appearance` (Production's cast column prints it); `CueVariantRow.key`;
+`AliasProvenance`, `BoundCueView`, `CharacterProfile.bound`; `ResolveProposal.reason`,
+`ResolveCandidate`, `ResolveItem.candidates`; the `ResolveItem` comment no longer describes ghost
+cards.
+
+**Repositories** - `listBoundCues` selects `bound_by`; `moveBoundCue` (one CTE: unbind there,
+bind here - between two statements the spelling would be bound nowhere), `splitBoundCue` (one
+CTE: unbind, insert the record, bind), `deleteBlankCharacter`; `deleteResolveDecisions` - the one
+delete on `resolve_decisions`, because the insert is `onConflictDoNothing` on `(project, row_key,
+target_key)` with no verdict in the key, so deciding the opposite way was a silent no-op;
+`createMentionTarget(scope, entity, name, cue)` inserts the character and its bound cue in one
+statement; `persistMintedRecords(scope, minted, healed)` takes the heal's rows into the insert it
+already issues.
+
+**Actions** (`lib/characters/actions.ts`) - `previewRename` (a pure read: cues per episode, the
+bound spellings that stay, whether the new spelling is taken), `moveAlias`, `splitOff`,
+`revokeDecision` (walk-on · not-this · bound · new-record); `renameCharacter` and `bindAlias`
+return `taken` as a result rather than a refusal string, so the drawer can offer the merge; the
+header's ghost-card wording is gone. `lib/script/actions.ts`'s `createMention` passes the cue;
+`lib/script/server.ts`'s `rederiveProject` and `deriveSpeculatively` apply `healNameCues`.
+
+**Loaders and figures** - `loadCharacters` reads `listBoundCues` too, ranks every open row's
+candidates (top three), sets the proposal's `reason`, and passes proposal-less rows through as
+`walkOns`; `loadProfile` fills `bound` with provenance and `cues[].key`. `lib/characters/cast.ts`:
+`reasonLabel`, `aliasRowsOf`, `leastUsedColor` (moved from the New drawer), `routeIdOf`,
+`onPageOf`, `QUEUE_FOLD`; `sceneLabel(0)` is `0 scenes`; `shortName` is gone. `figures.ts`:
+`subMap` (the filter applied to the map), `citeOf` (a scene ref as `{ label, href }`).
+`sheet.ts` (new): `sortFigures`, `defaultDirection`, `scopeOf`, `csvOf`. `heal.ts` (new).
+`facts.ts` (new): the cell the workspace publishes for the assistant panel. `compose.ts` gains
+`queueIntent` and `drawerIntent` cells. `lib/workspace/hrefs.ts`: `ScenePath`, `sceneHref` - the
+episode script and the `#n-<node id>` fragment AGENTS.md names; never `?selected=`.
+
+**Shared chrome** (additive; Locations, Research, Production compile and render unchanged) -
+`citation-chips.tsx` takes `string | { label, href }` and draws a `<Link>` for the second;
+`conflict-block.tsx` makes `accept` optional, takes a `deliberate` label, and `preventDefault`s
+both clicks; `drawer-shell.tsx` `meta: ReactNode` and an `actions` slot; `status-bar.tsx` a
+`toast` slot (`data-status-toast`, `data-status-undo`); `record-sidebar.tsx` `CountsWidget`.
+`project-shell.tsx` / `layout.tsx` hand the panel the read episode's label.
+
+**Body** - `cast-sidebar.tsx` rewritten on the shared parts: `Needs a decision` (amber dot, mono
+cue, `N cues`; a row opens the queue) · `Principal` · `Supporting` · `Off the page` (a 6px status
+dot, name over role, `N sc`; an off-page row shows a ghost `×` on hover that opens the drawer on
+its delete confirm) · `Walk-ons` (collapsed); `CastFootWidget`. `characters-layout.tsx` on
+`FindProvider`, quiet when the route is empty; the New drawer moved to the workspace's one slot.
+`characters-toolbar.tsx` on `RecordToolbar` / `FilterMenu` / `NewButton` (`+ New`, ASCII), the
+chip `3 of 8` while filtered, `No description` as a filter. `characters-workspace.tsx` on
+`useRun`, `useToast`, one `shown` for every view, publishes the facts cell, no toolbar while
+empty. `cast-view.tsx`: queue → walk-ons line → grid; the dashed tile gone; an empty filter is
+one line with `Show all`; every decision a toast with `Undo`. `unmatched-queue.tsx` reshaped:
+never dismissed, folds past five, a reason chip per row, `This is <name>` solid for
+certain/likely and `Maybe <name>` as a line button for possible, `Someone else…` as a
+`.folio-menu` with the ranked records first, `or rename <Name> → <CUE>` under a record proposal
+opening the rename confirm with its preview. `walk-ons-line.tsx` (new). `character-card.tsx`:
+linked chips, `0 scenes`, the full name, decisions reported to the toast - the geometry waits
+for phase 2. `sheet-view.tsx` rewritten: `All episodes ▾`, `Export CSV` (a Blob, no
+dependency), sortable eyebrow headers with `aria-sort`, rows as `<Link>`s, status as a dot,
+per-episode columns, linked First/Last, a totals row. `alias-table.tsx` (new): `In the script
+as` with variants, the `name` pill, provenance, `Split off`, `×`, `+ add a spelling`, and the
+`taken` conflict block (`Move it here` / `Merge into <name>` / `Keep it there`).
+`rename-confirm.tsx` (new): `Counting cues…`, `Rename everywhere? N cues in the script will read
+X: E1 28 · E2 24`, the spellings that stay, `Keep the name` / `Create a new character instead` /
+`Rename`, or the `taken` block. `character-drawer.tsx`: linked meta chips, `Ask` and `Open in
+script` in the head, the alias table after the fields, `Arc` rows as links, the foot's `In N
+scenes · Merge into…` (picker + amber confirm) on an on-page record and a live `Delete` off it,
+the rename preview, the delete intent from the sidebar. `profile-fields.tsx`: Gender, Appearance,
+the ten colour swatches on `--chip-N`, the shared `StatusTabs`. `new-character-drawer.tsx`
+through `run`. `use-toast.ts` (new). `_script/script-workspace.tsx`: `landOnHash` scrolls to
+and tints the `#n-<id>` block after Tiptap paints. `_chrome/assistant-panel.tsx`: chips typed
+`ask | report`, the first Characters chip names the open record, report chips print a
+`report · no model` note from the facts cell (works disconnected), `Reading Episode N.`,
+`Scene N` in an answer becomes an `E1 Sc N` chip linked on `/characters`.
+
+**Inbound links** - Scenes (`CastChip href`, the index's `@name`, the detail's `Resolve them on
+Characters` as a link that unfolds the queue), Timeline (`Present` chips), Production (cast rows,
+which also print `appearance`), Locations (`Who's here` rows, `CastStack` avatars via `hrefOf`),
+Research (a character filing chip).
+
+### Verification
+
+- `pnpm typecheck` - 6 of 6. `pnpm lint` - 7 of 7 clean. `pnpm build` - compiled.
+- `pnpm --filter @folio/script exec vitest run` - 26 files, 480 tests (one new file, three cases
+  extended). The web suite under Node 22.23 (`node node_modules/vitest/vitest.mjs run
+  --pool=threads`) - 36 files, 446 tests; the forks pool prints its usual Windows worker
+  timeouts and the same counts.
+- `drizzle-kit check` not run: no schema change this pass.
+- `e2e/characters-route.spec.ts` rewritten to the new contract (eight serial tests: the quiet
+  empty state, the reasoned queue, undo and walk-ons, the alias table and the script landing, the
+  rename preview and `Create a new character instead`, the merge door and the tombstone
+  redirect, the sortable sheet and the CSV and the sidebar delete, the inbound links and the
+  panel's report) and **unrun** - no `E2E_EMAIL` / `E2E_PASSWORD` here, and it has not run
+  since 2026-09-12. A browser check of the queue's menu, the toast's `Undo` at eight seconds,
+  the alias table's hover controls, the drawer at 1000px, and the script landing is the next
+  thing a human should do.
 
 ---
 
@@ -97,7 +628,19 @@ pooler) - before the body could change, with the router's loading state in betwe
   click once hydration finishes, which on the dev server was past the 5s `expect` (probed: the
   dialog appeared, seconds late, with no second click). The toolbar row now carries
   `data-mounted`, as the Storyboard's does, and a `waitMounted` helper precedes every first
-  click in walks 2-5 and every `toView`.
+  click in walks 2-5 and every `toView`. Walk 5's `[data-scene-row]` matched four rows: the
+  list's two and the writing sidebar's Scenes group's two (`_chrome/sidebar-group.tsx` marks
+  its rows the same way); scoped to `[data-scene-board]`.
+- **A screenshot straight after a DOM assertion can show the frame before.** The passing
+  run's `scenes-index-*` / `scenes-list-*` screenshots showed the body on the index or the
+  list with the header's `Cards` tab still lit, while `aria-current` on the clicked tab had
+  just been asserted (added to `toView`, and it passes). Twelve probes - clicks before and
+  after hydration, each theme, each view - never found the DOM disagreeing with itself, so
+  the state is one and the picture is Chrome's paint lagging a busy main thread (the dev
+  server hydrating after a reload). Every screenshot in the spec now waits two
+  `requestAnimationFrame`s (`painted`). The fix to the picture is unverified visually: the
+  dev server broke under a concurrent session's Characters edit (`Export shortName doesn't
+  exist`, a 500 on every page) before the next full run got past the import.
 
 ### Verified
 
@@ -108,8 +651,13 @@ pooler) - before the body could change, with the router's loading state in betwe
   `e2e-scenes-views@example.com` (Supabase admin API, the `e2e-views` precedent; password only
   in the session's scratchpad; flagged for deletion with the others): walk 1 - the tabs are
   buttons, a click keeps the URL, `?view=index` / `?view=grid` are 200s on the cards - passed
-  on the first run; the strict-mode failure above stopped the serial suite at walk 2. Second
-  run: see the pass's report.
+  on every one of eight runs. The serial suite stopped at each latent phase-8 fault above in
+  turn (runs 1-5), then ran **5/5** twice (runs 6 and 7, 5.2m and 7.1m; run 7 with the
+  lit-tab assertion in `toView`). Run 8, after the `painted` waits, passed walk 1 and fell at
+  walk 2's Fountain import (`[data-nav-meta="scenes"]` stayed `0`) while a concurrent session's
+  Characters edit was landing on the dev server; the server returned a 500 on every page
+  minutes later. Nothing in walks 2-5 changed between runs 7 and 8 but the waits before
+  screenshots. Eight `Scenes walk …` projects are left on the throwaway account.
 
 ---
 

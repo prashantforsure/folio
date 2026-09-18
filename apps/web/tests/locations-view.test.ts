@@ -2,25 +2,35 @@
 import type { LocationRow, SceneRef } from '@folio/contracts'
 import { episodeSlug } from '@folio/contracts'
 import type { LocationId } from '@folio/script'
-import { locationId, nodeId } from '@folio/script'
+import { NO_QUADRANT, locationId, nodeId } from '@folio/script'
 import { describe, expect, it } from 'vitest'
 
 import { NO_LOCATION_COUNTS } from '../lib/locations/figures'
 import {
   dayNightLabel,
+  dayNightShort,
+  daysLabel,
+  decisionToast,
   grouped,
   hueOf,
   ieKindLine,
   kindLabel,
   kindOf,
+  longestGap,
   matchesFind,
   metaLine,
   metaLong,
   passesFilter,
+  quadrantLabel,
+  routeIdOf,
+  scoutedLine,
   scoutedOf,
+  sidebarLine,
   sluglineNote,
   statusLeft,
   statusTone,
+  storyTimeLabel,
+  stripGroupsOf,
   unmatchedLabel,
 } from '../lib/locations/view'
 
@@ -64,9 +74,16 @@ const row = (
     status: 'pending',
     address: null,
     description: null,
+    scheduledDays: 0,
     photoUrl: null,
     sluglines: [],
     boundSluglines: [],
+    bound: [],
+    intro: null,
+    quadrant: NO_QUADRANT,
+    rollupQuadrant: NO_QUADRANT,
+    clips: [],
+    similar: [],
     scenes: [],
     people: [],
     perEpisode: [],
@@ -204,5 +221,63 @@ describe('hueOf', () => {
     expect(hue).toBeGreaterThanOrEqual(0)
     expect(hue).toBeLessThan(360)
     expect(hueOf(place(2))).not.toBe(hue)
+  })
+})
+
+describe('the rebuild’s lines (2026-09-18)', () => {
+  const quadrant = { intDay: 3, intNight: 2, extDay: 1, extNight: 3, unlit: 0 }
+
+  it('prints the day / night split from the quadrant, and `—` with no lit heading', () => {
+    expect(dayNightShort(quadrant)).toBe('4 D · 5 N')
+    expect(dayNightShort(NO_QUADRANT)).toBe('—')
+    expect(dayNightShort({ ...NO_QUADRANT, unlit: 2 })).toBe('—')
+  })
+
+  it('prints the sidebar row’s second line, and the four boxes with the unlit count only when there is one', () => {
+    expect(sidebarLine({ ie: 'INT', rollupQuadrant: quadrant })).toBe('INT · 4 D · 5 N')
+    expect(sidebarLine({ ie: null, rollupQuadrant: NO_QUADRANT })).toBe('—')
+    expect(quadrantLabel(quadrant)).toBe('INT D 3 · INT N 2 · EXT D 1 · EXT N 3')
+    expect(quadrantLabel({ ...quadrant, unlit: 1 })).toBe('INT D 3 · INT N 2 · EXT D 1 · EXT N 3 · 1 unlit')
+  })
+
+  it('prints the Timeline’s story time, whatever parts of it were set', () => {
+    expect(storyTimeLabel({ storyDay: 3, storyClock: '09:40', flashback: true })).toBe('Day 3 · 09:40 · flashback')
+    expect(storyTimeLabel({ storyDay: null, storyClock: null, flashback: false })).toBe('')
+    expect(storyTimeLabel({ storyDay: 1, storyClock: null, flashback: false })).toBe('Day 1')
+  })
+
+  it('prints the shooting days with the roll-up only when the subtree has more', () => {
+    expect(daysLabel(0, 0)).toBe('—')
+    expect(daysLabel(2, 2)).toBe('2 days')
+    expect(daysLabel(1, 1)).toBe('1 day')
+    expect(daysLabel(2, 5)).toBe('2 days · roll-up 5')
+    expect(daysLabel(0, 3)).toBe('0 days · roll-up 3')
+  })
+
+  it('groups the strip by episode with `full` where the scene is at the set, no label on a film', () => {
+    const index = [ref(1, 1), ref(1, 2), ref(2, 1)]
+    const here = new Set([index[1]?.sceneNodeId ?? ''])
+    const groups = stripGroupsOf(here, index, [{ ordinal: 1 }, { ordinal: 2 }])
+    expect(groups.map((group) => group.label)).toEqual(['E1', 'E2'])
+    expect(groups[0]?.cells.map((cell) => cell.state)).toEqual(['none', 'full'])
+    expect(groups[0]?.cells[1]?.title).toBe('E1 Sc 2 · INT. SOMEWHERE - DAY · here')
+    expect(stripGroupsOf(here, index.slice(0, 2), [{ ordinal: 1 }])[0]?.label).toBe('')
+    expect(stripGroupsOf(here, index, [{ ordinal: 3 }])).toEqual([])
+  })
+
+  it('finds the longest gap of five scenes or more between two appearances', () => {
+    const index = Array.from({ length: 12 }, (_, at) => ref(1, at + 1))
+    const at = (n: number): string => index[n - 1]?.sceneNodeId ?? ''
+    expect(longestGap(new Set([at(1), at(3), at(12)]), index)).toEqual({ scenes: 8, from: index[2], to: index[11] })
+    expect(longestGap(new Set([at(1), at(4)]), index)).toBeNull()
+    expect(longestGap(new Set([at(1)]), index)).toBeNull()
+  })
+
+  it('prints the status bar’s route id, the widget’s scouted line and the queue’s toasts', () => {
+    expect(routeIdOf(null)).toBe('locations')
+    expect(routeIdOf({ id: '3f2a9c1e-0000-4000-8000-000000000000' })).toBe('locations/3f2a9c1e')
+    expect(scoutedLine([{ status: 'scouted' }, { status: 'locked' }, { status: 'pending' }])).toBe('2 of 3')
+    expect(decisionToast('INT. TANK ROOM', { kind: 'bound', name: 'Kamathi Chawl' })).toBe("INT. TANK ROOM is Kamathi Chawl's now.")
+    expect(decisionToast('INT. TANK ROOM', { kind: 'new-record' })).toBe('INT. TANK ROOM is a new location.')
   })
 })

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { memo } from 'react'
 
 import type { LocationSummary } from '../../../../../../lib/production/server'
-import { locationHref, projectRouteHref } from '../../../../../../lib/workspace/hrefs'
+import { characterHref, locationHref, projectRouteHref } from '../../../../../../lib/workspace/hrefs'
 
 /**
  * The reel card's third column - `Route - Production v2.dc.html`, "In this
@@ -54,7 +54,12 @@ export const InThisReel = memo(
         ) : (
           <div className="flex flex-col gap-[8px]">
             {cast.map((row) => (
-              <span key={row.id} className="flex min-w-0 items-center gap-[10px]" data-cast-row={row.id}>
+              <Link
+                key={row.id}
+                href={characterHref(projectId, row.id)}
+                className="folio-ghost-button -mx-[6px] flex min-w-0 items-center gap-[10px] rounded-[9px] px-[6px] py-[3px] text-left text-ink no-underline hover:no-underline"
+                data-cast-row={row.id}
+              >
                 <span
                   className="grid h-[44px] w-[34px] flex-none place-items-center overflow-hidden rounded-[8px] text-10-5 font-semibold"
                   style={{ background: `var(--chip-${String(row.hue)})`, color: 'var(--chip-ink)' }}
@@ -69,8 +74,13 @@ export const InThisReel = memo(
                 <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
                   <span className="truncate text-12-5">{row.name}</span>
                   <span className="text-11 text-ink3">{metaOf(row) === '' ? 'in this scene' : metaOf(row)}</span>
+                  {row.appearance === null ? null : (
+                    <span className="line-clamp-2 text-11 text-ink3" style={{ textWrap: 'pretty' }} data-cast-appearance>
+                      {row.appearance}
+                    </span>
+                  )}
                 </span>
-              </span>
+              </Link>
             ))}
           </div>
         )}

@@ -27,6 +27,14 @@ interaction rules into whatever component system the app already uses.
 
 Open any `.dc.html` directly in a browser to see it live. `support.js` must sit beside them.
 
+> **Amendment, 2026-09-17.** `Route - Characters v2.dc.html` no longer binds the Characters
+> route. The client retired it (too close to laper.ai, visually weak, not useful enough); the
+> route was rebuilt in four phases to a written plan, recorded pass by pass in
+> `docs/build-decisions.md` ("Characters rebuild"). Its shape is now the content-first record
+> card with a presence strip, the Presence grid in place of the relationships graph, and a drawer
+> ordered around the script's evidence. This README's language, tokens and patterns still apply
+> there; the mockup does not.
+
 Each route exposes a small set of props at the bottom of its file (`theme`, `view`,
 `drawer`, `assistant`, `empty` and route-specific ones) so you can render every state
 without editing code. Use them to see the empty states and the light theme.

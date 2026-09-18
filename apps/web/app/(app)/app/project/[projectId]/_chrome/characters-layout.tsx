@@ -4,9 +4,9 @@ import { figuresOf } from '../../../../../../lib/characters/cast'
 import { loadCharacters } from '../../../../../../lib/characters/server'
 import { loadShareLink } from '../../../../../../lib/share/server'
 import { loadEpisode } from '../../../../../../lib/workspace/context'
-import { CastFind, CastGroups, CastSidebarProvider, CastTitleRow, DefinedWidget } from '../_characters/cast-sidebar'
-import { NewCharacterDrawer } from '../_characters/new-character-drawer'
+import { CastFind, CastFootWidget, CastGroups, CastTitleRow } from '../_characters/cast-sidebar'
 import { CharactersHeaderViews, CharactersViewProvider } from '../_characters/view-state'
+import { FindProvider } from './find-field'
 import { Sidebar } from './sidebar'
 import { WritingHeader } from './writing-header'
 
@@ -14,22 +14,26 @@ import { WritingHeader } from './writing-header'
  * The Characters route's shell - the three parts every route wears
  * (`docs/ui design/README.md`, "Shell"), on `_chrome/production-layout.tsx`'s
  * pattern: the sidebar card with this route's four slots
- * (`_characters/cast-sidebar.tsx`), the header told its route (the crumb
- * is `Project / Characters` with no episode - the route is project-scoped)
- * and handed this route's view tabs for its centre (`CharactersHeaderViews`:
- * the views are state, not `?view=`, so the header cannot read them from
- * the URL as it does the other routes'), and the main-surface card the page
- * body sits in.
+ * (`_characters/cast-sidebar.tsx`, on the record routes' shared pieces),
+ * the header told its route (the crumb is `Project / Characters` with no
+ * episode - the route is project-scoped) and handed this route's view tabs
+ * for its centre (`CharactersHeaderViews`: the views are state, not
+ * `?view=`, so the header cannot read them from the URL as it does the
+ * other routes'), and the main-surface card the page body sits in.
  *
  * ## The drawer's slot
  *
- * `Route - Characters v2.dc.html` draws the edit drawer as a sibling of
- * `<main>`, full height beside the header, in flow above 1200px. The
- * drawer is the page's (`/characters/:id`), and a page renders inside the
- * surface - so the layout leaves an empty slot after the column and the
- * page's drawer portals into it (`_characters/character-drawer.tsx`). The
- * `New character` drawer is nobody's page and mounts here, in the same
- * slot, opened through `lib/characters/compose.ts`.
+ * The edit drawer is a sibling of `<main>`, full height beside the header,
+ * in flow above 1200px. The drawer is the page's (`/characters/:id`), and a
+ * page renders inside the surface - so the layout leaves an empty slot
+ * after the column and the page's drawer portals into it. The `New
+ * character` drawer mounts from the workspace too since 2026-09-17, so the
+ * two can never be in the slot at once.
+ *
+ * ## The empty route is quiet
+ *
+ * With no record and nothing in the queue the sidebar draws neither the
+ * find field nor the widget - the 440px empty card is the whole page.
  *
  * ## One read
  *
@@ -51,45 +55,49 @@ export const CharactersLayout = async ({ projectId, children }: { readonly proje
   const rows = figures.map((figure) => ({
     id: figure.id,
     name: figure.name,
-    short: figure.short,
-    initial: figure.initial,
-    hue: figure.hue,
     role: figure.role,
     appearances: figure.appearances,
     group: figure.group,
     status: figure.status,
+    presence: figure.presence,
   }))
+  // The queue's cue rows and its pair rows both need a decision; the sidebar counts both.
+  const decisions = [
+    ...load.resolve.map((item) => ({ key: item.key, cue: item.cue, occurrences: item.occurrences })),
+    ...load.pairs.map((pair) => ({ key: pair.key, cue: `${pair.other.name} · ${pair.keep.name}`, occurrences: pair.other.appearances })),
+  ]
+  const walkOns = load.walkOns.map((item) => ({ key: item.key, cue: item.cue, occurrences: item.occurrences }))
+  const quiet = rows.length === 0 && decisions.length === 0
 
   return (
     <CharactersViewProvider>
-      <CastSidebarProvider>
-      <Sidebar
-        context={context}
-        slots={{
-          title: <CastTitleRow title={context.project.title} />,
-          find: rows.length === 0 ? null : <CastFind />,
-          group: <CastGroups projectId={context.project.id} rows={rows} />,
-          widget: <DefinedWidget rows={rows} />,
-          label: 'Cast',
-        }}
-      />
-      <div data-writing-column className="relative z-[2] flex min-h-0 min-w-0 flex-1 flex-col">
-        <WritingHeader
-          projectId={context.project.id}
-          projectTitle={context.project.title}
-          shape={context.shape}
-          route="characters"
-          episodes={context.episodes.map((episode) => ({ slug: episode.slug, ordinal: episode.ordinal, title: episode.title }))}
-          share={share}
-          views={<CharactersHeaderViews />}
+      <FindProvider>
+        <Sidebar
+          context={context}
+          slots={{
+            title: <CastTitleRow title={context.project.title} />,
+            find: quiet ? null : <CastFind />,
+            group: <CastGroups projectId={context.project.id} rows={rows} decisions={decisions} walkOns={walkOns} />,
+            widget: quiet ? null : <CastFootWidget projectId={context.project.id} rows={rows} decisions={decisions.length} />,
+            label: 'Cast',
+          }}
         />
-        <div data-surface className="folio-surface flex min-h-0 min-w-0 flex-1 flex-col">
-          {children}
+        <div data-writing-column className="relative z-[2] flex min-h-0 min-w-0 flex-1 flex-col">
+          <WritingHeader
+            projectId={context.project.id}
+            projectTitle={context.project.title}
+            shape={context.shape}
+            route="characters"
+            episodes={context.episodes.map((episode) => ({ slug: episode.slug, ordinal: episode.ordinal, title: episode.title }))}
+            share={share}
+            views={<CharactersHeaderViews />}
+          />
+          <div data-surface className="folio-surface flex min-h-0 min-w-0 flex-1 flex-col">
+            {children}
+          </div>
         </div>
-      </div>
-      <div id="characters-drawer" data-drawer-slot className="relative z-[7] flex min-h-0 flex-none" />
-      <NewCharacterDrawer projectId={context.project.id} usedHues={rows.map((row) => row.hue)} />
-      </CastSidebarProvider>
+        <div id="characters-drawer" data-drawer-slot className="relative z-[7] flex min-h-0 flex-none" />
+      </FindProvider>
     </CharactersViewProvider>
   )
 }

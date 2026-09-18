@@ -1,12 +1,18 @@
-import { canonicalKey, compare, confidenceRank } from './alias'
+import type { MatchScore } from './alias'
+import { canonicalKey, compare, confidenceRank, scoreMatch } from './alias'
 import type {
   CharacterAuthored,
   CharacterRecord,
   Confidence,
   DerivedEntities,
+  Exchange,
+  LongestLine,
+  SceneCount,
+  SpokenLine,
   LocationAuthored,
   LocationCounts,
   LocationRecord,
+  MatchReason,
   Presence,
   Proposal,
   ProposalDecision,
@@ -23,6 +29,7 @@ import { readCue, writeCue } from './generated-text'
 import type { CharacterId, LocationId, NodeId } from './ids'
 import { characterId, locationId } from './ids'
 import type { InlineContent, MentionTarget } from './inline'
+import { findIntroductions } from './introductions'
 import type { DeliveryModifier, ScreenplayNode } from './node'
 import type { Result } from './result'
 import { err, ok } from './result'
@@ -191,6 +198,19 @@ const plainText = (content: InlineContent): string =>
     .join('')
     .trim()
 
+/**
+ * Words in a dialogue node: the text split on whitespace, a mention run
+ * counting as one word (it renders as one name). The same reading
+ * `outlineWordCount` takes of an outline block, so the two word counts in
+ * the product agree on what a word is. Never a rendered-line count.
+ */
+export const dialogueWords = (content: InlineContent): number =>
+  content.reduce((total, run) => {
+    if (run.kind === 'mention') return total + 1
+    const text = run.text.trim()
+    return total + (text === '' ? 0 : text.split(/\s+/u).length)
+  }, 0)
+
 const mergeModifiers = (
   authored: readonly DeliveryModifier[],
   fromText: readonly DeliveryModifier[],
@@ -205,6 +225,7 @@ type CueVariant = {
   readonly modifiers: readonly DeliveryModifier[]
   occurrences: number
   lines: number
+  words: number
 }
 
 type CueAggregate = {
@@ -214,7 +235,13 @@ type CueAggregate = {
   readonly variants: Map<string, CueVariant>
   occurrences: number
   lines: number
-  readonly scenes: NodeId[]
+  words: number
+  parens: number
+  firstLine: SpokenLine | null
+  lastLine: SpokenLine | null
+  longest: LongestLine | null
+  /** Every scene the cue appears in, document order, with what it says there. */
+  readonly scenes: Map<NodeId, { lines: number; words: number }>
 }
 
 type SluglineAggregate = {
@@ -236,17 +263,24 @@ type SceneScan = {
   readonly cueKeys: string[]
   readonly mentions: CharacterId[]
   lines: number
+  words: number
 }
+
+/** Two cue keys that follow one another under a heading, and where. Keyed `a\u0000b` with a < b. */
+type ExchangeScan = { readonly a: string; readonly b: string; count: number; readonly scenes: NodeId[] }
 
 type Scan = {
   readonly scenes: SceneScan[]
   readonly cues: Map<string, CueAggregate>
   readonly sluglines: Map<string, SluglineAggregate>
+  readonly exchanges: Map<string, ExchangeScan>
   readonly rejectedHeadings: RejectedSceneHeading[]
   readonly mentionedCharacters: Map<CharacterId, { count: number; nodes: NodeId[] }>
   readonly mentionedLocations: Map<LocationId, number>
   readonly mentionNodes: { node: NodeId; target: MentionTarget }[]
 }
+
+const pairKey = (a: string, b: string): string => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`)
 
 const pushUnique = <T>(list: T[], value: T): void => {
   if (!list.includes(value)) list.push(value)
@@ -266,6 +300,7 @@ const scanNodes = (nodes: readonly ScreenplayNode[]): Scan => {
     scenes: [],
     cues: new Map<string, CueAggregate>(),
     sluglines: new Map<string, SluglineAggregate>(),
+    exchanges: new Map<string, ExchangeScan>(),
     rejectedHeadings: [],
     mentionedCharacters: new Map<CharacterId, { count: number; nodes: NodeId[] }>(),
     mentionedLocations: new Map<LocationId, number>(),
@@ -274,6 +309,9 @@ const scanNodes = (nodes: readonly ScreenplayNode[]): Scan => {
 
   let scene: SceneScan | undefined
   let cue: { aggregate: CueAggregate; variant: CueVariant } | undefined
+  // Who spoke last under this heading: an exchange is two different keys in a
+  // row. Action between them keeps it; a heading clears it.
+  let lastSpeakerKey: string | undefined
 
   const noteMentions = (node: ScreenplayNode): void => {
     for (const run of node.content) {
@@ -317,8 +355,10 @@ const scanNodes = (nodes: readonly ScreenplayNode[]): Scan => {
         cueKeys: [],
         mentions: [],
         lines: 0,
+        words: 0,
       }
       cue = undefined
+      lastSpeakerKey = undefined
       scan.scenes.push(scene)
 
       const aggregate = scan.sluglines.get(key) ?? {
@@ -358,7 +398,12 @@ const scanNodes = (nodes: readonly ScreenplayNode[]): Scan => {
         variants: new Map<string, CueVariant>(),
         occurrences: 0,
         lines: 0,
-        scenes: [],
+        words: 0,
+        parens: 0,
+        firstLine: null,
+        lastLine: null,
+        longest: null,
+        scenes: new Map<NodeId, { lines: number; words: number }>(),
       }
       const display = writeCue(reading.name, modifiers)
       const variant = aggregate.variants.get(display) ?? {
@@ -366,6 +411,7 @@ const scanNodes = (nodes: readonly ScreenplayNode[]): Scan => {
         modifiers,
         occurrences: 0,
         lines: 0,
+        words: 0,
       }
       variant.occurrences += 1
       aggregate.variants.set(display, variant)
@@ -373,7 +419,20 @@ const scanNodes = (nodes: readonly ScreenplayNode[]): Scan => {
       scan.cues.set(key, aggregate)
       if (scene !== undefined) {
         pushUnique(scene.cueKeys, key)
-        pushUnique(aggregate.scenes, scene.node)
+        if (!aggregate.scenes.has(scene.node)) aggregate.scenes.set(scene.node, { lines: 0, words: 0 })
+        if (lastSpeakerKey !== undefined && lastSpeakerKey !== key) {
+          const pair = pairKey(lastSpeakerKey, key)
+          const exchange = scan.exchanges.get(pair) ?? {
+            a: lastSpeakerKey < key ? lastSpeakerKey : key,
+            b: lastSpeakerKey < key ? key : lastSpeakerKey,
+            count: 0,
+            scenes: [],
+          }
+          exchange.count += 1
+          pushUnique(exchange.scenes, scene.node)
+          scan.exchanges.set(pair, exchange)
+        }
+        lastSpeakerKey = key
       }
       cue = { aggregate, variant }
       noteMentions(node)
@@ -381,11 +440,36 @@ const scanNodes = (nodes: readonly ScreenplayNode[]): Scan => {
     }
 
     if (node.type === 'dialogue') {
+      const words = dialogueWords(node.content)
       if (cue !== undefined) {
-        cue.aggregate.lines += 1
-        cue.variant.lines += 1
+        const { aggregate, variant } = cue
+        aggregate.lines += 1
+        aggregate.words += words
+        variant.lines += 1
+        variant.words += words
+        const line: SpokenLine = { nodeId: node.id, scene: scene?.node ?? null }
+        aggregate.firstLine ??= line
+        aggregate.lastLine = line
+        if (aggregate.longest === null || words > aggregate.longest.words) aggregate.longest = { ...line, words }
+        if (scene !== undefined) {
+          const count = aggregate.scenes.get(scene.node)
+          if (count !== undefined) {
+            count.lines += 1
+            count.words += words
+          }
+        }
       }
-      if (scene !== undefined) scene.lines += 1
+      if (scene !== undefined) {
+        scene.lines += 1
+        scene.words += words
+      }
+      noteMentions(node)
+      continue
+    }
+
+    // A parenthetical inside a speech: counted, and the speech goes on.
+    if (node.type === 'paren') {
+      if (cue !== undefined) cue.aggregate.parens += 1
       noteMentions(node)
       continue
     }
@@ -459,32 +543,70 @@ const decidedOn = (
 const scoreCandidates = (
   key: string,
   pool: readonly Candidate[],
-): readonly { readonly ref: Ref; readonly confidence: Confidence }[] => {
-  const scored: { ref: Ref; confidence: Confidence; order: number }[] = []
+): readonly { readonly ref: Ref; readonly confidence: Confidence; readonly reason: MatchReason }[] => {
+  const scored: { ref: Ref; confidence: Confidence; reason: MatchReason; order: number }[] = []
   for (let index = 0; index < pool.length; index += 1) {
     const candidate = pool[index]
     if (candidate === undefined) continue
-    let best: Confidence | null = compare(key, candidate.nameKey)
+    let best: MatchScore | null = scoreMatch(key, candidate.nameKey)
     for (const bound of candidate.boundKeys) {
-      const score = compare(key, bound)
+      const score = scoreMatch(key, bound)
       if (score === null) continue
-      if (best === null || confidenceRank(score) < confidenceRank(best)) best = score
+      if (best === null || confidenceRank(score.confidence) < confidenceRank(best.confidence)) {
+        best = score
+      }
     }
     if (best === null) continue
-    scored.push({ ref: candidate.ref, confidence: best, order: index })
+    scored.push({ ref: candidate.ref, confidence: best.confidence, reason: best.reason, order: index })
   }
   scored.sort((a, b) =>
     confidenceRank(a.confidence) === confidenceRank(b.confidence)
       ? a.order - b.order
       : confidenceRank(a.confidence) - confidenceRank(b.confidence),
   )
-  return scored.map(({ ref, confidence }) => ({ ref, confidence }))
+  return scored.map(({ ref, confidence, reason }) => ({ ref, confidence, reason }))
 }
 
-/** One existing character a cue resembles, and how closely. */
+/** One existing character a cue resembles, how closely, and by which rule. */
 export type CharacterMatch = {
   readonly id: CharacterId
   readonly confidence: Confidence
+  readonly reason: MatchReason
+}
+
+/**
+ * What `matchCharacterNames` ranks against: a record's id, name and bound
+ * spellings - the three things the alias table holds - without the rest of a
+ * `CharacterRecord`. The Characters route's loader has exactly these (a
+ * record row and the bound-cue rows) and none of the nine reads a full
+ * derivation input needs.
+ */
+export type CharacterNamePool = {
+  readonly id: CharacterId
+  readonly name: string
+  readonly boundCues: readonly string[]
+}
+
+/**
+ * `matchCharacters` over the lighter pool: the same scoring, the same order,
+ * so the queue's `Someone else…` menu lists exactly what later passes would
+ * propose one at a time. Nothing here binds.
+ */
+export const matchCharacterNames = (
+  cue: string,
+  records: readonly CharacterNamePool[],
+): readonly CharacterMatch[] => {
+  const key = canonicalKey(readCue(cue).name)
+  if (key === '') return []
+  const pool: Candidate[] = records.map((record) => ({
+    ref: { kind: 'existing', id: record.id },
+    name: record.name,
+    nameKey: canonicalKey(record.name),
+    boundKeys: record.boundCues.map(canonicalKey),
+  }))
+  return scoreCandidates(key, pool).flatMap(({ ref, confidence, reason }) =>
+    ref.kind === 'existing' ? [{ id: characterId(ref.id), confidence, reason }] : [],
+  )
 }
 
 /**
@@ -505,18 +627,58 @@ export type CharacterMatch = {
 export const matchCharacters = (
   cue: string,
   characters: readonly CharacterRecord[],
-): readonly CharacterMatch[] => {
-  const key = canonicalKey(readCue(cue).name)
-  if (key === '') return []
-  const pool: Candidate[] = characters.map((record) => ({
-    ref: { kind: 'existing', id: record.id },
-    name: record.authored.name,
-    nameKey: canonicalKey(record.authored.name),
-    boundKeys: record.authored.boundCues.map(canonicalKey),
-  }))
-  return scoreCandidates(key, pool).flatMap(({ ref, confidence }) =>
-    ref.kind === 'existing' ? [{ id: characterId(ref.id), confidence }] : [],
+): readonly CharacterMatch[] =>
+  matchCharacterNames(
+    cue,
+    characters.map((record) => ({
+      id: record.id,
+      name: record.authored.name,
+      boundCues: record.authored.boundCues,
+    })),
   )
+
+/** Two records that read as one person - `MEERA PAWAR` beside `Meera` - by the queue's own scoring. */
+export type SimilarPair = {
+  readonly a: CharacterId
+  readonly b: CharacterId
+  readonly confidence: Confidence
+}
+
+/**
+ * Every pair of records whose names or bound spellings score `certain` or
+ * `likely` against each other - a record made by hand under the full name
+ * beside the one the pass minted from the first name, say. Every key of one
+ * against every key of the other, through `compare`, the best kept; record
+ * order, so the answer is stable. Nothing here merges: the pair is a row
+ * for the writer, who says `Merge` or `They're different people`.
+ * `possible` is left out - two edits apart is a question the queue asks
+ * about a cue, not about two records a writer already told apart.
+ */
+export const similarRecords = (
+  records: readonly { readonly id: CharacterId; readonly name: string; readonly boundCues: readonly string[] }[],
+): readonly SimilarPair[] => {
+  const keysOf = records.map((record) =>
+    [...new Set([canonicalKey(record.name), ...record.boundCues.map((cue) => canonicalKey(readCue(cue).name))])].filter(
+      (key) => key !== '',
+    ),
+  )
+  const pairs: SimilarPair[] = []
+  for (let i = 0; i < records.length; i += 1) {
+    for (let j = i + 1; j < records.length; j += 1) {
+      let best: Confidence | null = null
+      for (const a of keysOf[i] ?? []) {
+        for (const b of keysOf[j] ?? []) {
+          const score = compare(a, b)
+          if (score === null || score === 'possible') continue
+          if (best === null || confidenceRank(score) < confidenceRank(best)) best = score
+        }
+      }
+      const a = records[i]
+      const b = records[j]
+      if (best !== null && a !== undefined && b !== undefined) pairs.push({ a: a.id, b: b.id, confidence: best })
+    }
+  }
+  return pairs
 }
 
 const NEW_RECORD: ProposalTarget = { kind: 'new-record' }
@@ -939,34 +1101,117 @@ export const derive = (
     }
   }
 
+  // Exchanges folded from cue keys onto records: a pair with an unresolved
+  // side is nobody's, and two keys of one record (an alias talking to the
+  // name) are not a conversation.
+  const exchangesOf = new Map<string, Map<string, { count: number; scenes: NodeId[] }>>()
+  for (const exchange of planned.scan.exchanges.values()) {
+    const a = characterOfCue.get(exchange.a)
+    const b = characterOfCue.get(exchange.b)
+    if (a === undefined || b === undefined || a === b) continue
+    for (const [self, other] of [
+      [a, b],
+      [b, a],
+    ] as const) {
+      const mine = exchangesOf.get(self) ?? new Map<string, { count: number; scenes: NodeId[] }>()
+      const row = mine.get(other) ?? { count: 0, scenes: [] }
+      row.count += exchange.count
+      for (const scene of exchange.scenes) pushUnique(row.scenes, scene)
+      mine.set(other, row)
+      exchangesOf.set(self, mine)
+    }
+  }
+
+  // Where the action introduces each record: every key the record answers
+  // to - its bound spellings and the cues resolved to it this pass.
+  const keysOf = new Map<string, string[]>()
+  for (const record of previous.characters) {
+    keysOf.set(record.id, record.authored.boundCues.map((cue) => canonicalKey(readCue(cue).name)).filter((key) => key !== ''))
+  }
+  planned.mints.forEach((mint, slot) => {
+    if (mint.kind === 'character') keysOf.set(idOfSlot(slot), [canonicalKey(mint.cue)])
+  })
+  for (const [key, id] of characterOfCue) {
+    const keys = keysOf.get(id) ?? []
+    pushUnique(keys, key)
+    keysOf.set(id, keys)
+  }
+  const introductions = findIntroductions(
+    nodes,
+    [...keysOf.entries()].map(([id, keys]) => ({ id, keys })),
+    new Set(planned.scan.scenes.map((scene) => scene.node)),
+  )
+  const position = new Map<string, number>(nodes.map((node, index) => [node.id as string, index]))
+  const at = (line: SpokenLine | null): number =>
+    line === null ? Number.POSITIVE_INFINITY : (position.get(line.nodeId as string) ?? Number.POSITIVE_INFINITY)
+
   const buildCharacter = (
     id: CharacterId,
     authored: CharacterAuthored,
   ): CharacterRecord => {
     const keys = cueKeysOf.get(id) ?? []
-    const cues = keys.flatMap((key) => {
+    const aggregates = keys.flatMap((key) => {
       const aggregate = planned.scan.cues.get(key)
-      if (aggregate === undefined) return []
-      return [...aggregate.variants.values()].map((variant) => ({
+      return aggregate === undefined ? [] : [aggregate]
+    })
+    const cues = aggregates.flatMap((aggregate) =>
+      [...aggregate.variants.values()].map((variant) => ({
         cue: variant.cue,
-        key,
+        key: aggregate.key,
         modifiers: variant.modifiers,
         occurrences: variant.occurrences,
         lines: variant.lines,
-      }))
-    })
+        words: variant.words,
+      })),
+    )
     const scenes: NodeId[] = []
     for (const scene of planned.scan.scenes) {
       const speaks = scene.cueKeys.some((key) => characterOfCue.get(key) === id)
       const mentioned = scene.mentions.includes(id)
       if (speaks || mentioned) scenes.push(scene.node)
     }
-    const lines = keys.reduce((total, key) => total + (planned.scan.cues.get(key)?.lines ?? 0), 0)
-    const occurrences = keys.reduce(
-      (total, key) => total + (planned.scan.cues.get(key)?.occurrences ?? 0),
-      0,
-    )
+    const sum = (read: (aggregate: CueAggregate) => number): number =>
+      aggregates.reduce((total, aggregate) => total + read(aggregate), 0)
+    const lines = sum((aggregate) => aggregate.lines)
+    const occurrences = sum((aggregate) => aggregate.occurrences)
     const mentions = planned.scan.mentionedCharacters.get(id)?.count ?? 0
+
+    // Across the record's keys, by document position: the earliest first
+    // line wins, the latest last line, the longest by words and then the
+    // earlier one.
+    let firstLine: SpokenLine | null = null
+    let lastLine: SpokenLine | null = null
+    let longest: LongestLine | null = null
+    for (const aggregate of aggregates) {
+      if (aggregate.firstLine !== null && (firstLine === null || at(aggregate.firstLine) < at(firstLine))) firstLine = aggregate.firstLine
+      if (aggregate.lastLine !== null && (lastLine === null || at(aggregate.lastLine) > at(lastLine))) lastLine = aggregate.lastLine
+      if (
+        aggregate.longest !== null &&
+        (longest === null ||
+          aggregate.longest.words > longest.words ||
+          (aggregate.longest.words === longest.words && at(aggregate.longest) < at(longest)))
+      ) {
+        longest = aggregate.longest
+      }
+    }
+    const perScene = new Map<NodeId, { lines: number; words: number }>()
+    for (const aggregate of aggregates) {
+      for (const [scene, count] of aggregate.scenes) {
+        const row = perScene.get(scene) ?? { lines: 0, words: 0 }
+        row.lines += count.lines
+        row.words += count.words
+        perScene.set(scene, row)
+      }
+    }
+    const sceneCounts: SceneCount[] = planned.scan.scenes.flatMap((scene) => {
+      const count = perScene.get(scene.node)
+      return count === undefined || count.lines === 0 ? [] : [{ scene: scene.node, lines: count.lines, words: count.words }]
+    })
+    const exchanges: Exchange[] = [...(exchangesOf.get(id)?.entries() ?? [])]
+      .map(([other, row]) => ({ other: characterId(other), count: row.count, scenes: row.scenes }))
+      .sort((a, b) => b.count - a.count || (a.other < b.other ? -1 : a.other > b.other ? 1 : 0))
+    const introduction = introductions.get(id)
+
     return {
       id,
       authored,
@@ -976,6 +1221,16 @@ export const derive = (
       lines,
       mentions,
       presence: presenceOf(occurrences + mentions),
+      words: sum((aggregate) => aggregate.words),
+      speeches: occurrences,
+      parens: sum((aggregate) => aggregate.parens),
+      namedIn: introduction?.namedIn ?? 0,
+      firstLine,
+      lastLine,
+      longest,
+      sceneCounts,
+      exchanges,
+      introducedAt: introduction?.introducedAt ?? null,
     }
   }
 
@@ -1168,6 +1423,7 @@ export const derive = (
       unresolvedCues,
       castSize: cast.length,
       lines: scan.lines,
+      words: scan.words,
       presence: 'present',
       authored: previousScene.get(String(scan.node))?.authored ?? EMPTY_SCENE_AUTHORED,
     }
@@ -1185,6 +1441,7 @@ export const derive = (
       unresolvedCues: [],
       castSize: 0,
       lines: 0,
+      words: 0,
       presence: 'absent',
       authored: scene.authored,
     })
@@ -1240,7 +1497,7 @@ export const derive = (
       if (!known) continue
       addRow(subject, {
         occurrences: aggregate.occurrences,
-        scenes: aggregate.scenes,
+        scenes: [...aggregate.scenes.keys()],
         proposal: null,
         suppressed: [],
         state: 'settled',
@@ -1249,7 +1506,7 @@ export const derive = (
     }
     addRow(subject, {
       occurrences: aggregate.occurrences,
-      scenes: aggregate.scenes,
+      scenes: [...aggregate.scenes.keys()],
       proposal: resolution.proposal === null ? null : targetOf(resolution.proposal, 'character'),
       suppressed: resolution.suppressed.map((entry) => targetOf(entry, 'character')),
       state: 'open',

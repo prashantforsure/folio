@@ -93,6 +93,7 @@ export const ScriptRoute = async ({
       measurement: load.measurement,
       stats: load.stats,
       labels: load.labels,
+      cues: load.cues,
       lockedPages: load.lockedPages,
       revision: episode.revisionColour,
       threads: threads.filter((thread) => thread.nodeId !== ''),

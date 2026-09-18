@@ -1,56 +1,54 @@
 'use client'
 
-import type { CharacterColor, ProjectId } from '@folio/contracts'
-import { CHARACTER_COLORS } from '@folio/contracts'
+import type { ProjectId } from '@folio/contracts'
 import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
 
 import { createCharacter } from '../../../../../../lib/characters/actions'
-import { setNewCharacterOpen, useNewCharacterOpen } from '../../../../../../lib/characters/compose'
+import { leastUsedColor } from '../../../../../../lib/characters/cast'
+import { setNewCharacterOpen } from '../../../../../../lib/characters/compose'
 import { characterHref } from '../../../../../../lib/workspace/hrefs'
+import type { Run } from '../_chrome/use-run'
 import { DrawerShell } from './drawer-shell'
 import type { ProfileDraft } from './profile-fields'
-import { ProfileFields } from './profile-fields'
+import { NameField, ProfileFields } from './profile-fields'
 
 /**
- * `New character` - the edit drawer's shape with nothing to edit yet
- * (`Route - Characters v2.dc.html` opens the same drawer for `+`). The
- * fields, then `Cancel` / `Create`; no portrait row, no arc, no
+ * `New character` - the edit drawer's shape with nothing to edit yet. The
+ * fields, then `Cancel` / `Create`; no portrait row, no scenes, no
  * relationships - a record that is not yet in the script has none. On
  * create the drawer becomes the record's own: the router goes to
  * `/characters/:id`.
  *
- * Opened through `lib/characters/compose.ts` from the sidebar's `+`, the
- * toolbar's `＋ New` and the grid's dashed card; mounted by the layout so
- * every door reaches it. The colour is the first of the ten
- * `CHARACTER_COLORS` no record uses, else the least used - the picker was
- * not carried into the v2 drawer (flagged), so the choice is made here.
+ * Opened through `lib/characters/compose.ts` from the sidebar's `+` and
+ * the toolbar's `+ New`; mounted by the workspace in the one drawer slot,
+ * so it and the edit drawer are never open at once. The write goes through
+ * the page's `run`, so the status bar says `Saving…` while the record is
+ * made. The colour starts as the least used of the ten and the swatches
+ * let the writer pick another.
  */
-const EMPTY: ProfileDraft = { name: '', role: '', age: '', bio: '', status: 'draft', wants: '', needs: '' }
-
-const pickColor = (used: readonly number[]): CharacterColor => {
-  const counts = new Map<number, number>()
-  for (const hue of used) counts.set(hue, (counts.get(hue) ?? 0) + 1)
-  let best: (typeof CHARACTER_COLORS)[number] = CHARACTER_COLORS[0]
-  let fewest = Number.POSITIVE_INFINITY
-  for (const color of CHARACTER_COLORS) {
-    const n = counts.get(color.hue) ?? 0
-    if (n < fewest) {
-      fewest = n
-      best = color
-    }
-  }
-  return best.id
-}
-
-export const NewCharacterDrawer = ({ projectId, usedHues }: { readonly projectId: ProjectId; readonly usedHues: readonly number[] }) => {
-  const open = useNewCharacterOpen()
-  return open ? <NewCharacterForm projectId={projectId} usedHues={usedHues} /> : null
-}
-
-const NewCharacterForm = ({ projectId, usedHues }: { readonly projectId: ProjectId; readonly usedHues: readonly number[] }) => {
+export const NewCharacterDrawer = ({
+  projectId,
+  usedHues,
+  run,
+}: {
+  readonly projectId: ProjectId
+  readonly usedHues: readonly number[]
+  readonly run: Run
+}) => {
   const router = useRouter()
-  const [draft, setDraft] = useState<ProfileDraft>(EMPTY)
+  const [draft, setDraft] = useState<ProfileDraft>(() => ({
+    name: '',
+    role: '',
+    age: '',
+    gender: '',
+    bio: '',
+    appearance: '',
+    color: leastUsedColor(usedHues),
+    status: 'draft',
+    wants: '',
+    needs: '',
+  }))
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const close = useCallback(() => {
@@ -65,13 +63,15 @@ const NewCharacterForm = ({ projectId, usedHues }: { readonly projectId: Project
     }
     setBusy(true)
     setNotice(null)
-    void (async () => {
+    run(async () => {
       const result = await createCharacter(projectId, {
         name,
-        color: pickColor(usedHues),
+        color: draft.color,
+        gender: draft.gender === '' ? null : draft.gender,
         role: draft.role,
         age: draft.age,
         bio: draft.bio,
+        appearance: draft.appearance,
         status: draft.status,
         wants: draft.wants,
         needs: draft.needs,
@@ -79,11 +79,12 @@ const NewCharacterForm = ({ projectId, usedHues }: { readonly projectId: Project
       setBusy(false)
       if (result.status !== 'created') {
         setNotice(result.message)
-        return
+        return result.message
       }
       setNewCharacterOpen(false)
       router.push(characterHref(projectId, result.id))
-    })()
+      return null
+    })
   }
 
   return (
@@ -109,6 +110,13 @@ const NewCharacterForm = ({ projectId, usedHues }: { readonly projectId: Project
         </>
       }
     >
+      <NameField
+        value={draft.name}
+        busy={busy}
+        onChange={(name) => {
+          setDraft((current) => ({ ...current, name }))
+        }}
+      />
       <ProfileFields draft={draft} onChange={setDraft} busy={busy} />
     </DrawerShell>
   )

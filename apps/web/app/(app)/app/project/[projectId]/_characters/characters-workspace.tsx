@@ -1,30 +1,35 @@
 'use client'
 
-import type { CastRow, CharacterMap, CharacterProfile, ProjectId, ResolveItem, SceneRef } from '@folio/contracts'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import type { CastRow, CharacterMap, CharacterProfile, EpisodeSlug, PairItem, ProjectId, ResolveItem, SceneFacts } from '@folio/contracts'
+import { useEffect, useMemo, useState } from 'react'
 
-import { figuresOf, initialsOf, shortName } from '../../../../../../lib/characters/cast'
+import { figuresOf, initialsOf, neverShare, routeIdOf } from '../../../../../../lib/characters/cast'
+import { publishCharacterFacts } from '../../../../../../lib/characters/facts'
 import type { Derivable } from '../../../../../../lib/characters/server'
-import type { ProjectRoutePath } from '../../../../../../lib/workspace/hrefs'
+import { useNewCharacterOpen } from '../../../../../../lib/characters/compose'
+import { offerUndo } from '../../../../../../lib/characters/undo'
+import type { ProjectRoutePath, WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
 import { StatusBar } from '../_chrome/status-bar'
-import type { SaveIndicator } from '../_chrome/status-bar'
+import { useRun } from '../_chrome/use-run'
 import { CastView } from './cast-view'
 import type { Relation } from './character-drawer'
 import { CharacterDrawer } from './character-drawer'
 import type { CastFilter } from './characters-toolbar'
-import { CharactersToolbar } from './characters-toolbar'
+import { CharactersToolbar, passesFilter } from './characters-toolbar'
 import { EmptyCharacters } from './empty-characters'
-import { RelationshipsView } from './relationships-view'
+import { NewCharacterDrawer } from './new-character-drawer'
+import { PresenceView } from './presence-view'
 import { SheetView } from './sheet-view'
+import { useToast } from './use-toast'
 import { useCharactersView } from './view-state'
 
 /**
- * The Characters route's body inside the main-surface card - `Route -
- * Characters v2.dc.html` on the shell phase 1 built: the toolbar
+ * The Characters route's body inside the main-surface card: the toolbar
  * (`characters-toolbar.tsx`), one of the three views or the empty card,
  * the 28px status bar (`_chrome/status-bar.tsx`: `6 characters · 3
- * episodes · Meera Pawar`, `Hide nav`, the saved dot, `characters/<id>`),
- * and the drawer when the URL names a record.
+ * episodes · Meera Pawar`, the toast after an act that can be taken back,
+ * `Hide nav`, the saved dot, `characters/3f2a9c1e`), and one drawer -
+ * `New character`, or the record the URL names.
  *
  * ## `:characterId` is the URL; everything else is state
  *
@@ -32,75 +37,79 @@ import { useCharactersView } from './view-state'
  * over the view. The three views are state the layout holds
  * (`view-state.tsx`, ruled 2026-09-16 - the URL stays `/characters`), so
  * the pill's tabs are buttons; `data-sub-view` keeps its name for the
- * smoke test that reads it. The toolbar's filter, the banner's dismissal,
- * a save in flight: component state, none of it worth a link.
+ * smoke test that reads it. The toolbar's filter, a save in flight, the
+ * toast, the rename's undo offer: component state, none of it worth a link.
+ *
+ * ## One filter, every view
+ *
+ * `shown` is the cast after the toolbar's filter, and it is what every
+ * view draws - the cast, the sheet, and the Presence grid narrowed to it.
+ * The count chip says `3 of 8` while it narrows. The queue is never
+ * filtered: it is a list of decisions, not of records.
  *
  * ## Every write returns a result, and the page re-reads
  *
  * The actions revalidate the workspace path, so the router refreshes the
- * server-rendered read after each write; the save indicator is the only
- * client-held state a write touches. Nothing here computes a count that
- * the loader or `lib/characters/cast.ts` does not.
+ * server-rendered read after each write; the save indicator and the toast
+ * are the only client-held state a write touches. Nothing here computes a
+ * count that the loader or `lib/characters/cast.ts` does not.
+ *
+ * ## What the assistant panel is told
+ *
+ * The workspace publishes `lib/characters/facts.ts` after every render of
+ * its figures - the open record, the never-share pair, the records with no
+ * description, the scene index - so the panel's report chips can answer
+ * without a model and its `Scene N` chips can link. Cleared on unmount,
+ * as is the rename's undo offer.
  */
+export type { Run } from '../_chrome/use-run'
 
-/** Run a write, and report. `null` from the job means it succeeded. */
-export type Run = (job: () => Promise<string | null>) => void
+export type EpisodeRow = { readonly slug: EpisodeSlug; readonly ordinal: number; readonly title: string }
 
 export const CharactersWorkspace = ({
   projectId,
   projectTitle,
+  shape,
   baseHref,
   cast,
   index,
-  episodeOrdinals,
+  episodes,
   resolve,
+  pairs,
+  walkOns,
   map,
   derivable,
   storage,
+  assistant,
   profile,
 }: {
   readonly projectId: ProjectId
   readonly projectTitle: string
+  readonly shape: WorkspaceShape
   readonly baseHref: ProjectRoutePath
   readonly cast: readonly CastRow[]
-  readonly index: readonly SceneRef[]
-  readonly episodeOrdinals: readonly number[]
+  readonly index: readonly SceneFacts[]
+  readonly episodes: readonly EpisodeRow[]
   readonly resolve: readonly ResolveItem[]
+  readonly pairs: readonly PairItem[]
+  readonly walkOns: readonly ResolveItem[]
   readonly map: CharacterMap
   readonly derivable: Derivable | null
   readonly storage: boolean
+  /** Whether `ANTHROPIC_API_KEY` is set - the drawer's model actions. */
+  readonly assistant: boolean
   /** The record the drawer shows, when the path names one. */
   readonly profile: CharacterProfile | null
 }) => {
   const { view } = useCharactersView()
-  const [save, setSave] = useState<SaveIndicator>('saved')
-  const pending = useRef(0)
-  const run: Run = useCallback((job) => {
-    pending.current += 1
-    setSave('saving')
-    void (async () => {
-      let failure: string | null
-      try {
-        failure = await job()
-      } catch (cause) {
-        failure = cause instanceof Error ? cause.message : 'The save did not reach the server.'
-      } finally {
-        pending.current -= 1
-      }
-      if (failure !== null) setSave('error')
-      else if (pending.current === 0) setSave('saved')
-    })()
-  }, [])
+  const { save, run } = useRun('saved')
+  const { toast, show } = useToast()
+  const newOpen = useNewCharacterOpen()
 
+  const episodeOrdinals = useMemo(() => episodes.map((episode) => episode.ordinal), [episodes])
   const figures = useMemo(() => figuresOf(cast, index, episodeOrdinals, resolve), [cast, episodeOrdinals, index, resolve])
   const [filter, setFilter] = useState<CastFilter>('all')
-  const shown = useMemo(
-    () =>
-      figures.filter((figure) =>
-        filter === 'all' ? true : filter.startsWith('group:') ? `group:${figure.group}` === filter : `status:${figure.status}` === filter,
-      ),
-    [figures, filter],
-  )
+  const shown = useMemo(() => figures.filter((figure) => passesFilter(figure, filter)), [figures, filter])
 
   const selected = profile === null ? null : (figures.find((figure) => figure.id === profile.id) ?? null)
   const relations = useMemo<readonly Relation[]>(() => {
@@ -113,7 +122,7 @@ export const CharactersWorkspace = ({
       .sort((a, b) => b.shared - a.shared)
       .map((entry) => ({
         id: entry.column.id,
-        short: shortName(entry.column.name),
+        short: entry.column.name,
         initial: initialsOf(entry.column.name),
         hue: entry.column.hue,
         shared: entry.shared,
@@ -121,10 +130,41 @@ export const CharactersWorkspace = ({
   }, [map, selected])
 
   const empty = figures.length === 0 && resolve.length === 0
-  const episodes = episodeOrdinals.length
+  const episodeCount = episodes.length
   const left = empty
-    ? `${projectTitle} · ${String(episodes)} ${episodes === 1 ? 'episode' : 'episodes'} · no characters`
-    : `${String(figures.length)} ${figures.length === 1 ? 'character' : 'characters'} · ${String(episodes)} ${episodes === 1 ? 'episode' : 'episodes'}${selected === null ? '' : ` · ${selected.name}`}`
+    ? `${projectTitle} · ${String(episodeCount)} ${episodeCount === 1 ? 'episode' : 'episodes'} · no characters`
+    : `${String(figures.length)} ${figures.length === 1 ? 'character' : 'characters'} · ${String(episodeCount)} ${episodeCount === 1 ? 'episode' : 'episodes'}${selected === null ? '' : ` · ${selected.name}`}`
+  const countChip = shown.length === figures.length ? String(figures.length) : `${String(shown.length)} of ${String(figures.length)}`
+
+  useEffect(() => {
+    const groups = map.columns.map((column) => figures.find((figure) => figure.id === column.id)?.group ?? 'supporting')
+    const pair = neverShare(map, groups)
+    const person = (i: number) => {
+      const column = map.columns[i]
+      const figure = column === undefined ? undefined : figures.find((entry) => entry.id === column.id)
+      return column === undefined || figure === undefined
+        ? null
+        : { id: column.id, name: column.name, scenes: column.scenes, first: figure.first }
+    }
+    const a = pair === null ? null : person(pair[0])
+    const b = pair === null ? null : person(pair[1])
+    publishCharacterFacts({
+      projectId,
+      shape,
+      episodes,
+      index,
+      open: selected === null ? null : { id: selected.id, name: selected.name },
+      neverShare: a === null || b === null ? null : { a, b, episodes: episodeCount },
+      noDescription: figures.filter((figure) => figure.bio === null).map((figure) => ({ id: figure.id, name: figure.name })),
+    })
+  }, [episodeCount, episodes, figures, index, map, projectId, selected, shape])
+  useEffect(
+    () => () => {
+      publishCharacterFacts(null)
+      offerUndo(null)
+    },
+    [],
+  )
 
   return (
     <main
@@ -133,22 +173,75 @@ export const CharactersWorkspace = ({
       data-characters-state={empty ? 'empty' : view}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
-      <CharactersToolbar total={figures.length} filter={filter} onFilter={setFilter} />
+      {empty ? null : <CharactersToolbar count={countChip} filter={filter} onFilter={setFilter} />}
 
       {empty ? (
         <EmptyCharacters projectId={projectId} derivable={derivable ?? { count: 0, top: [] }} run={run} />
-      ) : view === 'relationships' ? (
-        <RelationshipsView projectId={projectId} figures={figures} map={map} episodes={episodes} selectedId={selected?.id ?? null} />
+      ) : view === 'presence' ? (
+        <PresenceView
+          projectId={projectId}
+          shape={shape}
+          figures={shown}
+          index={index}
+          map={map}
+          episodes={episodeCount}
+          selectedId={selected?.id ?? null}
+          onShowAll={() => {
+            setFilter('all')
+          }}
+        />
       ) : view === 'sheet' ? (
-        <SheetView projectId={projectId} shown={shown} selectedId={selected?.id ?? null} />
+        <SheetView
+          projectId={projectId}
+          shape={shape}
+          shown={shown}
+          index={index}
+          episodes={episodes}
+          selectedId={selected?.id ?? null}
+          onShowAll={() => {
+            setFilter('all')
+          }}
+        />
       ) : (
-        <CastView projectId={projectId} figures={figures} shown={shown} resolve={resolve} selectedId={selected?.id ?? null} storage={storage} run={run} />
+        <CastView
+          projectId={projectId}
+          shape={shape}
+          figures={figures}
+          shown={shown}
+          index={index}
+          resolve={resolve}
+          pairs={pairs}
+          walkOns={walkOns}
+          selectedId={selected?.id ?? null}
+          storage={storage}
+          run={run}
+          toast={show}
+          onShowAll={() => {
+            setFilter('all')
+          }}
+        />
       )}
 
-      <StatusBar left={left} save={save} routeId={selected === null ? 'characters' : `characters/${selected.id}`} />
+      <StatusBar left={left} save={save} routeId={routeIdOf(selected)} toast={toast} />
 
-      {profile === null || selected === null ? null : (
-        <CharacterDrawer key={profile.id} projectId={projectId} figure={selected} profile={profile} relations={relations} storage={storage} baseHref={baseHref} run={run} />
+      {newOpen ? (
+        <NewCharacterDrawer projectId={projectId} usedHues={cast.map((row) => row.hue)} run={run} />
+      ) : profile === null || selected === null ? null : (
+        <CharacterDrawer
+          key={profile.id}
+          projectId={projectId}
+          shape={shape}
+          figure={selected}
+          profile={profile}
+          cast={figures}
+          index={index}
+          relations={relations}
+          storage={storage}
+          assistant={assistant}
+          baseHref={baseHref}
+          run={run}
+          toast={show}
+        />
       )}
     </main>
   )

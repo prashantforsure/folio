@@ -12,13 +12,14 @@ import { LocationsWorkspace } from './locations-workspace'
 /**
  * The Locations route, server side: one read, then the client workspace.
  *
- * `?view=` is `places | scenes | sheet` (`params.ts`, the v2 mockup's
- * tabs), parsed as every route's is; a value outside it is a 404.
- * `/locations/:locationId` opens that record's drawer over the view - the
- * id is the record's UUID, so the URL survives every rename. A record
- * merged into another redirects to the survivor - the loser's row is a
- * tombstone that says where it went - and an id that names nothing here is
- * a 404.
+ * The three views are state, not `?view=` (ruled 2026-09-18,
+ * `_locations/view-state.tsx`), so the search params are parsed for the
+ * empty schema every route parses and nothing else - a stale `?view=sheet`
+ * link opens the places. `/locations/:locationId` opens that record's
+ * drawer over the view - the id is the record's UUID, so the URL survives
+ * every rename. A record merged into another redirects to the survivor -
+ * the loser's row is a tombstone that says where it went - and an id that
+ * names nothing here is a 404.
  *
  * `loadLocations` is `cache()`d on the context; the layout beside this
  * page (`_chrome/locations-layout.tsx`) makes the same call for the
@@ -37,7 +38,7 @@ export const LocationsRoute = async ({
 }) => {
   const parsed = parseSubViews('locations', await searchParams)
   if (!parsed.ok) notFound()
-  const { project, episodes } = context
+  const { project, episodes, shape } = context
   const load = await loadLocations(context)
 
   let record: LocationRow | null = null
@@ -52,13 +53,15 @@ export const LocationsRoute = async ({
     <LocationsWorkspace
       projectId={project.id}
       projectTitle={project.title}
-      view={parsed.params.view}
+      shape={shape}
       baseHref={projectRouteHref(project.id, 'locations')}
       charactersHref={projectRouteHref(project.id, 'characters')}
+      researchHref={projectRouteHref(project.id, 'research')}
       rows={load.rows}
       resolve={load.resolve}
+      index={load.index}
       sceneTotal={load.sceneTotal}
-      episodes={episodes.length}
+      episodes={episodes.map((episode) => ({ slug: episode.slug, ordinal: episode.ordinal, title: episode.title }))}
       derivable={load.derivable}
       storage={load.storage}
       selected={record}

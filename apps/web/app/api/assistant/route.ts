@@ -5,7 +5,7 @@ import { ask } from '../../../lib/assistant/server'
  *
  * A route handler rather than a server action because an action returns a
  * value and an answer arrives over seconds; the panel appends text as it
- * lands. The body is `AskInput` (`lib/assistant/result.ts`); the response is
+ * lands. The body is `AskRequest` (`@folio/contracts`, `AskInputSchema`; `scope` and `focus` are the Characters route's); the response is
  * `text/plain` chunks of the answer, nothing else, so the client needs no
  * event parser - what it reads is what it shows.
  *

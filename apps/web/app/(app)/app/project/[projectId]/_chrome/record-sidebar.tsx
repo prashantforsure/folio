@@ -17,11 +17,15 @@ import { count } from '../../../../../../lib/workspace/format'
  *                      location`); the find field is `find-field.tsx`
  *   `RecordGroup`      an eyebrow and a count over a route's own rows
  *   `SidebarNote`      the 12px `--ink3` line for an empty or unmatched list
- *   `ProgressWidget`   `Defined 4 / 6` · `Scouted 4 / 6`: a label, `n / m`,
- *                      a 4px accent bar, a note
+ *   `ProgressWidget`   `Scouted 4 / 6`: a label, `n / m`, a 4px accent bar, a
+ *                      note (Locations, Research)
+ *   `CountsWidget`     the same card with rows of counts and no bar - the
+ *                      Characters foot since 2026-09-17: `Needs a decision · 3`
+ *                      (amber, a button that opens the queue) and `On the
+ *                      page · 6 of 8`, both derived, neither a status the
+ *                      writer sets by hand
  *
- * `_characters/cast-sidebar.tsx` carries the same pieces written for one
- * route; it moves onto these when the Characters pass lands.
+ * The Characters route sits on these since 2026-09-17 (`_characters/cast-sidebar.tsx`).
  */
 
 /** The title row: the project's name and `+`. */
@@ -118,5 +122,46 @@ export const ProgressWidget = ({
     <span className="text-11 text-ink3" {...{ [`data-${attr}-note`]: '' }}>
       {note}
     </span>
+  </div>
+)
+
+export type CountsRow = {
+  readonly label: string
+  readonly value: string
+  /** `warn` draws the value amber with a dot - a decision waiting. */
+  readonly tone?: 'warn'
+  readonly attr: `data-${string}`
+  /** With a handler the row is a button - `Needs a decision` opens the queue. */
+  readonly onClick?: () => void
+}
+
+/** The foot card as rows of counts: label left, value right, no bar. */
+export const CountsWidget = ({ rows, attr }: { readonly rows: readonly CountsRow[]; readonly attr: string }) => (
+  <div {...{ [`data-${attr}-widget`]: '' }} className="flex flex-col gap-[7px] rounded-card border border-line2 bg-s1 px-[12px] py-[11px]">
+    {rows.map((row) => {
+      const inner = (
+        <>
+          {row.tone === 'warn' ? <span className="h-[6px] w-[6px] flex-none rounded-full bg-warn" /> : null}
+          <span className="min-w-0 flex-1 truncate text-12 text-ink2">{row.label}</span>
+          <span className={`tabular text-13 font-medium ${row.tone === 'warn' ? 'text-warn' : ''}`} {...{ [row.attr]: '' }}>
+            {row.value}
+          </span>
+        </>
+      )
+      return row.onClick === undefined ? (
+        <div key={row.label} className="flex items-center gap-[8px]">
+          {inner}
+        </div>
+      ) : (
+        <button
+          key={row.label}
+          type="button"
+          onClick={row.onClick}
+          className="folio-ghost-button -mx-[4px] flex items-center gap-[8px] rounded-[7px] px-[4px] py-[1px] text-left hover:!bg-s2"
+        >
+          {inner}
+        </button>
+      )
+    })}
   </div>
 )

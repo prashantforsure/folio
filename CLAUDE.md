@@ -54,7 +54,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   ways, FDX import/export, derivation, pagination, the draft diff, and one read module per
   derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `rename.ts`).
 - `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, forward-only
-  migrations `0000`–`0019` (which are applied to the dev Supabase project is tracked in
+  migrations `0000`–`0022` (which are applied to the dev Supabase project is tracked in
   `packages/db/CLAUDE.md`), project-scoped repositories.
   `packages/ui` — tokens as CSS custom properties, the inline SVG icon set (`icons.tsx`), and a
   few small components (`src/index.ts` is the list).
@@ -85,22 +85,39 @@ Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
   without asking (AGENTS.md, Adding a dependency). Boundary files are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`;
   the document lives in the editor, never in React state. See AGENTS.md, The node model, for the
   slash-menu / no-type-bar rule both editors follow.
-- **The Characters route is `Route - Characters v2.dc.html`** ("Redesign phase 4" in
-  `docs/build-decisions.md`); the laper.ai second pass and the older bundle are history.
-  `?view=cast | relationships | sheet`; `/characters/:uuid` is the edit drawer (a portal into
-  the layout's slot beside the column); the sidebar card is the cast list (groups computed in
-  `lib/characters/cast.ts`, `Defined N / M` widget); unmatched cues are the banner's queue and
-  a `--warn` conflict block on the card their proposal names. Migration `0013` dropped the
-  first pass's drives, arc turns, voice rules and key lines; `0017` brings back only `wants`,
-  `needs` and a writer-set `status` (`draft | defined | locked`). Portraits are on Cloudflare
-  R2 through `apps/web/lib/storage/r2.ts` (`aws4fetch`), gated on the optional `R2_*` env
-  block; the card's `Drop a reference` is a real drop. `character_relationships` is kept as a
-  derivation read and nothing writes it. Gender, the colour picker, appearance, the alias
-  table and merge have actions and no surface since the v2 pass. Generate (the look-sheet job)
-  is not built. **The three views are client state, not `?view=`** (ruled 2026-09-16 with the
-  Script precedent): `_characters/view-state.tsx` in the route's layout; the pill's tabs are
-  buttons. The rail's Characters icon is a plain link everywhere - the writing-route overlay
-  was removed the same day.
+- **The Characters route was rebuilt to a written plan, not a mockup** (ruled 2026-09-17;
+  `Route - Characters v2.dc.html` is retired for this route - "Characters rebuild" in
+  `docs/build-decisions.md`, four sections, one per phase, all built 2026-09-17/18). The route
+  reads the script back as evidence about each person: views `Cast · Presence · Sheet` (client
+  state, `_characters/view-state.tsx`; Presence is a character × scene grid that replaced the
+  graph), content-first cards with a presence strip (`@folio/ui` `PresenceStrip`), the alias
+  table (`_characters/alias-table.tsx`), the reasoned, undoable queue with pair rows for two
+  records that read as one person, and a drawer ordered derived-first (stats, Voice, Introduced,
+  Presence, Scenes, Sets, then a `Notes` fold, then Continuity). The pure core counts the voice
+  (`packages/script` `derive.ts`: words, speeches, first / last / longest line, per-scene counts,
+  exchanges; `introductions.ts`, `sides.ts`, `revertCueRewrites` for the rename's undo) on
+  `character_derivations` since migration `0021`, which also added `characters.origin`. The
+  assistant reads the whole project on `/characters` with a Focus block for the open record, and
+  the drawer's `✦ Draft from the script` / `✦ Check for contradictions`
+  (`lib/characters/model-actions.ts`) write only into an unsaved field or `character_findings`
+  (`0022`) - open decision 13 stands. The Script editor's cues carry `data-character-id` with a
+  hover card and a `Colour cues` toggle. `/characters/:uuid` is the edit drawer (a portal into
+  the layout's slot). Migration `0013` dropped the first pass's profile; `0017` brought back
+  `wants`, `needs` and `status`. Portraits are on Cloudflare R2 (`apps/web/lib/storage/r2.ts`,
+  gated on the optional `R2_*` block). `character_relationships` is kept as a derivation read and
+  nothing writes it. Generate (the look-sheet job) is not built. The rail's Characters icon is a
+  plain link everywhere.
+- **The Locations route was rebuilt to a written plan, not the mockup** (ruled 2026-09-18, the
+  Characters precedent; `Route - Locations v2.dc.html` is retired for this route - "Locations
+  rebuild" in `docs/build-decisions.md`). The views `Places · Scenes here · Sheet` are client state
+  (`_locations/view-state.tsx`); `/locations/:uuid` is the drawer. What the script says about a
+  set is read at request time, not stored: `packages/script/src/sets.ts` (the establishing line,
+  the `INT/EXT × DAY/NIGHT` quadrant, similar-set pairs, set-text matching) over the node list
+  and the scene index in `lib/locations/server.ts` - no migration. `scheduled_days` is authored in
+  the drawer's Production fold and rolled up; the alias table is `_locations/slugline-table.tsx`;
+  every scene ref is a link into the script; the assistant reads the location records on
+  `/locations` (`places: true`, a location Focus). `PresenceStrip` in `@folio/ui` is shared with
+  Characters. No scouting layer beyond status / address / days / one photo, by ruling.
 - **`beats`, `revisions` and `comment_threads` are tables with no route above them** (AGENTS.md,
   Constraints — all three routes were built, then cut). `beats` was dropped in migration `0010`;
   `revisions` and `comment_threads` stay: the Script route draws threads inline under their

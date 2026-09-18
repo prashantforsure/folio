@@ -2,6 +2,7 @@ import type { CharacterProfile } from '@folio/contracts'
 import type { CharacterId } from '@folio/script'
 import { notFound, redirect } from 'next/navigation'
 
+import { assistantConnected } from '../../../../../../lib/assistant/server'
 import { loadCharacters, loadProfile } from '../../../../../../lib/characters/server'
 import type { ProjectContext } from '../../../../../../lib/workspace/context'
 import { characterHref, projectRouteHref } from '../../../../../../lib/workspace/hrefs'
@@ -13,7 +14,7 @@ import { CharactersWorkspace } from './characters-workspace'
  * The Characters route, server side: one read, then the client workspace.
  *
  * The route has no sub-view param (`params.ts`, ruled 2026-09-16): the
- * `Cast · Relationships · Sheet` tabs are client state in the layout
+ * view tabs are client state in the layout
  * (`view-state.tsx`) and the URL stays `/characters`. `parseSubViews` is
  * still called so unknown keys are handled as every route handles them.
  * `/characters/:characterId` opens that record's drawer over the
@@ -39,7 +40,7 @@ export const CharactersRoute = async ({
 }) => {
   const parsed = parseSubViews('characters', await searchParams)
   if (!parsed.ok) notFound()
-  const { project, episodes } = context
+  const { project, episodes, shape } = context
   const load = await loadCharacters(context)
 
   let profile: CharacterProfile | null = null
@@ -54,14 +55,18 @@ export const CharactersRoute = async ({
     <CharactersWorkspace
       projectId={project.id}
       projectTitle={project.title}
+      shape={shape}
       baseHref={projectRouteHref(project.id, 'characters')}
       cast={load.cast}
       index={load.index}
-      episodeOrdinals={episodes.map((episode) => episode.ordinal)}
+      episodes={episodes.map((episode) => ({ slug: episode.slug, ordinal: episode.ordinal, title: episode.title }))}
       resolve={load.resolve}
+      pairs={load.pairs}
+      walkOns={load.walkOns}
       map={load.map}
       derivable={load.derivable}
       storage={load.storage}
+      assistant={assistantConnected()}
       profile={profile}
     />
   )

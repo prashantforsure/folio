@@ -1,5 +1,6 @@
 'use client'
 
+import type { ProjectId } from '@folio/contracts'
 import { Icon } from '@folio/ui'
 import Link from 'next/link'
 import type { PointerEvent as ReactPointerEvent } from 'react'
@@ -10,6 +11,7 @@ import type { SceneCard } from '../../../../../../../lib/scenes/server'
 import type { Point, Size } from '../../../../../../../lib/storyboard/canvas'
 import { count } from '../../../../../../../lib/workspace/format'
 import type { EpisodeRoutePath } from '../../../../../../../lib/workspace/hrefs'
+import { characterHref } from '../../../../../../../lib/workspace/hrefs'
 import { CastChip, NO_SYNOPSIS, TileLines, eighthsLabel, hasSynopsis, pageLabel, sceneNo } from '../scene-parts'
 
 /**
@@ -44,6 +46,7 @@ import { CastChip, NO_SYNOPSIS, TileLines, eighthsLabel, hasSynopsis, pageLabel,
  * which names the table each came from; nothing on the card is computed.
  */
 export const SceneNode = ({
+  projectId,
   card,
   synopsis,
   position,
@@ -58,6 +61,7 @@ export const SceneNode = ({
   onDrop,
   onMeasure,
 }: {
+  readonly projectId: ProjectId
   readonly card: SceneCard
   /** The synopsis as the workspace knows it - the row's, or the one just saved. */
   readonly synopsis: string | null
@@ -230,7 +234,7 @@ export const SceneNode = ({
         {card.cast.length === 0 ? null : (
           <div className="flex flex-wrap gap-[6px]">
             {card.cast.map((member) => (
-              <CastChip key={member.id} name={member.name} />
+              <CastChip key={member.id} name={member.name} href={characterHref(projectId, member.id)} />
             ))}
           </div>
         )}

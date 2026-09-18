@@ -18,6 +18,9 @@ export const ABSENT = '—'
 /** A count that may legitimately be zero. `0` is a real answer. */
 export const count = (value: number): string => String(value)
 
+/** A count with thousands separators - `3,180 words`. Written here rather than with `Intl`, so the string is the same in every locale and on the server. */
+export const thousands = (value: number): string => String(Math.trunc(value)).replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
+
 /** A count of something that may not exist at all. `null` is `—`, never `0`. */
 export const countOrAbsent = (value: number | null, suffix = ''): string =>
   value === null ? ABSENT : `${String(value)}${suffix}`

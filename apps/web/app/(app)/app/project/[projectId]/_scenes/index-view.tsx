@@ -1,9 +1,12 @@
 'use client'
 
+import type { ProjectId } from '@folio/contracts'
+import Link from 'next/link'
 import type { NodeId } from '@folio/script'
 
 import { SCENE_STATUS_LABEL, sceneStatus } from '../../../../../../lib/scenes/canvas'
 import type { SceneCard } from '../../../../../../lib/scenes/server'
+import { characterHref } from '../../../../../../lib/workspace/hrefs'
 import { eighthsLabel, hasSynopsis, pageLabel, sceneNo, timeLabel } from './scene-parts'
 
 /**
@@ -17,11 +20,13 @@ import { eighthsLabel, hasSynopsis, pageLabel, sceneNo, timeLabel } from './scen
  * place" (2026-09-11).
  */
 export const IndexView = ({
+  projectId,
   scenes,
   synopsisOf,
   selected,
   onOpen,
 }: {
+  readonly projectId: ProjectId
   readonly scenes: readonly SceneCard[]
   readonly synopsisOf: (card: SceneCard) => string | null
   readonly selected: NodeId | null
@@ -75,9 +80,17 @@ export const IndexView = ({
               {card.cast.length === 0 ? null : (
                 <div className="flex flex-wrap gap-[4px]">
                   {card.cast.map((member) => (
-                    <span key={member.id} className="whitespace-nowrap text-10-5 text-accent">
+                    <Link
+                      key={member.id}
+                      href={characterHref(projectId, member.id)}
+                      data-cast-link
+                      className="whitespace-nowrap text-10-5 text-accent no-underline hover:underline"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                      }}
+                    >
                       @{member.name}
-                    </span>
+                    </Link>
                   ))}
                 </div>
               )}

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { derive, matchCharacters } from './derive'
 import { NO_ENTITIES } from './entities'
 import { mention, text } from './inline'
-import { cueSpelling, renameCharacterCues, renameLocationHeadings, setSpelling } from './rename'
+import { cueSpelling, renameCharacterCues, renameLocationHeadings, revertCueRewrites, setSpelling } from './rename'
 import { characterAuthored, characterRecord, idAt, nodesOf } from './testing/derive-corpus'
 
 /**
@@ -47,6 +47,46 @@ describe('cueSpelling', () => {
 
   it('leaves a script with no case alone', () => {
     expect(cueSpelling('मीरा')).toBe('मीरा')
+  })
+})
+
+describe('revertCueRewrites', () => {
+  it('round-trips: every rewritten cue reads as it did, ids and order kept', () => {
+    const nodes = nodesOf(SCRIPT)
+    const renamed = renameCharacterCues(nodes, 'Meera', 'Meera Pawar')
+    expect(renamed.before.map((entry) => entry.id)).toEqual(renamed.rewritten)
+    const reverted = revertCueRewrites(renamed.nodes, renamed.before, 'MEERA PAWAR')
+    expect(reverted.restored).toEqual(renamed.rewritten)
+    expect(reverted.skipped).toEqual([])
+    reverted.nodes.forEach((node, index) => {
+      expect(node.id).toBe(nodes[index]?.id)
+      expect(cueText(node)).toBe(cueText(nodes[index]))
+    })
+  })
+
+  it('leaves a cue that carried the new spelling before the rename alone', () => {
+    const nodes = nodesOf(['cue:MEERA PAWAR', 'dialogue:Already the full name.', ...SCRIPT])
+    const renamed = renameCharacterCues(nodes, 'Meera', 'Meera Pawar')
+    const reverted = revertCueRewrites(renamed.nodes, renamed.before, 'MEERA PAWAR')
+    expect(cueText(reverted.nodes[0])).toBe('MEERA PAWAR')
+    expect(reverted.restored).toEqual(renamed.rewritten)
+  })
+
+  it('skips a cue edited since the rename, and one that has left the script', () => {
+    const nodes = nodesOf(SCRIPT)
+    const renamed = renameCharacterCues(nodes, 'Meera', 'Meera Pawar')
+    const edited = renamed.nodes
+      .map((node) => (node.id === idAt(1) ? { ...node, content: [text('SOMEONE ELSE')] } : node))
+      .filter((node) => node.id !== idAt(5))
+    const reverted = revertCueRewrites(edited, renamed.before, 'MEERA PAWAR')
+    expect(reverted.restored).toEqual([idAt(3)])
+    expect(reverted.skipped).toEqual([idAt(1), idAt(5)])
+    expect(cueText(reverted.nodes[1])).toBe('SOMEONE ELSE')
+  })
+
+  it('returns the same list when nothing is restored', () => {
+    const nodes = nodesOf(SCRIPT)
+    expect(revertCueRewrites(nodes, [], 'MEERA').nodes).toBe(nodes)
   })
 })
 
@@ -145,9 +185,11 @@ describe('matchCharacters', () => {
     characterRecord('c3', characterAuthored({ name: 'Farida Sheikh', boundCues: ['FARIDA'] })),
   ]
 
-  it('lists every record the cue resembles, best first, with the modifiers off', () => {
-    expect(matchCharacters('SURESH (V.O.)', records)).toEqual([{ id: 'c2', confidence: 'likely' }])
-    expect(matchCharacters('MEERA PAWAR', records)).toEqual([{ id: 'c1', confidence: 'certain' }])
+  it('lists every record the cue resembles, best first, with the modifiers off, and says why', () => {
+    expect(matchCharacters('SURESH (V.O.)', records)).toEqual([
+      { id: 'c2', confidence: 'likely', reason: { kind: 'leading', shorter: 'SURESH' } },
+    ])
+    expect(matchCharacters('MEERA PAWAR', records)).toEqual([{ id: 'c1', confidence: 'certain', reason: { kind: 'exact' } }])
   })
 
   it('lists nothing for a cue nobody resembles, or an empty one', () => {

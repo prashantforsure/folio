@@ -75,6 +75,20 @@ export const episodeRouteHref = (address: EpisodeAddress, route: EpisodeRoute): 
     ? `/app/project/${address.projectId}/${route}`
     : `/app/project/${address.projectId}/${address.episode}/${route}`
 
+export type ScenePath = `${EpisodeRoutePath}#n-${string}`
+
+/**
+ * A scene heading in the script: the episode's script href and the
+ * `#n-<node id>` fragment. AGENTS.md, exception table: a scene the sidebar
+ * scrolls to "is a `#n-<node id>` fragment, never `?selected=`" - every
+ * block in the editor and the static sheet carries `id="n-<node id>"`, so
+ * this is the one way a citation chip on a record route lands on its scene.
+ * No segment, no param; `_script/script-workspace.tsx` re-lands the hash
+ * after Tiptap paints.
+ */
+export const sceneHref = (address: EpisodeAddress, sceneNodeId: string): ScenePath =>
+  `${episodeRouteHref(address, 'script')}#n-${sceneNodeId}`
+
 /**
  * One location's record: `/locations/:locationId`, as the spec writes it
  * beside `/locations`. The record's UUID, for the reason `characterHref`

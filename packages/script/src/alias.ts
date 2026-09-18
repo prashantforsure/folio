@@ -1,4 +1,4 @@
-import type { Confidence } from './entities'
+import type { Confidence, MatchReason } from './entities'
 
 /**
  * The alias table's matching half.
@@ -141,31 +141,50 @@ const MAXIMUM_EDITS = 2
  * for, and a wrong guess here is not a cosmetic failure - it is a row that
  * proposes merging two people.
  */
-export const compare = (subject: string, candidate: string): Confidence | null => {
+export const compare = (subject: string, candidate: string): Confidence | null =>
+  scoreMatch(subject, candidate)?.confidence ?? null
+
+export type MatchScore = {
+  readonly confidence: Confidence
+  readonly reason: MatchReason
+}
+
+/**
+ * `compare` with the branch it took. The confidence is the proposal's weight;
+ * the reason is what the queue prints beside it (`lib/characters/cast.ts`,
+ * `reasonLabel`) so the writer sees *why* the app is asking - `first name`
+ * for a leading run, `contains MEERA` for a contained key, `2 letters off`
+ * for an edit distance - instead of one solid button for every tier.
+ * `shorter` and `inner` name the key that is the subset, whichever side it
+ * came from.
+ */
+export const scoreMatch = (subject: string, candidate: string): MatchScore | null => {
   if (subject === '' || candidate === '') return null
-  if (subject === candidate) return 'certain'
+  if (subject === candidate) return { confidence: 'certain', reason: { kind: 'exact' } }
 
   const subjectTokens = keyTokens(subject)
   const candidateTokens = keyTokens(candidate)
 
-  if (
-    startsWithTokens(subjectTokens, candidateTokens) ||
-    startsWithTokens(candidateTokens, subjectTokens)
-  ) {
-    return 'likely'
+  if (startsWithTokens(subjectTokens, candidateTokens)) {
+    return { confidence: 'likely', reason: { kind: 'leading', shorter: candidate } }
+  }
+  if (startsWithTokens(candidateTokens, subjectTokens)) {
+    return { confidence: 'likely', reason: { kind: 'leading', shorter: subject } }
   }
 
-  if (
-    containsAllTokens(subjectTokens, candidateTokens) ||
-    containsAllTokens(candidateTokens, subjectTokens)
-  ) {
-    return 'possible'
+  if (containsAllTokens(subjectTokens, candidateTokens)) {
+    return { confidence: 'possible', reason: { kind: 'contains', inner: candidate } }
+  }
+  if (containsAllTokens(candidateTokens, subjectTokens)) {
+    return { confidence: 'possible', reason: { kind: 'contains', inner: subject } }
   }
 
   const longest = Math.max(subject.length, candidate.length)
   if (longest < MINIMUM_FUZZY_LENGTH) return null
   const distance = editDistance(subject, candidate, MAXIMUM_EDITS)
-  if (distance <= MAXIMUM_EDITS && distance * 3 <= longest) return 'possible'
+  if (distance <= MAXIMUM_EDITS && distance * 3 <= longest) {
+    return { confidence: 'possible', reason: { kind: 'edits', distance } }
+  }
 
   return null
 }

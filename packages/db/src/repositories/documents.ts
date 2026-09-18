@@ -620,6 +620,15 @@ export const findUnusableIds = async (
   return ids.filter((id) => unusable.has(id))
 }
 
+const readProjectRows = (scope: ProjectScope) =>
+  dbOf(scope)
+    .select({ ...NODE_COLUMNS, ordinal: episodes.ordinal, episodeTitle: episodes.title, episodeSlug: episodes.slug })
+    .from(nodes)
+    .innerJoin(documents, eq(documents.id, nodes.documentId))
+    .innerJoin(episodes, eq(episodes.id, documents.episodeId))
+    .where(scoped(scope, nodes, eq(nodes.documentKind, 'screenplay')))
+    .orderBy(asc(episodes.ordinal), byOrderKey(nodes.orderKey))
+
 /**
  * Every screenplay node in the project, in episode order then document order.
  *
@@ -630,13 +639,7 @@ export const findUnusableIds = async (
 export const readProjectScreenplayNodes = async (
   scope: ProjectScope,
 ): Promise<Result<readonly ScreenplayNode[], ModelDefect>> => {
-  const rows = await dbOf(scope)
-    .select({ ...NODE_COLUMNS, ordinal: episodes.ordinal })
-    .from(nodes)
-    .innerJoin(documents, eq(documents.id, nodes.documentId))
-    .innerJoin(episodes, eq(episodes.id, documents.episodeId))
-    .where(scoped(scope, nodes, eq(nodes.documentKind, 'screenplay')))
-    .orderBy(asc(episodes.ordinal), byOrderKey(nodes.orderKey))
+  const rows = await readProjectRows(scope)
   const out: ScreenplayNode[] = []
   for (const row of rows) {
     const node = screenplayNodeFromRow(row)
@@ -644,4 +647,59 @@ export const readProjectScreenplayNodes = async (
     out.push(node.value)
   }
   return ok(out)
+}
+
+/** One episode's screenplay, as the project read groups it: the episode's ordinal and title, then its nodes. */
+export type EpisodeNodeRun = {
+  readonly ordinal: number
+  readonly title: string
+  readonly slug: string
+  readonly nodes: readonly ScreenplayNode[]
+}
+
+/**
+ * The same project-wide read, kept in its episodes - what the assistant's
+ * project scope renders with `[Episode N]` markers between them. An
+ * episode with no screenplay yet has no run.
+ */
+export const readProjectScreenplayByEpisode = async (
+  scope: ProjectScope,
+): Promise<Result<readonly EpisodeNodeRun[], ModelDefect>> => {
+  const rows = await readProjectRows(scope)
+  const runs: { ordinal: number; title: string; slug: string; nodes: ScreenplayNode[] }[] = []
+  for (const row of rows) {
+    const node = screenplayNodeFromRow(row)
+    if (isErr(node)) return node
+    const last = runs.at(-1)
+    if (last !== undefined && last.ordinal === row.ordinal) last.nodes.push(node.value)
+    else runs.push({ ordinal: row.ordinal, title: row.episodeTitle, slug: row.episodeSlug, nodes: [node.value] })
+  }
+  return ok(runs)
+}
+
+/**
+ * A few screenplay nodes by id, across the project - the lines the
+ * Characters route quotes (a first line, an introduction). An id that
+ * names no node is simply absent from the map: the derivation row carried
+ * it and the node has since left the script, which the caller reads as
+ * "nothing to quote". A row that will not read is skipped for the same
+ * reason - this is a read for a quote, not for the document. No query at
+ * all for no ids.
+ */
+export const readScreenplayNodesById = async (
+  scope: ProjectScope,
+  ids: readonly NodeId[],
+): Promise<ReadonlyMap<NodeId, ScreenplayNode>> => {
+  const out = new Map<NodeId, ScreenplayNode>()
+  if (ids.length === 0) return out
+  const rows = await dbOf(scope)
+    .select(NODE_COLUMNS)
+    .from(nodes)
+    .where(scoped(scope, nodes, eq(nodes.documentKind, 'screenplay'), inArray(nodes.id, [...new Set(ids)])))
+  for (const row of rows) {
+    const node = screenplayNodeFromRow(row)
+    if (isErr(node)) continue
+    out.set(node.value.id, node.value)
+  }
+  return out
 }

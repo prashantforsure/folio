@@ -1,7 +1,7 @@
 import type { DerivedEntities } from '@folio/script'
 import { resolveRowKey } from '@folio/script'
 import type { ProposalTarget } from '@folio/script'
-import { eq, sql } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 
 import {
   characterCueTallies,
@@ -130,6 +130,16 @@ export const commitDerivation = async (
     mentions: character.mentions,
     presence: character.presence,
     scenes: [...character.scenes],
+    words: character.words,
+    speeches: character.speeches,
+    parens: character.parens,
+    named_in: character.namedIn,
+    first_line: character.firstLine,
+    last_line: character.lastLine,
+    longest: character.longest,
+    introduced_at: character.introducedAt,
+    scene_counts: character.sceneCounts,
+    exchanges: character.exchanges,
   }))
   const cueRows = entities.characters.flatMap((character) =>
     character.cues.map((cue) => ({
@@ -138,6 +148,7 @@ export const commitDerivation = async (
       key: cue.key,
       occurrences: cue.occurrences,
       lines: cue.lines,
+      words: cue.words,
     })),
   )
   const locationRows = entities.locations.map((location) => ({
@@ -176,6 +187,7 @@ export const commitDerivation = async (
     unresolved_cues: [...scene.unresolvedCues],
     cast_size: scene.castSize,
     lines: scene.lines,
+    words: scene.words,
     presence: scene.presence,
   }))
   const queueRows = entities.queue.map((row) => ({
@@ -193,13 +205,21 @@ export const commitDerivation = async (
   await dbOf(scope).execute(sql`
     with
     character_rows as (
-      insert into ${characterDerivations} (project_id, character_id, appearances, lines, mentions, presence, scenes, derived_at)
-      select ${scope.projectId}, r.character_id, r.appearances, r.lines, r.mentions, r.presence, r.scenes, ${at}::timestamptz
+      insert into ${characterDerivations}
+        (project_id, character_id, appearances, lines, mentions, presence, scenes,
+         words, speeches, parens, named_in, first_line, last_line, longest, introduced_at, scene_counts, exchanges, derived_at)
+      select ${scope.projectId}, r.character_id, r.appearances, r.lines, r.mentions, r.presence, r.scenes,
+        r.words, r.speeches, r.parens, r.named_in, r.first_line, r.last_line, r.longest, r.introduced_at, r.scene_counts, r.exchanges, ${at}::timestamptz
       from jsonb_to_recordset(${jsonb(characterRows)})
-        as r(character_id uuid, appearances int, lines int, mentions int, presence presence, scenes uuid[])
+        as r(character_id uuid, appearances int, lines int, mentions int, presence presence, scenes uuid[],
+             words int, speeches int, parens int, named_in int, first_line jsonb, last_line jsonb, longest jsonb, introduced_at jsonb,
+             scene_counts jsonb, exchanges jsonb)
       on conflict (character_id) do update set
         appearances = excluded.appearances, lines = excluded.lines, mentions = excluded.mentions,
-        presence = excluded.presence, scenes = excluded.scenes, derived_at = excluded.derived_at
+        presence = excluded.presence, scenes = excluded.scenes,
+        words = excluded.words, speeches = excluded.speeches, parens = excluded.parens, named_in = excluded.named_in,
+        first_line = excluded.first_line, last_line = excluded.last_line, longest = excluded.longest, introduced_at = excluded.introduced_at,
+        scene_counts = excluded.scene_counts, exchanges = excluded.exchanges, derived_at = excluded.derived_at
       returning character_id
     ),
     character_prune as (
@@ -209,12 +229,12 @@ export const commitDerivation = async (
       returning character_id
     ),
     cue_rows as (
-      insert into ${characterCueTallies} (project_id, character_id, cue, key, occurrences, lines)
-      select ${scope.projectId}, r.character_id, r.cue, r.key, r.occurrences, r.lines
+      insert into ${characterCueTallies} (project_id, character_id, cue, key, occurrences, lines, words)
+      select ${scope.projectId}, r.character_id, r.cue, r.key, r.occurrences, r.lines, r.words
       from jsonb_to_recordset(${jsonb(cueRows)})
-        as r(character_id uuid, cue text, key text, occurrences int, lines int)
+        as r(character_id uuid, cue text, key text, occurrences int, lines int, words int)
       on conflict (character_id, cue) do update set
-        key = excluded.key, occurrences = excluded.occurrences, lines = excluded.lines
+        key = excluded.key, occurrences = excluded.occurrences, lines = excluded.lines, words = excluded.words
       returning character_id
     ),
     cue_prune as (
@@ -272,15 +292,15 @@ export const commitDerivation = async (
     ),
     scene_rows as (
       insert into ${sceneDerivations}
-        (project_id, scene_node_id, number, heading, reading, location_id, "cast", speaking, mentioned, unresolved_cues, cast_size, lines, presence, derived_at)
-      select ${scope.projectId}, r.scene_node_id, r.number, r.heading, r.reading, r.location_id, r."cast", r.speaking, r.mentioned, r.unresolved_cues, r.cast_size, r.lines, r.presence, ${at}::timestamptz
+        (project_id, scene_node_id, number, heading, reading, location_id, "cast", speaking, mentioned, unresolved_cues, cast_size, lines, words, presence, derived_at)
+      select ${scope.projectId}, r.scene_node_id, r.number, r.heading, r.reading, r.location_id, r."cast", r.speaking, r.mentioned, r.unresolved_cues, r.cast_size, r.lines, r.words, r.presence, ${at}::timestamptz
       from jsonb_to_recordset(${jsonb(sceneRows)})
         as r(scene_node_id uuid, number int, heading text, reading jsonb, location_id uuid, "cast" uuid[], speaking uuid[], mentioned uuid[],
-             unresolved_cues text[], cast_size int, lines int, presence presence)
+             unresolved_cues text[], cast_size int, lines int, words int, presence presence)
       on conflict (scene_node_id) do update set
         number = excluded.number, heading = excluded.heading, reading = excluded.reading, location_id = excluded.location_id,
         "cast" = excluded."cast", speaking = excluded.speaking, mentioned = excluded.mentioned, unresolved_cues = excluded.unresolved_cues,
-        cast_size = excluded.cast_size, lines = excluded.lines, presence = excluded.presence, derived_at = excluded.derived_at
+        cast_size = excluded.cast_size, lines = excluded.lines, words = excluded.words, presence = excluded.presence, derived_at = excluded.derived_at
       returning scene_node_id
     ),
     scene_prune as (
@@ -379,6 +399,65 @@ export const recordResolveDecisions = async (
     .onConflictDoNothing({
       target: [resolveDecisions.projectId, resolveDecisions.rowKey, resolveDecisions.targetKey],
     })
+}
+
+/**
+ * A decision on a row that is not a queue row: `record:<a>:<b>` for two
+ * records the writer said are different people, `intro:<id>:<node>` for a
+ * character speaking before the action introduces them, waved through. The
+ * same insert as `recordResolveDecision`, with the key as text rather than
+ * a subject, and the same idempotence. A pass never sees these keys - they
+ * are never a `resolve_rows.key` - so the table carries them without
+ * touching the queue; the loader reads them back by prefix.
+ */
+export const recordDecisionByKey = async (
+  scope: ProjectScope,
+  rowKey: string,
+  verdict: 'accepted' | 'rejected',
+  target: ProposalTarget,
+): Promise<void> => {
+  await dbOf(scope)
+    .insert(resolveDecisions)
+    .values({
+      ...tenant(scope),
+      rowKey,
+      verdict,
+      target,
+      targetKey: proposalTargetKey(target),
+      decidedBy: scope.actor,
+    })
+    .onConflictDoNothing({
+      target: [resolveDecisions.projectId, resolveDecisions.rowKey, resolveDecisions.targetKey],
+    })
+}
+
+/**
+ * Take a decision back: the queue's `Undo` (a walk-on, a `not-this`, an
+ * accept, a `New character`) within its few seconds, and `Actually a
+ * character` on a listed walk-on. The one delete on this table, and it
+ * exists because the insert is `onConflictDoNothing` on `(project, row_key,
+ * target_key)` with no verdict in the key - so "deciding the opposite way"
+ * is a silent no-op, and the only way to reverse a decision is to remove the
+ * rows it wrote. `targetKeys` null removes every decision on the row (the
+ * walk-on's set); a list removes those targets only. Returns the count.
+ */
+export const deleteResolveDecisions = async (
+  scope: ProjectScope,
+  rowKey: string,
+  targetKeys: readonly string[] | null,
+): Promise<number> => {
+  const rows = await dbOf(scope)
+    .delete(resolveDecisions)
+    .where(
+      scoped(
+        scope,
+        resolveDecisions,
+        eq(resolveDecisions.rowKey, rowKey),
+        ...(targetKeys === null ? [] : [inArray(resolveDecisions.targetKey, [...targetKeys])]),
+      ),
+    )
+    .returning({ rowKey: resolveDecisions.rowKey })
+  return rows.length
 }
 
 /**

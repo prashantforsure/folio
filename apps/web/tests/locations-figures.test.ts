@@ -41,8 +41,10 @@ const indexRow = (
   heading: 'INT. SOMEWHERE - DAY',
   locationId: null,
   lines: 0,
+  words: 0,
   cast: [],
   speaking: [],
+  mentioned: [],
   episode: episodeSlug(`ep_${String(episodeOrdinal).padStart(3, '0')}`),
   episodeOrdinal,
   ie: 'INT',
@@ -136,7 +138,7 @@ describe('perEpisodeCounts', () => {
 })
 
 describe('peopleAt', () => {
-  it('counts scenes per character at the set, most first, top three, named from the cast', () => {
+  it('counts scenes per character at the set, most first, everyone, named from the cast; a limit cuts the list', () => {
     const meera = person(1)
     const anil = person(2)
     const kadam = person(3)
@@ -158,6 +160,8 @@ describe('peopleAt', () => {
       { id: meera, name: 'Meera', hue: 1, scenes: 3 },
       { id: anil, name: 'Anil', hue: 2, scenes: 2 },
       { id: farida, name: 'Farida', hue: 4, scenes: 1 },
+      { id: kadam, name: 'Kadam', hue: 3, scenes: 1 },
     ])
+    expect(peopleAt(rows, here, people, 3).map((row) => row.name)).toEqual(['Meera', 'Anil', 'Farida'])
   })
 })

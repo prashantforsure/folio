@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Derivation, DeriveError } from './derive'
-import { countDerivationIds, derive } from './derive'
+import { countDerivationIds, derive, matchCharacterNames, matchCharacters } from './derive'
 import type { DerivedEntities, ProposalDecision, ResolveRow } from './entities'
 import { NO_ENTITIES, resolveRowKey } from './entities'
 import { characterId, locationId } from './ids'
@@ -379,6 +379,40 @@ describe('the resolve queue', () => {
 
     expect(rowFor(derivation.entities, 'cue', 'MEERA PAWAR')?.proposal?.confidence).toBe('certain')
     expect(rowFor(derivation.entities, 'cue', 'YOUNG MEERA')?.proposal?.confidence).toBe('possible')
+
+    // The same scoring, with the branch it took - what the queue prints.
+    expect(matchCharacters('YOUNG MEERA', derivation.entities.characters)).toEqual([
+      { id: characterId('meera'), confidence: 'possible', reason: { kind: 'contains', inner: 'MEERA' } },
+    ])
+  })
+
+  it('ranks a cue against names and bound cues without a full record', () => {
+    const previous: DerivedEntities = {
+      ...NO_ENTITIES,
+      characters: [
+        characterRecord('meera', characterAuthored({ name: 'Meera Pawar', boundCues: ['MEERA'] })),
+        characterRecord('suresh', characterAuthored({ name: 'Suresh Kadam', boundCues: ['SURESH KADAM'] })),
+        characterRecord('anil', characterAuthored({ name: 'Anil', boundCues: ['ANIL'] })),
+      ],
+    }
+    const pool = previous.characters.map((record) => ({
+      id: record.id,
+      name: record.authored.name,
+      boundCues: record.authored.boundCues,
+    }))
+
+    // `SURESH (V.O.)`: the modifier comes off, the leading run names Suresh Kadam first.
+    const light = matchCharacterNames('SURESH (V.O.)', pool)
+    expect(light).toEqual(matchCharacters('SURESH (V.O.)', previous.characters))
+    expect(light).toEqual([
+      { id: characterId('suresh'), confidence: 'likely', reason: { kind: 'leading', shorter: 'SURESH' } },
+    ])
+
+    // Best first, then pool order on a tie.
+    expect(matchCharacterNames('MEERA', pool).map((match) => [match.id, match.confidence])).toEqual([
+      [characterId('meera'), 'certain'],
+    ])
+    expect(matchCharacterNames('', pool)).toEqual([])
   })
 
   it('does not bring a rejected proposal back on the next pass', () => {

@@ -768,6 +768,22 @@
     border-bottom-color: var(--accent);
   }
 
+  /*
+   * A cue's identity (the Characters rebuild, phase 3): a cue that resolves
+   * to no record is underlined dotted in `--warn` - the queue is waiting -
+   * and with `Colour cues` on (the actions menu; `data-colour-cues` on the
+   * route's main) every resolved cue takes its record's `--cue`. Both are
+   * decorations on the block, read-only; nothing on the node changes.
+   */
+  [data-cue-unresolved='true'] {
+    text-decoration: underline dotted var(--warn);
+    text-underline-offset: 3px;
+  }
+
+  [data-colour-cues='true'] [data-character-id] {
+    color: var(--cue);
+  }
+
   /* A thread card's host, and the card. Between the blocks, in the flow. */
   .folio-thread-host {
     display: block;
@@ -2514,33 +2530,42 @@ html[data-nav-open='false'] [data-context-column] {
 }
 
 /*
- * The Characters route - `docs/ui design/Route - Characters v2.dc.html`,
- * transcribed. The classes that repeat across the cast grid, the graph, the
- * sheet, the sidebar's groups and the drawer; the geometry that is one
- * element's stays at that element as Tailwind utilities (`_characters/`).
+ * The Characters route - rebuilt to a written plan, not a mockup ("Characters
+ * rebuild" in `docs/build-decisions.md`, ruled 2026-09-17). The classes that
+ * repeat across the record cards, the Presence grid, the sheet, the sidebar's
+ * groups and the drawer; the geometry that is one element's stays at that
+ * element as Tailwind utilities (`_characters/`).
  *
- *   .folio-cast-mark      an identity mark: the mockup's two-stop gradient
- *                         off the record's hue (`--cast-h`, set inline from
- *                         `--chip-N-h`), white initials. The sidebar's 24px
- *                         chip, the graph node's 26px disc, the drawer's
- *                         `Shares scenes with` 22px chip.
- *   .folio-cast-face      the three-stop face the drawer's 78×98 tile draws.
- *   .folio-cast-card      a card: `--s1` on `--line2`, a 14px radius; the
- *                         border is `--line` when hovered or selected and
- *                         `--warn` while a conflict is open (README,
- *                         "Conflict blocks").
- *   .folio-cast-badge     the status badge over the face: `--bg` on
- *                         `--line2`, a 6px radius, 10px, in the status tone.
- *   .folio-cite           a citation chip (`_chrome/citation-chips.tsx`) -
- *                         and the graph's edge label, the same mono badge.
- *   .folio-cast-row       a sidebar row: `8px 10px`, a 10px radius, `--s2`
+ *   .folio-cast-mark      an identity mark: the two-stop gradient off the
+ *                         record's hue (`--cast-h`, set inline from
+ *                         `--chip-N-h`), white initials. Locations' cast
+ *                         stacks and the drawer's `Shares scenes with`.
+ *   .folio-record-card    a content-first card: `--s1` on `--line2`, the
+ *                         card radius; `--line` hovered, `--s2` with an
+ *                         accent inset while selected, `--warn` while a
+ *                         conflict is open (README, "Conflict blocks"), a
+ *                         dashed accent outline while a file is over it.
+ *   .folio-record-link    the name, stretched over the card (`::after`) so
+ *                         the whole card is one link and a middle-click, a
+ *                         ctrl-click or Space are the browser's; anything
+ *                         under `[data-raised]` sits above it and stays
+ *                         clickable on its own.
+ *   .folio-cast-card      the Locations grid's card, until that route's pass.
+ *   .folio-cast-badge     a status badge over a face: `--bg` on `--line2`,
+ *                         a 6px radius, 10px, in the status tone (Locations).
+ *   .folio-cite           a citation chip (`_chrome/citation-chips.tsx`).
+ *   .folio-record-row     a sidebar row: `8px 10px`, a 10px radius, `--s2`
  *                         and full ink while its record is the drawer's.
- *   .folio-cast-ground    the graph's ground: `--sunk`, 16px radius, `--dot`
- *                         every 22px.
- *   .folio-cast-node      a graph node pill: `--bg` on `--line2`, 999px;
- *                         `--accent` while selected.
+ *                         Locations' sidebar draws it too.
  *   .folio-sheet-row      a sheet row: `11px 16px`, `--s1` on hover, `--s2`
  *                         while selected.
+ *   .folio-presence-grid  the Presence view's grid: sticky episode row and
+ *                         name column on `--bg`, a 12px cell per scene.
+ *   .folio-presence-cell  one scene: `--ink2` speaks, a hollow `--ink3`
+ *                         ring mentioned, `--line2` absent; a hovered row
+ *                         lifts its absent cells to `--s3`.
+ *   .folio-share-bar      the sheet's 40×4 share bar: `--s3` track, `--ink2` fill.
+ *   .folio-balance-card   the sheet's `Balance` card under the table.
  *   .folio-drawer         the edit panel: 400px, `--sunk`, one `--line` on
  *                         the left; overlaid with the README's shadow below
  *                         1200px (`data-in-flow`).
@@ -2550,7 +2575,7 @@ html[data-nav-open='false'] [data-context-column] {
  *   .folio-warn-button    the conflict block's accept: `--warn` outline,
  *                         filled on hover.
  *   .folio-delete-button  `Delete` in the drawer's foot: `--live` only on
- *                         hover, as the mockup draws it.
+ *                         hover.
  */
 @layer components {
   .folio-cast-mark {
@@ -2567,17 +2592,65 @@ html[data-nav-open='false'] [data-context-column] {
     line-height: 1;
   }
 
-  .folio-cast-face {
-    display: grid;
-    flex: none;
-    place-items: center;
-    background: linear-gradient(
-      155deg,
-      oklch(var(--cast-l1) var(--cast-c1) var(--cast-h)),
-      oklch(var(--cast-l2) var(--cast-c2) calc(var(--cast-h) + 18)) 70%,
-      oklch(var(--cast-l3) var(--cast-c3) calc(var(--cast-h) + 34))
-    );
-    color: var(--chip-ink);
+  .folio-record-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px 13px 11px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-card);
+    color: inherit;
+    transition:
+      border-color 0.14s,
+      background-color 0.14s;
+  }
+
+  .folio-record-card:hover {
+    border-color: var(--line);
+  }
+
+  .folio-record-card[aria-current='true'] {
+    background: var(--s2);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    border-color: transparent;
+  }
+
+  .folio-record-card[data-conflict='true'] {
+    border-color: var(--warn);
+  }
+
+  .folio-record-card[data-over='true'] {
+    outline: 1px dashed var(--accent);
+    outline-offset: 2px;
+  }
+
+  .folio-record-card:has(.folio-record-link:focus-visible) {
+    box-shadow: 0 0 0 2px var(--focus);
+  }
+
+  .folio-record-link {
+    color: inherit;
+    text-decoration: none;
+    outline: none;
+  }
+
+  .folio-record-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  .folio-record-link:hover {
+    text-decoration: none;
+  }
+
+  .folio-record-card [data-raised] {
+    position: relative;
+    z-index: 1;
   }
 
   .folio-cast-card {
@@ -2632,7 +2705,7 @@ html[data-nav-open='false'] [data-context-column] {
     font-variant-numeric: tabular-nums;
   }
 
-  .folio-cast-row {
+  .folio-record-row {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -2647,51 +2720,14 @@ html[data-nav-open='false'] [data-context-column] {
     color: var(--ink2);
   }
 
-  .folio-cast-row:hover {
+  .folio-record-row:hover {
     background: var(--hover);
     text-decoration: none;
   }
 
-  .folio-cast-row[aria-current='page'] {
+  .folio-record-row[aria-current='page'] {
     background: var(--s2);
     color: var(--ink);
-  }
-
-  .folio-cast-ground {
-    position: relative;
-    min-width: 700px;
-    height: 540px;
-    background-color: var(--sunk);
-    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
-    background-size: 22px 22px;
-    border: 1px solid var(--line2);
-    border-radius: 16px;
-    overflow: hidden;
-  }
-
-  .folio-cast-node {
-    position: absolute;
-    transform: translate(-50%, -50%);
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 8px 12px 8px 9px;
-    background: var(--bg);
-    border: 1px solid var(--line2);
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-    white-space: nowrap;
-    color: var(--ink);
-    text-decoration: none;
-  }
-
-  .folio-cast-node:hover {
-    border-color: var(--line);
-    text-decoration: none;
-  }
-
-  .folio-cast-node[aria-current='true'] {
-    border-color: var(--accent);
   }
 
   .folio-sheet-row {
@@ -2716,6 +2752,94 @@ html[data-nav-open='false'] [data-context-column] {
 
   .folio-sheet-row[aria-current='true'] {
     background: var(--s2);
+  }
+
+  .folio-presence-grid {
+    display: grid;
+    align-items: center;
+    gap: 3px 0;
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .folio-presence-head {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--bg);
+  }
+
+  .folio-presence-name {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 24px;
+    padding-right: 12px;
+    background: var(--bg);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .folio-presence-name:hover {
+    text-decoration: none;
+    color: var(--accent);
+  }
+
+  .folio-presence-cell {
+    display: block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background: var(--line2);
+  }
+
+  .folio-presence-cell[data-state='speaks'] {
+    background: var(--ink2);
+  }
+
+  .folio-presence-cell[data-state='mentioned'] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--ink3);
+  }
+
+  .folio-presence-row:hover .folio-presence-cell[data-state='absent'] {
+    background: var(--s3);
+  }
+
+  .folio-presence-gap {
+    height: 1px;
+    background: var(--line2);
+  }
+
+  .folio-share-bar {
+    display: inline-block;
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--s3);
+    overflow: hidden;
+    vertical-align: middle;
+  }
+
+  .folio-share-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--ink2);
+  }
+
+  .folio-balance-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-card);
   }
 
   .folio-drawer {
@@ -2846,7 +2970,7 @@ html[data-nav-open='false'] [data-context-column] {
  * The Locations route - `docs/ui design/Route - Locations v2.dc.html`,
  * transcribed. Locations and Characters are one shape - a card grid, a
  * sheet, a sidebar list, a drawer - so the route draws the Characters
- * classes above (`.folio-cast-card`, `.folio-cast-badge`, `.folio-cast-row`,
+ * classes above (`.folio-cast-card`, `.folio-cast-badge`, `.folio-record-row`,
  * `.folio-sheet-row`, `.folio-drawer-*`, `.folio-status-tab`,
  * `.folio-delete-button`) and adds only what is its own: the set gradient.
  *

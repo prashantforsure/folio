@@ -523,3 +523,46 @@ export const unfileResearchClip = async (scope: ProjectScope, id: ResearchFiling
     .returning({ id: researchClipFilings.id })
   return deleted[0] !== undefined
 }
+
+/** A clip as the place it is filed to reads it: the line, and the source it came from. */
+export type ClipFiledToLocationRow = {
+  readonly clipId: ResearchClipId
+  readonly locationId: LocationId
+  readonly text: string
+  readonly sourceId: ResearchSourceId
+  readonly sourceTitle: string
+}
+
+/**
+ * The reverse read the filings table was built to allow: every clip filed
+ * to a location, oldest first, with its source's title. The Locations
+ * drawer lists them under `Research`; nothing here writes.
+ */
+export const listClipsFiledToLocations = async (scope: ProjectScope): Promise<readonly ClipFiledToLocationRow[]> => {
+  const rows = await dbOf(scope)
+    .select({
+      clipId: researchClips.id,
+      locationId: researchClipFilings.locationId,
+      text: researchClips.text,
+      sourceId: researchClips.sourceId,
+      sourceTitle: researchSources.title,
+    })
+    .from(researchClipFilings)
+    .innerJoin(researchClips, eq(researchClips.id, researchClipFilings.clipId))
+    .innerJoin(researchSources, eq(researchSources.id, researchClips.sourceId))
+    .where(scoped(scope, researchClipFilings, eq(researchClipFilings.kind, 'location')))
+    .orderBy(asc(researchClipFilings.createdAt), asc(researchClipFilings.id))
+  return rows.flatMap((row) =>
+    row.locationId === null
+      ? []
+      : [
+          {
+            clipId: brandClipId(row.clipId),
+            locationId: row.locationId as LocationId,
+            text: row.text,
+            sourceId: brandSourceId(row.sourceId),
+            sourceTitle: row.sourceTitle,
+          },
+        ],
+  )
+}

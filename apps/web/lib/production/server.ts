@@ -2,6 +2,7 @@ import type { CastRow, CreditBalance, DocumentRecord, ProductionScene, RenderRes
 import { FRAME_GENERATION_COST, REEL_RENDER_COST } from '@folio/contracts'
 import {
   listCharacterRecords,
+  listCueTallies,
   listLocationRecords,
   listProductionScenes,
   readBalance,
@@ -11,7 +12,7 @@ import {
 import type { LocationId, MentionLabel } from '@folio/script'
 import { cache } from 'react'
 
-import { castRowOf } from '../characters/server'
+import { castRowOf, cuesByRecord } from '../characters/server'
 import { loadEpisode } from '../workspace/context'
 import type { EpisodeContext } from '../workspace/context'
 import { episodeStats } from './status'
@@ -77,12 +78,14 @@ export const loadProduction = cache(async (context: EpisodeContext): Promise<Pro
     readBalance(scope),
   ])
   if (document === null) return { state: 'empty', balance, resolution: project.renderResolution }
-  const [scenes, labels, characters, locationRecords] = await Promise.all([
+  const [scenes, labels, characters, locationRecords, tallies] = await Promise.all([
     listProductionScenes(scope, episode.id),
     readMentionLabels(scope),
     listCharacterRecords(scope),
     listLocationRecords(scope),
+    listCueTallies(scope),
   ])
+  const cues = cuesByRecord(tallies)
   const locations = new Map<LocationId, LocationSummary>(
     locationRecords.map((record) => [record.id, { id: record.id, name: record.name, description: record.description }]),
   )
@@ -91,7 +94,7 @@ export const loadProduction = cache(async (context: EpisodeContext): Promise<Pro
     document,
     scenes,
     labels,
-    cast: characters.map(castRowOf),
+    cast: characters.map((record) => castRowOf(record, cues.get(record.id) ?? [])),
     locations,
     balance,
     costs: { frame: FRAME_GENERATION_COST, render: REEL_RENDER_COST },

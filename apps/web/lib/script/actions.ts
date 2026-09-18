@@ -34,6 +34,7 @@ import {
   writeTitlePage,
 } from '@folio/db'
 import type { DocumentId, NodeId, ScreenplayNode } from '@folio/script'
+import { cueSpelling } from '@folio/script'
 import {
   countFdxNodes,
   countFountainNodes,
@@ -512,7 +513,14 @@ export const createMention = async (
   if (!parsedName.success) return { status: 'error', message: 'Give the record a name.' }
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
-  const label = await createMentionTarget(gate.scope, entity, parsedName.data)
+  // A character binds its name's spelling as its first alias, as `createCharacter`
+  // does, so a cue typed later resolves to it instead of proposing it.
+  const label = await createMentionTarget(
+    gate.scope,
+    entity,
+    parsedName.data,
+    entity === 'character' ? cueSpelling(parsedName.data) : null,
+  )
   return { status: 'created', label }
 }
 

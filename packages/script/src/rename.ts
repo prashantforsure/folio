@@ -40,6 +40,22 @@ export type CueRewrite = {
   readonly nodes: readonly ScreenplayNode[]
   /** The cue nodes whose text changed, in document order. The diff. */
   readonly rewritten: readonly NodeId[]
+  /** What each rewritten cue read before, so the rename can be taken back (`revertCueRewrites`). */
+  readonly before: readonly CueRestore[]
+}
+
+/** One rewritten cue's old text: the undo entry's half of the diff. */
+export type CueRestore = {
+  readonly id: NodeId
+  readonly text: string
+}
+
+export type CueRevert = {
+  readonly nodes: readonly ScreenplayNode[]
+  /** The cues put back, in document order. */
+  readonly restored: readonly NodeId[]
+  /** Cues the rename wrote that no longer read as the new name - edited since, or gone - and were left alone. */
+  readonly skipped: readonly NodeId[]
 }
 
 const COLLAPSE_SPACES = /\s+/gu
@@ -74,9 +90,10 @@ export const renameCharacterCues = (
 ): CueRewrite => {
   const fromKey = canonicalKey(from)
   const spelling = cueSpelling(to)
-  if (fromKey === '' || canonicalKey(spelling) === '') return { nodes, rewritten: [] }
+  if (fromKey === '' || canonicalKey(spelling) === '') return { nodes, rewritten: [], before: [] }
 
   const rewritten: NodeId[] = []
+  const before: CueRestore[] = []
   const out = nodes.map((node): ScreenplayNode => {
     if (node.type !== 'character') return node
     const raw = plainText(node)
@@ -86,9 +103,40 @@ export const renameCharacterCues = (
     const next = writeCue(spelling, reading.modifiers)
     if (next === raw.trim()) return node
     rewritten.push(node.id)
+    before.push({ id: node.id, text: raw })
     return { ...node, content: [text(next)] }
   })
-  return { nodes: rewritten.length === 0 ? nodes : out, rewritten }
+  return { nodes: rewritten.length === 0 ? nodes : out, rewritten, before }
+}
+
+/**
+ * Take a rename back: put each rewritten cue's old text where it was.
+ *
+ * Not `renameCharacterCues(nodes, to, from)` - that would also rewrite a cue
+ * that carried the new spelling *before* the rename, which the rename never
+ * touched. This restores by node id, and only a node that still reads as
+ * the renamed name (`currentKey`): a cue the writer edited since, or one
+ * that has left the script, is reported in `skipped` and left alone. The
+ * undo of the sanctioned write-back is as explicit as the write-back was.
+ */
+export const revertCueRewrites = (
+  nodes: readonly ScreenplayNode[],
+  restores: readonly CueRestore[],
+  currentKey: string,
+): CueRevert => {
+  const wanted = new Map<string, string>(restores.map((restore) => [restore.id as string, restore.text]))
+  const restored: NodeId[] = []
+  const out = nodes.map((node): ScreenplayNode => {
+    const old = wanted.get(node.id as string)
+    if (old === undefined || node.type !== 'character') return node
+    const raw = plainText(node)
+    if (raw === null || canonicalKey(readCue(raw).name) !== currentKey) return node
+    restored.push(node.id)
+    return { ...node, content: [text(old)] }
+  })
+  const done = new Set<string>(restored.map((id) => id as string))
+  const skipped = restores.flatMap((restore) => (done.has(restore.id as string) ? [] : [restore.id]))
+  return { nodes: restored.length === 0 ? nodes : out, restored, skipped }
 }
 
 // ---------------------------------------------------------------------------

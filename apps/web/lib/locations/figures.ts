@@ -137,12 +137,17 @@ export const perEpisodeCounts = (
     (episode) => index.filter((row) => row.episodeOrdinal === episode.ordinal && scenes.has(row.sceneNodeId)).length,
   )
 
-/** Who is here most: characters by scenes at this set, most first, top three. */
+/**
+ * Who is here: every character named in a scene at this set, by how many,
+ * most first. Everyone, by default - the drawer's `Who's here` is the call
+ * list for the set; the card passes a `limit` and draws `+N` for the rest.
+ * (Until 2026-09-18 the default was three, and the drawer showed three.)
+ */
 export const peopleAt = (
   index: readonly SceneIndexRow[],
   scenes: ReadonlySet<NodeId>,
   people: ReadonlyMap<CharacterId, { readonly name: string; readonly hue: number }>,
-  limit = 3,
+  limit: number | null = null,
 ): readonly LocationPersonRow[] => {
   const counts = new Map<CharacterId, number>()
   for (const row of index) {
@@ -155,5 +160,5 @@ export const peopleAt = (
       return person === undefined ? [] : [{ id, name: person.name, hue: person.hue, scenes: count }]
     })
     .sort((a, b) => b.scenes - a.scenes || a.name.localeCompare(b.name))
-    .slice(0, limit)
+    .slice(0, limit ?? undefined)
 }

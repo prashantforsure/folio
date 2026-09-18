@@ -50,6 +50,18 @@ export type AiScope = (typeof AI_SCOPES)[number]
  * (The rail's Characters overlay kept its open flag here until the client
  * re-ruled the icon a plain link to `/characters`, 2026-09-16.)
  */
+/**
+ * What the writer has open for the assistant to focus on: the Characters
+ * drawer's record (the Characters rebuild, phase 4). Ephemeral for the
+ * scope's reason: a focus that outlived the drawer would point the model
+ * at a record nobody is looking at. The drawer publishes it on mount and
+ * clears it on unmount; the panel sends it as `focus` on `/characters`.
+ */
+export type AssistantFocus =
+  | { readonly kind: 'character'; readonly id: string; readonly name: string }
+  /** The Locations drawer's record (the Locations rebuild, 2026-09-18); the panel sends it on `/locations`. */
+  | { readonly kind: 'location'; readonly id: string; readonly name: string }
+
 type EphemeralValue = {
   readonly paletteOpen: boolean
   readonly setPaletteOpen: (open: boolean) => void
@@ -58,6 +70,8 @@ type EphemeralValue = {
   readonly setAiScope: (scope: AiScope) => void
   readonly assistantPrompt: string | null
   readonly setAssistantPrompt: (prompt: string | null) => void
+  readonly assistantFocus: AssistantFocus | null
+  readonly setAssistantFocus: (focus: AssistantFocus | null) => void
 }
 
 const EphemeralContext = createContext<EphemeralValue | null>(null)
@@ -66,6 +80,7 @@ export const EphemeralProvider = ({ children }: { readonly children: ReactNode }
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [aiScope, setAiScope] = useState<AiScope>('scene')
   const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null)
+  const [assistantFocus, setAssistantFocus] = useState<AssistantFocus | null>(null)
 
   const togglePalette = useCallback(() => {
     setPaletteOpen((open) => !open)
@@ -80,8 +95,10 @@ export const EphemeralProvider = ({ children }: { readonly children: ReactNode }
       setAiScope,
       assistantPrompt,
       setAssistantPrompt,
+      assistantFocus,
+      setAssistantFocus,
     }),
-    [paletteOpen, togglePalette, aiScope, assistantPrompt],
+    [paletteOpen, togglePalette, aiScope, assistantPrompt, assistantFocus],
   )
 
   return <EphemeralContext.Provider value={value}>{children}</EphemeralContext.Provider>

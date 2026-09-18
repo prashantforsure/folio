@@ -55,7 +55,7 @@ import type { WorkspaceRoute } from './routes'
  *
  * ## Characters has none either - ruled 2026-09-16
  *
- * The v2 pass parsed `view: cast | relationships | sheet` here; the client
+ * The v2 pass parsed `view: cast | relationships | sheet` here (`presence` since 2026-09-18); the client
  * then ruled the route's tabs the way the Script's switches were ruled:
  * instant, and the URL stays `/characters`. The view is React state in the
  * route's layout (`_characters/view-state.tsx`), so `?view=` is an unknown
@@ -82,6 +82,16 @@ import type { WorkspaceRoute } from './routes'
  * (`_scenes/view-state.tsx`), so `?view=` is an unknown key here too - a
  * stale `?view=index` link opens the cards and is not a 404.
  *
+ * ## And Locations - ruled 2026-09-18
+ *
+ * `view: places | scenes | sheet` parsed here from the v2 pass to the
+ * rebuild; each tab was a link that re-ran the page's read. The client
+ * ruled it as the three before it: smooth, and the URL stays `/locations`.
+ * The view is React state in the route's layout (`_locations/view-state.tsx`,
+ * the Characters shape - the route has a layout of its own), so `?view=`
+ * is an unknown key here too - a stale `?view=sheet` link opens the places
+ * and is not a 404.
+ *
  * ## `selected` is not wired
  *
  * The README puts a selected record in `?selected=`, and the storyboard
@@ -105,7 +115,7 @@ export const SUB_VIEW_SCHEMAS = {
   scenes: z.object({}),
   production: z.object({ view: first(['scene', 'episode']) }),
   characters: z.object({}),
-  locations: z.object({ view: first(['places', 'scenes', 'sheet']) }),
+  locations: z.object({}),
   timeline: z.object({ view: first(['story', 'chrono', 'continuity']) }),
   research: z.object({ view: first(['library', 'source', 'clips']) }),
 } as const satisfies Record<WorkspaceRoute, z.ZodObject>

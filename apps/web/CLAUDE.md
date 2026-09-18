@@ -96,6 +96,44 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   again by text (`lib/research/view.ts`, `highlightParagraphs`); a filing points at a scene by
   its heading node id with no key. Everything the route reads is one `cache()`d `loadResearch`.
   Details: `docs/build-decisions.md`, "Redesign phase 7".
+- **The Locations route (rebuilt 2026-09-18, the plan is the spec):** `_locations/locations-workspace.tsx`
+  is the body - toolbar (count chip, status filter), one of `places-view.tsx` (the queue, then cards
+  on `.folio-record-card` with sub-sets drawn inside their parent's card), `scenes-view.tsx` (one
+  section per primary set, rows linked into the script, CSV per set) or `sheet-view.tsx` (sort,
+  episode scope, totals, CSV), the status bar with its toast, and `location-drawer.tsx`
+  (evidence first, the Production fold last). The views are state in the layout
+  (`_locations/view-state.tsx`); the sidebar's find narrows the body too. Every derived line is
+  `lib/locations/view.ts` or `lib/locations/sheet.ts`, pure and tested; the readings over the
+  script are `@folio/script`'s `sets.ts`, computed in `lib/locations/server.ts` - nothing new is
+  stored. Trap: a queue decision's `Undo` is `revokeDecision`, keyed by the row's key, and a `New
+  location` undo deletes the minted record only while it is blank.
+- **The Characters route (rebuilt in four phases, 2026-09-17/18):** `_characters/characters-workspace.tsx`
+  is the body - the shared toolbar pieces, one of Cast / Presence / Sheet (`view-state.tsx`, client
+  state) or the empty card, the status bar with its `toast` slot (`use-toast.ts` - a queue decision
+  or a rename is undoable from it; the rename's offer is `lib/characters/undo.ts`), and one drawer
+  slot the New drawer and the edit drawer share. `_chrome/characters-layout.tsx` is the shell on
+  `FindProvider`, quiet when the route is empty; the sidebar (`cast-sidebar.tsx`) sits on
+  `_chrome/record-sidebar.tsx` with a `Needs a decision` group (cue rows and pair rows), `Off the
+  page` (a ghost `×` opens the drawer on its delete confirm through `lib/characters/compose.ts`)
+  and a collapsed `Walk-ons` group. The card (`character-card.tsx`) is content-first with a
+  `PresenceStrip` and is one stretched link; the queue (`unmatched-queue.tsx`) is never dismissed,
+  prints a reason chip, weights its button by confidence and lists pairs of records that read as
+  one person; `presence-view.tsx` is the character × scene grid with the pairs list and the
+  finding cards. The drawer (`character-drawer.tsx`) is derived-first: the stats row, the alias
+  table (`alias-table.tsx`), `voice-section.tsx` (with `sides-modal.tsx` on the Script route's
+  static sheet), `intro-section.tsx`, the presence strip and gap, the per-episode `Scenes`
+  breakdown, `Shares scenes with · Talks to`, `Sets`, then the `Notes` fold (`profile-fields.tsx`
+  with the `✦ Draft from the script` rows) and `continuity-section.tsx`. `rename-confirm.tsx` is
+  the rename's preview. Every scene ref is a link through `lib/characters/figures.ts`'s `citeOf` →
+  `sceneHref`; the loader (`lib/characters/server.ts`) reads the scene index as `SceneFacts` and
+  quotes the first line and the introduction by node id. The workspace publishes
+  `lib/characters/facts.ts` for the assistant panel's report chips, and the drawer publishes the
+  assistant's Focus (`lib/state/ephemeral.tsx`). The model actions are
+  `lib/characters/model-actions.ts` over `lib/characters/evidence.ts` (cite or drop) - the one
+  Characters module that reaches the SDK, through `lib/assistant/server.ts`'s `assistantClient`.
+  `lib/characters/heal.ts` binds the name's cue to a record that has none on the next derive.
+  Everything the route reads is one `cache()`d `loadCharacters`. Details: `docs/build-decisions.md`,
+  "Characters rebuild", phases 1-4.
 - **The Script autosave is a delta and every write it runs is one statement.** Over the
   transaction pooler a parameterised statement costs two round trips and cannot be pipelined
   (`packages/db/src/client.ts`), so on the request path the cost is statement count, not row

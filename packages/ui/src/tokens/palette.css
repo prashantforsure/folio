@@ -470,20 +470,19 @@
 }
 
 /*
- * The Characters route's tokens. `docs/ui design/Route - Characters v2.dc.html`
- * draws every identity mark - the sidebar chip, the graph node, the card's
- * face with no portrait, the drawer's tile - as a gradient off one hue
- * (`grad(hue)` in `renderVals`): three oklch stops whose lightness and
- * chroma the theme sets and whose hue is the record's, at `+0`, `+18` and
- * `+34`. The hue comes from the record's authored colour: `--chip-N-h` is
- * the hue angle written in `--chip-N` above, so a record keeps one colour
- * across the flat chip the other routes draw and the gradient this one
- * does. `--cast-l*` / `--cast-c*` are the stops, transcribed verbatim;
- * `--cast-h` is set per element and is not a palette colour.
+ * The identity mark's tokens. `.folio-cast-mark` (`globals.css`) draws a
+ * two-stop oklch gradient off one hue whose lightness and chroma the theme
+ * sets and whose hue is the record's, at `+0` and `+18`. The hue comes
+ * from the record's authored colour: `--chip-N-h` is the hue angle written
+ * in `--chip-N` above, so a record keeps one colour across the flat chip
+ * and the gradient. `--cast-h` is set per element and is not a palette
+ * colour. The face's third stop and the graph's dotted ground left with
+ * the Characters rebuild (2026-09-18); Locations' cast stacks are the
+ * gradient's remaining reader.
  *
- * `--cast-face-ink` / `--cast-face-sub` / `--cast-scrim` are the ink and
- * scrim over a real portrait - white on a picture, on either canvas, so no
- * light override, like `--frame-badge`.
+ * `--cast-face-name` / `--cast-face-sub` / `--cast-scrim-*` are the ink and
+ * scrim over a real photo on the Locations card - white on a picture, on
+ * either canvas, so no light override, like `--frame-badge`.
  */
 :root {
   --chip-1-h: 27;
@@ -500,9 +499,6 @@
   --cast-c1: 0.09;
   --cast-l2: 0.3;
   --cast-c2: 0.07;
-  --cast-l3: 0.18;
-  --cast-c3: 0.05;
-  --cast-face-ink: rgba(255, 255, 255, 0.88);
   --cast-face-name: #fff;
   --cast-face-sub: rgba(255, 255, 255, 0.72);
   --cast-scrim-mid: rgba(0, 0, 0, 0.3);
@@ -512,31 +508,11 @@
 [data-theme='light'] {
   --cast-l1: 0.62;
   --cast-l2: 0.48;
-  --cast-l3: 0.38;
 }
 
 [data-theme='dark'] {
   --cast-l1: 0.46;
   --cast-l2: 0.3;
-  --cast-l3: 0.18;
-}
-
-/*
- * `--dot` is the dotted ground under the Characters relationships graph, as
- * `Route - Characters v2.dc.html` declares it in its `:root` block - a
- * fainter dot than the Storyboard canvas's `--grid-dot`, and a different
- * token in the two mockups, so two tokens here.
- */
-:root {
-  --dot: rgba(255, 255, 255, 0.055);
-}
-
-[data-theme='light'] {
-  --dot: rgba(20, 18, 14, 0.07);
-}
-
-[data-theme='dark'] {
-  --dot: rgba(255, 255, 255, 0.055);
 }
 
 /*

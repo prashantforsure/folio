@@ -1,17 +1,23 @@
 'use server'
 
-import { LOCATION_PHOTO_MAX_BYTES, LocationEditSchema, LocationIdSchema, ParentEditSchema, TitleSchema } from '@folio/contracts'
+import { InlineContentSchema, LOCATION_PHOTO_MAX_BYTES, LocationEditSchema, LocationIdSchema, ParentEditSchema, TitleSchema } from '@folio/contracts'
 import {
   bindSlugline,
   createLocationRecord,
   deleteAbsentLocation,
+  deleteBlankLocation,
+  deleteResolveDecisions,
   listBoundSluglines,
   listEpisodes,
   listLocationRecords,
   listOpenLocationRows,
+  listResolveDecisions,
   mergeLocationRecords,
+  moveBoundSlugline,
+  proposalTargetKey,
   readDocumentByKind,
   readScreenplayNodes,
+  recordDecisionByKey,
   recordResolveDecisions,
   renameLocationRecord,
   rewriteHeadingNodes,
@@ -22,7 +28,7 @@ import {
   updateLocationRecord,
 } from '@folio/db'
 import type { HeadingNodeRewrite, ProjectScope } from '@folio/db'
-import type { LocationId, ProposalTarget, ResolveSubject } from '@folio/script'
+import type { LocationId, NodeId, ProposalTarget, ResolveSubject } from '@folio/script'
 import { canonicalKey, readSlugline, renameLocationHeadings, setSpelling } from '@folio/script'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
@@ -37,12 +43,17 @@ import type {
   CreateResult,
   DeleteResult,
   DeriveResult,
+  HeadingRestore,
   MergeResult,
+  MoveResult,
   PhotoResult,
-  RenameResult,
+  RenameDone,
+  RenamePreview,
   ResolveResult,
   SavedResult,
+  UndoRenameResult,
 } from './result'
+import { similarKey } from './server'
 
 /**
  * The Locations route's writes.
@@ -71,7 +82,19 @@ import type {
  * writes a node: the pure core's `renameLocationHeadings` decides which
  * headings change, a `before_rename` version is taken of every document it
  * touches, the headings are rewritten in one statement, and the count comes
- * back as the diff.
+ * back as the diff - with every heading's two readings, so `undoRename` can
+ * put back exactly the headings nothing has touched since (the one step).
+ * `previewRename` is the same reading with nothing written, for the confirm.
+ *
+ * ## Decisions can be taken back
+ *
+ * A queue decision is rows (`resolve_decisions`) and the insert is
+ * idempotent on the row and its target, so `revokeDecision` deletes exactly
+ * the rows a decision wrote, undoes what it bound, minted or hung, and
+ * re-derives - the status bar's eight-second `Undo`. "Two records are
+ * different places" (`decideSimilar`) is a decision on a key no pass ever
+ * writes (`set:<a>:<b>`), so the finding stays gone without touching the
+ * queue.
  *
  * ## A photo goes through the action, not past it
  *
@@ -150,7 +173,7 @@ export const saveLocation = async (projectId: string, rawId: string, rawEdit: un
  * (`renameLocationRecord`), and the headings carrying the old set are
  * rewritten in every episode. Aliases the writer bound stay bound.
  */
-export const renameLocation = async (projectId: string, rawId: string, rawName: string): Promise<RenameResult> => {
+export const renameLocation = async (projectId: string, rawId: string, rawName: string): Promise<RenameDone> => {
   const id = parseId(rawId)
   const name = TitleSchema.safeParse(rawName)
   if (id === null || !name.success) return { status: 'error', message: 'A location needs a name, up to 200 characters.' }
@@ -170,17 +193,16 @@ export const renameLocation = async (projectId: string, rawId: string, rawName: 
   const outcome = await renameLocationRecord(scope, id, name.data, oldSluglines, newSlugline)
   if (outcome.status === 'taken') {
     const holder = records.find((entry) => entry.id === outcome.by)
-    return {
-      status: 'refused',
-      message: `${newSlugline} already resolves to ${holder?.name ?? 'another location'}. Merge the two records instead.`,
-    }
+    return { status: 'taken', by: outcome.by, name: holder?.name ?? 'another location', slugline: newSlugline }
   }
   if (outcome.status === 'missing') return { status: 'error', message: REFUSED_LOCATION }
 
   // The rewrite, episode by episode: a `before_rename` version of every
-  // script that changes, then every changed heading in one statement.
+  // script that changes, then every changed heading in one statement - and
+  // each heading's two readings kept for the undo.
   let episodesTouched = 0
   const pending: HeadingNodeRewrite[] = []
+  const restores: HeadingRestore[] = []
   for (const episode of await listEpisodes(scope)) {
     const document = await readDocumentByKind(scope, episode.id, 'screenplay')
     if (document === null) continue
@@ -192,12 +214,143 @@ export const renameLocation = async (projectId: string, rawId: string, rawName: 
     episodesTouched += 1
     await snapshotVersion(scope, document.id, 'before_rename', before, before.length)
     const changed = new Set(result.rewritten)
-    for (const node of result.nodes) if (changed.has(node.id)) pending.push({ id: node.id, content: node.content })
+    const beforeById = new Map(before.map((node) => [node.id, node.content]))
+    for (const node of result.nodes) {
+      if (!changed.has(node.id)) continue
+      pending.push({ id: node.id, content: node.content })
+      const previous = beforeById.get(node.id)
+      if (previous !== undefined) restores.push({ id: node.id, before: previous, after: node.content })
+    }
   }
   const headings = await rewriteHeadingNodes(scope, pending)
   await rederiveProject(scope)
   revalidatePath(workspacePath(project.id), 'layout')
-  return { status: 'renamed', headings, episodes: episodesTouched }
+  return {
+    status: 'renamed',
+    headings,
+    episodes: episodesTouched,
+    undo: { locationId: id, previousName: record.name, name: name.data, restores },
+  }
+}
+
+/**
+ * What a rename would do, before it does: the headings per episode the
+ * write-back would rewrite, the bound set texts it leaves alone, and
+ * whether the new set text is already another record's. A pure read.
+ */
+export const previewRename = async (projectId: string, rawId: string, rawName: string): Promise<RenamePreview> => {
+  const id = parseId(rawId)
+  const name = TitleSchema.safeParse(rawName)
+  if (id === null || !name.success) return { status: 'error', message: 'A location needs a name, up to 200 characters.' }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+  const { scope } = gate
+
+  const [records, bound, episodes] = await Promise.all([listLocationRecords(scope), listBoundSluglines(scope), listEpisodes(scope)])
+  const record = records.find((entry) => entry.id === id)
+  if (record === undefined) return { status: 'error', message: REFUSED_LOCATION }
+  const oldKey = canonicalKey(record.name)
+  const newSlugline = setSpelling(name.data)
+  const newKey = canonicalKey(newSlugline)
+
+  // Three waves of reads rather than two per episode in series.
+  const documents = await Promise.all(episodes.map((episode) => readDocumentByKind(scope, episode.id, 'screenplay')))
+  const reads = await Promise.all(
+    documents.map((document) => (document === null ? Promise.resolve(null) : readScreenplayNodes(scope, document.id))),
+  )
+  const perEpisode = episodes.flatMap((episode, index) => {
+    const read = reads[index]
+    if (read === null || read === undefined || !read.ok) return []
+    const nodes = read.value.map((entry) => entry.node)
+    const headings = renameLocationHeadings(nodes, record.name, name.data).rewritten.length
+    return headings === 0 ? [] : [{ ordinal: episode.ordinal, headings }]
+  })
+  const stays = bound
+    .filter((entry) => entry.locationId === id)
+    .map((entry) => entry.slugline)
+    .filter((slugline) => {
+      const key = canonicalKey(slugline)
+      return key !== oldKey && key !== newKey
+    })
+  const holder = bound.find((entry) => entry.locationId !== id && entry.slugline === newSlugline)
+  const holderRecord = holder === undefined ? undefined : records.find((entry) => entry.id === holder.locationId)
+  return {
+    status: 'preview',
+    to: newSlugline,
+    headings: perEpisode.reduce((total, entry) => total + entry.headings, 0),
+    episodes: perEpisode,
+    stays,
+    taken: holder === undefined ? null : { by: holder.locationId, name: holderRecord?.name ?? 'another location' },
+  }
+}
+
+const UndoRenameSchema = z.object({
+  locationId: LocationIdSchema,
+  previousName: TitleSchema,
+  name: TitleSchema,
+  restores: z.array(z.object({ id: z.string().min(1), before: InlineContentSchema, after: InlineContentSchema })).max(5000),
+})
+
+/**
+ * Take a rename back: the record's old name and set text, then every
+ * heading the rename rewrote whose content is still exactly what the rename
+ * left - a heading edited since is left as it is and counted as skipped.
+ * A `before_rename` version is taken of each document, so the undo is as
+ * recoverable as the rename was.
+ */
+export const undoRename = async (projectId: string, rawUndo: unknown): Promise<UndoRenameResult> => {
+  const undo = UndoRenameSchema.safeParse(rawUndo)
+  if (!undo.success) return { status: 'error', message: 'That rename could not be taken back.' }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+  const { scope, project } = gate
+  const { locationId, previousName, name, restores } = undo.data
+
+  const [records, bound] = await Promise.all([listLocationRecords(scope), listBoundSluglines(scope)])
+  const record = records.find((entry) => entry.id === locationId)
+  if (record === undefined) return { status: 'error', message: REFUSED_LOCATION }
+  const currentKey = canonicalKey(name)
+  const current = bound.filter((entry) => entry.locationId === locationId && canonicalKey(entry.slugline) === currentKey).map((entry) => entry.slugline)
+  const oldSlugline = setSpelling(previousName)
+  const outcome = await renameLocationRecord(scope, locationId, previousName, current, oldSlugline)
+  if (outcome.status === 'taken') {
+    const holder = records.find((entry) => entry.id === outcome.by)
+    return {
+      status: 'refused',
+      message: `${oldSlugline} now resolves to ${holder?.name ?? 'another location'}. The rename cannot be undone from here - merge the two records instead.`,
+    }
+  }
+  if (outcome.status === 'missing') return { status: 'error', message: REFUSED_LOCATION }
+
+  const wanted = new Map(restores.map((entry) => [entry.id as NodeId, entry]))
+  let skipped = 0
+  const pending: HeadingNodeRewrite[] = []
+  for (const episode of await listEpisodes(scope)) {
+    const document = await readDocumentByKind(scope, episode.id, 'screenplay')
+    if (document === null) continue
+    const read = await readScreenplayNodes(scope, document.id)
+    if (!read.ok) continue
+    const before = read.value.map((entry) => entry.node)
+    const here: HeadingNodeRewrite[] = []
+    for (const node of before) {
+      const entry = wanted.get(node.id)
+      if (entry === undefined) continue
+      wanted.delete(node.id)
+      if (JSON.stringify(node.content) !== JSON.stringify(entry.after)) {
+        skipped += 1
+        continue
+      }
+      here.push({ id: node.id, content: entry.before })
+    }
+    if (here.length === 0) continue
+    await snapshotVersion(scope, document.id, 'before_rename', before, before.length)
+    pending.push(...here)
+  }
+  skipped += wanted.size
+  const headings = await rewriteHeadingNodes(scope, pending)
+  await rederiveProject(scope)
+  revalidatePath(workspacePath(project.id), 'layout')
+  return { status: 'undone', headings, skipped }
 }
 
 /** Hang a record under another, or make it a primary set. The tree's one authored write. */
@@ -353,6 +506,35 @@ export const unbindSluglineAlias = async (projectId: string, rawId: string, rawS
   return { status: 'saved' }
 }
 
+/**
+ * Move a set text to this record from whichever holds it - the alias
+ * table's `Move it here` when a bind was refused as taken. One statement
+ * in the repository; the holder keeps its last set text.
+ */
+export const moveAlias = async (projectId: string, rawId: string, rawSlugline: string): Promise<MoveResult> => {
+  const id = parseId(rawId)
+  const slugline = SluglineSchema.safeParse(rawSlugline)
+  if (id === null || !slugline.success) return { status: 'error', message: 'An alias is a set text, up to 200 characters.' }
+  const set = setTextOf(slugline.data)
+  if (canonicalKey(set) === '') return { status: 'error', message: 'An alias needs at least one letter or digit.' }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+
+  const outcome = await moveBoundSlugline(gate.scope, set, id)
+  if (outcome.status === 'missing') return { status: 'error', message: REFUSED_LOCATION }
+  if (outcome.status === 'last') {
+    const holder = (await listLocationRecords(gate.scope)).find((entry) => entry.id === outcome.by)
+    return {
+      status: 'refused',
+      message: `${set} is the only set text bound to ${holder?.name ?? 'the other location'}. Merge the two records instead.`,
+    }
+  }
+  if (outcome.status === 'already') return { status: 'moved', from: null }
+  await rederiveProject(gate.scope)
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return { status: 'moved', from: outcome.from }
+}
+
 // ---------------------------------------------------------------------------
 // The resolve queue
 // ---------------------------------------------------------------------------
@@ -477,6 +659,99 @@ export const resolveStructure = async (projectId: string, rawKey: string, rawCho
   if (!pass.ok) return { status: 'error', message: `The script could not be re-derived (${pass.error.kind}).` }
   revalidatePath(workspacePath(project.id), 'layout')
   return { status: 'resolved', pending: await pendingCount(scope) }
+}
+
+const UndoSchema = z.discriminatedUnion('kind', [
+  /** Undo on `This is X`: the acceptance goes and the set text is unbound from the record. */
+  z.object({ kind: z.literal('bound'), id: LocationIdSchema }),
+  /** Undo on `New location`: the acceptance goes and the minted record, still blank, with it. */
+  z.object({ kind: z.literal('new-record') }),
+  /** Undo on `Move it inside`: the acceptance goes, the record is a primary set again, a minted parent goes if blank. */
+  z.object({ kind: z.literal('attached'), parent: LocationIdSchema }),
+  /** Undo on `It's deliberate`: that rejection goes; the pass proposes the edge again. */
+  z.object({ kind: z.literal('not-inside') }),
+])
+
+/**
+ * Take a queue decision back. See the header. The row may be `settled` by
+ * now (a bind settles it); the key is the subject's, and the decisions are
+ * looked up by it, not by an open row.
+ */
+export const revokeDecision = async (projectId: string, rawKey: string, rawUndo: unknown): Promise<ResolveResult> => {
+  const key = z.string().min(1).max(400).safeParse(rawKey)
+  const undo = UndoSchema.safeParse(rawUndo)
+  if (!key.success || !undo.success) return { status: 'error', message: 'That decision could not be read.' }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+  const { scope, project } = gate
+
+  const decisions = (await listResolveDecisions(scope)).filter((decision) => decision.rowKey === key.data)
+  if (decisions.length === 0) return { status: 'error', message: 'There is nothing to take back on that heading.' }
+
+  if (undo.data.kind === 'bound') {
+    if (!key.data.startsWith('slugline:')) return { status: 'error', message: 'That decision could not be read.' }
+    const setKey = key.data.slice('slugline:'.length)
+    const id = undo.data.id
+    const held = (await listBoundSluglines(scope)).find((entry) => entry.locationId === id && canonicalKey(entry.slugline) === setKey)
+    if (held === undefined) return { status: 'error', message: 'That set text is no longer bound here.' }
+    const outcome = await unbindSlugline(scope, id, held.slugline)
+    if (outcome === 'last') {
+      return { status: 'refused', message: 'That is the only set text bound to this record. Rename the record, or merge it, instead.' }
+    }
+    await deleteResolveDecisions(scope, key.data, [proposalTargetKey({ kind: 'location', id })])
+  } else if (undo.data.kind === 'new-record') {
+    if (!key.data.startsWith('slugline:')) return { status: 'error', message: 'That decision could not be read.' }
+    await deleteResolveDecisions(scope, key.data, [proposalTargetKey({ kind: 'new-record' })])
+    const setKey = key.data.slice('slugline:'.length)
+    const holder = (await listBoundSluglines(scope)).find((entry) => canonicalKey(entry.slugline) === setKey)
+    if (holder !== undefined) {
+      const gone = await deleteBlankLocation(scope, holder.locationId)
+      // A record the writer has already written on is kept; only its
+      // binding goes, so the heading proposes it rather than resolving to it.
+      if (gone === 'kept') await unbindSlugline(scope, holder.locationId, holder.slugline)
+    }
+  } else if (undo.data.kind === 'attached') {
+    if (!key.data.startsWith('structure:')) return { status: 'error', message: 'That decision could not be read.' }
+    const child = parseId(key.data.slice('structure:'.length))
+    if (child === null) return { status: 'error', message: REFUSED_LOCATION }
+    await deleteResolveDecisions(scope, key.data, null)
+    await setLocationParent(scope, child, null)
+    // A parent the accept minted, untouched since, goes with it; one the
+    // writer has written on, or one that was already there, stays.
+    await deleteBlankLocation(scope, undo.data.parent)
+  } else {
+    await deleteResolveDecisions(scope, key.data, null)
+  }
+
+  const pass = await rederiveProject(scope)
+  if (!pass.ok) return { status: 'error', message: `The script could not be re-derived (${pass.error.kind}).` }
+  revalidatePath(workspacePath(project.id), 'layout')
+  return { status: 'resolved', pending: await pendingCount(scope) }
+}
+
+const SimilarChoiceSchema = z.discriminatedUnion('kind', [
+  /** The two are one place: merge this record into the other. */
+  z.object({ kind: z.literal('merge'), into: LocationIdSchema }),
+  /** They are different places; the finding is never shown for this pair again. */
+  z.object({ kind: z.literal('differ'), other: LocationIdSchema }),
+])
+
+/**
+ * The `Same place?` finding's two doors: merge (the domain operation,
+ * through `mergeLocations`), or "they're different" - a decision under a
+ * `set:<a>:<b>` key that no pass writes, so the loader hides the pair from
+ * now on. Nothing about the script changes either way.
+ */
+export const decideSimilar = async (projectId: string, rawId: string, rawChoice: unknown): Promise<MergeResult | SavedResult> => {
+  const id = parseId(rawId)
+  const choice = SimilarChoiceSchema.safeParse(rawChoice)
+  if (id === null || !choice.success) return { status: 'error', message: 'That decision could not be read.' }
+  if (choice.data.kind === 'merge') return mergeLocations(projectId, id, choice.data.into)
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+  await recordDecisionByKey(gate.scope, similarKey(id, choice.data.other), 'rejected', { kind: 'location', id: choice.data.other })
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return { status: 'saved' }
 }
 
 /** The empty state's "Derive N locations": a pass, awaited, project-wide. */

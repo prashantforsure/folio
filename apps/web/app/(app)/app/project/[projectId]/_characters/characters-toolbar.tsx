@@ -1,108 +1,77 @@
 'use client'
 
 import { CHARACTER_STATUSES, CHARACTER_STATUS_LABELS } from '@folio/contracts'
-import { Icon } from '@folio/ui'
-import { memo, useRef, useState } from 'react'
+import { memo } from 'react'
 
-import type { CastGroup } from '../../../../../../lib/characters/cast'
+import type { CastFigure, CastGroup } from '../../../../../../lib/characters/cast'
 import { CAST_GROUPS, CAST_GROUP_LABELS } from '../../../../../../lib/characters/cast'
 import { setNewCharacterOpen } from '../../../../../../lib/characters/compose'
-import { useDismiss } from '../_chrome/use-dismiss'
+import { FilterMenu, NewButton, RecordToolbar } from '../_chrome/record-toolbar'
 
 /**
- * The Characters toolbar row - `Route - Characters v2.dc.html`: the route
- * name, the count chip, `flex: 1`, `All characters ▾` and the solid `＋
- * New`. `12px 20px`, 10px gaps. The mockup's `Cast · Relationships · Sheet`
- * pill sat between the chip and the gap; since 2026-09-17 it is the
- * header's centre (`view-state.tsx`, `CharactersHeaderViews`), as every
- * route's views are.
+ * The Characters toolbar row, on the record routes' shared pieces
+ * (`_chrome/record-toolbar.tsx`) since 2026-09-17: the route name, the count
+ * chip (`8`, or `3 of 8` while a filter narrows the cast), `flex: 1`, `All
+ * characters ▾` and the solid `+ New`. The view pill is the header's
+ * centre (`view-state.tsx`, `CharactersHeaderViews`), as every route's.
  *
- * The filter is real: a menu over the groups and the statuses, narrowing
- * the cast and the sheet. Component state - a way of looking, not an
- * address (the Storyboard's ruling for its `All shots ▾`).
+ * The filter is real and applies to every view the same way - the cast,
+ * the sheet, the map. A menu over the groups, the statuses and `No
+ * description` (the assistant panel's report chip of the same name is this
+ * filter's answer). Component state - a way of looking, not an address.
  */
-export type CastFilter = 'all' | `group:${CastGroup}` | `status:${(typeof CHARACTER_STATUSES)[number]}`
+export type CastFilter = 'all' | `group:${CastGroup}` | `status:${(typeof CHARACTER_STATUSES)[number]}` | 'no-description'
+
+export const CAST_FILTERS: readonly CastFilter[] = [
+  'all',
+  ...CAST_GROUPS.map((group) => `group:${group}` as const),
+  ...CHARACTER_STATUSES.map((status) => `status:${status}` as const),
+  'no-description',
+]
 
 export const filterLabel = (filter: CastFilter): string => {
   if (filter === 'all') return 'All characters'
+  if (filter === 'no-description') return 'No description'
   if (filter.startsWith('group:')) return CAST_GROUP_LABELS[filter.slice(6) as CastGroup]
   return CHARACTER_STATUS_LABELS[filter.slice(7) as (typeof CHARACTER_STATUSES)[number]]
 }
 
-const FilterMenu = memo(({ filter, onPick }: { readonly filter: CastFilter; readonly onPick: (filter: CastFilter) => void }) => {
-  const [open, setOpen] = useState(false)
-  const root = useRef<HTMLDivElement>(null)
-  useDismiss(open, () => setOpen(false), root)
-  const options: readonly CastFilter[] = ['all', ...CAST_GROUPS.map((group) => `group:${group}` as const), ...CHARACTER_STATUSES.map((status) => `status:${status}` as const)]
-  return (
-    <div ref={root} className="relative">
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        data-cast-filter={filter}
-        className="folio-pill-button flex h-[34px] items-center gap-[7px] whitespace-nowrap rounded-[10px] px-[13px] text-12-5"
-        onClick={() => {
-          setOpen((value) => !value)
-        }}
-      >
-        {filterLabel(filter)}
-        <Icon name="chevron" size={11} strokeWidth={1.5} className="opacity-60" />
-      </button>
-      {open ? (
-        <div role="menu" className="folio-menu absolute right-0 top-[40px] w-[220px]">
-          {options.map((option, index) => (
-            <button
-              key={option}
-              type="button"
-              role="menuitemradio"
-              aria-checked={option === filter}
-              data-filter-option={option}
-              className={`folio-menu-item ${index === 1 || index === 1 + CAST_GROUPS.length ? 'mt-[4px] border-t border-line2 pt-[10px]' : ''}`}
-              onClick={() => {
-                setOpen(false)
-                onPick(option)
-              }}
-            >
-              <span className="min-w-0 flex-1">{filterLabel(option)}</span>
-              {option === filter ? <Icon name="check" size={13} strokeWidth={1.6} className="flex-none opacity-70" /> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  )
-})
-FilterMenu.displayName = 'FilterMenu'
+/** Whether a figure passes the filter. One rule for every view. */
+export const passesFilter = (figure: CastFigure, filter: CastFilter): boolean => {
+  if (filter === 'all') return true
+  if (filter === 'no-description') return figure.bio === null
+  if (filter.startsWith('group:')) return `group:${figure.group}` === filter
+  return `status:${figure.status}` === filter
+}
 
 export const CharactersToolbar = memo(
   ({
-    total,
+    count,
     filter,
     onFilter,
   }: {
-    readonly total: number
+    /** `8`, or `3 of 8` while filtered. */
+    readonly count: string
     readonly filter: CastFilter
     readonly onFilter: (filter: CastFilter) => void
   }) => (
-    <div data-characters-toolbar className="flex flex-none flex-wrap items-center gap-[10px] px-[20px] py-[12px]">
-      <h1 className="m-0 whitespace-nowrap text-14 font-medium leading-normal tracking-title">Characters</h1>
-      <span className="tabular whitespace-nowrap rounded-pill bg-s2 px-[10px] py-[4px] text-11-5 text-ink2" data-cast-count>
-        {total}
-      </span>
-      <div className="flex-1" />
-      <FilterMenu filter={filter} onPick={onFilter} />
-      <button
-        type="button"
-        data-new-character
+    <RecordToolbar title="Characters" total={count} countAttr="data-cast-count" attr="data-characters-toolbar">
+      <FilterMenu
+        value={filter}
+        options={CAST_FILTERS}
+        label={filterLabel}
+        dividers={[1, 1 + CAST_GROUPS.length]}
+        attr="data-cast-filter"
+        onPick={onFilter}
+      />
+      <NewButton
+        attr="data-new-character"
+        label="+ New"
         onClick={() => {
           setNewCharacterOpen(true)
         }}
-        className="folio-solid-button flex h-[34px] items-center gap-[7px] whitespace-nowrap rounded-[10px] px-[14px] text-12-5 font-medium"
-      >
-        ＋ New
-      </button>
-    </div>
+      />
+    </RecordToolbar>
   ),
 )
 CharactersToolbar.displayName = 'CharactersToolbar'

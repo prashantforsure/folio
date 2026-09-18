@@ -18,23 +18,25 @@ import { FilterMenu, NewButton, RecordToolbar } from '../_chrome/record-toolbar'
  *
  * The filter is real: a menu over the three statuses, narrowing every
  * view. Component state - a way of looking, not an address (the
- * Storyboard's ruling for its `All shots ▾`).
+ * Storyboard's ruling for its `All shots ▾`). The count chip reads `3 of
+ * 8` while the filter or the sidebar's find narrows the rows.
  */
-export type LocationsView = 'places' | 'scenes' | 'sheet'
+export type { LocationsView } from './view-state'
 
 const FILTERS: readonly StatusFilter[] = ['all', ...LOCATION_STATUSES]
 
 export const LocationsToolbar = memo(
   ({
-    total,
+    count,
     filter,
     onFilter,
   }: {
-    readonly total: number
+    /** `8`, or `3 of 8` while narrowed. */
+    readonly count: string
     readonly filter: StatusFilter
     readonly onFilter: (filter: StatusFilter) => void
   }) => (
-    <RecordToolbar title="Locations" total={total} countAttr="data-location-count" attr="data-locations-toolbar">
+    <RecordToolbar title="Locations" total={count} countAttr="data-location-count" attr="data-locations-toolbar">
       <FilterMenu value={filter} options={FILTERS} label={(option) => FILTER_LABELS[option]} dividers={[1]} attr="data-location-filter" onPick={onFilter} />
       <NewButton
         attr="data-new-location"

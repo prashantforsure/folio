@@ -176,6 +176,8 @@ export type BoundSluglineRow = {
   readonly locationId: LocationId
   /** The set text, as the writer would type it after `INT.`. */
   readonly slugline: string
+  /** Who bound it: a user id, or null when a derivation pass did. The drawer's provenance column. */
+  readonly boundBy: string | null
 }
 
 /** The alias table's authored half, whole. AUTHORED. */
@@ -183,11 +185,49 @@ export const listBoundSluglines = async (
   scope: ProjectScope,
 ): Promise<readonly BoundSluglineRow[]> => {
   const rows = await dbOf(scope)
-    .select({ locationId: locationBoundSluglines.locationId, slugline: locationBoundSluglines.slugline })
+    .select({
+      locationId: locationBoundSluglines.locationId,
+      slugline: locationBoundSluglines.slugline,
+      boundBy: locationBoundSluglines.boundBy,
+    })
     .from(locationBoundSluglines)
     .where(scoped(scope, locationBoundSluglines))
     .orderBy(asc(locationBoundSluglines.boundAt))
-  return rows.map((row) => ({ locationId: brandLocationId(row.locationId), slugline: row.slugline }))
+  return rows.map((row) => ({ locationId: brandLocationId(row.locationId), slugline: row.slugline, boundBy: row.boundBy }))
+}
+
+/** The Timeline's authored story time per heading node, where the writer set any of it. */
+export type SceneStoryTimeRow = {
+  readonly storyDay: number | null
+  readonly storyClock: string | null
+  readonly flashback: boolean
+}
+
+/**
+ * Story day, clock and the flashback flag per scene (`scenes.story_day` and
+ * its neighbours, migration `0011`) - the continuity facts a location's
+ * scene list prints beside the heading. Rows with none of the three set
+ * are left out; the route prints nothing for them.
+ */
+export const listSceneStoryTime = async (scope: ProjectScope): Promise<ReadonlyMap<NodeId, SceneStoryTimeRow>> => {
+  const rows = await dbOf(scope)
+    .select({
+      sceneNodeId: scenes.sceneNodeId,
+      storyDay: scenes.storyDay,
+      storyClock: scenes.storyClock,
+      flashback: scenes.flashback,
+    })
+    .from(scenes)
+    .where(
+      scoped(
+        scope,
+        scenes,
+        sql`(${scenes.storyDay} IS NOT NULL OR ${scenes.storyClock} IS NOT NULL OR ${scenes.flashback})`,
+      ),
+    )
+  return new Map(
+    rows.map((row) => [row.sceneNodeId as NodeId, { storyDay: row.storyDay, storyClock: row.storyClock, flashback: row.flashback }]),
+  )
 }
 
 /** An open resolve-queue row for a slugline or a structure edge, as stored. */
@@ -298,6 +338,8 @@ export type LocationRecordEdit = {
   readonly description?: string | null | undefined
   readonly address?: string | null | undefined
   readonly status?: LocationStatus | undefined
+  /** Shooting days at this set alone. The roll-up is the next pass's. */
+  readonly scheduledDays?: number | undefined
 }
 
 /** Write the fields present in `edit`, whole. `false` when the record is not here. */
@@ -312,6 +354,7 @@ export const updateLocationRecord = async (
       ...(edit.description === undefined ? {} : { description: edit.description === '' ? null : edit.description }),
       ...(edit.address === undefined ? {} : { address: edit.address === '' ? null : edit.address }),
       ...(edit.status === undefined ? {} : { status: edit.status }),
+      ...(edit.scheduledDays === undefined ? {} : { scheduledDays: edit.scheduledDays }),
       updatedAt: new Date(),
     })
     .where(scoped(scope, locations, eq(locations.id, id), sql`${locations.mergedInto} IS NULL`))
@@ -553,6 +596,82 @@ export const unbindSlugline = async (
   return 'unbound'
 }
 
+export type MoveSluglineOutcome =
+  | { readonly status: 'moved'; readonly from: LocationId | null }
+  /** Already bound to `toId`. Nothing to do. */
+  | { readonly status: 'already' }
+  /** The holder's last set text; moving it would leave that record with none. */
+  | { readonly status: 'last'; readonly by: LocationId }
+  | { readonly status: 'missing' }
+
+/**
+ * Move a set text from whichever record holds it to `toId` - the alias
+ * table's `Move it here`, when a bind is refused as `taken`, and the
+ * queue's answer when a heading was matched to the wrong place. One
+ * statement rather than an unbind and a bind, for the reason `moveBoundCue`
+ * gives: between two statements the set text would be bound nowhere. The
+ * holder keeps it when it is their last (the `unbindSlugline` rule). A set
+ * text nobody holds is simply bound.
+ */
+export const moveBoundSlugline = async (
+  scope: ProjectScope,
+  slugline: string,
+  toId: LocationId,
+): Promise<MoveSluglineOutcome> => {
+  const rows = await dbOf(scope).execute(sql`
+    with holder as (
+      select ${locationBoundSluglines.locationId} as location_id from ${locationBoundSluglines}
+      where ${scoped(scope, locationBoundSluglines, eq(locationBoundSluglines.slugline, slugline))}
+    ),
+    held as (
+      select count(*)::int as n from ${locationBoundSluglines}
+      where ${scoped(scope, locationBoundSluglines)}
+        and ${locationBoundSluglines.locationId} = (select location_id from holder limit 1)
+    ),
+    target as (
+      select ${locations.id} as id from ${locations}
+      where ${scoped(scope, locations, eq(locations.id, toId))} and ${locations.mergedInto} is null
+    ),
+    removed as (
+      delete from ${locationBoundSluglines}
+      where ${scoped(scope, locationBoundSluglines, eq(locationBoundSluglines.slugline, slugline))}
+        and ${locationBoundSluglines.locationId} <> ${toId}
+        and (select n from held) > 1
+        and exists (select 1 from target)
+      returning slugline
+    ),
+    bound as (
+      insert into ${locationBoundSluglines} (project_id, location_id, slugline, bound_by)
+      select ${scope.projectId}, ${toId}, ${slugline}, ${scope.actor}::uuid
+      where exists (select 1 from target)
+        and (not exists (select 1 from holder) or exists (select 1 from removed))
+      on conflict do nothing
+      returning slugline
+    )
+    select
+      (select location_id from holder limit 1) as holder,
+      coalesce((select n from held), 0) as held,
+      (select count(*)::int from target) as target,
+      (select count(*)::int from removed) as removed,
+      (select count(*)::int from bound) as bound
+  `)
+  const row = rows[0] as
+    | {
+        readonly holder: string | null
+        readonly held: number
+        readonly target: number
+        readonly removed: number
+        readonly bound: number
+      }
+    | undefined
+  if (row === undefined) throw new Error('Folio: moving a slugline returned no row. This is a bug in the repository.')
+  if (row.target === 0) return { status: 'missing' }
+  if (row.holder === (toId as string)) return { status: 'already' }
+  if (row.holder !== null && row.removed === 0) return { status: 'last', by: brandLocationId(row.holder) }
+  if (row.bound === 0) return { status: 'missing' }
+  return { status: 'moved', from: row.holder === null ? null : brandLocationId(row.holder) }
+}
+
 // ---------------------------------------------------------------------------
 // Writes - merge, delete
 // ---------------------------------------------------------------------------
@@ -654,4 +773,47 @@ export const deleteAbsentLocation = async (
   if (row === undefined || row.found === 0) return 'missing'
   if (row.present) return 'present'
   return 'deleted'
+}
+
+/**
+ * Delete a record the writer has not written on yet, present in the script
+ * or not - the eight-second undo of a `New location` queue decision, whose
+ * minted record *is* present the moment the heading resolves to it, so
+ * `deleteAbsentLocation` would refuse. `kept` when there is something on
+ * it (a description, an address, a photo, a status past pending, shooting
+ * days, a sub-set, or more than one bound set text): the caller unbinds the
+ * set text instead, so the heading is asked about again and nothing
+ * authored is lost. The cascades take the binding and the derived rows.
+ */
+export const deleteBlankLocation = async (
+  scope: ProjectScope,
+  id: LocationId,
+): Promise<'deleted' | 'kept' | 'missing'> => {
+  const rows = await dbOf(scope).execute(sql`
+    with record as (
+      select ${locations.id} as id,
+        (${locations.description} is null
+          and ${locations.address} is null
+          and ${locations.photoKey} is null
+          and ${locations.status} = 'pending'
+          and ${locations.scheduledDays} = 0
+          and not exists (select 1 from ${locations} c where c.project_id = ${scope.projectId} and c.parent_id = ${locations.id} and c.merged_into is null)
+          and (select count(*) from ${locationBoundSluglines} b where b.project_id = ${scope.projectId} and b.location_id = ${locations.id}) <= 1
+        ) as blank
+      from ${locations}
+      where ${scoped(scope, locations, eq(locations.id, id))} and ${locations.mergedInto} is null
+    ),
+    gone as (
+      delete from ${locations}
+      where ${scoped(scope, locations, eq(locations.id, id))}
+        and exists (select 1 from record where blank)
+      returning id
+    )
+    select (select count(*)::int from record) as found,
+      coalesce((select blank from record limit 1), false) as blank,
+      (select count(*)::int from gone) as deleted
+  `)
+  const row = rows[0] as { readonly found: number; readonly blank: boolean; readonly deleted: number } | undefined
+  if (row === undefined || row.found === 0) return 'missing'
+  return row.deleted > 0 ? 'deleted' : 'kept'
 }

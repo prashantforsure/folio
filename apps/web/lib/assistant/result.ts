@@ -45,11 +45,3 @@ export type SimpleAssistantResult =
   | { readonly status: 'done' }
   | { readonly status: 'refused'; readonly message: string }
   | { readonly status: 'error'; readonly message: string }
-
-/** The request body the streaming route reads. */
-export type AskInput = {
-  readonly projectId: string
-  readonly episode: string
-  readonly chatId: string
-  readonly message: string
-}

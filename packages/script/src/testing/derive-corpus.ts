@@ -101,6 +101,16 @@ export const characterRecord = (
   lines: 0,
   mentions: 0,
   presence: 'absent',
+  words: 0,
+  speeches: 0,
+  parens: 0,
+  namedIn: 0,
+  firstLine: null,
+  lastLine: null,
+  longest: null,
+  sceneCounts: [],
+  exchanges: [],
+  introducedAt: null,
 })
 
 export const locationAuthored = (

@@ -1,21 +1,29 @@
-import { ASSISTANT_MESSAGE_MAX } from '@folio/contracts'
-import type { AssistantChatId } from '@folio/contracts'
-import { AssistantChatIdSchema } from '@folio/contracts'
+import type { AskFocus, AssistantChatId, SceneRef } from '@folio/contracts'
+import { AskInputSchema } from '@folio/contracts'
 import {
   appendMessage,
+  listBoundCues,
+  listBoundSluglines,
   listCharacterRecords,
+  listLocationRecords,
   listMessages,
+  listSceneIndex,
   readChat,
   readDocumentByKind,
   readMentionLabels,
+  readProjectScreenplayByEpisode,
   readScreenplayNodes,
 } from '@folio/db'
+import type { CharacterRecordRow, LocationRecordRow, ProjectScope, SceneIndexRow } from '@folio/db'
 import { assistantEnv } from '@folio/db/env'
 import type { ScreenplayNode } from '@folio/script'
+import { establishingLines, quadrantOf } from '@folio/script'
 import Anthropic from '@anthropic-ai/sdk'
-import { z } from 'zod'
 
+import { formatSceneRef, sceneRefOf } from '../characters/figures'
+import { dayNightShort, quadrantLabel } from '../locations/view'
 import { isRefusal, openEpisodeWith } from '../script/gate'
+import type { FocusInput, LocationFocusInput, PlaceInput, ScriptInput } from './context'
 import { buildContext } from './context'
 import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
 
@@ -23,9 +31,12 @@ import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
  * Asking the assistant. Server only - this file holds the API key's reader.
  *
  * `assistantConnected()` is what the shell tells the panel: unset key, no
- * composer. `ask()` is the streaming path `app/api/assistant/route.ts`
- * exposes: gate, read the script beside the gate, append the writer's turn,
- * stream the answer, append the answer when the stream ends.
+ * composer. `assistantClient()` is the one door to the SDK, for this file
+ * and the Characters route's model actions (`lib/characters/model-actions.ts`);
+ * the key itself never leaves here. `ask()` is the streaming path
+ * `app/api/assistant/route.ts` exposes: gate, read the script beside the
+ * gate, append the writer's turn, stream the answer, append the answer when
+ * the stream ends.
  *
  * ## The gate is the Script route's
  *
@@ -36,20 +47,16 @@ import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
  *
  * ## What the answer is made of
  *
- * The whole script and the cast, as `context.ts` renders them, in one
- * cached system block; the chat's earlier turns as messages; the new turn
- * last. Adaptive thinking at default effort - a writer's question is not a
- * proof - and text only: no tools, because the assistant may not write.
+ * The script and the cast, as `context.ts` renders them, in one cached
+ * system block; the chat's earlier turns as messages; the new turn last.
+ * `scope: 'project'` (the Characters route, ruled 2026-09-17) reads every
+ * episode with `[E2 Sc 9]` headers; a `focus` adds the open record as a
+ * second, uncached block so the cacheable prefix stays stable between
+ * turns. A stale focus id is no block and no error. Text only: no tools,
+ * because the assistant may not write.
  */
 
 export const assistantConnected = (): boolean => assistantEnv !== null
-
-const AskSchema = z.object({
-  projectId: z.string(),
-  episode: z.string(),
-  chatId: AssistantChatIdSchema,
-  message: z.string().trim().min(1).max(ASSISTANT_MESSAGE_MAX),
-})
 
 export type AskOutcome =
   | { readonly status: 'streaming'; readonly stream: ReadableStream<Uint8Array> }
@@ -58,17 +65,118 @@ export type AskOutcome =
 
 let client: Anthropic | null = null
 
-const clientFor = (apiKey: string): Anthropic => {
-  client ??= new Anthropic({ apiKey })
+/** The SDK client, or null with no key. The only reader of `ANTHROPIC_API_KEY` after `env.ts`. */
+export const assistantClient = (): Anthropic | null => {
+  const env = assistantEnv
+  if (env === null) return null
+  client ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
   return client
 }
 
+/** The open record as the Focus block reads it. Null when the id names no live record. */
+const focusOf = async (
+  scope: ProjectScope,
+  records: readonly CharacterRecordRow[],
+  focus: AskFocus,
+  episodeOrdinalOf: ReadonlyMap<string, number>,
+): Promise<FocusInput | null> => {
+  const record = records.find((entry) => entry.id === focus.id)
+  if (record === undefined) return null
+  const bound = await listBoundCues(scope)
+  const perEpisode = new Map<number, number>()
+  for (const scene of record.derived?.scenes ?? []) {
+    const ordinal = episodeOrdinalOf.get(scene)
+    if (ordinal !== undefined) perEpisode.set(ordinal, (perEpisode.get(ordinal) ?? 0) + 1)
+  }
+  return {
+    name: record.name,
+    cues: bound.filter((entry) => entry.characterId === record.id).map((entry) => entry.cue),
+    status: record.status,
+    role: record.role,
+    bio: record.bio,
+    wants: record.wants,
+    needs: record.needs,
+    scenes: record.derived?.appearances ?? 0,
+    perEpisode: [...perEpisode.entries()].sort(([a], [b]) => a - b).map(([ordinal, scenes]) => ({ ordinal, scenes })),
+    lines: record.derived?.lines ?? 0,
+  }
+}
+
+/**
+ * The location records as the Locations route's system block lists them,
+ * and the open one as its Focus block (the Locations rebuild, 2026-09-18).
+ * Read only when the turn asks for them (`places: true` - the Locations
+ * route), so the Characters turn's prefix is unchanged. The establishing
+ * line is `@folio/script`'s `establishingLines` over the project's nodes,
+ * the same reading the route's drawer quotes.
+ */
+const placesOf = async (
+  scope: ProjectScope,
+  nodes: readonly ScreenplayNode[],
+  index: readonly SceneIndexRow[],
+  labelFor: (target: { readonly entity: string; readonly id: string }) => string | undefined,
+  focusId: string | null,
+): Promise<{ readonly places: readonly PlaceInput[]; readonly focus: LocationFocusInput | null }> => {
+  const [records, bound] = await Promise.all([listLocationRecords(scope), listBoundSluglines(scope)])
+  const nameOf = new Map(records.map((record) => [record.id as string, record.name]))
+  const rowByScene = new Map(index.map((row) => [row.sceneNodeId as string, row]))
+  const intros = establishingLines(nodes, (sceneNodeId) => rowByScene.get(sceneNodeId as string)?.locationId ?? null, labelFor)
+  const sluglinesOf = (record: LocationRecordRow): readonly string[] => bound.filter((entry) => entry.locationId === record.id).map((entry) => entry.slugline)
+  const scenesOf = (record: LocationRecordRow): readonly SceneIndexRow[] =>
+    (record.derived?.scenes ?? []).flatMap((id) => {
+      const row = rowByScene.get(id as string)
+      return row === undefined ? [] : [row]
+    })
+  const places: PlaceInput[] = records
+    .filter((record) => record.derived === null || record.derived.presence === 'present' || record.parentId !== null)
+    .map((record) => {
+      const quadrant = quadrantOf(scenesOf(record))
+      const dayNight = dayNightShort(quadrant)
+      return {
+        name: record.name,
+        sluglines: sluglinesOf(record),
+        parent: record.parentId === null ? null : (nameOf.get(record.parentId as string) ?? null),
+        scenes: record.derived?.rollup.scenes ?? 0,
+        dayNight: dayNight === '—' ? null : dayNight,
+        status: record.status,
+        line: record.description ?? intros.get(record.id)?.text ?? null,
+      }
+    })
+  const open = focusId === null ? undefined : records.find((record) => (record.id as string) === focusId)
+  if (open === undefined) return { places, focus: null }
+  const scenes = scenesOf(open)
+  const perEpisode = new Map<number, number>()
+  for (const row of scenes) perEpisode.set(row.episodeOrdinal, (perEpisode.get(row.episodeOrdinal) ?? 0) + 1)
+  const first = scenes[0]
+  const last = scenes.at(-1)
+  return {
+    places,
+    focus: {
+      kind: 'location',
+      name: open.name,
+      sluglines: sluglinesOf(open),
+      parent: open.parentId === null ? null : (nameOf.get(open.parentId as string) ?? null),
+      subSets: records.filter((record) => record.parentId === open.id).map((record) => record.name),
+      scenes: open.derived?.rollup.scenes ?? 0,
+      perEpisode: [...perEpisode.entries()].sort(([a], [b]) => a - b).map(([ordinal, count]) => ({ ordinal, scenes: count })),
+      quadrant: quadrantLabel(quadrantOf(scenes)),
+      first: first === undefined ? null : formatSceneRef(sceneRefOf(first)),
+      last: last === undefined ? null : formatSceneRef(sceneRefOf(last)),
+      intro: intros.get(open.id)?.text ?? null,
+      status: open.status,
+      address: open.address,
+      description: open.description,
+      shootingDays: open.derived?.rollup.shootingDays ?? open.scheduledDays,
+    },
+  }
+}
+
 export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome> => {
-  const env = assistantEnv
-  if (env === null) {
+  const anthropic = assistantClient()
+  if (anthropic === null) {
     return { status: 'error', code: 503, message: 'The assistant is not connected. Set ANTHROPIC_API_KEY on the server.' }
   }
-  const parsed = AskSchema.safeParse(raw)
+  const parsed = AskInputSchema.safeParse(raw)
   if (!parsed.success) return { status: 'error', code: 400, message: 'Write a question first.' }
   const input = parsed.data
 
@@ -90,31 +198,73 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
   // The script, read after the gate rather than beside it: it needs the
   // document id, which is itself a read. Two round trips for the context of a
   // question that then takes seconds to answer is not the cost that matters.
-  const document = await readDocumentByKind(scope, episode.id, 'screenplay')
-  let nodes: readonly ScreenplayNode[] = []
-  if (document !== null) {
-    const read = await readScreenplayNodes(scope, document.id)
-    if (read.ok) nodes = read.value.map((entry) => entry.node)
+  let script: ScriptInput
+  let index: readonly SceneRef[] = []
+  let sceneRows: readonly SceneIndexRow[] = []
+  let projectNodes: readonly ScreenplayNode[] = []
+  if (input.scope === 'project') {
+    const [runs, rows] = await Promise.all([readProjectScreenplayByEpisode(scope), listSceneIndex(scope)])
+    sceneRows = rows
+    index = rows.map(sceneRefOf)
+    projectNodes = runs.ok ? runs.value.flatMap((run) => run.nodes) : []
+    script = {
+      kind: 'project',
+      episodes: runs.ok ? runs.value.map((run) => ({ ordinal: run.ordinal, title: run.title, nodes: run.nodes })) : [],
+      index,
+    }
+  } else {
+    const document = await readDocumentByKind(scope, episode.id, 'screenplay')
+    let nodes: readonly ScreenplayNode[] = []
+    if (document !== null) {
+      const read = await readScreenplayNodes(scope, document.id)
+      if (read.ok) nodes = read.value.map((entry) => entry.node)
+    }
+    script = { kind: 'episode', episodeTitle: episode.title, nodes }
   }
+  const focus =
+    input.focus === undefined || input.focus.kind !== 'character'
+      ? null
+      : await focusOf(
+          scope,
+          extra.records,
+          input.focus,
+          new Map(index.map((ref) => [ref.sceneNodeId as string, ref.episodeOrdinal])),
+        )
+  // The Locations route's turn (ruled 2026-09-18): the location records
+  // beside the cast, and the open place as the Focus block.
+  const labelBook = new Map(extra.labels.map((label) => [`${label.entity}:${label.id}`, label.label]))
+  const placeRead =
+    input.places === true && input.scope === 'project'
+      ? await placesOf(
+          scope,
+          projectNodes,
+          sceneRows,
+          (target) => labelBook.get(`${target.entity}:${target.id}`),
+          input.focus?.kind === 'location' ? input.focus.id : null,
+        )
+      : null
+
   const history = await listMessages(scope, chatId)
   await appendMessage(scope, chatId, 'user', input.message)
 
   const context = buildContext({
     projectTitle: project.title,
-    episodeTitle: episode.title,
-    nodes,
+    script,
     labels: extra.labels,
     cast: extra.records
       .filter((record) => record.derived === null || record.derived.presence === 'present')
       .map((record) => ({ name: record.name, line: record.role ?? record.bio })),
+    ...(placeRead === null ? {} : { places: placeRead.places }),
+    ...(placeRead?.focus != null ? { focus: placeRead.focus } : focus === null ? {} : { focus }),
   })
 
   const messages: Anthropic.MessageParam[] = [
     ...history.map((turn): Anthropic.MessageParam => ({ role: turn.role, content: turn.body })),
     { role: 'user', content: input.message },
   ]
+  const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: context.system, cache_control: { type: 'ephemeral' } }]
+  if (context.focus !== null) system.push({ type: 'text', text: context.focus })
 
-  const anthropic = clientFor(env.ANTHROPIC_API_KEY)
   const encoder = new TextEncoder()
   let answer = ''
 
@@ -125,7 +275,7 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
           {
             model: ASSISTANT_MODEL,
             max_tokens: MAX_OUTPUT_TOKENS,
-            system: [{ type: 'text', text: context.system, cache_control: { type: 'ephemeral' } }],
+            system,
             messages,
           },
           { signal },

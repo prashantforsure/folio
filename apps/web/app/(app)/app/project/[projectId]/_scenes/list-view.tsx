@@ -1,10 +1,12 @@
 'use client'
 
+import type { ProjectId } from '@folio/contracts'
 import type { NodeId } from '@folio/script'
 
 import { SCENE_STATUS_LABEL, sceneStatus } from '../../../../../../lib/scenes/canvas'
 import type { SceneCard } from '../../../../../../lib/scenes/server'
 import { count } from '../../../../../../lib/workspace/format'
+import { characterHref } from '../../../../../../lib/workspace/hrefs'
 import { CastChip, eighthsLabel, hasSynopsis, sceneNo, timeLabel } from './scene-parts'
 
 /**
@@ -16,11 +18,13 @@ import { CastChip, eighthsLabel, hasSynopsis, sceneNo, timeLabel } from './scene
  * the ruling's "detail card in place" (2026-09-11).
  */
 export const ListView = ({
+  projectId,
   scenes,
   synopsisOf,
   selected,
   onOpen,
 }: {
+  readonly projectId: ProjectId
   readonly scenes: readonly SceneCard[]
   readonly synopsisOf: (card: SceneCard) => string | null
   readonly selected: NodeId | null
@@ -76,7 +80,7 @@ export const ListView = ({
             <span className="tabular w-[56px] flex-none font-mono text-12 text-ink2">{count(card.derived.lines)}</span>
             <span className="flex w-[150px] flex-none flex-wrap gap-[5px] overflow-hidden">
               {card.cast.map((member) => (
-                <CastChip key={member.id} name={member.name} small />
+                <CastChip key={member.id} name={member.name} href={characterHref(projectId, member.id)} small />
               ))}
             </span>
             <span className={`min-w-0 flex-1 truncate text-13 leading-[1.5] ${hasSynopsis(synopsis) ? 'text-ink2' : 'text-ink3'}`}>

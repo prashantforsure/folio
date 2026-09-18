@@ -373,15 +373,17 @@ test('an episode id of `characters` is rejected, and so are the other bad segmen
 
 test('a sub-view that does not exist is a 404; one that does is read', async ({ page, account }) => {
   await signIn(page, account)
-  await page.goto(`/app/project/${seriesId}/locations?view=sheet`)
-  await expect(page.locator('main[data-route="locations"]')).toHaveAttribute('data-sub-view', 'sheet')
   await page.goto(`/app/project/${seriesId}/timeline?view=chrono`)
   await expect(page.locator('main[data-route="timeline"]')).toHaveAttribute('data-sub-view', 'chrono')
   // Insights was removed with the redesign; its URL is gone, not a shell.
   const gone = await page.goto(`/app/project/${seriesId}/insights`)
   expect(gone?.status()).toBe(404)
-  const bad = await page.goto(`/app/project/${seriesId}/locations?view=grid`)
+  const bad = await page.goto(`/app/project/${seriesId}/timeline?view=grid`)
   expect(bad?.status()).toBe(404)
+  // Locations' views are state (ruled 2026-09-18): a stale `?view=sheet` opens the places.
+  const staleSheet = await page.goto(`/app/project/${seriesId}/locations?view=sheet`)
+  expect(staleSheet?.status()).toBe(200)
+  await expect(page.locator('main[data-route="locations"]')).toHaveAttribute('data-sub-view', 'places')
   // Scenes' views are state (ruled 2026-09-17): `?view=` is an unknown key there, and opens the cards.
   const stale = await page.goto(`/app/project/${seriesId}/ep_001/scenes?view=index`)
   expect(stale?.status()).toBe(200)

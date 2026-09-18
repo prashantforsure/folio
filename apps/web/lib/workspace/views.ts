@@ -20,13 +20,15 @@ import type { WorkspaceRoute } from './routes'
  * the schema's order, so the first tab is the default and links to the bare
  * path. A route with no sub-view param has an empty row and no pill.
  *
- * Three routes' views are not a param, by ruling (AGENTS.md, the exception
- * table): Characters' `cast | relationships | sheet` (2026-09-16), the
+ * Four routes' views are not a param, by ruling (AGENTS.md, the exception
+ * table): Characters' `cast | presence | sheet` (2026-09-16; Presence replaced Relationships 2026-09-18), the
  * Storyboard's `board | canvas | list` and Scenes' `cards | index | list`
- * (both 2026-09-17) are client state, so their rows are empty here and
- * their tabs are `_characters/view-state.tsx`, `_storyboard/view-state.tsx`
- * and `_scenes/view-state.tsx`, drawn into the same header slot as buttons.
- * All three use this `ViewTab` shape, so the pill is still one shape.
+ * (both 2026-09-17) and Locations' `places | scenes | sheet` (2026-09-18)
+ * are client state, so their rows are empty here and their tabs are
+ * `_characters/view-state.tsx`, `_storyboard/view-state.tsx`,
+ * `_scenes/view-state.tsx` and `_locations/view-state.tsx`, drawn into the
+ * same header slot as buttons. All four use this `ViewTab` shape, so the
+ * pill is still one shape.
  *
  * ## Titles and labels
  *
@@ -62,11 +64,7 @@ export const ROUTE_VIEWS: { readonly [R in WorkspaceRoute]: readonly ViewTab<Rou
     { id: 'episode', title: 'Episode' },
   ],
   characters: [],
-  locations: [
-    { id: 'places', title: 'Places' },
-    { id: 'scenes', title: 'Scenes here' },
-    { id: 'sheet', title: 'Sheet' },
-  ],
+  locations: [],
   timeline: [
     { id: 'story', title: 'Story order' },
     { id: 'chrono', title: 'Chronology' },

@@ -9,23 +9,27 @@
  * Handed the initial rather than the name for the same reason `Avatar` is
  * handed initials: which character of a name is its initial is decided in
  * the app. The font size follows the bundle: 8.5px/600 up to 40px, 15px/600
- * from 40px.
+ * from 40px. `shape` is round by default; the Characters route's Presence
+ * grid and drawer draw a 16px square (the rebuild, 2026-09-18).
  */
 export const IdentityChip = ({
   initial,
   hue,
   size = 20,
+  shape = 'round',
   className,
 }: {
   readonly initial: string
   /** 1..10 - `--chip-1` to `--chip-10`. */
   readonly hue: number
   readonly size?: number
+  readonly shape?: 'round' | 'square'
   readonly className?: string
 }) => (
   <span
     aria-hidden="true"
-    className={`grid flex-none place-items-center rounded-full font-semibold ${className ?? ''}`}
+    data-chip-shape={shape}
+    className={`grid flex-none place-items-center font-semibold ${shape === 'round' ? 'rounded-full' : 'rounded-[4px]'} ${className ?? ''}`}
     style={{
       width: size,
       height: size,

@@ -17,7 +17,9 @@ import { PANEL_IN_FLOW_MIN } from '../../../../../../lib/workspace/routes'
  * (`project-shell.tsx`) and it learns of this drawer through
  * `lib/workspace/drawer.ts`, published while mounted.
  *
- * Head: the title at 15px/500 with a meta line, and ✕. Body: the scrolling
+ * Head: an optional lead (the Characters drawer's 32px portrait thumbnail)
+ * before the title at 15px/500 with a meta line (a string, or nodes when a
+ * ref in it is a link), the caller's actions beside it, and ✕. Body: the scrolling
  * column, `0 18px 20px`, 18px between sections. Foot: the caller's - the
  * README's "destructive action on the left and Cancel / Save on the
  * right". Escape closes.
@@ -35,6 +37,8 @@ export const DrawerShell = ({
   title,
   meta,
   label,
+  lead,
+  actions,
   onClose,
   footer,
   children,
@@ -42,9 +46,13 @@ export const DrawerShell = ({
   /** Which route's slot to fill: `characters` portals into `#characters-drawer`. */
   readonly route: 'characters' | 'locations' | 'research'
   readonly title: string
-  readonly meta: string
+  readonly meta: ReactNode
   /** The `aria-label`; `data-<route>-drawer` carries it too, for the walks. */
   readonly label: string
+  /** Drawn before the title column: a small thumbnail. */
+  readonly lead?: ReactNode
+  /** Ghost buttons drawn between the title column and ✕: `Ask`, `Open in script`. */
+  readonly actions?: ReactNode
   readonly onClose: () => void
   readonly footer: ReactNode
   readonly children: ReactNode
@@ -85,12 +93,14 @@ export const DrawerShell = ({
       className={`folio-drawer ${inFlow ? 'relative' : 'absolute inset-y-0 right-0'} z-[7] flex min-h-0 flex-none flex-col`}
     >
       <div className="flex flex-none items-start gap-[10px] pb-[12px] pl-[18px] pr-[14px] pt-[16px]">
+        {lead === undefined ? null : <div className="flex-none pt-[1px]">{lead}</div>}
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
           <span className="text-15 font-medium tracking-title">{title}</span>
-          <span className="text-11-5 text-ink3" data-drawer-meta>
+          <span className="flex flex-wrap items-center gap-x-[4px] text-11-5 text-ink3" data-drawer-meta>
             {meta}
           </span>
         </div>
+        {actions === undefined ? null : <div className="flex flex-none items-center gap-[4px] pt-[1px]">{actions}</div>}
         <button
           type="button"
           title="Close"

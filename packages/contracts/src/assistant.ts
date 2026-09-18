@@ -3,7 +3,9 @@ import { z } from 'zod'
 import {
   AssistantChatIdSchema,
   AssistantMessageIdSchema,
+  CharacterIdSchema,
   EpisodeIdSchema,
+  LocationIdSchema,
   ProjectIdSchema,
   UserIdSchema,
 } from './ids'
@@ -65,3 +67,48 @@ export const AssistantMessageSchema = z.object({
 })
 
 export type AssistantMessage = z.infer<typeof AssistantMessageSchema>
+
+/**
+ * What a turn reads. `episode` is the panel's standing since 2026-09-16 -
+ * one episode's script. `project` is every episode, in order, with
+ * `[E2 Sc 9]` markers so an answer can cite across them; the Characters
+ * route sends it (ruled 2026-09-17: the assistant may read the whole
+ * project on `/characters`) and the Locations route since 2026-09-18 (the
+ * same ruling, with the location records beside the cast); only those two,
+ * because the widening is per route and AGENTS.md puts every widening
+ * behind a question.
+ */
+export const ASK_SCOPES = ['episode', 'project'] as const
+
+export type AskScope = (typeof ASK_SCOPES)[number]
+
+export const AskScopeSchema = z.enum(ASK_SCOPES)
+
+/**
+ * What the writer has open: the Characters drawer's record, or - since the
+ * Locations rebuild (ruled 2026-09-18: the assistant reads the location
+ * records on `/locations`) - the Locations drawer's. The server builds the
+ * Focus block from the id (name, spellings, the record as written, the
+ * counts) so the model knows which person "she" or which place "there"
+ * is; a stale id is no block and no error.
+ */
+export const AskFocusSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('character'), id: CharacterIdSchema }),
+  z.object({ kind: z.literal('location'), id: LocationIdSchema }),
+])
+
+export type AskFocus = z.infer<typeof AskFocusSchema>
+
+/** The request body the streaming route reads (`POST /api/assistant`). */
+export const AskInputSchema = z.object({
+  projectId: z.string(),
+  episode: z.string(),
+  chatId: AssistantChatIdSchema,
+  message: z.string().trim().min(1).max(ASSISTANT_MESSAGE_MAX),
+  scope: AskScopeSchema.default('episode'),
+  focus: AskFocusSchema.optional(),
+  /** The Locations route's turn: the location records go into the system block beside the cast (ruled 2026-09-18). Project scope only. */
+  places: z.boolean().optional(),
+})
+
+export type AskRequest = z.input<typeof AskInputSchema>

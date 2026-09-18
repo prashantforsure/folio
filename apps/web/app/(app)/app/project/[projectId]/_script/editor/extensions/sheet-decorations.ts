@@ -1,5 +1,7 @@
+import type { CueBookEntry } from '@folio/contracts'
+import { hueOfColor } from '@folio/contracts'
 import type { MeasurementRecord, ScreenplayNodeType, SheetSpec } from '@folio/script'
-import { resolveSheet } from '@folio/script'
+import { canonicalKey, readCue, resolveSheet } from '@folio/script'
 import { Extension, getChangedRanges } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { EditorState, Transaction } from '@tiptap/pm/state'
@@ -48,7 +50,12 @@ import { UNRESOLVED_LABEL } from './mention'
  *   labels    a node decoration on every mention carrying its current
  *             label, which is what makes `mention.ts`'s node view redraw
  *             when the label book changes - and the comment block's
- *             `Note · not exported` label as a widget.
+ *             `Note · not exported` label as a widget. Since the Characters
+ *             rebuild (phase 3) also a node decoration on every cue block
+ *             carrying the record it resolves to (`data-character-id`, the
+ *             name, the scene count, `--cue` in the record's colour) or
+ *             `data-cue-unresolved` - read-only, no attribute on the node,
+ *             so the hover card and `Colour cues` cost the script nothing.
  *   threads   a host element after every block that carries a comment
  *             thread, and one for the new-thread composer, into which React
  *             portals the cards (`sheet/thread-cards.tsx`). `stopEvent` and
@@ -65,6 +72,10 @@ export type SheetInputs = {
   readonly record: MeasurementRecord | null
   readonly paged: boolean
   readonly labelFor: LabelFor
+  /** The record a cue's canonical key resolves to (`lib/script/server.ts`, `draft.cues`), or nothing. */
+  readonly cueFor: (key: string) => CueBookEntry | undefined
+  /** `Colour cues`: each cue in its record's colour. */
+  readonly colourCues: boolean
   /** Thread ids by the node id they anchor to. */
   readonly threadsByNode: ReadonlyMap<string, readonly string[]>
   /** The node a new-thread composer is open under, or null. */
@@ -270,11 +281,28 @@ const commentLabelElement = (): HTMLElement => {
   return label
 }
 
+/** The cue block's identity: which record it resolves to, or that it resolves to none. */
+const cueDecorationFor = (block: ProseMirrorNode, pos: number, inputs: SheetInputs): Decoration | null => {
+  if (block.type.name !== 'character') return null
+  const key = canonicalKey(readCue(block.textContent).name)
+  if (key === '') return null
+  const entry = inputs.cueFor(key)
+  if (entry === undefined) return Decoration.node(pos, pos + block.nodeSize, { 'data-cue-unresolved': 'true' })
+  return Decoration.node(pos, pos + block.nodeSize, {
+    'data-character-id': entry.id,
+    'data-cue-name': entry.name,
+    'data-cue-scenes': String(entry.appearances),
+    style: inputs.colourCues ? `--cue: var(--chip-${String(hueOfColor(entry.color))})` : '',
+  })
+}
+
 const labelDecorationsFor = (block: ProseMirrorNode, pos: number, inputs: SheetInputs): readonly Decoration[] => {
   const out: Decoration[] = []
   if (block.type.name === 'comment') {
     out.push(Decoration.widget(pos + 1, commentLabelElement, { side: -1, key: 'comment-label' }))
   }
+  const cue = cueDecorationFor(block, pos, inputs)
+  if (cue !== null) out.push(cue)
   block.forEach((child, offset) => {
     const mention = mentionAttrsOf(child)
     if (mention === null) return
@@ -396,7 +424,13 @@ const apply = (tr: Transaction, previous: SheetState, state: EditorState, contex
   const inputs = meta === undefined ? previous.inputs : { ...previous.inputs, ...meta }
   const everything =
     meta !== undefined &&
-    (meta.sheet !== undefined || meta.labelFor !== undefined || meta.paged !== undefined || meta.threadsByNode !== undefined || meta.composerAt !== undefined)
+    (meta.sheet !== undefined ||
+      meta.labelFor !== undefined ||
+      meta.paged !== undefined ||
+      meta.threadsByNode !== undefined ||
+      meta.composerAt !== undefined ||
+      meta.cueFor !== undefined ||
+      meta.colourCues !== undefined)
   if (everything) return build(state, inputs, context)
 
   const { doc } = state
@@ -430,7 +464,7 @@ const apply = (tr: Transaction, previous: SheetState, state: EditorState, contex
       }
       handles = replaceWithin(handles, doc, pos, end, [handleDecorationFor(block, pos, idOf, context.onHandleMenu)])
       text = replaceWithin(text, doc, pos + 1, end - 1, textDecorationsFor(block, pos))
-      labels = replaceWithin(labels, doc, pos + 1, end - 1, labelDecorationsFor(block, pos, inputs))
+      labels = replaceWithin(labels, doc, pos, end, labelDecorationsFor(block, pos, inputs))
       threads = replaceWithin(threads, doc, end, end, threadDecorationsFor(block, pos, inputs, context.hosts))
     })
   }
@@ -450,7 +484,16 @@ const apply = (tr: Transaction, previous: SheetState, state: EditorState, contex
 const letterInputs = (): SheetInputs => {
   const letter = resolveSheet('hollywood')
   if (!letter.ok) throw new Error('Folio: US Letter must resolve.')
-  return { sheet: letter.value, record: null, paged: true, labelFor: () => undefined, threadsByNode: new Map(), composerAt: null }
+  return {
+    sheet: letter.value,
+    record: null,
+    paged: true,
+    labelFor: () => undefined,
+    cueFor: () => undefined,
+    colourCues: false,
+    threadsByNode: new Map(),
+    composerAt: null,
+  }
 }
 
 /** One of the sets, presented to ProseMirror as its own plugin so the sets are never merged by hand. */
@@ -491,6 +534,6 @@ export const SheetDecorations = Extension.create<SheetDecorationsOptions>({
   },
 })
 
-/** Hand the page new inputs. A new sheet, label book, thread map or composer rebuilds every set; a new record re-places the dividers. */
+/** Hand the page new inputs. A new sheet, label book, cue book, thread map or composer rebuilds every set; a new record re-places the dividers. */
 export const sheetInputsTransaction = (state: EditorState, inputs: Partial<SheetInputs>): Transaction =>
   state.tr.setMeta(sheetKey, inputs).setMeta('addToHistory', false)

@@ -1,4 +1,5 @@
 import type {
+  CueBookEntry,
   DocumentRecord,
   Episode,
   Project,
@@ -7,10 +8,11 @@ import type {
   TitlePage,
   Version,
 } from '@folio/contracts'
-import type { ProjectScope } from '@folio/db'
+import type { CharacterRecordRow, ProjectScope } from '@folio/db'
 import {
   commitDerivation,
   ensureSceneRecords,
+  listCharacterRecords,
   listOpenThreads,
   listRevisions,
   listVersions,
@@ -25,6 +27,7 @@ import {
   writeMeasurement,
 } from '@folio/db'
 import type {
+  CharacterRecord,
   Derivation,
   DeriveError,
   LockedPage,
@@ -32,10 +35,11 @@ import type {
   RevisionColour,
   ScreenplayNode,
 } from '@folio/script'
-import { countDerivationIds, derive, paginate, renderableNodes } from '@folio/script'
+import { canonicalKey, countDerivationIds, derive, paginate, readCue, renderableNodes } from '@folio/script'
 import { after } from 'next/server'
 import { createHash } from 'node:crypto'
 
+import { healNameCues } from '../characters/heal'
 import type { MeasureOutcome } from './result'
 import type { ScriptStats } from './stats'
 
@@ -228,8 +232,12 @@ const storeMeasurement = async (
 export const rederiveProject = async (
   scope: ProjectScope,
 ): Promise<{ readonly ok: true; readonly derivation: Derivation } | { readonly ok: false; readonly error: DeriveError | { readonly kind: 'unreadable' } }> => {
-  const [all, previous] = await Promise.all([readProjectScreenplayNodes(scope), readDerivationInput(scope)])
+  const [all, previousRaw] = await Promise.all([readProjectScreenplayNodes(scope), readDerivationInput(scope)])
   if (!all.ok) return { ok: false, error: { kind: 'unreadable' } }
+  // A record with no bound spelling gets its name's before the pass reads it
+  // (`lib/characters/heal.ts`), so its own cue resolves exactly rather than
+  // proposing; the binding lands with the mints below.
+  const { entities: previous, healed } = healNameCues(previousRaw)
   const needed = countDerivationIds(all.value, previous)
   const freshIds = Array.from({ length: needed }, () => crypto.randomUUID())
   const pass = derive(all.value, previous, { freshIds })
@@ -238,7 +246,7 @@ export const rederiveProject = async (
   // nothing else creates it. See `@folio/db`'s `scenes.ts`. Minted records
   // and scene rows are independent tables, so they land together.
   await Promise.all([
-    persistMintedRecords(scope, pass.value.minted),
+    persistMintedRecords(scope, pass.value.minted, healed),
     ensureSceneRecords(scope, pass.value.entities.scenes),
   ])
   await commitDerivation(scope, pass.value.entities)
@@ -277,8 +285,11 @@ export const deriveSpeculatively = (
     const at = first < 0 ? kept.length : first
     nodes = [...kept.slice(0, at), ...replacing.nodes, ...kept.slice(at)]
   }
-  const needed = countDerivationIds(nodes, reads.previous)
-  const pass = derive(nodes, reads.previous, {
+  // The same heal `rederiveProject` applies, so a speculative count agrees
+  // with what the next real pass will write. Nothing is persisted here.
+  const previous = healNameCues(reads.previous).entities
+  const needed = countDerivationIds(nodes, previous)
+  const pass = derive(nodes, previous, {
     freshIds: Array.from({ length: needed }, () => crypto.randomUUID()),
   })
   return pass.ok ? pass.value : null
@@ -354,6 +365,22 @@ export const deferAfterSave = (
 export const statsFor = (nodes: readonly ScreenplayNode[], derivation: Derivation | null): ScriptStats =>
   statsOf(nodes, derivation)
 
+/**
+ * The cue book the editor colours and labels cues with: every live record
+ * under each of its bound spellings' canonical keys - the record rows for
+ * the colour and the scene count, the derivation input (already read) for
+ * the bound spellings. Read once per load: a record minted by a save shows
+ * its identity on the next load, not before - flagged, and cheap to change
+ * if it grates.
+ */
+export const cueBookOf = (records: readonly CharacterRecordRow[], previous: readonly CharacterRecord[]): readonly CueBookEntry[] =>
+  records.flatMap((record) => {
+    const bound = previous.find((entry) => entry.id === record.id)?.authored.boundCues ?? []
+    return [...new Set([canonicalKey(record.name), ...bound.map((cue) => canonicalKey(readCue(cue).name))])]
+      .filter((key) => key !== '')
+      .map((key) => ({ key, id: record.id, name: record.name, color: record.color, appearances: record.derived?.appearances ?? 0 }))
+  })
+
 // ---------------------------------------------------------------------------
 // What the route reads
 // ---------------------------------------------------------------------------
@@ -367,6 +394,8 @@ export type ScriptLoad =
       readonly measurement: MeasureOutcome
       readonly stats: ScriptStats
       readonly labels: readonly MentionLabel[]
+      /** Every record and its bound spellings, keyed by canonical key - what the editor colours and labels a cue with. */
+      readonly cues: readonly CueBookEntry[]
       /** What the client needs to run the engine itself and get the server's answer. */
       readonly lockedPages: readonly LockedPage[]
       readonly titlePage: TitlePage | null
@@ -395,13 +424,14 @@ export const loadScript = async (
   ])
   if (document === null) return { state: 'empty', titlePage }
 
-  const [read, inputs, revisions, versions, threads, reads] = await Promise.all([
+  const [read, inputs, revisions, versions, threads, reads, records] = await Promise.all([
     readScreenplayNodes(scope, document.id),
     readMeasureInputs(scope, episode),
     listRevisions(scope, episode.id),
     listVersions(scope, document.id, 20),
     listOpenThreads(scope),
     readDerivationReads(scope),
+    listCharacterRecords(scope),
   ])
   if (!read.ok) {
     return {
@@ -421,6 +451,7 @@ export const loadScript = async (
     measurement,
     stats: statsOf(nodes, deriveSpeculatively(reads)),
     labels: inputs.labels,
+    cues: cueBookOf(records, reads.previous.characters),
     lockedPages: inputs.lockedPages,
     titlePage,
     threads: threads.filter(
