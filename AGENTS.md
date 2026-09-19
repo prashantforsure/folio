@@ -157,6 +157,7 @@ Stop and ask before you:
 | 11 | The revision colour sequence past green (`nextRevisionColour` refuses at green) | Issuing a sixth revision |
 | 12 | Locked-page numbering past the last lock — a judgement call is implemented (the sequence continues unprotected), not ruled | Export, revision compare |
 | 13 | Whether an assistant message costs credits, and how much. The panel is real and read-only (2026-09-16) and writes no ledger row; the Characters drawer's `Draft from the script` and `Check for contradictions` (2026-09-18) take the same standing | Charging the assistant; "cost named before it is spent" on its send button and on the two Characters buttons; a rate limit on either |
+| 14 | The Production feature set's escalations — the credit unit and margin, refund on cancel-while-running, the clip-length source (registry vs the `CLIP_SECONDS` CHECK), the film-settings shape, where kept Looks live, comments on takes — each listed with a recommendation in `docs/production/06-decisions.md` §3 (D-1 … D-21) | Production phase 1 (D-4, D-10, D-13), phase 3 (D-6, D-9), phase 4 (D-18) |
 
 ---
 
@@ -288,7 +289,12 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   in four phases to a written plan, recorded pass by pass in `docs/build-decisions.md`
   ("Characters rebuild") - **and ruled 2026-09-18, `Route - Locations v2.dc.html` no longer binds
   the Locations route** (the same audit found the same shape; "Locations rebuild" in
-  `docs/build-decisions.md`). The README's language, tokens and patterns still apply on both.
+  `docs/build-decisions.md`); **the Timeline's followed on 2026-09-18** ("Timeline rebuild"); **and
+  ruled 2026-09-19, `Route - Production v2.dc.html` no longer binds the Production route** — the
+  feature is re-specified end to end in `docs/production/` (PRD, design spec, data model, pipeline,
+  phases, decisions) and its body is rebuilt to Claude Design frames drawn from
+  `docs/production/02-design-spec.md`, one phase per session. The README's language, tokens and
+  patterns still apply on all four.
 - **Icons are inline stroke SVGs** from `packages/ui/src/icons.tsx` - 18px, 1.35 stroke, the
   mockups' own paths. The routes built before the redesign still print the older Unicode glyph
   set as text: `✎ ◍ ⌖ ◷ ▧ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝` (`⧗` left with Beats, `◈` with Bible, `◎` with
@@ -368,6 +374,14 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   ledger entry.
 - `blocked` means moderation refused a shot, and it must show **the refusal reason in the
   writer's terms**.
+- **The generation pipeline is specified, not improvised** (`docs/production/04-generation-pipeline.md`,
+  2026-09-19): every job carries a provider-neutral `spec` (the assembled prompt, role-tagged
+  reference inputs, the film-settings snapshot, a `source_hash`) and a `route` (what the worker
+  chose); the registry in `packages/contracts` is the **only** place a model is named; the writer
+  sees tiers (`Draft · Standard · Cinema`). Consistency is reference discipline: the kept character
+  Look, the location plate and the Art Style prefix go into every generation, and an output whose
+  `source_hash` no longer matches is **stale**, never silently regenerated. Cost is quoted from the
+  registry at click, held on submit, settled on success, refunded or released otherwise.
 
 ### Tenancy and data access
 
@@ -515,7 +529,9 @@ There is no case where an empty state is optional. A new project is entirely emp
 ## Feature workflow
 
 1. **Locate the route** in the route document and read its design bundle. Where two bundles
-   disagree on chrome, `Route - Script.dc.html` wins.
+   disagree on chrome, `Route - Script.dc.html` wins. For the four routes whose bundle is retired
+   (Characters, Locations, Timeline, Production) the written plan is the spec; for Production that
+   is `docs/production/` — read its `README.md` and the one phase you are executing, nothing more.
 2. **Check the open decisions table.** If the feature depends on one, stop and ask — do not pick.
 3. **Schema first** if the data is new: a forward-only drizzle-kit migration, in the repo. Never
    the Supabase dashboard.

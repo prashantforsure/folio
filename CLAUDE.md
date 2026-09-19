@@ -14,10 +14,13 @@ sidebar and header, assistant panel), **Script**, **Outline**,
 **Storyboard**, **Production**, **Characters**, **Locations**, **Research** (the last built from
 nothing: no body, table or contract existed before its pass) and **Scenes** (2026-09-17, ruled off
 its mockup onto the Storyboard's canvas, with a reading modal) and **Timeline** (2026-09-18, all
-five phases — every route is on the shell now). **Three mockups are retired:** Characters
+five phases — every route is on the shell now). **Four mockups are retired:** Characters
 (2026-09-17), Locations and Timeline (both 2026-09-18) were rebuilt to written plans instead — the
 "Characters rebuild", "Locations rebuild" and "Timeline rebuild" sections of
-`docs/build-decisions.md` are their spec.
+`docs/build-decisions.md` are their spec — and **Production (2026-09-19)**, whose v2 body still
+runs but is superseded by the feature set in `docs/production/` (a PRD, a design spec for Claude
+Design mockups, the data model, the generation pipeline, six phases built one session each, a
+decisions log). Its `README.md` is the entry point; nothing in that set is built yet.
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -45,6 +48,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 | --- | --- |
 | build a route or touch UI | [docs/ui design/README.md](docs/ui%20design/README.md), then that route's `Route - <name> v2.dc.html` |
 | change a built route | its phase in [docs/build-decisions.md](docs/build-decisions.md) — `grep -n '^## ' docs/build-decisions.md` |
+| touch the Production route, its worker, or any `✦` generation | [docs/production/README.md](docs/production/README.md) first — the feature is built in phases across sessions; that index says which of its seven files to read for the phase. The old `Route - Production v2.dc.html` is retired by `docs/production/02-design-spec.md` |
 | change node identity or the id shape | [ADR 0001](docs/adr/0001-node-identity.md) — preamble first; both rulings are reversible |
 | touch `episodes` or join on one | [ADR 0002](docs/adr/0002-episode-identity.md) — `ep_NNN` is a slug over an opaque key |
 | add a table, or ask what may write one | [packages/db/src/schema/index.ts](packages/db/src/schema/index.ts) — every table classified |
@@ -79,7 +83,9 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   `_storyboard/view-state.tsx` and `_scenes/view-state.tsx`, tabs as buttons in the same slot, the URL unchanged. The assistant (`lib/assistant/`,
   `app/api/assistant/route.ts`) and share links (`lib/share/`, `app/share/[token]/`) are cross-route
   features built with the redesign.
-- `apps/worker` — empty on purpose. Do not create `apps/sync/`.
+- `apps/worker` — empty today; Production phase 1 (`docs/production/05-phases.md`) builds it as the
+  BullMQ consumer AGENTS.md names, behind an all-or-none `REDIS_URL` + `FAL_KEY` env block. Do not
+  create `apps/sync/`.
 
 Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
 `docs/build-decisions.md`):
@@ -124,6 +130,13 @@ Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
   still paginates in Courier; `lib/script/pages.ts` turns the record into `Page N` dividers and
   the E2E golden diff still reads `[data-page-map]`. The Outline still draws its old prose sheet
   until its pass.
+- **Production is a pipeline of jobs, and consistency is reference discipline.** A scene's derived
+  shots (the Storyboard's rows) group into reels of a fixed length; each reel walks Scene still →
+  Performance (derived, read-only) → Shots → Frames (takes) → Clip (versions), every generation a
+  `jobs` row with its cost named before it is spent, conditioned on the same kept character Look,
+  location plate and Art Style prefix, and marked stale by `source_hash` when the page or a
+  reference changes. Tiers (`Draft · Standard · Cinema`), never model names, in UI or schema — the
+  registry is the one place a model is named. The whole of it: `docs/production/`.
 - **The assistant needs `ANTHROPIC_API_KEY`** (optional, like the `R2_*` block): unset, the panel
   draws its composer disabled and says so. Model id is `lib/assistant/model.ts`, not env.
   Bible was a fourth cut route, but unlike these its five tables had no other reader once the
@@ -174,6 +187,6 @@ Traps that produce a false reading:
 ## Working here
 
 - **Escalate the open decisions in AGENTS.md; do not resolve them.** They're one table there
-  (thirteen rows, four struck through as ruled or moot) — read it before touching any of them.
+  (fourteen rows, four struck through as ruled or moot; row 14 points at the Production feature set's own list) — read it before touching any of them.
 - **Any dependency needs approval, every time.** `packages/script` has none — keep it that way.
 - Report literally: paste failing output, name assumptions, flag any rule you were tempted to break.
