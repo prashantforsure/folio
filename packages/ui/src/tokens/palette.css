@@ -516,6 +516,31 @@
 }
 
 /*
+ * The character card's face (2026-09-21, the card redesign - "Characters,
+ * card and connector redesign" in `docs/build-decisions.md`): a deep tint of
+ * the record's hue, dark enough on either theme that the name and sub-line
+ * are printed white straight on it - the light theme lifts it a little but
+ * never past the point white ink needs. `--cast-l*` stays the graph tile's
+ * and Locations' stack; only the card's face reads these.
+ */
+:root {
+  --face-l1: 0.36;
+  --face-c1: 0.08;
+  --face-l2: 0.19;
+  --face-c2: 0.05;
+}
+
+[data-theme='light'] {
+  --face-l1: 0.42;
+  --face-l2: 0.24;
+}
+
+[data-theme='dark'] {
+  --face-l1: 0.36;
+  --face-l2: 0.19;
+}
+
+/*
  * The Research route's tokens. `docs/ui design/Route - Research v2.dc.html`
  * declares one beyond the shared block - `--mark`, the amber wash behind a
  * highlighted line in a source - and writes two families of hue inline in

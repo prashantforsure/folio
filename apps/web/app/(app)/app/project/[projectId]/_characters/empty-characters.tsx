@@ -9,16 +9,17 @@ import type { Derivable } from '../../../../../../lib/characters/server'
 import type { Run } from './characters-workspace'
 
 /**
- * The empty state - `docs/ui design/README.md`, "Empty states": "A single
- * 440px card: heading, one paragraph of plain explanation, an accent AI
- * action plus a manual alternative, and a one-line caveat. Never an
- * illustration." `Route - Characters v2.dc.html` draws it with a mono
- * block of the three busiest cues (`MEERA · 79 scenes`, `… 8 more`),
- * `✦ Derive 11 characters` and `＋ By hand`, and the caveat `Deriving
- * costs nothing and never changes the script.`
+ * The empty state: a single 440px card - heading, one paragraph of plain
+ * explanation, an accent AI action plus a manual alternative, and a
+ * one-line caveat; no illustration (none exists, and the design's rule
+ * was never one). The fourth pass's copy (2026-09-20): `No characters
+ * yet` / `Read the script and every character cue becomes a card on the
+ * canvas - or add one by hand.` / `✦ Read the script` · `＋ By hand`, over
+ * a mono block of the three busiest cues (`MEERA · 79 scenes`, `… 8 more`)
+ * and the caveat `Reading costs nothing and never changes the script.`
  *
  * Every number is the speculative pass's (`loadCharacters`'s `derivable`).
- * With nothing derivable - no script, or a script with no cue - the derive
+ * With nothing derivable - no script, or a script with no cue - the read
  * button is not drawn and the paragraph says why; the mono block goes too.
  */
 export const EmptyCharacters = ({
@@ -49,8 +50,8 @@ export const EmptyCharacters = ({
           <span className="text-17 font-medium tracking-title">No characters yet</span>
           <span className="text-13 leading-[1.55] text-ink2" style={{ textWrap: 'pretty' }}>
             {derivable.count > 0
-              ? `Your script has ${String(derivable.count)} distinct character ${derivable.count === 1 ? 'cue' : 'cues'}. Derive them and each becomes a record you can edit, connect and cast.`
-              : 'Write a character cue in the script and it becomes a record here - or add one by hand.'}
+              ? 'Read the script and every character cue becomes a card on the canvas - or add one by hand.'
+              : 'Write a character cue in the script and it becomes a card here - or add one by hand.'}
           </span>
         </div>
         {derivable.top.length > 0 ? (
@@ -69,7 +70,7 @@ export const EmptyCharacters = ({
         <div className="flex gap-[8px]">
           {derivable.count > 0 ? (
             <button type="button" onClick={derive} data-derive-now className="folio-accent-button h-[36px] flex-1 justify-center rounded-[10px] text-13">
-              <span className="folio-mark">✦</span> Derive {derivable.count} {derivable.count === 1 ? 'character' : 'characters'}
+              <span className="folio-mark">✦</span> Read the script
             </button>
           ) : null}
           <button
@@ -84,7 +85,9 @@ export const EmptyCharacters = ({
             ＋ By hand
           </button>
         </div>
-        <span className="text-11-5 text-ink3">Deriving costs nothing and never changes the script.</span>
+        <span className="text-11-5 text-ink3">
+          {derivable.count > 0 ? `${String(derivable.count)} distinct ${derivable.count === 1 ? 'cue' : 'cues'} · reading costs nothing and never changes the script.` : 'Reading costs nothing and never changes the script.'}
+        </span>
       </div>
     </div>
   )

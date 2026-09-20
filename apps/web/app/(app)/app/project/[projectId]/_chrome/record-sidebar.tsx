@@ -25,7 +25,8 @@ import { count } from '../../../../../../lib/workspace/format'
  *                      page · 6 of 8`, both derived, neither a status the
  *                      writer sets by hand
  *
- * The Characters route sits on these since 2026-09-17 (`_characters/cast-sidebar.tsx`).
+ * The Characters route sat on these from 2026-09-17 until its fourth pass
+ * (2026-09-20) took its sidebar away; Locations' sidebar draws them.
  */
 
 /** The title row: the project's name and `+`. */

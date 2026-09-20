@@ -98,11 +98,19 @@ export const readDerivationInput = async (scope: ProjectScope): Promise<DerivedE
     list.push(row.cue)
     cuesByCharacter.set(row.characterId, list)
   }
+  // One row per pair since `0024`; the pure core still reads one directed
+  // entry per side, so each row hands `a` its `aIs` and `b` its `bIs`. A
+  // blank side is the writer's silence on that direction, not a relation.
   const relationshipsByCharacter = new Map<string, CharacterRecord['authored']['relationships'][number][]>()
+  const relate = (id: string, other: string, what: string): void => {
+    if (what.trim() === '') return
+    const list = relationshipsByCharacter.get(id) ?? []
+    list.push({ other: other as CharacterId, what })
+    relationshipsByCharacter.set(id, list)
+  }
   for (const row of relationshipRows) {
-    const list = relationshipsByCharacter.get(row.characterId) ?? []
-    list.push({ other: row.otherId as CharacterId, what: row.what })
-    relationshipsByCharacter.set(row.characterId, list)
+    relate(row.characterId, row.otherId, row.aIs)
+    relate(row.otherId, row.characterId, row.bIs)
   }
 
   const characterRecords: CharacterRecord[] = characterRows

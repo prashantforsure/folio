@@ -23,12 +23,14 @@ export const MAX_OUTPUT_TOKENS = 16_000
 export const CONTEXT_CHAR_CAP = 400_000
 
 /**
- * The Characters route's model actions (`lib/characters/model-actions.ts`):
- * the scenes one character is in, capped smaller than a chat's script
- * because they are one person's evidence, not the whole draft; a short
- * answer for a draft, a longer one for a list of findings; a timeout under
- * most platform proxies'; and at most eight findings per check, the
- * strongest first.
+ * A per-record model action's caps, once the Characters drawer's
+ * `✦ Draft from the script` / `✦ Check for contradictions`
+ * (`lib/characters/model-actions.ts`, removed with the fourth Characters
+ * pass, 2026-09-20): the scenes one character is in, capped smaller than
+ * a chat's script because they are one person's evidence, not the whole
+ * draft; a short answer for a draft, a longer one for a list of findings;
+ * a timeout under most platform proxies'; and at most eight findings per
+ * check, the strongest first. Kept for the next action of that shape.
  */
 export const EVIDENCE_CHAR_CAP = 160_000
 

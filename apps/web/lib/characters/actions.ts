@@ -1,33 +1,32 @@
 'use server'
 
 import {
+  CanvasPositionSchema,
   CharacterIdSchema,
   CharacterProfileEditSchema,
   NewCharacterSchema,
   PORTRAIT_MAX_BYTES,
   PORTRAIT_TYPES,
+  RelationshipInputSchema,
 } from '@folio/contracts'
 import type { PortraitType } from '@folio/contracts'
-import { hueOfColor } from '@folio/contracts'
 import {
   bindCue,
   createCharacterRecord,
   deleteAbsentCharacter,
   deleteBlankCharacter,
+  deleteRelationship as deleteRelationshipRow,
   deleteResolveDecisions,
   listBoundCues,
   listCharacterRecords,
   listEpisodes,
   listOpenCueRows,
   listResolveDecisions,
-  listSceneIndex,
   mergeCharacterRecords,
-  moveBoundCue,
+  placeCharacter,
   proposalTargetKey,
   readDerivationInput,
   readDocumentByKind,
-  readMentionLabels,
-  readProjectScreenplayNodes,
   readScreenplayNodes,
   recordDecisionByKey,
   recordResolveDecisions,
@@ -35,39 +34,37 @@ import {
   rewriteCueNodes,
   setPortraitKey,
   snapshotVersion,
-  splitBoundCue,
   unbindCue,
   updateCharacterProfile,
+  upsertRelationship,
 } from '@folio/db'
 import type { CueNodeRewrite, ProjectScope } from '@folio/db'
 import type { CharacterId, NodeId, ProposalTarget, ResolveSubject } from '@folio/script'
-import { canonicalKey, cueSpelling, matchCharacters, readCue, renameCharacterCues, revertCueRewrites, sidesFor } from '@folio/script'
+import { canonicalKey, cueSpelling, matchCharacters, readCue, renameCharacterCues, revertCueRewrites } from '@folio/script'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { isRefusal, openProject } from '../script/gate'
 import { rederiveProject } from '../script/server'
 import { deleteObject, publicUrl, putObject, storageAvailable } from '../storage/r2'
-import { leastUsedColor } from './cast'
-import { sceneRefOf } from './figures'
+import { orderInput, orderPair } from './relationships'
 import type {
-  BindResult,
   CreateResult,
   DeleteResult,
   DeriveResult,
   MergeResult,
-  MoveResult,
   PairResult,
+  PlaceResult,
   PortraitResult,
+  RelationshipResult,
   RenamePreview,
   RenameRestore,
   RenameResult,
   ResolveResult,
   SavedResult,
-  SidesResult,
   UndoRenameResult,
 } from './result'
-import { introDecisionKey, pairDecisionKey } from './server'
+import { pairDecisionKey, relationshipOf } from './server'
 
 /**
  * The Characters route's writes.
@@ -107,11 +104,10 @@ import { introDecisionKey, pairDecisionKey } from './server'
  * ## Two records, one person
  *
  * `decidePair` answers the queue's pair row (`similarRecords`): `merge` is
- * the same merge the drawer's foot does; `different` writes a
+ * the same merge the rename's `taken` door does; `different` writes a
  * `record:<a>:<b>` rejection through `recordDecisionByKey` so the pair is
- * never asked about again. `dismissIntroFinding` writes `intro:<id>:<node>`
- * the same way for "speaks before introduced". Neither key is ever a queue
- * row's, so a pass never sees them.
+ * never asked about again. The key is never a queue row's, so a pass never
+ * sees it.
  *
  * ## Walk-on is one act, and every act can be taken back
  *
@@ -128,12 +124,19 @@ import { introDecisionKey, pairDecisionKey } from './server'
  * an accepted spelling is unbound, a `New character` that is still blank is
  * deleted, and the project re-derives so the cue is asked about again.
  *
- * ## The alias table's other doors
+ * ## The alias table is written by the queue
  *
- * `moveAlias` takes a spelling from whoever holds it (`Move it here` on a
- * `taken` bind); `splitOff` gives a bound spelling a record of its own
- * (three writes in one statement so nothing is stranded); `mergeCharacters`
- * is the door every `taken` refusal used to name in prose.
+ * Since the fourth pass (2026-09-20) the only doors into the alias table
+ * are the queue's: `resolveCue` binds a spelling, `revokeDecision` unbinds
+ * it, `mergeCharacters` (the rename's `taken` door, and the queue's pair
+ * row) moves every spelling to the winner. The drawer's bind / move /
+ * split / unbind doors went with the alias table.
+ *
+ * ## The canvas and the graph
+ *
+ * `placeCharacterOnCanvas` writes where a card was dropped; `saveRelationship`
+ * and `deleteRelationship` write one authored row per pair. None of the
+ * three re-derives: nothing derived reads them.
  *
  * ## A portrait goes through the action, not past it
  *
@@ -443,53 +446,6 @@ export const decidePair = async (
   return { status: 'different' }
 }
 
-/** `It's deliberate` on "speaks before introduced": an accepted `intro:<id>:<node>` row, read back by the loader. */
-export const dismissIntroFinding = async (projectId: string, rawId: string, rawNode: string): Promise<SavedResult> => {
-  const id = parseId(rawId)
-  const node = z.string().uuid().safeParse(rawNode)
-  if (id === null || !node.success) return { status: 'error', message: 'That finding could not be read.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-  await recordDecisionByKey(gate.scope, introDecisionKey(id, node.data as NodeId), 'accepted', { kind: 'character', id })
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
-}
-
-/**
- * The sides: one part's speeches under their headings, read on demand for
- * the drawer's modal. A read-only server action (the `listAssistantChats`
- * precedent): the whole project's nodes through `sidesFor`, the headings
- * as refs so each group can be titled, the labels a mention run renders by.
- */
-export const readSides = async (projectId: string, rawId: string): Promise<SidesResult> => {
-  const id = parseId(rawId)
-  if (id === null) return { status: 'error', message: REFUSED_CHARACTER }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-  const { scope } = gate
-  const [records, bound, all, index, labels] = await Promise.all([
-    listCharacterRecords(scope),
-    listBoundCues(scope),
-    readProjectScreenplayNodes(scope),
-    listSceneIndex(scope),
-    readMentionLabels(scope),
-  ])
-  const record = records.find((entry) => entry.id === id)
-  if (record === undefined) return { status: 'error', message: REFUSED_CHARACTER }
-  if (!all.ok) return { status: 'error', message: 'The script could not be read.' }
-  const keys = new Set(
-    [canonicalKey(record.name), ...bound.filter((entry) => entry.characterId === id).map((entry) => canonicalKey(readCue(entry.cue).name))].filter(
-      (key) => key !== '',
-    ),
-  )
-  return {
-    status: 'sides',
-    nodes: sidesFor(all.value, keys),
-    labels: labels.map((label) => ({ entity: label.entity, id: label.id as string, label: label.label })),
-    headings: index.map(sceneRefOf),
-  }
-}
-
 export const deleteCharacter = async (projectId: string, rawId: string): Promise<DeleteResult> => {
   const id = parseId(rawId)
   if (id === null) return { status: 'error', message: REFUSED_CHARACTER }
@@ -589,103 +545,6 @@ export const removePortrait = async (projectId: string, rawId: string): Promise<
   if (pointed.previous !== null && storageAvailable()) await deleteObject(pointed.previous)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'saved', url: null }
-}
-
-// ---------------------------------------------------------------------------
-// The alias table
-// ---------------------------------------------------------------------------
-
-const CueSchema = z.string().trim().min(1).max(200)
-
-export const bindAlias = async (projectId: string, rawId: string, rawCue: string): Promise<BindResult> => {
-  const id = parseId(rawId)
-  const cue = CueSchema.safeParse(rawCue)
-  if (id === null || !cue.success) return { status: 'error', message: 'An alias is a cue spelling, up to 200 characters.' }
-  const spelling = cueSpelling(readCue(cue.data).name)
-  if (canonicalKey(spelling) === '') return { status: 'error', message: 'An alias needs at least one letter or digit.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  const outcome = await bindCue(gate.scope, id, spelling)
-  if (outcome.status === 'missing') return { status: 'error', message: REFUSED_CHARACTER }
-  if (outcome.status === 'taken') {
-    const [records, bound] = await Promise.all([listCharacterRecords(gate.scope), listBoundCues(gate.scope)])
-    const holder = records.find((entry) => entry.id === outcome.by)
-    return {
-      status: 'taken',
-      by: outcome.by,
-      name: holder?.name ?? 'another character',
-      cue: spelling,
-      last: bound.filter((entry) => entry.characterId === outcome.by).length <= 1,
-    }
-  }
-  if (outcome.status === 'bound') await rederiveProject(gate.scope)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'bound' }
-}
-
-/** `Move it here`: take a spelling from whoever holds it. Refused when it is their last. */
-export const moveAlias = async (projectId: string, rawId: string, rawCue: string): Promise<MoveResult> => {
-  const id = parseId(rawId)
-  const cue = CueSchema.safeParse(rawCue)
-  if (id === null || !cue.success) return { status: 'error', message: 'An alias is a cue spelling, up to 200 characters.' }
-  const spelling = cueSpelling(readCue(cue.data).name)
-  if (canonicalKey(spelling) === '') return { status: 'error', message: 'An alias needs at least one letter or digit.' }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  const outcome = await moveBoundCue(gate.scope, spelling, id)
-  if (outcome.status === 'missing') return { status: 'error', message: REFUSED_CHARACTER }
-  if (outcome.status === 'last') {
-    const records = await listCharacterRecords(gate.scope)
-    const holder = records.find((entry) => entry.id === outcome.by)
-    return { status: 'last', by: outcome.by, name: holder?.name ?? 'another character' }
-  }
-  if (outcome.status === 'moved') await rederiveProject(gate.scope)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'moved' }
-}
-
-/**
- * `Split off`: a bound spelling becomes a record of its own, named by that
- * spelling, coloured least-used. The script is untouched; the next pass
- * counts the cues under the new record. Refused on the record's only
- * spelling, as an unbind is.
- */
-export const splitOff = async (projectId: string, rawId: string, rawCue: string): Promise<CreateResult> => {
-  const id = parseId(rawId)
-  const cue = CueSchema.safeParse(rawCue)
-  if (id === null || !cue.success) return { status: 'error', message: REFUSED_CHARACTER }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  const records = await listCharacterRecords(gate.scope)
-  const color = leastUsedColor(records.map((record) => hueOfColor(record.color)))
-  const outcome = await splitBoundCue(gate.scope, id, cue.data, cue.data, color)
-  if (outcome.status === 'missing') return { status: 'error', message: 'That spelling is not bound here.' }
-  if (outcome.status === 'last') {
-    return { status: 'refused', message: 'That is the only spelling bound to this record. Rename the record, or merge it, instead.' }
-  }
-  await rederiveProject(gate.scope)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'created', id: outcome.id }
-}
-
-export const unbindAlias = async (projectId: string, rawId: string, rawCue: string): Promise<SavedResult> => {
-  const id = parseId(rawId)
-  const cue = CueSchema.safeParse(rawCue)
-  if (id === null || !cue.success) return { status: 'error', message: REFUSED_CHARACTER }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
-
-  const outcome = await unbindCue(gate.scope, id, cue.data)
-  if (outcome === 'missing') return { status: 'error', message: 'That spelling is not bound here.' }
-  if (outcome === 'last') {
-    return { status: 'refused', message: 'That is the only spelling bound to this record. Rename the record, or merge it, instead.' }
-  }
-  await rederiveProject(gate.scope)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
 }
 
 // ---------------------------------------------------------------------------
@@ -843,6 +702,65 @@ export const revokeDecision = async (projectId: string, rawKey: string, rawUndo:
   if (!pass.ok) return { status: 'error', message: `The script could not be re-derived (${pass.error.kind}).` }
   revalidatePath(workspacePath(project.id), 'layout')
   return { status: 'resolved', pending: await pendingCount(scope) }
+}
+
+// ---------------------------------------------------------------------------
+// The canvas and the graph (the fourth pass, 2026-09-20)
+// ---------------------------------------------------------------------------
+
+/**
+ * Put a card where the canvas dropped it (`lib/storyboard/actions.ts`,
+ * `placeShotOnCanvas`'s shape). Cosmetic - nothing derived reads it - so
+ * nothing re-derives, and the layout is not revalidated: the canvas holds
+ * the point optimistically and the next read agrees with it.
+ */
+export const placeCharacterOnCanvas = async (projectId: string, rawId: string, rawPosition: unknown): Promise<PlaceResult> => {
+  const id = parseId(rawId)
+  const position = CanvasPositionSchema.safeParse(rawPosition)
+  if (id === null || !position.success) return { status: 'error', message: 'A card goes at a whole x and y.' }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+  const written = await placeCharacter(gate.scope, id, position.data)
+  if (!written) return { status: 'error', message: REFUSED_CHARACTER }
+  return { status: 'placed' }
+}
+
+/**
+ * Write a pair's relationship, whole - the modal's `Create` and `Save`.
+ * The pair is sorted and the labels swapped with it (`orderInput`), so
+ * either end of the modal lands on the one row. Authored beside the
+ * record, never derived from it: nothing re-derives, and the label
+ * `derive.ts` reads next pass is this row's.
+ */
+export const saveRelationship = async (projectId: string, rawInput: unknown): Promise<RelationshipResult> => {
+  const input = RelationshipInputSchema.safeParse(rawInput)
+  if (!input.success) return { status: 'error', message: input.error.issues[0]?.message ?? 'That relationship could not be read.' }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+  const ordered = orderInput(input.data)
+  const row = await upsertRelationship(gate.scope, {
+    aId: ordered.aId,
+    bId: ordered.bId,
+    aIs: ordered.aIs,
+    bIs: ordered.bIs,
+    description: ordered.description === '' ? null : ordered.description,
+  })
+  if (row === null) return { status: 'error', message: 'One of those characters could not be found.' }
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return { status: 'saved', relationship: relationshipOf(row) }
+}
+
+export const deleteRelationship = async (projectId: string, rawA: string, rawB: string): Promise<RelationshipResult> => {
+  const a = parseId(rawA)
+  const b = parseId(rawB)
+  if (a === null || b === null || a === b) return { status: 'error', message: 'That relationship could not be read.' }
+  const gate = await openProject(projectId)
+  if (isRefusal(gate)) return gate
+  const [x, y] = orderPair(a, b)
+  const gone = await deleteRelationshipRow(gate.scope, x, y)
+  if (!gone) return { status: 'error', message: 'That relationship is not here any more.' }
+  revalidatePath(workspacePath(gate.project.id), 'layout')
+  return { status: 'gone' }
 }
 
 /** The empty state's "Derive N characters": a pass, awaited, project-wide. */

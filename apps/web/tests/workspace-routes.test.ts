@@ -142,10 +142,10 @@ describe("the header's views", () => {
   })
 
   it('keeps the same tab shape on the three routes whose views are state', () => {
-    // The Storyboard's and Scenes' tabs draw the mockups' icons; Characters' mockup has text tabs. None is a `?view=` value.
+    // The Storyboard's, Scenes' and Characters' tabs draw icons (Characters' since its canvas pass, 2026-09-20). None is a `?view=` value.
     expect(STORYBOARD_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['board Boards', 'canvas Canvas', 'list Shot list'])
     expect(SCENES_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['cards Cards', 'board Index cards', 'list Scene list'])
-    expect(CHARACTERS_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['- Cast', '- Presence', '- Sheet'])
+    expect(CHARACTERS_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['canvas Canvas', 'relationships Relationships', 'list List'])
     expect(LOCATIONS_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['- Places', '- Scenes here', '- Sheet'])
     for (const tab of [...STORYBOARD_VIEWS, ...SCENES_VIEWS, ...CHARACTERS_VIEWS, ...LOCATIONS_VIEWS]) {
       expect(tab.title.length).toBeGreaterThan(0)
@@ -160,7 +160,7 @@ describe("the header's views", () => {
     expect(currentView('production', 'episode')?.id).toBe('episode')
     expect(currentView('production', 'grid')?.id).toBe('scene')
     expect(currentView('script', 'anything')).toBeNull()
-    expect(currentView('characters', 'sheet')).toBeNull()
+    expect(currentView('characters', 'list')).toBeNull()
     expect(currentView('storyboard', 'canvas')).toBeNull()
     expect(currentView('scenes', 'index')).toBeNull()
     expect(currentView('locations', 'sheet')).toBeNull()

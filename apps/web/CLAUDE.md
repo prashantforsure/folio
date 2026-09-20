@@ -7,8 +7,9 @@ Loads when you work in this directory. Root `CLAUDE.md` still applies.
 Before touching auth or reaching for a Supabase client, read
 [lib/auth/NO-BROWSER-CLIENT.md](lib/auth/NO-BROWSER-CLIENT.md). Before putting anything in a
 client store, read [lib/state/README.md](lib/state/README.md). Before building a route, read
-[docs/ui design/README.md](../../docs/ui%20design/README.md), then that route's
-`Route - <name> v2.dc.html`.
+that route's section in [docs/build-decisions.md](../../docs/build-decisions.md) - the v2 design
+package was deleted by the client on 2026-09-20 and is not to be read from git history; the built
+routes and `packages/ui/src/tokens/` are the pattern.
 
 - **State:** Google OAuth **and** email + password (AGENTS.md Constraints was rewritten for this —
   `docs/build-decisions.md`), session in Server Components, route protection in two places. Two
@@ -139,33 +140,43 @@ client store, read [lib/state/README.md](lib/state/README.md). Before building a
   the workspace decides what a drop writes; the check's thresholds are constants in
   `continuity.ts`, not rulings. Details: `docs/build-decisions.md`, "Timeline rebuild, phases 2-5"
   and "phase 1".
-- **The Characters route (rebuilt in four phases, 2026-09-17/18):** `_characters/characters-workspace.tsx`
-  is the body - the shared toolbar pieces, one of Cast / Presence / Sheet (`view-state.tsx`, client
-  state) or the empty card, the status bar with its `toast` slot (`use-toast.ts` - a queue decision
-  or a rename is undoable from it; the rename's offer is `lib/characters/undo.ts`), and one drawer
-  slot the New drawer and the edit drawer share. `_chrome/characters-layout.tsx` is the shell on
-  `FindProvider`, quiet when the route is empty; the sidebar (`cast-sidebar.tsx`) sits on
-  `_chrome/record-sidebar.tsx` with a `Needs a decision` group (cue rows and pair rows), `Off the
-  page` (a ghost `×` opens the drawer on its delete confirm through `lib/characters/compose.ts`)
-  and a collapsed `Walk-ons` group. The card (`character-card.tsx`) is content-first with a
-  `PresenceStrip` and is one stretched link; the queue (`unmatched-queue.tsx`) is never dismissed,
-  prints a reason chip, weights its button by confidence and lists pairs of records that read as
-  one person; `presence-view.tsx` is the character × scene grid with the pairs list and the
-  finding cards. The drawer (`character-drawer.tsx`) is derived-first: the stats row, the alias
-  table (`alias-table.tsx`), `voice-section.tsx` (with `sides-modal.tsx` on the Script route's
-  static sheet), `intro-section.tsx`, the presence strip and gap, the per-episode `Scenes`
-  breakdown, `Shares scenes with · Talks to`, `Sets`, then the `Notes` fold (`profile-fields.tsx`
-  with the `✦ Draft from the script` rows) and `continuity-section.tsx`. `rename-confirm.tsx` is
-  the rename's preview. Every scene ref is a link through `lib/characters/figures.ts`'s `citeOf` →
-  `sceneHref`; the loader (`lib/characters/server.ts`) reads the scene index as `SceneFacts` and
-  quotes the first line and the introduction by node id. The workspace publishes
-  `lib/characters/facts.ts` for the assistant panel's report chips, and the drawer publishes the
-  assistant's Focus (`lib/state/ephemeral.tsx`). The model actions are
-  `lib/characters/model-actions.ts` over `lib/characters/evidence.ts` (cite or drop) - the one
-  Characters module that reaches the SDK, through `lib/assistant/server.ts`'s `assistantClient`.
+- **The Characters route (the fourth pass, 2026-09-20 - laper.ai's shape by the client's
+  ruling):** `_characters/characters-workspace.tsx` is the body - the toolbar row
+  (`characters-toolbar.tsx`: the count, the `Needs a decision · N` pill, `＋ New character`), one
+  of Canvas / Relationships / List (`view-state.tsx`, client state) or the empty card, the status
+  bar with its `toast` slot (`_chrome/use-toast.ts`; the rename's undo offer is
+  `lib/characters/undo.ts`), **one thing in the drawer slot** (the New drawer, the queue panel, or
+  the edit drawer) and the relationship modal (`relationship-modal.tsx` on the new
+  `_chrome/modal.tsx`). `_chrome/characters-layout.tsx` has **no sidebar** - the header with the
+  three tabs, the surface, the drawer slot. `canvas/character-canvas.tsx` is the Storyboard's
+  canvas with a person per card (`_storyboard/canvas/use-canvas-viewport.ts` imported; the zoom
+  pill, node drag and measure lifted to `_chrome/canvas/`): `character-node.tsx` (redrawn 2026-09-21: a
+  `Portrait · Advanced · Look sheet` strip on the card's top edge, component state; the face is
+  the grip and the click, a deep tint off `--face-*` with the name printed white on it;
+  `Edit · Upload`, then `✦ Generate` disabled; the ring connect grip) and
+  `relationship-threads.tsx` (`.folio-rel-thread` glow + rail + gradient dash per row, a
+  two-label pill at the midpoint that lights its thread on hover);
+  positions persist through `placeCharacterOnCanvas` (`0024`), an unplaced card takes the first
+  free grid cell (`lib/characters/canvas.ts`, `lib/workspace/canvas.ts`).
+  `graph/relationships-view.tsx` draws 72×90 tiles on a static ground with `graph-edges.tsx`
+  (dashed, a rotated label at each end; the hovered / focused / selected tile's edges go 2px
+  accent and the rest step back - "Characters, card and connector redesign") over `lib/characters/graph.ts`'s deterministic
+  Fruchterman-Reingold (`Force` on authored rows, `Dialogue` on the derivation's exchanges) and
+  circle (`Chord`); tile drags override until `Relayout`. `list/list-view.tsx` +
+  `display-menu.tsx` sort `lib/characters/list.ts`'s columns and export its CSV. The identity
+  layer is unchanged and re-homed: `queue-panel.tsx` hosts `unmatched-queue.tsx` (never
+  dismissed, a reason chip, confidence-weighted buttons, pair rows) and `walk-ons-line.tsx` behind
+  the pill, with the undo toasts. The drawer (`character-drawer.tsx`) is a form: `profile-fields.tsx`
+  (`Basic info · Bio · Appearance notes`), `Portrait`, `Relationships` (rows from this side,
+  `＋ Add relationship`), `Delete · Cancel · Save`; a changed name is still the rename with
+  `rename-confirm.tsx`'s preview and the status bar's Undo, verbatim from the third pass. The
+  loader (`lib/characters/server.ts`) reads no node: records, tallies, relationships
+  (`listRelationships`), the scene index as refs with words, the queue. `lib/characters/
+  relationships.ts` sorts a pair and reads a row from either side; `facts.ts` publishes the open
+  record, the no-description and the no-relationship lists for the assistant's report chips.
   `lib/characters/heal.ts` binds the name's cue to a record that has none on the next derive.
-  Everything the route reads is one `cache()`d `loadCharacters`. Details: `docs/build-decisions.md`,
-  "Characters rebuild", phases 1-4.
+  Details: `docs/build-decisions.md`, "Characters, fourth pass"; the third pass's "Characters
+  rebuild" is history.
 - **The Script autosave is a delta and every write it runs is one statement.** Over the
   transaction pooler a parameterised statement costs two round trips and cannot be pipelined
   (`packages/db/src/client.ts`), so on the request path the cost is statement count, not row

@@ -16,14 +16,14 @@ import { createCell } from '../workspace/open-cell'
  * the panel reads it. Nothing here is sent to a model - AGENTS.md, The AI
  * agent: "A report never calls a model" - and nothing here widens what one
  * reads; the panel prints these itself.
+ *
+ * The fourth pass (2026-09-20) replaced the never-share pair (the Presence
+ * grid's finding, gone with the grid) with `unrelated` - the records no
+ * authored relationship names, which is what the graph shows as a lone
+ * tile.
  */
 
-export type FactsPerson = {
-  readonly id: CharacterId
-  readonly name: string
-  readonly scenes: number
-  readonly first: SceneRef | null
-}
+export type FactsPerson = { readonly id: CharacterId; readonly name: string }
 
 export type CharacterFacts = {
   readonly projectId: ProjectId
@@ -32,10 +32,10 @@ export type CharacterFacts = {
   /** Every present scene as a ref - the join for a `Scene N` chip. */
   readonly index: readonly SceneRef[]
   /** The drawer's record, when one is open. */
-  readonly open: { readonly id: CharacterId; readonly name: string } | null
-  /** The busiest pair of principals with no scene together, or null. */
-  readonly neverShare: { readonly a: FactsPerson; readonly b: FactsPerson; readonly episodes: number } | null
-  readonly noDescription: readonly { readonly id: CharacterId; readonly name: string }[]
+  readonly open: FactsPerson | null
+  readonly noDescription: readonly FactsPerson[]
+  /** Records no authored relationship names, cast order. */
+  readonly unrelated: readonly FactsPerson[]
 }
 
 const cell = createCell<CharacterFacts | null>(null)

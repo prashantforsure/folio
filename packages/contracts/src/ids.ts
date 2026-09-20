@@ -107,7 +107,6 @@ export type ResearchClipId = Branded<'ResearchClipId'>
 /** A filing: a clip sent to a character, a location or a scene. See `research.ts`. */
 export type ResearchFilingId = Branded<'ResearchFilingId'>
 /** A continuity finding on a character: two quotes that contradict. See `characters.ts`. */
-export type CharacterFindingId = Branded<'CharacterFindingId'>
 
 export const projectId = (raw: string): ProjectId => raw as ProjectId
 export const episodeId = (raw: string): EpisodeId => raw as EpisodeId
@@ -132,7 +131,6 @@ export const researchCollectionId = (raw: string): ResearchCollectionId => raw a
 export const researchSourceId = (raw: string): ResearchSourceId => raw as ResearchSourceId
 export const researchClipId = (raw: string): ResearchClipId => raw as ResearchClipId
 export const researchFilingId = (raw: string): ResearchFilingId => raw as ResearchFilingId
-export const characterFindingId = (raw: string): CharacterFindingId => raw as CharacterFindingId
 
 // ---------------------------------------------------------------------------
 // The schemas
@@ -179,7 +177,6 @@ export const ResearchCollectionIdSchema = brandedUuid(researchCollectionId)
 export const ResearchSourceIdSchema = brandedUuid(researchSourceId)
 export const ResearchClipIdSchema = brandedUuid(researchClipId)
 export const ResearchFilingIdSchema = brandedUuid(researchFilingId)
-export const CharacterFindingIdSchema = brandedUuid(characterFindingId)
 
 // The five brands the pure core owns must survive the round trip through Zod.
 // If one of these stops compiling, a schema has started minting its own brand

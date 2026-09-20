@@ -34,6 +34,7 @@ import { PANEL_IN_FLOW_MIN } from '../../../../../../lib/workspace/routes'
  */
 export const DrawerShell = ({
   route,
+  overlay = false,
   title,
   meta,
   label,
@@ -43,8 +44,19 @@ export const DrawerShell = ({
   footer,
   children,
 }: {
-  /** Which route's slot to fill: `characters` portals into `#characters-drawer`. */
+  /** Which route's slot to fill: `characters` portals into `#characters-drawer`. Unread when `overlay`. */
   readonly route: 'characters' | 'locations' | 'research' | 'timeline'
+  /**
+   * Floating over the whole app instead of docked in the route's slot: a
+   * blurred scrim (`.folio-modal-scrim`, the same ground `_chrome/modal.tsx`
+   * uses) behind a full-height sheet at the right edge, portalled straight to
+   * `body` rather than the route's `#<route>-drawer`. Used by the Characters
+   * edit modal reached through the intercepted `/characters/:id`
+   * (`_characters/character-edit-modal.tsx`) so opening a record does not
+   * remount the canvas behind it; every other caller leaves this unset and
+   * keeps the in-flow drawer.
+   */
+  readonly overlay?: boolean
   readonly title: string
   readonly meta: ReactNode
   /** The `aria-label`; `data-<route>-drawer` carries it too, for the walks. */
@@ -58,19 +70,25 @@ export const DrawerShell = ({
   readonly children: ReactNode
 }) => {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
+  const [mounted, setMounted] = useState(false)
   const { width } = useViewport()
-  const inFlow = width >= PANEL_IN_FLOW_MIN
+  const inFlow = !overlay && width >= PANEL_IN_FLOW_MIN
 
   useEffect(() => {
+    if (overlay) {
+      setMounted(true)
+      return
+    }
     setSlot(document.getElementById(`${route}-drawer`))
-  }, [route])
+  }, [overlay, route])
 
   useEffect(() => {
+    if (overlay) return
     publishDrawer(true)
     return () => {
       publishDrawer(false)
     }
-  }, [])
+  }, [overlay])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -82,15 +100,15 @@ export const DrawerShell = ({
     }
   }, [onClose])
 
-  if (slot === null) return null
-  return createPortal(
+  const panel = (
     <aside
       role="dialog"
       aria-label={label}
       {...{ [`data-${route}-drawer`]: label }}
       data-drawer-route={route}
       data-in-flow={inFlow ? 'true' : 'false'}
-      className={`folio-drawer ${inFlow ? 'relative' : 'absolute inset-y-0 right-0'} z-[7] flex min-h-0 flex-none flex-col`}
+      data-overlay={overlay ? 'true' : undefined}
+      className={`folio-drawer ${overlay ? '' : inFlow ? 'relative' : 'absolute inset-y-0 right-0'} z-[7] flex min-h-0 flex-none flex-col`}
     >
       <div className="flex flex-none items-start gap-[10px] pb-[12px] pl-[18px] pr-[14px] pt-[16px]">
         {lead === undefined ? null : <div className="flex-none pt-[1px]">{lead}</div>}
@@ -114,9 +132,27 @@ export const DrawerShell = ({
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-[18px] pb-[20px]">{children}</div>
       <div className="flex flex-none items-center gap-[8px] border-t border-line2 px-[18px] pb-[16px] pt-[12px]">{footer}</div>
-    </aside>,
-    slot,
+    </aside>
   )
+
+  if (overlay) {
+    if (!mounted) return null
+    return createPortal(
+      <div
+        className="folio-modal-scrim"
+        data-align="end"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose()
+        }}
+      >
+        {panel}
+      </div>,
+      document.body,
+    )
+  }
+
+  if (slot === null) return null
+  return createPortal(panel, slot)
 }
 
 /** A labelled field: the 11.5px `--ink2` label over the control. */

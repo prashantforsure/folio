@@ -608,7 +608,7 @@ export type MoveSluglineOutcome =
  * Move a set text from whichever record holds it to `toId` - the alias
  * table's `Move it here`, when a bind is refused as `taken`, and the
  * queue's answer when a heading was matched to the wrong place. One
- * statement rather than an unbind and a bind, for the reason `moveBoundCue`
+ * statement rather than an unbind and a bind, for the reason the Characters' `moveBoundCue` gave until it left in `0024`'s pass
  * gives: between two statements the set text would be bound nowhere. The
  * holder keeps it when it is their last (the `unbindSlugline` rule). A set
  * text nobody holds is simply bound.

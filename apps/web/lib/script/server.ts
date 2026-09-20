@@ -160,7 +160,16 @@ const statsOf = (nodes: readonly ScreenplayNode[], derivation: Derivation | null
     locations: present(entities?.locations).length,
     beats: 0,
     shots: 0,
-    relations: characters.reduce((total, record) => total + record.authored.relationships.length, 0),
+    // Pairs, not a sum: a relationship is one row per unordered pair
+    // (`0024`) that derivation hands to both sides, so counting entries
+    // would count every labelled pair twice.
+    relations: new Set(
+      characters.flatMap((record) =>
+        record.authored.relationships.map((relation) =>
+          record.id < relation.other ? `${record.id}:${relation.other}` : `${relation.other}:${record.id}`,
+        ),
+      ),
+    ).size,
   }
 }
 

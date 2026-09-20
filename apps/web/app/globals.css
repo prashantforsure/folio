@@ -2533,6 +2533,12 @@ html[data-nav-open='false'] [data-context-column] {
   }
 }
 
+@keyframes folio-rel-thread {
+  to {
+    stroke-dashoffset: -16px;
+  }
+}
+
 @keyframes folio-slide {
   0% {
     transform: translateX(-100%);
@@ -2543,52 +2549,49 @@ html[data-nav-open='false'] [data-context-column] {
 }
 
 /*
- * The Characters route - rebuilt to a written plan, not a mockup ("Characters
- * rebuild" in `docs/build-decisions.md`, ruled 2026-09-17). The classes that
- * repeat across the record cards, the Presence grid, the sheet, the sidebar's
- * groups and the drawer; the geometry that is one element's stays at that
- * element as Tailwind utilities (`_characters/`).
+ * The Characters route - the fourth pass (2026-09-20, laper.ai's route
+ * shape by the client's ruling; "Characters, fourth pass" in
+ * `docs/build-decisions.md`). The classes that repeat across the drawer
+ * and the queue panel, and the pieces Locations still draws from here; the
+ * canvas, the graph and the List have their own block below. The geometry
+ * that is one element's stays at that element as Tailwind utilities
+ * (`_characters/`).
  *
  *   .folio-cast-mark      an identity mark: the two-stop gradient off the
  *                         record's hue (`--cast-h`, set inline from
- *                         `--chip-N-h`), white initials. Locations' cast
- *                         stacks and the drawer's `Shares scenes with`.
+ *                         `--chip-N-h`), white initials. The drawer's lead
+ *                         and Locations' cast stacks.
  *   .folio-record-card    a content-first card: `--s1` on `--line2`, the
  *                         card radius; `--line` hovered, `--s2` with an
  *                         accent inset while selected, `--warn` while a
- *                         conflict is open (README, "Conflict blocks"), a
- *                         dashed accent outline while a file is over it.
+ *                         conflict is open, a dashed accent outline while a
+ *                         file is over it. Locations' grid.
  *   .folio-record-link    the name, stretched over the card (`::after`) so
  *                         the whole card is one link and a middle-click, a
  *                         ctrl-click or Space are the browser's; anything
  *                         under `[data-raised]` sits above it and stays
  *                         clickable on its own.
- *   .folio-cast-card      the Locations grid's card, until that route's pass.
- *   .folio-cast-badge     a status badge over a face: `--bg` on `--line2`,
- *                         a 6px radius, 10px, in the status tone (Locations).
  *   .folio-cite           a citation chip (`_chrome/citation-chips.tsx`).
  *   .folio-record-row     a sidebar row: `8px 10px`, a 10px radius, `--s2`
  *                         and full ink while its record is the drawer's.
- *                         Locations' sidebar draws it too.
- *   .folio-sheet-row      a sheet row: `11px 16px`, `--s1` on hover, `--s2`
- *                         while selected.
- *   .folio-presence-grid  the Presence view's grid: sticky episode row and
- *                         name column on `--bg`, a 12px cell per scene.
- *   .folio-presence-cell  one scene: `--ink2` speaks, a hollow `--ink3`
- *                         ring mentioned, `--line2` absent; a hovered row
- *                         lifts its absent cells to `--s3`.
- *   .folio-share-bar      the sheet's 40×4 share bar: `--s3` track, `--ink2` fill.
- *   .folio-balance-card   the sheet's `Balance` card under the table.
+ *                         Locations' sidebar draws it.
+ *   .folio-sheet-row      a table row: `11px 16px`, `--s1` on hover, `--s2`
+ *                         while selected. The List and Locations' sheet.
  *   .folio-drawer         the edit panel: 400px, `--sunk`, one `--line` on
  *                         the left; overlaid with the README's shadow below
- *                         1200px (`data-in-flow`).
+ *                         1200px (`data-in-flow`); `data-overlay` is the
+ *                         Characters edit modal's own sheet, full height and
+ *                         left-rounded over `.folio-modal-scrim[data-align='end']`.
  *   .folio-drawer-field   an input on `--s1`: `9px 12px`, a 10px radius.
- *   .folio-status-tab     the drawer's status segmented control: the tone's
- *                         `-bg` and ink while pressed, hairline otherwise.
+ *   .folio-status-tab     a status segmented control: the tone's `-bg` and
+ *                         ink while pressed, hairline otherwise (Locations).
  *   .folio-warn-button    the conflict block's accept: `--warn` outline,
  *                         filled on hover.
  *   .folio-delete-button  `Delete` in the drawer's foot: `--live` only on
  *                         hover.
+ *
+ * The cast card, the status badge, the Presence grid, the share bar and
+ * the balance card left with the third pass's views.
  */
 @layer components {
   .folio-cast-mark {
@@ -2666,44 +2669,6 @@ html[data-nav-open='false'] [data-context-column] {
     z-index: 1;
   }
 
-  .folio-cast-card {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    background: var(--s1);
-    border: 1px solid var(--line2);
-    border-radius: 14px;
-    overflow: hidden;
-    cursor: pointer;
-    text-align: left;
-    color: inherit;
-    text-decoration: none;
-    transition: border-color 0.14s;
-  }
-
-  .folio-cast-card:hover,
-  .folio-cast-card[aria-current='true'] {
-    border-color: var(--line);
-    text-decoration: none;
-  }
-
-  .folio-cast-card[data-conflict='true'] {
-    border-color: var(--warn);
-  }
-
-  .folio-cast-badge {
-    position: absolute;
-    top: 9px;
-    right: 9px;
-    padding: 2px 8px;
-    border-radius: 6px;
-    background: var(--bg);
-    border: 1px solid var(--line2);
-    font-size: var(--text-10);
-    line-height: 1.4;
-    white-space: nowrap;
-  }
-
   .folio-cite {
     display: inline-block;
     padding: 2px 7px;
@@ -2768,94 +2733,6 @@ html[data-nav-open='false'] [data-context-column] {
     background: var(--s2);
   }
 
-  .folio-presence-grid {
-    display: grid;
-    align-items: center;
-    gap: 3px 0;
-    width: max-content;
-    min-width: 100%;
-  }
-
-  .folio-presence-head {
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    background: var(--bg);
-  }
-
-  .folio-presence-name {
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    height: 24px;
-    padding-right: 12px;
-    background: var(--bg);
-    color: var(--ink);
-    text-decoration: none;
-  }
-
-  .folio-presence-name:hover {
-    text-decoration: none;
-    color: var(--accent);
-  }
-
-  .folio-presence-cell {
-    display: block;
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
-    background: var(--line2);
-  }
-
-  .folio-presence-cell[data-state='speaks'] {
-    background: var(--ink2);
-  }
-
-  .folio-presence-cell[data-state='mentioned'] {
-    background: transparent;
-    box-shadow: inset 0 0 0 1.5px var(--ink3);
-  }
-
-  .folio-presence-row:hover .folio-presence-cell[data-state='absent'] {
-    background: var(--s3);
-  }
-
-  .folio-presence-gap {
-    height: 1px;
-    background: var(--line2);
-  }
-
-  .folio-share-bar {
-    display: inline-block;
-    width: 40px;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--s3);
-    overflow: hidden;
-    vertical-align: middle;
-  }
-
-  .folio-share-bar > span {
-    display: block;
-    height: 100%;
-    border-radius: 2px;
-    background: var(--ink2);
-  }
-
-  .folio-balance-card {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 12px 14px;
-    background: var(--s1);
-    border: 1px solid var(--line2);
-    border-radius: var(--radius-card);
-  }
-
   .folio-drawer {
     width: 400px;
     min-height: 0;
@@ -2866,6 +2743,16 @@ html[data-nav-open='false'] [data-context-column] {
   .folio-drawer[data-in-flow='false'] {
     width: min(400px, 92vw);
     box-shadow: -24px 0 70px var(--shade);
+  }
+
+  /* The edit-modal's sheet (`overlay`): full height over the blurred scrim, rounded only on the left - the right edge is flush with the viewport. */
+  .folio-drawer[data-overlay='true'] {
+    width: min(520px, 94vw);
+    height: 100%;
+    border-left: none;
+    border-radius: var(--radius-panel) 0 0 var(--radius-panel);
+    box-shadow: -24px 0 70px var(--panel-shadow);
+    overflow: hidden;
   }
 
   .folio-drawer-field {
@@ -2972,7 +2859,7 @@ html[data-nav-open='false'] [data-context-column] {
   }
 }
 
-/* The sheet's status pill: `3px 10px` at 11px, as `Route - Characters v2.dc.html` draws it. */
+/* The sheet's status pill: `3px 10px` at 11px (Locations' sheet). */
 @layer components {
   .folio-tone-pill[data-size='sheet'] {
     padding: 3px 10px;
@@ -2981,10 +2868,673 @@ html[data-nav-open='false'] [data-context-column] {
 }
 
 /*
+ * The Characters canvas (2026-09-20) - the fourth pass, laper.ai's route
+ * shape by the client's ruling: a card per character on the Storyboard's
+ * ground, authored relationships as threads between them, a Relationships
+ * graph and a List. The classes that repeat; the geometry that is one
+ * element's stays at that element as Tailwind utilities (`_characters/`).
+ *
+ *   .folio-char-node       a character card on the canvas (redrawn
+ *                          2026-09-21): `.folio-char-tabs` / `-tab` the
+ *                          `Portrait · Advanced · Look sheet` strip on its
+ *                          top edge, `.folio-char-body` the card under it -
+ *                          the shot node's recipe (`--sunk` on `--line2`,
+ *                          14px, the `--shade` shadow), `--line` while
+ *                          hovered or dragged, an accent inset while
+ *                          selected (selection is accent's sanctioned use),
+ *                          an accent dashed outline while a connect-drag is
+ *                          over it (`data-target`).
+ *   .folio-char-face       the face: 300px (180 on the other tabs), a deep
+ *                          tint of `--cast-h` (`--face-*`), the name at 20px
+ *                          and its line at 14px in `--cast-face-name` /
+ *                          `-sub` bottom-left, the `--cast-scrim-*` wash on
+ *                          every face; `.folio-char-hint` the centred line.
+ *   .folio-char-chip       `12 scenes` · `40 lines`: an icon, the count in
+ *                          `--ink`, the unit in `--ink2`, on `--s1`.
+ *   .folio-char-bio        13.5px `--read`; `--ink3` with no bio.
+ *   .folio-char-action     `Edit` · `Upload` · `✦ Generate`: 36px on `--s1`,
+ *                          disabled a dashed hairline in `--ink3`.
+ *   .folio-char-prompt / -slot / -label   the Advanced tab's prompt and the
+ *                          Look sheet's three angle slots, drawn inert.
+ *   .folio-connect-grip    the ring of four dots ending the last row: drag
+ *                          it onto another card to make a relationship.
+ *                          `--line` ring, accent on hover and while active.
+ *   .folio-rel-thread(-glow/-rail)  a relationship thread on the canvas:
+ *                          glow, rail and the moving dash; accent when lit.
+ *   .folio-edge-pill       the two-label pill at a thread's midpoint on
+ *                          the canvas: `sister | brother`, `--sunk` on
+ *                          `--line`, accent halo on hover, click to edit.
+ *   .folio-edge            a graph edge: 1px dashed `--ink3`, no animation;
+ *                          `data-on` 2px accent, `data-dim` stepped back.
+ *   .folio-edge-label      a label along a graph edge, `--ink3` on a `--bg`
+ *                          stroke; accent when its edge is on.
+ *   .folio-graph-node      a 72×90 tile on the graph: the face's gradient,
+ *                          10px; `.folio-graph-name` the name pill under it.
+ *   .folio-canvas-ground[data-static]  the graph's ground: the dots without
+ *                          the pan - no grab cursor.
+ *   .folio-modal           a form dialog's panel: `--sunk` on `--line`, the
+ *                          panel radius and shadow (`_chrome/modal.tsx`).
+ */
+@layer components {
+  .folio-char-node {
+    background: transparent;
+  }
+
+  /* The tab strip on the card's top edge; the active tab is the card's own surface. */
+  .folio-char-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 6px;
+  }
+
+  .folio-char-tab {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: 12px 12px 0 0;
+    background: transparent;
+    color: var(--ink2);
+    font-size: var(--text-12-5);
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .folio-char-tab > i {
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    border: 1.5px solid currentColor;
+    opacity: 0.7;
+  }
+
+  .folio-char-tab:hover {
+    color: var(--ink);
+    background: var(--s1);
+  }
+
+  .folio-char-tab[aria-selected='true'] {
+    position: relative;
+    z-index: 1;
+    background: var(--sunk);
+    border-color: var(--line2);
+    color: var(--ink);
+    margin-bottom: -1px;
+    padding-bottom: 1px;
+  }
+
+  .folio-char-tab[aria-selected='true'] > i {
+    background: var(--accent);
+    border-color: var(--accent);
+    opacity: 1;
+  }
+
+  .folio-char-tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -3px;
+  }
+
+  /* The card below the strip: the shot node's recipe, a 12px inset, 12px between rows. */
+  .folio-char-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    border-radius: 0 14px 14px 14px;
+    box-shadow: 0 12px 34px var(--shade);
+    transition:
+      border-color 0.14s,
+      box-shadow 0.14s;
+  }
+
+  .folio-char-node:hover > .folio-char-body,
+  .folio-char-node[data-dragging='true'] > .folio-char-body {
+    border-color: var(--line);
+    box-shadow: 0 16px 40px var(--shade);
+  }
+
+  .folio-char-node[data-selected='true'] > .folio-char-body {
+    border-color: var(--line);
+    box-shadow:
+      inset 0 0 0 1px var(--accent),
+      0 12px 34px var(--shade);
+  }
+
+  .folio-char-node[data-target='true'] > .folio-char-body {
+    outline: 1.5px dashed var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* The face: a deep tint of the record's hue; white ink straight on it; the scrim on every face. */
+  .folio-char-face {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 300px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: linear-gradient(
+      170deg,
+      oklch(var(--face-l1) var(--face-c1) var(--cast-h)),
+      oklch(var(--face-l2) var(--face-c2) calc(var(--cast-h) + 18))
+    );
+    color: var(--cast-face-name);
+    cursor: grab;
+  }
+
+  .folio-char-face[data-short='true'] {
+    height: 180px;
+  }
+
+  .folio-char-face:active {
+    cursor: grabbing;
+  }
+
+  .folio-char-face:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .folio-char-face > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .folio-char-face::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 56%;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent, var(--cast-scrim-mid) 45%, var(--cast-scrim-end));
+  }
+
+  /* The centred hint: the initial and a line with no portrait; an icon and `No look sheet yet` on the other tabs. */
+  .folio-char-hint {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 0;
+    bottom: 84px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    font-size: var(--text-12-5);
+    line-height: 1.4;
+    color: var(--cast-face-sub);
+    pointer-events: none;
+  }
+
+  .folio-char-face[data-short='true'] .folio-char-hint {
+    bottom: 56px;
+  }
+
+  .folio-char-glyph {
+    font-size: 44px;
+    font-weight: 600;
+    line-height: 1;
+    opacity: 0.45;
+  }
+
+  .folio-char-face-name {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    pointer-events: none;
+  }
+
+  .folio-char-face-sub {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.3;
+    letter-spacing: 0;
+    color: var(--cast-face-sub);
+  }
+
+  .folio-char-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 10px 0 8px;
+    border-radius: 999px;
+    background: var(--s1);
+    border: 1px solid var(--line);
+    font-size: var(--text-12);
+    color: var(--ink2);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .folio-char-chip > b {
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .folio-char-chip > svg {
+    color: var(--ink);
+    opacity: 0.8;
+  }
+
+  .folio-char-bio {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--read);
+  }
+
+  .folio-char-bio[data-node-bio='none'] {
+    color: var(--ink3);
+  }
+
+  .folio-char-label {
+    font-size: var(--text-12);
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--ink2);
+  }
+
+  .folio-char-prompt {
+    display: block;
+    width: 100%;
+    resize: none;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--s1);
+    color: var(--ink);
+    font-size: var(--text-13);
+    line-height: 1.45;
+  }
+
+  .folio-char-prompt::placeholder {
+    color: var(--ink3);
+  }
+
+  .folio-char-prompt:disabled {
+    cursor: not-allowed;
+  }
+
+  .folio-char-prompt:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .folio-char-slot {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 3 / 4;
+    border-radius: 8px;
+    border: 1px dashed var(--line);
+    font-size: var(--text-11);
+    color: var(--ink3);
+  }
+
+  /* `Edit` · `Upload` · `✦ Generate`: 36px, `--s1` on `--line`; `--s2` on hover; disabled is a dashed hairline in `--ink3`. */
+  .folio-char-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 10px;
+    background: var(--s1);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-size: var(--text-13);
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background 0.12s,
+      border-color 0.12s;
+  }
+
+  .folio-char-action > svg {
+    opacity: 0.8;
+  }
+
+  .folio-char-action:hover:not(:disabled) {
+    background: var(--s2);
+    border-color: var(--s3);
+  }
+
+  .folio-char-action:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .folio-char-action:disabled {
+    cursor: not-allowed;
+    color: var(--ink3);
+    background: transparent;
+    border-style: dashed;
+  }
+
+  /* The grip: a 40px ring of four dots at the end of the last row. */
+  .folio-connect-grip {
+    display: grid;
+    place-content: center;
+    grid-template-columns: repeat(2, 5px);
+    gap: 4px;
+    width: 40px;
+    height: 40px;
+    margin: -2px -2px -2px 0;
+    padding: 0;
+    border: 2px solid var(--line);
+    border-radius: 999px;
+    background: var(--sunk);
+    color: var(--ink2);
+    cursor: crosshair;
+    touch-action: none;
+    transition:
+      border-color 0.12s,
+      color 0.12s;
+  }
+
+  .folio-connect-grip > span {
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .folio-connect-grip:hover,
+  .folio-connect-grip[data-active='true'] {
+    border-color: var(--accent);
+    color: var(--ink);
+  }
+
+  .folio-connect-grip:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    color: var(--ink);
+  }
+
+  /*
+   * A relationship thread on the canvas: three strokes on one path - a
+   * blurred `--line` glow, a 2px `--line2` rail, and the moving dash on
+   * top, its ink graded `--ink3` → `--ink` → `--ink3` along the curve
+   * (`<linearGradient>` in the threads' SVG, `stroke` set inline). The dash
+   * is the route's one motion (ruled 2026-09-17), off under
+   * `prefers-reduced-motion`; 7 + 9 = 16, one period per offset, so the
+   * loop is seamless. `data-lit` (the pill hovered or focused) turns the
+   * dash and the glow accent.
+   */
+  .folio-rel-thread-glow {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: 7;
+    stroke-linecap: round;
+    filter: blur(3px);
+    transition: stroke 0.16s;
+  }
+
+  .folio-rel-thread-rail {
+    fill: none;
+    stroke: var(--line2);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .folio-rel-thread {
+    fill: none;
+    stroke: var(--ink2);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 7 9;
+    animation: folio-rel-thread 1.6s linear infinite;
+    transition: stroke 0.16s;
+  }
+
+  [data-lit='true'] > .folio-rel-thread-glow {
+    stroke: var(--accent-bg);
+    stroke-width: 9;
+  }
+
+  [data-lit='true'] > .folio-rel-thread {
+    stroke: var(--accent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .folio-rel-thread {
+      animation: none;
+    }
+  }
+
+  /* The two-label pill at the thread's midpoint: `sister | rival`, a real divider between them. */
+  .folio-edge-pill {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 11px;
+    border-radius: 999px;
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    box-shadow: 0 6px 18px var(--shade);
+    font-size: var(--text-11-5);
+    font-weight: 500;
+    color: var(--ink);
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    transition:
+      border-color 0.14s,
+      box-shadow 0.14s;
+  }
+
+  .folio-edge-pill > i {
+    display: block;
+    width: 1px;
+    height: 12px;
+    margin: 0 9px;
+    background: var(--line);
+  }
+
+  .folio-edge-pill:hover,
+  .folio-edge-pill[data-lit='true'] {
+    border-color: var(--accent);
+    box-shadow:
+      0 8px 22px var(--shade),
+      0 0 0 3px var(--accent-bg);
+  }
+
+  .folio-edge-pill:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /*
+   * A graph edge: a 1px dashed `--ink3` line at 60%, static - the threads'
+   * dash is the route's one motion. `data-on` (an end of it is the active
+   * tile: hovered, focused or selected) makes it 2px solid accent with an
+   * `--accent-bg` glow; `data-dim` (some other tile is active) drops it to
+   * 22%. A dialogue edge is solid, its width the log of the scenes shared.
+   */
+  .folio-edge {
+    fill: none;
+    stroke: var(--ink3);
+    stroke-width: 1;
+    stroke-dasharray: 4 6;
+    stroke-linecap: round;
+    opacity: 0.6;
+    transition:
+      opacity 0.16s,
+      stroke 0.16s,
+      stroke-width 0.16s;
+  }
+
+  .folio-edge[data-kind='dialogue'] {
+    stroke-dasharray: none;
+    opacity: 0.7;
+  }
+
+  .folio-edge[data-dim='true'] {
+    opacity: 0.22;
+  }
+
+  .folio-edge[data-on='true'] {
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-dasharray: none;
+    opacity: 1;
+    filter: drop-shadow(0 0 5px var(--accent-bg));
+  }
+
+  .folio-edge-label {
+    font-size: var(--text-10-5);
+    fill: var(--ink3);
+    stroke: var(--bg);
+    stroke-width: 3px;
+    paint-order: stroke;
+    text-anchor: middle;
+    dominant-baseline: central;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      fill 0.16s,
+      opacity 0.16s;
+  }
+
+  .folio-edge-label[data-dim='true'] {
+    opacity: 0.35;
+  }
+
+  .folio-edge-label[data-on='true'] {
+    fill: var(--accent);
+    font-weight: 500;
+  }
+
+  .folio-edge-label:hover {
+    fill: var(--ink);
+  }
+
+  .folio-edge-label:focus-visible {
+    outline: none;
+    fill: var(--accent);
+    text-decoration: underline;
+  }
+
+  .folio-graph-node {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .folio-graph-node:active {
+    cursor: grabbing;
+  }
+
+  .folio-graph-node > span:first-child {
+    display: block;
+    width: 72px;
+    height: 66px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: linear-gradient(
+      150deg,
+      oklch(var(--cast-l1) var(--cast-c1) var(--cast-h)),
+      oklch(var(--cast-l2) var(--cast-c2) calc(var(--cast-h) + 18))
+    );
+    box-shadow: 0 8px 22px var(--shade);
+  }
+
+  .folio-graph-node:hover > span:first-child {
+    box-shadow:
+      0 0 0 2px var(--line),
+      0 8px 22px var(--shade);
+  }
+
+  .folio-graph-node[data-selected='true'] > span:first-child,
+  .folio-graph-node[data-selected='true']:hover > span:first-child {
+    box-shadow:
+      0 0 0 2px var(--accent),
+      0 8px 22px var(--shade);
+  }
+
+  /* Some other tile is active: this one steps back. */
+  .folio-graph-node[data-dim='true'] {
+    opacity: 0.55;
+  }
+
+  .folio-graph-node:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 12px;
+  }
+
+  .folio-graph-node > span:first-child > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .folio-graph-name {
+    max-width: 120px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    font-size: var(--text-11);
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .folio-canvas-ground[data-static] {
+    cursor: default;
+  }
+
+  .folio-modal {
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    box-shadow: 0 30px 90px var(--panel-shadow);
+  }
+}
+
+/*
  * The Locations route - `docs/ui design/Route - Locations v2.dc.html`,
  * transcribed. Locations and Characters are one shape - a card grid, a
  * sheet, a sidebar list, a drawer - so the route draws the Characters
- * classes above (`.folio-cast-card`, `.folio-cast-badge`, `.folio-record-row`,
+ * classes above (`.folio-record-card`, `.folio-record-row`,
  * `.folio-sheet-row`, `.folio-drawer-*`, `.folio-status-tab`,
  * `.folio-delete-button`) and adds only what is its own: the set gradient.
  *
@@ -3239,7 +3789,9 @@ html[data-nav-open='false'] [data-context-column] {
  *                         way the mockup's `L()` insets them.
  *   .folio-modal-scrim    the ground under a modal: the scrim over a
  *                         backdrop blur, portalled to `body` so the surface
- *                         card's own blur cannot contain it.
+ *                         card's own blur cannot contain it; `data-align='end'`
+ *                         pins the panel to the right edge, full height,
+ *                         for the Characters edit modal's sheet.
  *   .folio-paper          the reading sheet: `--paper` under a grain (an
  *                         inline SVG turbulence, no asset), `--paper-ink`.
  *   .folio-paper-close    the round X beside the sheet's top-right corner,
@@ -3375,6 +3927,13 @@ html[data-nav-open='false'] [data-context-column] {
     background: var(--scrim);
     -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
+  }
+
+  /* The edit-modal's ground (`_chrome/drawer-shell.tsx`, `overlay`): the same scrim and blur, the sheet flush to the right edge instead of a centred card. */
+  .folio-modal-scrim[data-align='end'] {
+    align-items: stretch;
+    justify-content: flex-end;
+    padding: 0;
   }
 
   .folio-paper {

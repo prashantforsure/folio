@@ -140,22 +140,21 @@ const PRODUCTION_CHIPS: readonly Chip[] = [
 const PRODUCTION_SUBHEAD = 'Ask about this reel, or have me propose shots from the scene.'
 
 /**
- * The Characters route's chips and subhead. The first names the open
- * record when the drawer has one (the mockup's "Draft Meera's needs"),
- * read from the facts cell the workspace publishes; the other two are
- * reports - the route already counts them (`neverShare`, `bio === null`),
- * so the panel answers without a model.
+ * The Characters route's chips and subhead (the fourth pass, 2026-09-20).
+ * The first names the open record when the drawer has one, read from the
+ * facts cell the workspace publishes, and is a prompt - the model reads
+ * the script and describes the person; the other two are reports the
+ * route already counts (`unrelated`, `bio === null`), so the panel answers
+ * without a model.
  */
 const charactersChips = (facts: CharacterFacts | null): readonly Chip[] => [
-  { label: facts?.open == null ? "Draft a character's needs" : `Draft ${facts.open.name}'s needs`, tone: 'accent' },
-  { label: 'Who never shares a scene?', tone: 'warn', kind: 'report' },
+  { label: facts?.open == null ? 'Describe a character from the script' : `Describe ${facts.open.name} from the script`, tone: 'accent' },
+  { label: 'Who has no relationships yet?', tone: 'warn', kind: 'report' },
   { label: 'Find characters with no description', tone: 'ok', kind: 'report' },
 ]
 
 const charactersSubhead = (facts: CharacterFacts | null): string =>
-  facts?.open == null
-    ? 'Ask about the cast, or have me draft what a character wants and needs.'
-    : `Ask about the cast, or have me draft what ${facts.open.name} wants and needs.`
+  facts?.open == null ? 'Ask about the cast, or have me describe a character from the script.' : `Ask about the cast, or have me describe ${facts.open.name} from the script.`
 
 /**
  * The Locations route's chips and subhead - the v2 mockup's words where
@@ -240,19 +239,17 @@ type Report = {
 }
 
 const reportFor = (label: string, facts: CharacterFacts): Omit<Report, 'id' | 'createdAt'> | null => {
-  const cite = (ref: CharacterFacts['index'][number] | null): readonly CitationChip[] =>
-    ref === null ? [] : [citeOf(facts.projectId, facts.shape, ref)]
-  if (label === 'Who never shares a scene?') {
-    const pair = facts.neverShare
-    if (pair === null) {
-      return { role: 'report', label, sentence: 'Every pair of principals shares at least one scene.', cites: [], people: [] }
-    }
+  if (label === 'Who has no relationships yet?') {
+    const people = facts.unrelated
     return {
       role: 'report',
       label,
-      sentence: `${pair.a.name} and ${pair.b.name} never share a scene. Two principals - ${String(pair.a.scenes)} and ${String(pair.b.scenes)} scenes - with no contact across ${String(pair.episodes)} ${pair.episodes === 1 ? 'episode' : 'episodes'}.`,
-      cites: [...cite(pair.a.first), ...cite(pair.b.first)],
-      people: [pair.a, pair.b].map((person) => ({ id: person.id, name: person.name })),
+      sentence:
+        people.length === 0
+          ? 'Every character has at least one relationship.'
+          : `${String(people.length)} ${people.length === 1 ? 'character has' : 'characters have'} no relationship yet. Drag a card's handle onto another on the Canvas to add one.`,
+      cites: [],
+      people,
     }
   }
   if (label === 'Find characters with no description') {

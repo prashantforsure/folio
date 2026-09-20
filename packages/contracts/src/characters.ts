@@ -1,16 +1,10 @@
-import type {
-  CharacterId,
-  Confidence,
-  InteriorExterior,
-  Light,
-  LocationId,
-  MatchReason,
-  NodeId,
-  Presence,
-} from '@folio/script'
+import type { CharacterId, Confidence, MatchReason, NodeId, Presence } from '@folio/script'
 import { z } from 'zod'
 
-import type { CharacterFindingId, EpisodeSlug } from './ids'
+import { CharacterIdSchema } from './ids'
+import type { EpisodeSlug } from './ids'
+import { CanvasPositionSchema } from './storyboard'
+import type { CanvasPosition } from './storyboard'
 
 /**
  * The Characters route: what a writer authors on top of a derived record,
@@ -23,21 +17,24 @@ import type { CharacterFindingId, EpisodeSlug } from './ids'
  * shapes the route reads, which join the two halves by id and never
  * recombine them into a row a re-derive could clobber.
  *
- * ## The rebuild (2026-09-17 onward)
+ * ## The fourth pass (2026-09-20)
  *
- * The route is rebuilt to a written plan rather than a mockup ("Characters
- * rebuild" in `docs/build-decisions.md`, one section per phase). The read
- * model is what that plan reads back to the writer: the script as evidence
- * about each person. `CastRow` carries the voice the pass counts (words,
- * speeches, the first and last and longest line, what is said per scene,
- * who they talk to, where the action introduces them - phase 3), the
- * profile the writer authors, and where the record came from (`origin`).
- * `SceneFacts` is the scene index as the route reads it - a subtype of
- * `SceneRef`, which Locations and Research still construct as it was.
+ * The route is laper.ai's shape by the client's ruling - a canvas of cards,
+ * a Relationships graph, a List, a form drawer ("Characters, fourth pass"
+ * in `docs/build-decisions.md`). The read model is what those draw:
+ * `CastRow` is the profile the writer authors, where the record came from
+ * (`origin`), where the canvas left its card (`canvas`, `0024`) and the
+ * counts the pass wrote (scenes, lines, words, who they talk to);
+ * `Relationship` is one authored row per pair with two directional labels
+ * (`0024` reshaped the table). The third pass's evidence - quoted lines,
+ * introductions, the presence map, the findings - left the read model
+ * with the views that drew it; the `status` / `wants` / `needs` columns
+ * stay in the schema unread (dropping them is ask-first).
  *
  * Migration `0013` dropped the first pass's drives, arc turns, voice rules
  * and key lines; `0017` brought back `wants`, `needs` and `status`; `0021`
- * added the voice columns and `origin`; `0022` the findings table.
+ * added the voice columns and `origin`; `0022` the findings table (orphaned
+ * since this pass); `0024` the canvas position and the relationship shape.
  *
  * ## Colour is a token name
  *
@@ -103,11 +100,10 @@ export const hueOfColor = (color: string): number =>
   CHARACTER_COLORS.find((entry) => entry.id === color)?.hue ?? 1
 
 /**
- * The status a writer gives a record. `draft` is what a derivation pass
- * mints and what `New` creates; `defined` says the profile is written;
- * `locked` says stop changing it. README, "Status as a dot plus a pill":
- * amber for a draft (a decision waiting), green for defined (settled),
- * accent for locked. The tone is the route's (`lib/characters/cast.ts`).
+ * The status a writer gave a record in the v2 pass (`0017`): `draft`,
+ * `defined`, `locked`. Unread by the route since the fourth pass
+ * (2026-09-20) - the column stays, and the assistant's Focus block still
+ * prints it; dropping it is ask-first.
  */
 export const CHARACTER_STATUSES = ['draft', 'defined', 'locked'] as const
 
@@ -149,11 +145,13 @@ export const CHARACTER_ORIGIN_LABELS: Readonly<Record<CharacterOrigin, string>> 
 const line = (max: number) => z.string().trim().max(max).nullable()
 
 /**
- * The drawer's authored fields, and the modal's. Every field is optional
- * on the way in; a field that is present is written whole, and an empty
- * string is stored as `null` - the column is "no role", not "an empty
- * role". The name is not here: a changed name is a rename, and a rename is
- * the sanctioned write-back with its own action.
+ * The drawer's authored fields, and the New drawer's. Every field is
+ * optional on the way in; a field that is present is written whole, and an
+ * empty string is stored as `null` - the column is "no role", not "an
+ * empty role". The name is not here: a changed name is a rename, and a
+ * rename is the sanctioned write-back with its own action. `status`,
+ * `wants` and `needs` left the edit with the fourth pass; the columns keep
+ * whatever an earlier pass wrote.
  */
 export const CharacterProfileEditSchema = z
   .object({
@@ -163,9 +161,6 @@ export const CharacterProfileEditSchema = z
     role: line(200),
     bio: line(20_000),
     appearance: line(4_000),
-    status: CharacterStatusSchema,
-    wants: line(2_000),
-    needs: line(2_000),
   })
   .partial()
 
@@ -178,30 +173,51 @@ export const NewCharacterSchema = CharacterProfileEditSchema.extend({
 
 export type NewCharacter = z.infer<typeof NewCharacterSchema>
 
+/**
+ * A relationship as the modal sends it (the fourth pass, `0024`): the two
+ * records, what `a` is to `b` and `b` to `a` - at most one word or two
+ * (`sister`, `former partner`) - and a line under them. The pair arrives in
+ * either order; `orderInput` (`lib/characters/relationships.ts`) sorts it
+ * and swaps the labels with it before the write, so the row's `a` is the
+ * lower id. At least one label is written: a relationship nobody named is
+ * not one.
+ */
+const label = z.string().trim().max(40)
+
+export const RelationshipInputSchema = z
+  .object({
+    aId: CharacterIdSchema,
+    bId: CharacterIdSchema,
+    aIs: label,
+    bIs: label,
+    description: z.string().trim().max(500).nullable(),
+  })
+  .refine((input) => input.aId !== input.bId, { message: 'A relationship is between two different characters.' })
+  .refine((input) => input.aIs !== '' || input.bIs !== '', { message: 'Name at least one side of the relationship.' })
+
+export type RelationshipInput = z.infer<typeof RelationshipInputSchema>
+
+/** The row as the route reads it: the pair sorted, both labels, the line, the stamps. */
+export type Relationship = {
+  readonly aId: CharacterId
+  readonly bId: CharacterId
+  readonly aIs: string
+  readonly bIs: string
+  readonly description: string | null
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+/** Where a card sits on the Characters canvas: the Storyboard's shape, reused whole. */
+export { CanvasPositionSchema }
+export type { CanvasPosition }
+
 /** What a portrait upload accepts. The bytes are sniffed on the server; this is the declared shape. */
 export const PORTRAIT_MAX_BYTES = 5 * 1024 * 1024
 
 export const PORTRAIT_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const
 
 export type PortraitType = (typeof PORTRAIT_TYPES)[number]
-
-/**
- * The three prose fields the assistant may draft into - unsaved, into the
- * drawer's draft, for the writer to keep or not with the existing Save
- * (`lib/characters/model-actions.ts`). Closed: a fourth field is a
- * widening of what the model writes, which AGENTS.md puts behind a question.
- */
-export const DRAFT_FIELDS = ['bio', 'wants', 'needs'] as const
-
-export type DraftField = (typeof DRAFT_FIELDS)[number]
-
-export const DraftFieldSchema = z.enum(DRAFT_FIELDS)
-
-export const DRAFT_FIELD_LABELS: Readonly<Record<DraftField, string>> = {
-  bio: 'Description',
-  wants: 'Wants',
-  needs: 'Needs',
-}
 
 // ---------------------------------------------------------------------------
 // The read model
@@ -216,26 +232,6 @@ export type SceneRef = {
   readonly heading: string
 }
 
-/**
- * The scene index as the Characters route reads it: a `SceneRef` with the
- * heading's reading, its set, who speaks and who is mentioned, its measured
- * length and its dialogue words. The presence strip, the drawer's `Scenes`
- * breakdown and `Sets`, the share figure and the Presence view all read
- * from here; nothing is counted twice.
- */
-export type SceneFacts = SceneRef & {
-  readonly ie: InteriorExterior
-  readonly light: Light
-  readonly timeOfDay: string | null
-  readonly set: { readonly id: LocationId; readonly name: string } | null
-  readonly speaking: readonly CharacterId[]
-  readonly mentioned: readonly CharacterId[]
-  /** Eighths of a page, from the last measurement; null when the scene is unmeasured. */
-  readonly eighths: number | null
-  /** Dialogue words under the heading, every cue counted - the share denominator. */
-  readonly words: number
-}
-
 /** One row of the alias table: a counted spelling and what it accounts for. */
 export type CueVariantRow = {
   readonly cue: string
@@ -246,33 +242,13 @@ export type CueVariantRow = {
   readonly words: number
 }
 
-/** A dialogue or action node the route quotes, with the scene that proves it. */
-export type QuotedLine = {
-  readonly nodeId: NodeId
-  readonly text: string
-  readonly sceneNodeId: NodeId | null
-}
-
-/** The action line that introduces a character, with the age it gives and whether the writer waved the timing finding. */
-export type IntroLine = QuotedLine & {
-  readonly age: number | null
-  /** `true` once the writer said the character speaking before this line is deliberate. */
-  readonly deliberate: boolean
-}
-
-export type SceneCountRow = {
-  readonly scene: NodeId
-  readonly lines: number
-  readonly words: number
-}
-
 export type ExchangeRow = {
   readonly other: CharacterId
   readonly count: number
   readonly scenes: readonly NodeId[]
 }
 
-/** One card of the grid, one row of the sheet, one row of the Presence grid. */
+/** One card of the canvas, one tile of the graph, one row of the List. Production reads the same row for its cast column. */
 export type CastRow = {
   readonly id: CharacterId
   readonly name: string
@@ -285,94 +261,39 @@ export type CastRow = {
   readonly bio: string | null
   /** The look-sheet notes. Production's cast column prints it under the name. */
   readonly appearance: string | null
-  readonly status: CharacterStatus
-  readonly wants: string | null
-  readonly needs: string | null
   /** A public URL for the portrait, or null with none set or no storage. */
   readonly portraitUrl: string | null
   readonly origin: CharacterOrigin | null
   readonly presence: Presence
   readonly appearances: number
   readonly lines: number
-  readonly mentions: number
+  /** Dialogue words, the share's numerator. */
+  readonly words: number
   /** Heading node ids the character is in, in document order. */
   readonly scenes: readonly NodeId[]
-  /** Counted spellings, first-appearance order - the card's alias line. */
+  /** Counted spellings, first-appearance order - what a rename counts against. */
   readonly cues: readonly CueVariantRow[]
-  // The voice (phase 3).
-  readonly words: number
-  readonly speeches: number
-  readonly parens: number
-  /** Action lines naming the character. */
-  readonly namedIn: number
-  readonly firstLine: { readonly nodeId: NodeId; readonly sceneNodeId: NodeId | null } | null
-  readonly lastLine: { readonly nodeId: NodeId; readonly sceneNodeId: NodeId | null } | null
-  readonly longest: { readonly nodeId: NodeId; readonly sceneNodeId: NodeId | null; readonly words: number } | null
-  readonly introducedAt: { readonly nodeId: NodeId; readonly sceneNodeId: NodeId | null } | null
-  readonly sceneCounts: readonly SceneCountRow[]
+  /** Who they exchange lines with - the graph's `Dialogue` layout. */
   readonly exchanges: readonly ExchangeRow[]
-  /** The first line, quoted; null until the loader reads the node, or with no line. */
-  readonly quote: QuotedLine | null
-  /** The introduction, quoted; null with none. */
-  readonly intro: IntroLine | null
-}
-
-/**
- * Who bound a spelling: derivation (`bound_by` null - the name's own spelling,
- * or a mint), the signed-in writer, or another member. Drawn as a mono tag on
- * the alias row so a wrong accept can be told from a pass's own binding.
- */
-export type AliasProvenance = 'derived' | 'you' | 'member'
-
-export type BoundCueView = {
-  readonly cue: string
-  readonly provenance: AliasProvenance
-}
-
-/** One record the character talks to, for the drawer's `Talks to`. */
-export type TalksToRow = {
-  readonly id: CharacterId
-  readonly name: string
-  readonly hue: number
-  readonly count: number
-  readonly scenes: readonly NodeId[]
-  /** Scenes the two are both in, exchanges or not. */
-  readonly shared: number
+  /** Where the canvas left the card (`0024`); null when nobody has moved it. */
+  readonly canvas: CanvasPosition | null
 }
 
 /** What the drawer reads beyond the card. */
 export type CharacterProfile = CastRow & {
-  /** Every bound spelling, counted or not - the alias table's authored half. */
-  readonly boundCues: readonly string[]
-  /** The same list with who bound each - the alias table as the drawer draws it. */
-  readonly bound: readonly BoundCueView[]
   /** Cues a record-level rename would rewrite: every counted cue that is the name. */
   readonly nameCues: number
-  /** The first, last and longest line, quoted. */
-  readonly voice: {
-    readonly first: QuotedLine | null
-    readonly last: QuotedLine | null
-    readonly longest: (QuotedLine & { readonly words: number }) | null
-  }
-  readonly talksTo: readonly TalksToRow[]
-  /** The continuity findings the assistant recorded (phase 4), open and deliberate. */
-  readonly findings: readonly CharacterFinding[]
+  /** This record's authored relationships, either side (`0024`). */
+  readonly relationships: readonly Relationship[]
 }
 
-/** One node of the presence map. */
-export type MapColumn = {
-  readonly id: CharacterId
-  readonly name: string
-  readonly hue: number
-  readonly lines: number
-  readonly scenes: number
-}
-
-export type CharacterMap = {
-  readonly columns: readonly MapColumn[]
-  /** `cells[row][column]`: scenes shared. The diagonal is the character's own count. */
-  readonly cells: readonly (readonly number[])[]
-}
+/**
+ * Who bound a spelling: derivation (`bound_by` null - the name's own spelling,
+ * or a mint), the signed-in writer, or another member. The Characters
+ * alias table left with the fourth pass; Locations' slugline table still
+ * prints it as a mono tag.
+ */
+export type AliasProvenance = 'derived' | 'you' | 'member'
 
 export type ResolveProposal =
   | {
@@ -440,42 +361,4 @@ export type CueBookEntry = {
   readonly name: string
   readonly color: CharacterColor
   readonly appearances: number
-}
-
-// ---------------------------------------------------------------------------
-// Findings (phase 4)
-// ---------------------------------------------------------------------------
-
-/**
- * A continuity finding: the script against itself, for one character. The
- * assistant reads the scenes the character is in and returns the pairs of
- * quotes that contradict each other; the row is kept so the writer's
- * verdict (`deliberate`) survives a re-check, and so a finding is a row
- * with two citations rather than prose in a chat. Never a Bible: nothing
- * here is a fact the writer asserted, only two lines of the page.
- */
-export const CHARACTER_FINDING_KINDS = ['contradiction'] as const
-
-export type CharacterFindingKind = (typeof CHARACTER_FINDING_KINDS)[number]
-
-export const CHARACTER_FINDING_STATUSES = ['open', 'deliberate'] as const
-
-export type CharacterFindingStatus = (typeof CHARACTER_FINDING_STATUSES)[number]
-
-export const CharacterFindingStatusSchema = z.enum(CHARACTER_FINDING_STATUSES)
-
-export type FindingSide = {
-  readonly ref: SceneRef
-  readonly quote: string
-}
-
-export type CharacterFinding = {
-  readonly id: CharacterFindingId
-  readonly characterId: CharacterId
-  readonly kind: CharacterFindingKind
-  readonly status: CharacterFindingStatus
-  readonly claim: string
-  readonly a: FindingSide
-  readonly b: FindingSide
-  readonly createdAt: string
 }

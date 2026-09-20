@@ -49,7 +49,7 @@ days.
 | Storage | Supabase Storage | Signed URLs for everything |
 | Jobs | BullMQ + Redis on a long-running Railway service | |
 | Payments | Dodo Payments | Merchant of record; webhooks reconciled idempotently |
-| AI | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17), `/locations` and `/timeline` (2026-09-18). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) use structured outputs (`messages.parse` + `zodOutputFormat`) and write only into an unsaved field or the `character_findings` rows; tool use and proposals are still its next life |
+| AI | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17), `/locations` and `/timeline` (2026-09-18). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) were removed with the route's fourth pass (2026-09-20); their caps stay in `lib/assistant/model.ts` for the next action of that shape. Tool use and proposals are still its next life |
 | PDF | `pdf-lib` or `pdfkit` on our own layout engine | |
 | FDX | `fast-xml-parser` + custom mapping | |
 | Fountain | Custom, in `packages/script` | |
@@ -72,8 +72,9 @@ silently destroy the product.
   agree with pagination exactly.
 - **Tailwind's `dark:` variant.** Theme is the cascade under `data-theme`, and islands nest. Use `data-theme`.
 - **Tailwind's default `gray` or `slate`.** The palette is one near-black canvas, translucent
-  surfaces and a single blue accent, all declared in `packages/ui/src/tokens/palette.css` from
-  `docs/ui design/README.md`; a second grey scale beside it is how the look drifts.
+  surfaces and a single blue accent, all declared in `packages/ui/src/tokens/palette.css` (copied
+  from the v2 design package's `:root` block before the client retired that package on
+  2026-09-20); a second grey scale beside it is how the look drifts.
 - **Any icon library.** Icons are inline stroke SVGs hand-written in `packages/ui/src/icons.tsx` from
   the design package, and nothing else. (The routes built before the v2 redesign still print the
   older Unicode glyph set as text until each is rebuilt.)
@@ -156,7 +157,7 @@ Stop and ask before you:
 | 10 | Whether `SCENE_xxx` is a node id or the derived scene record's id. ADR 0001 ruled the latter, in a separate id space — but `packages/script`'s `SceneRecord.id` is implemented as the heading node's own id, so the ADR and the code contradict each other | `?selected=`, any URL naming a scene |
 | 11 | The revision colour sequence past green (`nextRevisionColour` refuses at green) | Issuing a sixth revision |
 | 12 | Locked-page numbering past the last lock — a judgement call is implemented (the sequence continues unprotected), not ruled | Export, revision compare |
-| 13 | Whether an assistant message costs credits, and how much. The panel is real and read-only (2026-09-16) and writes no ledger row; the Characters drawer's `Draft from the script` and `Check for contradictions` (2026-09-18) take the same standing | Charging the assistant; "cost named before it is spent" on its send button and on the two Characters buttons; a rate limit on either |
+| 13 | Whether an assistant message costs credits, and how much. The panel is real and read-only (2026-09-16) and writes no ledger row; the Characters drawer's `Draft from the script` and `Check for contradictions` (2026-09-18) took the same standing until the route's fourth pass removed them (2026-09-20) | Charging the assistant; "cost named before it is spent" on its send button; a rate limit on it |
 | 14 | The Production feature set's escalations — the credit unit and margin, refund on cancel-while-running, the clip-length source (registry vs the `CLIP_SECONDS` CHECK), the film-settings shape, where kept Looks live, comments on takes — each listed with a recommendation in `docs/production/06-decisions.md` §3 (D-1 … D-21) | Production phase 1 (D-4, D-10, D-13), phase 3 (D-6, D-9), phase 4 (D-18) |
 
 ---
@@ -260,7 +261,7 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   tree by accident; do not rely on it.
 - `projectType: 'film'` **hides** the episode segment. The database still stores one episode row.
   The router special-cases the shape; the schema never does.
-- Rail order is fixed (`docs/ui design/README.md`, "Rail"): Writing · Characters · Locations ·
+- Rail order is fixed (the v2 design's "Rail", retired 2026-09-20 - the order stands): Writing · Characters · Locations ·
   Timeline · Research · Production. Writing stays lit across all four writing routes. Insights
   was removed with the v2 redesign (2026-09-16); its name stays reserved.
 - The writing sidebar lists **Script · Storyboard · Outline · Scenes** (ruled 2026-09-17, reversing
@@ -271,9 +272,9 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 - The rail's Characters icon navigates to `/characters` from every route (re-ruled by the client
   2026-09-16; the writing mockups' 330px peek overlay was built in the first shell pass and
   removed).
-- Characters' `Cast · Relationships · Sheet` tabs are **not** `?view=` (ruled 2026-09-16, the
-  Script route's precedent): the URL stays `/characters`, the view is React state in the route's
-  layout. The Storyboard's `Boards · Canvas · Shot list` and Scenes' `Cards · Index cards · Scene
+- Characters' `Canvas · Relationships · List` tabs (the fourth pass, 2026-09-20) are **not**
+  `?view=` (ruled 2026-09-16, the Script route's precedent): the URL stays `/characters`, the view
+  is React state in the route's layout. The Storyboard's `Boards · Canvas · Shot list` and Scenes' `Cards · Index cards · Scene
   list` took the same ruling on 2026-09-17: the URL stays `/storyboard` or `/scenes`, the view is
   a client cell the header and the body share. Locations' `Places · Scenes here · Sheet` took it
   on 2026-09-18: the URL stays `/locations`, the view is React state in the route's layout
@@ -281,20 +282,23 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 
 ### UI fidelity
 
-- **The design package is the spec.** `docs/ui design/README.md` and the nine `Route - * v2.dc.html`
-  mockups (2026-09-16). Its `:root` token block is `packages/ui/src/tokens/palette.css`, copied
-  verbatim; the older token names alias onto it until every route is rebuilt. **Two exceptions:
-  ruled 2026-09-17, `Route - Characters v2.dc.html` no longer binds the Characters route** - the
-  client retired it (too close to laper.ai, visually weak, not useful); the route is being rebuilt
-  in four phases to a written plan, recorded pass by pass in `docs/build-decisions.md`
-  ("Characters rebuild") - **and ruled 2026-09-18, `Route - Locations v2.dc.html` no longer binds
-  the Locations route** (the same audit found the same shape; "Locations rebuild" in
-  `docs/build-decisions.md`); **the Timeline's followed on 2026-09-18** ("Timeline rebuild"); **and
-  ruled 2026-09-19, `Route - Production v2.dc.html` no longer binds the Production route** — the
-  feature is re-specified end to end in `docs/production/` (PRD, design spec, data model, pipeline,
-  phases, decisions) and its body is rebuilt to Claude Design frames drawn from
-  `docs/production/02-design-spec.md`, one phase per session. The README's language, tokens and
-  patterns still apply on all four.
+- **The design package was the spec, and is retired.** The v2 design package (`docs/ui design/`,
+  a README and nine `Route - * v2.dc.html` mockups, 2026-09-16) was the spec for the shell and the
+  routes rebuilt to it; the client deleted it on 2026-09-20, on purpose, and it is not to be read
+  back from git history. Its `:root` token block lives on as `packages/ui/src/tokens/palette.css`,
+  copied verbatim; its language, tokens and patterns (plain lower-case-leaning copy, live counts,
+  both states, both themes) still bind every route. Route by route the spec is now the written
+  record in `docs/build-decisions.md`: **ruled 2026-09-17, `Route - Characters v2.dc.html` no
+  longer binds the Characters route** - the client retired it (too close to laper.ai, visually
+  weak, not useful); the route was rebuilt in four phases to a written plan ("Characters rebuild"),
+  **then a fourth pass on 2026-09-20 to laper.ai's route shape by the client's ruling** (a canvas of
+  cards, a Relationships graph, a List, a form drawer; "Characters, fourth pass") - **ruled
+  2026-09-18, `Route - Locations v2.dc.html` no longer binds the Locations route** (the same audit
+  found the same shape; "Locations rebuild"); **the Timeline's followed on 2026-09-18** ("Timeline
+  rebuild"); **and ruled 2026-09-19, `Route - Production v2.dc.html` no longer binds the Production
+  route** — the feature is re-specified end to end in `docs/production/` (PRD, design spec, data
+  model, pipeline, phases, decisions) and its body is rebuilt to Claude Design frames drawn from
+  `docs/production/02-design-spec.md`, one phase per session.
 - **Icons are inline stroke SVGs** from `packages/ui/src/icons.tsx` - 18px, 1.35 stroke, the
   mockups' own paths. The routes built before the redesign still print the older Unicode glyph
   set as text: `✎ ◍ ⌖ ◷ ▧ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝` (`⧗` left with Beats, `◈` with Bible, `◎` with
@@ -333,12 +337,11 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   record open, a Focus block for it (ruled 2026-09-17); on `/locations` the location records
   beside the cast (2026-09-18); on `/timeline` every scene's story time, its threads and the
   continuity check's open findings, with the drawer's scene as the Focus (the Timeline rebuild,
-  2026-09-18). The Characters drawer's two model actions
-  (2026-09-18) are the first steps past the chat and stay inside the rule below: `Draft from the
-  script` lands two or three cited sentences in an **unsaved** field the writer keeps with Save,
-  and `Check for contradictions` returns pairs of quotes that are kept as rows the writer waves
-  through or not (`character_findings`); neither edits a node, and a draft that cites no scene it
-  was shown is refused. The lifecycle below is where it goes next.
+  2026-09-18). The Characters drawer's two model actions (2026-09-18: `Draft from the script`
+  into an **unsaved** field, `Check for contradictions` into `character_findings` rows) were the
+  first steps past the chat; the route's fourth pass removed them on 2026-09-20 (the drawer is a
+  form now), `character_findings` is orphaned and kept, and the rule below still binds whatever
+  comes next. The lifecycle below is where it goes next.
 - Lifecycle: **Brief → Plan → Run → Review → Commit.** One run produces one revision entry.
 - **Every write returns a proposal, never a mutation.** Proposals are anchored to node ids and
   rendered as hunks against current node state.
@@ -461,7 +464,7 @@ share a file.
 | `production.state` | The generation job's status | Drive it from the job row. All six states get built |
 | theme, zoom, panels, palette, aiScope | Per user or per session | localStorage or session state |
 | the assistant panel | The same panel on every route | `assistantOpen` is session state |
-| Characters' `cast \| presence \| sheet` | Ruled 2026-09-16 (the client; Presence replaced the Relationships graph 2026-09-18): switching must be instant and the URL must stay `/characters`, as the Script's switches were ruled 2026-09-11 | React state in the route's layout (`_characters/view-state.tsx`), so it survives opening the drawer; `?view=` is an unknown key there |
+| Characters' `canvas \| relationships \| list` | Ruled 2026-09-16 (the client; the views were renamed by the fourth pass, 2026-09-20, which brought the Relationships graph back in place of the Presence grid): switching must be instant and the URL must stay `/characters`, as the Script's switches were ruled 2026-09-11 | React state in the route's layout (`_characters/view-state.tsx`), so it survives opening the drawer; `?view=` is an unknown key there |
 | the Storyboard's `board \| canvas \| list` | Ruled 2026-09-17 (the client): the same ask - a tab must switch smoothly and the URL must stay `/storyboard`; as a param each click re-ran the page's server read | A client cell the header's tabs and the workspace both reach (`_storyboard/view-state.tsx`, the `coverage.ts` shape - the shared writing layout cannot host one route's provider); resets to the board when the workspace unmounts; `?view=` is an unknown key there |
 | Scenes' `cards \| index \| list` | Ruled 2026-09-17 (the client): the same ask again, in the same words - smooth, and the URL must stay `/scenes` | The Storyboard's cell shape (`_scenes/view-state.tsx`); the route's own client `<main>` (`_scenes/scenes-main.tsx`) writes `data-sub-view` and resets the cell to the cards on unmount; `?view=` is an unknown key there |
 | Locations' `places \| scenes \| sheet` | Ruled 2026-09-18 (the client), with the rebuild: the same ask, and the URL must stay `/locations` | React state in the route's layout (`_locations/view-state.tsx`, the Characters shape - the route has a layout of its own), so it survives opening the drawer; `?view=` is an unknown key there |

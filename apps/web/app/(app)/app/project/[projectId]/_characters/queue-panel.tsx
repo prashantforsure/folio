@@ -1,28 +1,30 @@
 'use client'
 
-import type { PairItem, ProjectId, ResolveItem, SceneFacts } from '@folio/contracts'
+import type { PairItem, ProjectId, ResolveItem } from '@folio/contracts'
+import { useCallback } from 'react'
 
 import { revokeDecision } from '../../../../../../lib/characters/actions'
 import type { CastFigure } from '../../../../../../lib/characters/cast'
 import type { WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
 import type { StatusToast } from '../_chrome/status-bar'
 import type { Run } from '../_chrome/use-run'
-import { CharacterCard } from './character-card'
+import { DrawerShell } from './drawer-shell'
 import type { QueueDecision } from './unmatched-queue'
 import { UnmatchedQueue } from './unmatched-queue'
 import { WalkOnsLine } from './walk-ons-line'
 
 /**
- * The Cast view: the queue first while it has rows or pairs
- * (`unmatched-queue.tsx`, never dismissed), the walk-ons line under it
- * (`walk-ons-line.tsx`), then the grid of content-first cards
- * (`repeat(auto-fill, minmax(260px, 1fr))`, 14px gaps). `0 20px 24px`
- * around it all. The toolbar's filter narrows the cards and never the
- * queue; an empty filter is one line with `Show all`.
+ * `Needs a decision` - the identity layer's machinery, off the main
+ * surface (the fourth pass, 2026-09-20): the resolve queue's cue rows and
+ * pair rows (`unmatched-queue.tsx`, unchanged - rows, never a computed
+ * view) and the walk-ons line (`walk-ons-line.tsx`), in the drawer slot
+ * behind the toolbar's `Needs a decision · N` pill. The canvas is the
+ * surface; this is a pill away. The Scenes modal's link still opens it
+ * (`setQueueIntent`, read by the workspace).
  *
  * Every queue decision lands in the status bar as a sentence with `Undo`
  * for a few seconds (`revokeDecision` takes it back), so a mis-click is
- * never permanent.
+ * never permanent - the handler that used to live on the Cast view.
  */
 const decided = (item: ResolveItem, decision: QueueDecision): { readonly message: string; readonly undo: unknown } => {
   switch (decision.kind) {
@@ -37,45 +39,39 @@ const decided = (item: ResolveItem, decision: QueueDecision): { readonly message
   }
 }
 
-export const CastView = ({
+export const QueuePanel = ({
   projectId,
   shape,
   figures,
-  shown,
-  index,
   resolve,
   pairs,
   walkOns,
-  selectedId,
-  storage,
   run,
   toast,
-  onShowAll,
+  onClose,
 }: {
   readonly projectId: ProjectId
   readonly shape: WorkspaceShape
   /** Every record - the queue's cast. */
   readonly figures: readonly CastFigure[]
-  /** The records after the toolbar's filter - the grid. */
-  readonly shown: readonly CastFigure[]
-  readonly index: readonly SceneFacts[]
   readonly resolve: readonly ResolveItem[]
   readonly pairs: readonly PairItem[]
   readonly walkOns: readonly ResolveItem[]
-  readonly selectedId: string | null
-  readonly storage: boolean
   readonly run: Run
   readonly toast: (message: string, action?: StatusToast['action']) => void
-  readonly onShowAll: () => void
+  readonly onClose: () => void
 }) => {
-  const undo = (item: ResolveItem, decision: unknown): void => {
-    run(async () => {
-      const result = await revokeDecision(projectId, item.key, decision)
-      if (result.status !== 'resolved') return result.message
-      toast('Undone.', undefined)
-      return null
-    })
-  }
+  const undo = useCallback(
+    (item: ResolveItem, decision: unknown): void => {
+      run(async () => {
+        const result = await revokeDecision(projectId, item.key, decision)
+        if (result.status !== 'resolved') return result.message
+        toast('Undone.', undefined)
+        return null
+      })
+    },
+    [projectId, run, toast],
+  )
   const onDecided = (item: ResolveItem, decision: QueueDecision): void => {
     const { message, undo: choice } = decided(item, decision)
     toast(message, {
@@ -85,13 +81,36 @@ export const CastView = ({
       },
     })
   }
+  const total = resolve.length + pairs.length
 
   return (
-    <div data-cast-view className="min-h-0 flex-1 overflow-y-auto px-[20px] pb-[24px]">
-      <div className="flex flex-col gap-[14px]">
-        {resolve.length > 0 || pairs.length > 0 ? (
+    <DrawerShell
+      title="Needs a decision"
+      meta={
+        <span className="tabular" data-queue-count={total}>
+          {total} {total === 1 ? 'decision' : 'decisions'}
+          {walkOns.length === 0 ? '' : ` · ${String(walkOns.length)} ${walkOns.length === 1 ? 'walk-on' : 'walk-ons'}`}
+        </span>
+      }
+      label="Needs a decision"
+      onClose={onClose}
+      footer={
+        <>
+          <span className="min-w-0 flex-1 text-11 text-ink3">Every answer can be taken back from the status bar for a few seconds.</span>
+          <button type="button" data-queue-done onClick={onClose} className="folio-line-button h-[34px] flex-none rounded-[9px] px-[14px]">
+            Done
+          </button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-[14px]" data-queue-panel>
+        {total === 0 ? (
+          <span className="text-12 text-ink3" data-queue-empty>
+            Nothing needs a decision. Every name in the script points at a character.
+          </span>
+        ) : (
           <UnmatchedQueue projectId={projectId} shape={shape} resolve={resolve} pairs={pairs} cast={figures} run={run} toast={toast} onDecided={onDecided} />
-        ) : null}
+        )}
         {walkOns.length > 0 ? (
           <WalkOnsLine
             projectId={projectId}
@@ -103,32 +122,7 @@ export const CastView = ({
             }}
           />
         ) : null}
-
-        {shown.length === 0 && figures.length > 0 ? (
-          <p className="m-0 text-12-5 text-ink3" data-cast-filtered-empty>
-            No character matches that filter.{' '}
-            <button type="button" data-show-all onClick={onShowAll} className="text-accent hover:underline">
-              Show all
-            </button>
-          </p>
-        ) : (
-          <div data-cast-grid className="grid gap-[14px]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
-            {shown.map((figure) => (
-              <CharacterCard
-                key={figure.id}
-                projectId={projectId}
-                shape={shape}
-                figure={figure}
-                index={index}
-                selected={figure.id === selectedId}
-                storage={storage}
-                run={run}
-                onDecided={onDecided}
-              />
-            ))}
-          </div>
-        )}
       </div>
-    </div>
+    </DrawerShell>
   )
 }

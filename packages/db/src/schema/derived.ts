@@ -1,7 +1,5 @@
 import {
   CHARACTER_COLOR_IDS,
-  CHARACTER_FINDING_KINDS,
-  CHARACTER_FINDING_STATUSES,
   CHARACTER_GENDERS,
   CHARACTER_ORIGINS,
   CHARACTER_STATUSES,
@@ -84,6 +82,15 @@ export const lightEnum = pgEnum('light', LIGHT_STATES)
 export const characterGenderEnum = pgEnum('character_gender', CHARACTER_GENDERS)
 export const characterStatusEnum = pgEnum('character_status', CHARACTER_STATUSES)
 export const characterOriginEnum = pgEnum('character_origin', CHARACTER_ORIGINS)
+/**
+ * The findings enums' values, once `@folio/contracts`'s `CHARACTER_FINDING_*`
+ * - the contract left with the fourth Characters pass (2026-09-20), the
+ * table is orphaned and kept, and a Postgres enum must still be declared
+ * with the values it has. Nothing reads them but the schema.
+ */
+const CHARACTER_FINDING_KINDS = ['contradiction'] as const
+const CHARACTER_FINDING_STATUSES = ['open', 'deliberate'] as const
+
 export const characterFindingKindEnum = pgEnum('character_finding_kind', CHARACTER_FINDING_KINDS)
 export const characterFindingStatusEnum = pgEnum('character_finding_status', CHARACTER_FINDING_STATUSES)
 export const locationStatusEnum = pgEnum('location_status', LOCATION_STATUSES)
@@ -157,6 +164,15 @@ export const characters = pgTable(
      * backfill guesses at a history nobody recorded.
      */
     origin: characterOriginEnum('origin'),
+    /**
+     * Where the canvas left the card (the fourth pass, `0024`, on the
+     * `shots.canvas_x` pattern of `0020`): world px, whole, both or
+     * neither by the check below. Null means "never moved" - the canvas
+     * lays the card out on the first free cell in grid order. Cosmetic:
+     * nothing derived reads it, and a re-derive never writes it.
+     */
+    canvasX: integer('canvas_x'),
+    canvasY: integer('canvas_y'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
@@ -165,6 +181,7 @@ export const characters = pgTable(
     check('characters_name_not_empty', sql`length(btrim(${table.name})) > 0`),
     check('characters_not_merged_into_self', sql`${table.mergedInto} IS DISTINCT FROM ${table.id}`),
     check('characters_color_known', sql`${table.color} = any(${sql.raw(`ARRAY[${CHARACTER_COLOR_IDS.map((id) => `'${id}'`).join(', ')}]::text[]`)})`),
+    check('characters_canvas_position_whole', sql`(${table.canvasX} IS NULL) = (${table.canvasY} IS NULL)`),
   ],
 )
 
@@ -208,7 +225,24 @@ export const characterBoundCues = pgTable(
   ],
 )
 
-/** A relationship between two characters. AUTHORED. */
+/**
+ * A relationship between two characters. AUTHORED.
+ *
+ * Reshaped in `0024` (the Characters fourth pass, 2026-09-20 - the
+ * Relationships graph laper.ai draws, by the client's ruling): one row per
+ * unordered pair, `character_id < other_id` by a check, so the primary key
+ * is the dedupe and either order finds the row. The two labels are
+ * directional - `a_is` reads "<character_id> is <other_id>'s a_is"
+ * (`sister`), `b_is` the other way (`brother`) - and at least one is
+ * written. `description` is the free line under them. The first shape's
+ * `what` / `shift` (one directed row per side, `0013`) were dropped: the
+ * table was empty, nothing had written it since that migration.
+ *
+ * Authored, never derived: who talks to whom is `character_derivations.
+ * exchanges` and the graph's `Dialogue` layout reads that instead. The
+ * derivation reads this table only to hand `@folio/script` each side's
+ * `{ other, what }` list (`repositories/derivation.ts`).
+ */
 export const characterRelationships = pgTable(
   'character_relationships',
   {
@@ -219,14 +253,19 @@ export const characterRelationships = pgTable(
     otherId: uuid('other_id')
       .notNull()
       .references(() => characters.id, { onDelete: 'cascade' }),
-    what: text('what').notNull(),
-    /** How it moves across the draft. Authored beside `what`; the shared-scene count is derived. */
-    shift: text('shift'),
+    /** What `character_id` is to `other_id`: `sister`. Empty when only the other side is named. */
+    aIs: text('a_is').notNull().default(''),
+    /** What `other_id` is to `character_id`: `brother`. */
+    bIs: text('b_is').notNull().default(''),
+    description: text('description'),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
   },
   (table) => [
     primaryKey({ columns: [table.characterId, table.otherId] }),
     index('character_relationships_project_idx').on(table.projectId),
-    check('character_relationships_not_self', sql`${table.characterId} <> ${table.otherId}`),
+    check('character_relationships_ordered', sql`${table.characterId} < ${table.otherId}`),
+    check('character_relationships_labelled', sql`length(btrim(${table.aIs})) > 0 OR length(btrim(${table.bIs})) > 0`),
   ],
 )
 
@@ -292,6 +331,14 @@ export const characterDerivations = pgTable(
 /**
  * A continuity finding on a character. AUTHORED, on the assistant's word
  * and the writer's verdict (`0022`).
+ *
+ * ORPHANED 2026-09-20: the Characters fourth pass removed the drawer's
+ * `✦ Check for contradictions` and with it every reader and writer of this
+ * table (`replaceOpenFindings`, `setFindingStatus`, `listCharacterFindings`
+ * went with `lib/characters/model-actions.ts`). The table stays,
+ * forward-only, like `revisions` - dropping it is a migration that drops
+ * user data, which is ask-first (AGENTS.md, When to ask first). The
+ * description below is what it was built for.
  *
  * The one kind is a contradiction: two quotes from the script that cannot
  * both be true of the character - the script against itself, never against

@@ -1,5 +1,5 @@
-import type { CharacterFinding, DraftField, SceneRef } from '@folio/contracts'
-import type { CharacterId, CueRestore, ScreenplayNode } from '@folio/script'
+import type { Relationship } from '@folio/contracts'
+import type { CharacterId, CueRestore } from '@folio/script'
 
 /**
  * What the Characters route's server actions hand back. Kept out of
@@ -64,23 +64,6 @@ export type RenamePreview =
     }
   | Failure
 
-/** `taken` carries whether the spelling is the holder's last, so the block can offer a move or a merge. */
-export type BindResult =
-  | { readonly status: 'bound' }
-  | {
-      readonly status: 'taken'
-      readonly by: CharacterId
-      readonly name: string
-      readonly cue: string
-      readonly last: boolean
-    }
-  | Failure
-
-export type MoveResult =
-  | { readonly status: 'moved' }
-  | { readonly status: 'last'; readonly by: CharacterId; readonly name: string }
-  | Failure
-
 /** After an upload: the portrait's public URL, so the card can show it before the page re-reads. */
 export type PortraitResult = { readonly status: 'saved'; readonly url: string | null } | Failure
 
@@ -96,48 +79,12 @@ export type DeriveResult = { readonly status: 'derived'; readonly characters: nu
 /** After a verdict on a pair of records: merged into the kept one, or marked different. */
 export type PairResult = { readonly status: 'merged'; readonly into: CharacterId } | { readonly status: 'different' } | Failure
 
-/** The sides: one part's nodes in script order, with the labels a mention run needs. */
-export type SidesResult =
-  | {
-      readonly status: 'sides'
-      readonly nodes: readonly ScreenplayNode[]
-      readonly labels: readonly { readonly entity: 'character' | 'location'; readonly id: string; readonly label: string }[]
-      /** The heading node ids as refs, so the modal can title each group. */
-      readonly headings: readonly SceneRef[]
-    }
-  | Failure
-
 // ---------------------------------------------------------------------------
-// The model's actions (phase 4)
+// The canvas and the graph (the fourth pass, 2026-09-20)
 // ---------------------------------------------------------------------------
 
-/**
- * A draft from the script, into an unsaved field. `nothing` is the honest
- * answer when the record is off the page or the model could cite nothing;
- * `shown` / `total` say how many of the character's scenes fitted the cap.
- */
-export type DraftResult =
-  | {
-      readonly status: 'drafted'
-      readonly field: DraftField
-      readonly text: string
-      readonly refs: readonly SceneRef[]
-      readonly shown: number
-      readonly total: number
-    }
-  | { readonly status: 'nothing'; readonly message: string }
-  | Failure
+/** After a drop on the canvas: the position as written. */
+export type PlaceResult = { readonly status: 'placed' } | Failure
 
-/** After a check: the open findings as they now stand, and how many the model returned that did not quote the page. */
-export type CheckResult =
-  | {
-      readonly status: 'checked'
-      readonly findings: readonly CharacterFinding[]
-      readonly dropped: number
-      readonly shown: number
-      readonly total: number
-    }
-  | { readonly status: 'nothing'; readonly message: string }
-  | Failure
-
-export type FindingResult = { readonly status: 'set'; readonly finding: CharacterFinding } | Failure
+/** After a relationship is written or deleted: the row as it now stands, or `gone`. */
+export type RelationshipResult = { readonly status: 'saved'; readonly relationship: Relationship } | { readonly status: 'gone' } | Failure

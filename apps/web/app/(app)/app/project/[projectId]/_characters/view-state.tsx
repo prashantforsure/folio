@@ -9,12 +9,14 @@ import { ViewPill } from '../_chrome/view-pill'
 import type { ViewPillItem } from '../_chrome/view-pill'
 
 /**
- * Which of the Characters route's three views is showing: `Cast ·
- * Presence · Sheet` - drawn in the header's centre since 2026-09-17 like
- * every route's views (`_chrome/writing-header.tsx`; `CharactersHeaderViews`
- * below is what the layout hands it). Presence replaced the Relationships
- * graph on 2026-09-18 (ruled 2026-09-17: a character × scene grid, the
- * pairs list and the findings under it).
+ * Which of the Characters route's three views is showing: `Canvas ·
+ * Relationships · List` (the fourth pass, 2026-09-20 - laper.ai's route
+ * shape by the client's ruling; ruling 1 brought the Relationships graph
+ * back in place of the Presence grid, reversing 2026-09-17). Drawn in the
+ * header's centre like every route's views (`_chrome/writing-header.tsx`;
+ * `CharactersHeaderViews` below is what the layout hands it), each tab
+ * an icon beside its name - the Storyboard's and Scenes' shape, since the
+ * canvas is theirs.
  *
  * ## State, not a URL - ruled 2026-09-16
  *
@@ -25,35 +27,33 @@ import type { ViewPillItem } from '../_chrome/view-pill'
  * (or `/characters/:id` with the drawer open) whichever tab is lit. So the
  * view is React state and the pill's tabs are buttons (`_chrome/view-pill.tsx`,
  * the `onSelect` target); `?view=` is an unknown key on this route and a
- * stale link opens the cast, not a 404. AGENTS.md's exception table names
+ * stale link opens the canvas, not a 404. AGENTS.md's exception table names
  * the row.
  *
  * ## It lives in the layout, so the drawer does not reset it
  *
  * Opening a record is a navigation, `/characters` → `/characters/:id`, and
  * the page's subtree remounts under `characters/layout.tsx`. State held in
- * the workspace would fall back to the cast every time a presence row or a
- * sheet row was clicked - which is what the URL-borne view did too, since
- * `characterHref` carries no query. The layout wraps the route in this
- * provider beside `CastSidebarProvider`, and the view rides across the
- * drawer's open and close. It still starts on the cast on every full load:
- * a peek that must not survive a navigation away.
+ * the workspace would fall back to the canvas every time a tile or a row
+ * was clicked. The layout wraps the route in this provider, and the view
+ * rides across the drawer's open and close. It still starts on the canvas
+ * on every full load: a peek that must not survive a navigation away.
  */
 
-export type CharactersView = 'cast' | 'presence' | 'sheet'
+export type CharactersView = 'canvas' | 'relationships' | 'list'
 
 export const CHARACTERS_VIEWS: readonly ViewPillItem<CharactersView>[] = [
-  { id: 'cast', title: 'Cast' },
-  { id: 'presence', title: 'Presence' },
-  { id: 'sheet', title: 'Sheet' },
+  { id: 'canvas', title: 'Canvas', icon: 'canvas' },
+  { id: 'relationships', title: 'Relationships', icon: 'relationships' },
+  { id: 'list', title: 'List', icon: 'list' },
 ]
 
 type ViewState = { readonly view: CharactersView; readonly setView: (view: CharactersView) => void }
 
-const ViewContext = createContext<ViewState>({ view: 'cast', setView: () => undefined })
+const ViewContext = createContext<ViewState>({ view: 'canvas', setView: () => undefined })
 
 export const CharactersViewProvider = ({ children }: { readonly children: ReactNode }) => {
-  const [view, setView] = useState<CharactersView>('cast')
+  const [view, setView] = useState<CharactersView>('canvas')
   const value = useMemo<ViewState>(() => ({ view, setView }), [view])
   return <ViewContext.Provider value={value}>{children}</ViewContext.Provider>
 }

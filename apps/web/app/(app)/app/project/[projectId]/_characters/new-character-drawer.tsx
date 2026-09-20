@@ -14,18 +14,19 @@ import type { ProfileDraft } from './profile-fields'
 import { NameField, ProfileFields } from './profile-fields'
 
 /**
- * `New character` - the edit drawer's shape with nothing to edit yet. The
- * fields, then `Cancel` / `Create`; no portrait row, no scenes, no
- * relationships - a record that is not yet in the script has none. On
- * create the drawer becomes the record's own: the router goes to
- * `/characters/:id`.
+ * `New character` - the 400px drawer with nothing to edit yet: `Basic
+ * info` (Name, the swatches - least-used colour by default - Gender, Age,
+ * Role) · `Bio` · `Appearance notes`, then `Cancel` / `Create`. No
+ * portrait row and no relationships: a record that does not exist yet
+ * has neither. On create the drawer becomes the record's own: the router
+ * goes to `/characters/:id`, and the canvas lands the new card on the
+ * first free grid cell without a write (`lib/characters/canvas.ts`).
  *
- * Opened through `lib/characters/compose.ts` from the sidebar's `+` and
- * the toolbar's `+ New`; mounted by the workspace in the one drawer slot,
- * so it and the edit drawer are never open at once. The write goes through
- * the page's `run`, so the status bar says `Saving…` while the record is
- * made. The colour starts as the least used of the ten and the swatches
- * let the writer pick another.
+ * Opened through `lib/characters/compose.ts` from the toolbar's `＋ New
+ * character` and the empty card's `＋ By hand`; mounted by the workspace
+ * in the one drawer slot, so it, the edit drawer and the queue panel are
+ * never open at once. The write goes through the page's `run`, so the
+ * status bar says `Saving…` while the record is made.
  */
 export const NewCharacterDrawer = ({
   projectId,
@@ -45,9 +46,6 @@ export const NewCharacterDrawer = ({
     bio: '',
     appearance: '',
     color: leastUsedColor(usedHues),
-    status: 'draft',
-    wants: '',
-    needs: '',
   }))
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -72,9 +70,6 @@ export const NewCharacterDrawer = ({
         age: draft.age,
         bio: draft.bio,
         appearance: draft.appearance,
-        status: draft.status,
-        wants: draft.wants,
-        needs: draft.needs,
       })
       setBusy(false)
       if (result.status !== 'created') {
@@ -110,14 +105,15 @@ export const NewCharacterDrawer = ({
         </>
       }
     >
-      <NameField
-        value={draft.name}
-        busy={busy}
-        onChange={(name) => {
-          setDraft((current) => ({ ...current, name }))
-        }}
-      />
-      <ProfileFields draft={draft} onChange={setDraft} busy={busy} />
+      <ProfileFields draft={draft} onChange={setDraft} busy={busy}>
+        <NameField
+          value={draft.name}
+          busy={busy}
+          onChange={(name) => {
+            setDraft((current) => ({ ...current, name }))
+          }}
+        />
+      </ProfileFields>
     </DrawerShell>
   )
 }

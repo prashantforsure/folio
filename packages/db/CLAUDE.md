@@ -18,7 +18,7 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0023` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0024` are applied to the dev Supabase project** and are forward-only.
   (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
   pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
   `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
@@ -54,6 +54,21 @@ authored / derived-cache / measurement. Touching `episodes` needs
   `timeline_findings` and its kind enum - AUTHORED, the writer's `It's deliberate` on a continuity
   finding, keyed on the pure check's own key; a row is the verdict, there is no status column -
   RLS block hand-written on the `0022` pattern, applied in its own run on 2026-09-18.
+  `0024` (the Characters fourth pass, 2026-09-20) adds `characters.canvas_x` / `canvas_y` (both or
+  neither, the `0020` pattern) and **reshapes `character_relationships`** - drops `what` / `shift`
+  and the self check, adds `a_is` / `b_is` (two directional labels, at least one non-empty) /
+  `description` / stamps and an `a < b` check, one row per unordered pair; the table was empty, so
+  drop + add, not a rename. Generated through `drizzle-kit/api` in **two prompt-free diffs** from a
+  one-off script (`0023` → an intermediate snapshot with only the drops → the schema): a
+  same-table drop + add makes both `db:generate` and the API prompt "is `a_is` `what` renamed?"
+  and exit without a TTY - then **reordered by hand with a fold**: dev held one row from the first
+  Characters route stored `character_id > other_id`, so the adds come first, every directed row is
+  folded into the pair shape (`what` → `a_is` / `b_is` by direction, `shift` → `description`), and
+  the drops and checks come last; the end state is the snapshot's. `db:check` clean; applied in
+  its own run on 2026-09-20 through `drizzle-orm/postgres-js/migrator` directly - `db:migrate`
+  failed silently twice (the `a < b` check, then the fold's `NOT NULL` on `what`) and only the
+  direct migrator showed which statement.
+  `character_findings` (`0022`) is orphaned by the same pass and kept (dropping it is ask-first).
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`
   when none is set. The only reader is `apps/web/lib/storage/r2.ts`. And `assistantEnv` -
   `ANTHROPIC_API_KEY`, optional, `null` when unset; the only reader is

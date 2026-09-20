@@ -36,9 +36,9 @@ import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
  * Asking the assistant. Server only - this file holds the API key's reader.
  *
  * `assistantConnected()` is what the shell tells the panel: unset key, no
- * composer. `assistantClient()` is the one door to the SDK, for this file
- * and the Characters route's model actions (`lib/characters/model-actions.ts`);
- * the key itself never leaves here. `ask()` is the streaming path
+ * composer. `assistantClient()` is the one door to the SDK (the Characters
+ * drawer's model actions were its second caller until the fourth pass,
+ * 2026-09-20); the key itself never leaves here. `ask()` is the streaming path
  * `app/api/assistant/route.ts` exposes: gate, read the script beside the
  * gate, append the writer's turn, stream the answer, append the answer when
  * the stream ends.

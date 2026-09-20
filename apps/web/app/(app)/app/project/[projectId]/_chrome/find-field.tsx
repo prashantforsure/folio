@@ -17,8 +17,8 @@ import { createContext, useContext, useMemo, useState } from 'react'
  * `Route - Characters v2.dc.html` draws `Find a character`, `Route -
  * Research v2.dc.html` draws `Search sources and clips`; the geometry is
  * one: `7px 10px` on `--sunk`, a 10px radius, the 13px search glyph at 40%.
- * The Characters route still carries its own copy (`_characters/cast-sidebar.tsx`)
- * from its pass and should take this one at its next.
+ * The Characters route's copy left with its sidebar (the fourth pass,
+ * 2026-09-20); the route has no find field now.
  */
 
 type Find = { readonly query: string; readonly setQuery: (value: string) => void }

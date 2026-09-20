@@ -94,6 +94,14 @@ export const ICONS = {
   canvas: P(18, 'M3.6 4.5h3.2a1.1 1.1 0 0 1 1.1 1.1v2.2a1.1 1.1 0 0 1-1.1 1.1H3.6a1.1 1.1 0 0 1-1.1-1.1V5.6a1.1 1.1 0 0 1 1.1-1.1z', 'M11.2 9.1h3.2a1.1 1.1 0 0 1 1.1 1.1v2.2a1.1 1.1 0 0 1-1.1 1.1h-3.2a1.1 1.1 0 0 1-1.1-1.1v-2.2a1.1 1.1 0 0 1 1.1-1.1z', 'M7.9 6.7h2.2v4.6'),
   /** Storyboard view pill: shot list. Three lines. */
   list: P(18, 'M3 5h12M3 9h12M3 13h12'),
+  /** Characters view pill: the Relationships graph (2026-09-20, drawn from the client's laper.ai screenshots). Three nodes, two links. */
+  relationships: P(
+    18,
+    'M11 4.2a2 2 0 1 1-4 0 2 2 0 0 1 4 0z',
+    'M6.2 13.6a2 2 0 1 1-4 0 2 2 0 0 1 4 0z',
+    'M15.8 13.6a2 2 0 1 1-4 0 2 2 0 0 1 4 0z',
+    'M8 5.9l-2.7 5.8M10 5.9l2.7 5.8',
+  ),
   /** Storyboard toolbar: display options. Two sliders. */
   sliders: P(18, 'M3 5.5h12M3 12.5h12', 'M8.9 5.5a1.9 1.9 0 1 1-3.8 0 1.9 1.9 0 0 1 3.8 0z', 'M13.5 12.5a1.9 1.9 0 1 1-3.8 0 1.9 1.9 0 0 1 3.8 0z'),
   /** The sidebar's find field (`Route - Characters v2.dc.html`): a lens and its handle, 1.4 stroke on a 14 box. */

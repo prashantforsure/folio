@@ -1,11 +1,10 @@
 import type { CharacterProfile } from '@folio/contracts'
 import type { CharacterId } from '@folio/script'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 
-import { assistantConnected } from '../../../../../../lib/assistant/server'
-import { loadCharacters, loadProfile } from '../../../../../../lib/characters/server'
+import { loadCharacterProfile, loadCharacters } from '../../../../../../lib/characters/server'
 import type { ProjectContext } from '../../../../../../lib/workspace/context'
-import { characterHref, projectRouteHref } from '../../../../../../lib/workspace/hrefs'
+import { projectRouteHref } from '../../../../../../lib/workspace/hrefs'
 import type { RawSearchParams } from '../../../../../../lib/workspace/params'
 import { parseSubViews } from '../../../../../../lib/workspace/params'
 import { CharactersWorkspace } from './characters-workspace'
@@ -23,11 +22,10 @@ import { CharactersWorkspace } from './characters-workspace'
  * row is a tombstone that says where it went - and an id that names
  * nothing here is a 404.
  *
- * `loadCharacters` is `cache()`d on the context; the layout beside this
- * page (`_chrome/characters-layout.tsx`) makes the same call for the
- * sidebar, so the two share one read per request. The `<main data-route
- * data-sub-view>` contract the smoke test reads is kept by the workspace
- * exactly.
+ * `loadCharacters` is the one read per request since the fourth pass
+ * (2026-09-20): the layout no longer reads the cast - it has no sidebar.
+ * The `<main data-route data-sub-view>` contract the smoke test reads is
+ * kept by the workspace exactly.
  */
 export const CharactersRoute = async ({
   context,
@@ -45,10 +43,7 @@ export const CharactersRoute = async ({
 
   let profile: CharacterProfile | null = null
   if (selected !== null) {
-    const result = await loadProfile(context, selected)
-    if (result.state === 'merged') redirect(characterHref(project.id, result.into))
-    if (result.state === 'missing') notFound()
-    profile = result.profile
+    profile = await loadCharacterProfile(context, selected)
   }
 
   return (
@@ -63,10 +58,10 @@ export const CharactersRoute = async ({
       resolve={load.resolve}
       pairs={load.pairs}
       walkOns={load.walkOns}
-      map={load.map}
+      relationships={load.relationships}
+      dialogue={load.dialogue}
       derivable={load.derivable}
       storage={load.storage}
-      assistant={assistantConnected()}
       profile={profile}
     />
   )

@@ -114,11 +114,14 @@ export type CharacterBoundCue = z.infer<typeof CharacterBoundCueSchema>
 /** AUTHORED. A relationship between two characters. */
 export const CharacterRelationshipSchema = z.object({
   projectId: ProjectIdSchema,
+  /** The lower id of the pair (`0024`: one row per unordered pair). */
   characterId: CharacterIdSchema,
   otherId: CharacterIdSchema,
-  what: z.string().trim().min(1).max(200),
-  /** How it moves across the draft - "Polite in E1. Adversaries by E2 Sc 9." */
-  shift: z.string().max(500).nullable(),
+  /** What `characterId` is to `otherId`: `sister`. Empty when only the other side is named. */
+  aIs: z.string().trim().max(40),
+  /** What `otherId` is to `characterId`: `brother`. */
+  bIs: z.string().trim().max(40),
+  description: z.string().max(500).nullable(),
 })
 
 export type CharacterRelationshipRow = z.infer<typeof CharacterRelationshipSchema>

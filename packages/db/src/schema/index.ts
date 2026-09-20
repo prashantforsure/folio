@@ -22,11 +22,14 @@
  *   revisions
  *   locked_pages
  *   characters                   name, bio, notes, the profile the Characters route authors,
- *                                since 0017 its status and wants / needs, since 0021 its origin
+ *                                since 0017 its status and wants / needs, since 0021 its origin, since 0024
+ *                                where the canvas left its card (canvas_x / canvas_y)
  *   character_bound_cues         the alias table's authored half
- *   character_relationships
- *   character_findings           a contradiction the assistant found between two lines of the script, and the
- *                                writer's verdict on it (0022) - the model's answer, so stored, never derived
+ *   character_relationships      one row per unordered pair with two directional labels and a line (0024
+ *                                reshaped it; the Canvas's connect-drag and the drawer write it)
+ *   character_findings           ORPHANED 2026-09-20 - a contradiction the assistant found between two lines
+ *                                of the script and the writer's verdict (0022); no route reads or writes it
+ *                                since the fourth Characters pass; kept forward-only, like revisions
  *   locations                    name, parent, scheduled days, description, the merge tombstone, and
  *                                since 0018 its scouting status, address and photo key
  *   location_bound_sluglines

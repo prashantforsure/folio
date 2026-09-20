@@ -8,19 +8,23 @@ lives in `docs/build-decisions.md`, one section per phase — read the phase for
 That file was restarted on 2026-09-16 with the v2 redesign; the phases before it are in git
 history (`git show 7a541bd:docs/build-decisions.md`) and are not the reference for a rebuilt route.
 
-**The app is mid-redesign.** `docs/ui design/README.md` and the nine `Route - * v2.dc.html`
-mockups are the spec; routes are rebuilt to them one at a time. Done: the shell (rail, writing
-sidebar and header, assistant panel), **Script**, **Outline**,
-**Storyboard**, **Production**, **Characters**, **Locations**, **Research** (the last built from
-nothing: no body, table or contract existed before its pass) and **Scenes** (2026-09-17, ruled off
-its mockup onto the Storyboard's canvas, with a reading modal) and **Timeline** (2026-09-18, all
-five phases — every route is on the shell now). **Four mockups are retired:** Characters
-(2026-09-17), Locations and Timeline (both 2026-09-18) were rebuilt to written plans instead — the
-"Characters rebuild", "Locations rebuild" and "Timeline rebuild" sections of
-`docs/build-decisions.md` are their spec — and **Production (2026-09-19)**, whose v2 body still
-runs but is superseded by the feature set in `docs/production/` (a PRD, a design spec for Claude
-Design mockups, the data model, the generation pipeline, six phases built one session each, a
-decisions log). Its `README.md` is the entry point; nothing in that set is built yet.
+**The app is mid-redesign, and the design package is gone.** The v2 design package
+(`docs/ui design/`, a README and nine `Route - * v2.dc.html` mockups) was the spec the shell and
+the routes were rebuilt to; **the client deleted it on 2026-09-20, on purpose - do not read it, not
+from git history either.** Its tokens live on in `packages/ui/src/tokens/palette.css`; its
+language and patterns (plain lower-case-leaning copy, live counts, both states, both themes) still
+bind. Done on the shell: the shell itself (rail, writing sidebar and header, assistant panel),
+**Script**, **Outline**, **Storyboard**, **Production**, **Characters**, **Locations**, **Research**
+(the last built from nothing: no body, table or contract existed before its pass), **Scenes**
+(2026-09-17, ruled off its mockup onto the Storyboard's canvas, with a reading modal) and
+**Timeline** (2026-09-18, all five phases — every route is on the shell now). Route by route the
+spec is now the written record: Characters (rebuilt 2026-09-17/18 to a plan, **then a fourth pass on
+2026-09-20 to laper.ai's route shape** - "Characters, fourth pass" in `docs/build-decisions.md` is
+the spec), Locations and Timeline (both 2026-09-18, "Locations rebuild" and "Timeline rebuild"), and
+**Production (2026-09-19)**, whose v2 body still runs but is superseded by the feature set in
+`docs/production/` (a PRD, a design spec for Claude Design mockups, the data model, the generation
+pipeline, six phases built one session each, a decisions log). Its `README.md` is the entry point;
+nothing in that set is built yet.
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -46,7 +50,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 
 | Before you… | Read |
 | --- | --- |
-| build a route or touch UI | [docs/ui design/README.md](docs/ui%20design/README.md), then that route's `Route - <name> v2.dc.html` |
+| build a route or touch UI | that route's section in [docs/build-decisions.md](docs/build-decisions.md) — the design package is deleted (2026-09-20); `packages/ui/src/tokens/` and the built routes are the pattern |
 | change a built route | its phase in [docs/build-decisions.md](docs/build-decisions.md) — `grep -n '^## ' docs/build-decisions.md` |
 | touch the Production route, its worker, or any `✦` generation | [docs/production/README.md](docs/production/README.md) first — the feature is built in phases across sessions; that index says which of its seven files to read for the phase. The old `Route - Production v2.dc.html` is retired by `docs/production/02-design-spec.md` |
 | change node identity or the id shape | [ADR 0001](docs/adr/0001-node-identity.md) — preamble first; both rulings are reversible |
@@ -62,7 +66,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   ways, FDX import/export, derivation, pagination, the draft diff, and one read module per
   derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `rename.ts`).
 - `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, forward-only
-  migrations `0000`–`0022` (which are applied to the dev Supabase project is tracked in
+  migrations `0000`–`0024` (which are applied to the dev Supabase project is tracked in
   `packages/db/CLAUDE.md`), project-scoped repositories.
   `packages/ui` — tokens as CSS custom properties, the inline SVG icon set (`icons.tsx`), and a
   few small components (`src/index.ts` is the list).
@@ -96,19 +100,26 @@ Facts too narrow for AGENTS.md's contract but easy to get wrong (full history in
   without asking (AGENTS.md, Adding a dependency). Boundary files are `lib/script/pm-model.ts` and `lib/outline/pm-model.ts`;
   the document lives in the editor, never in React state. See AGENTS.md, The node model, for the
   slash-menu / no-type-bar rule both editors follow.
-- **Characters and Locations read the script back as evidence; they store little.** What the
-  script says about a person is computed in `packages/script` (`derive.ts` voice counts,
-  `introductions.ts`, `sides.ts`) into `character_derivations` (migration `0021`); what it says
-  about a set is computed at request time by `packages/script/src/sets.ts` over the node list
-  and never stored. The drawers are `/characters/:uuid` and `/locations/:uuid` (portals into the
-  layout's slot); the views (`Cast · Presence · Sheet`, `Places · Scenes here · Sheet`) are client
-  state. The Script editor's cues carry `data-character-id`; `PresenceStrip` in `@folio/ui` is
-  shared by both. The drawer's `✦ Draft from the script` / `✦ Check for contradictions`
-  (`lib/characters/model-actions.ts`) write only an unsaved field or `character_findings`
-  (`0022`) — open decision 13 stands. Portraits are on R2 (`lib/storage/r2.ts`, gated on the
-  `R2_*` block). `character_relationships` is a derivation read that nothing writes; Generate
-  (the look-sheet job) is not built. Everything else — the queue, the alias tables, the drawer
-  order, the scouting-layer ruling — is in the two rebuild sections of `docs/build-decisions.md`.
+- **Characters is a canvas (2026-09-20, the fourth pass, laper.ai's shape by the client's ruling);
+  Locations reads the script back as evidence.** `/characters` is `Canvas · Relationships · List`
+  (client state), no sidebar: a 306px card per record on the Storyboard's canvas
+  (`_characters/canvas/`, positions in `characters.canvas_x/_y`, migration `0024`), authored
+  relationships as threads between cards and as a deterministic force / dialogue / chord graph
+  (`_characters/graph/`, `lib/characters/graph.ts` - no animated simulation), a sortable List with
+  a Display menu and CSV. `character_relationships` was reshaped in `0024` to one row per pair with
+  two directional labels, written by the connect-drag, the pills and the drawer's
+  `＋ Add relationship` (`lib/characters/relationships.ts` sorts the pair). The identity layer
+  (alias table, rows-based queue, record-level rename with preview + undo, merge, `Off the page`
+  kept) is unchanged and lives in the `Needs a decision` panel behind the toolbar pill
+  (`_characters/queue-panel.tsx`). The drawer is a form (`Basic info · Bio · Appearance notes ·
+  Portrait · Relationships`); `✦ Generate` on a card is drawn disabled (the look-sheet job is
+  Production's, not built). `character_findings` (`0022`) is orphaned - the two drawer model
+  actions went with the pass. `packages/script` reads `derive.ts`, `introductions.ts`, `sides.ts`
+  as before. Locations: what the script says about a set is computed at request time by
+  `packages/script/src/sets.ts` and never stored; the drawer is `/locations/:uuid`; the views
+  (`Places · Scenes here · Sheet`) are client state. Portraits and photos are on R2
+  (`lib/storage/r2.ts`, gated on the `R2_*` block). The rest is in "Characters, fourth pass",
+  "Characters rebuild" and "Locations rebuild" in `docs/build-decisions.md`.
 - **The Timeline was rebuilt in five phases (2026-09-18) to a written plan.** Three authored
   things (`story_threads`; `scenes.story_day/story_clock/flashback/threads`, migration `0011`;
   `timeline_findings`, the writer's `It's deliberate` on a finding, `0023`) and three pure

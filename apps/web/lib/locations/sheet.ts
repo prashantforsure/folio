@@ -8,8 +8,9 @@ import { kindLabel, refLabel } from './view'
 /**
  * The Sheet view's arithmetic: sort, episode scope, the totals row and the
  * CSV a location manager takes out of the app. Pure; tested in
- * `tests/locations-sheet.test.ts`. The Characters sheet's shape
- * (`lib/characters/sheet.ts`), over a location's rows.
+ * `tests/locations-sheet.test.ts`. The shape the Characters sheet had
+ * until its fourth pass (`lib/characters/list.ts` is what it became), over
+ * a location's rows.
  *
  * Sort and scope are component state, like the toolbar's filter - the URL
  * stays `/locations`. A scoped sheet counts the record's scenes in one
