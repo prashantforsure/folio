@@ -9,7 +9,6 @@ import { uploadPortrait } from '../../../../../../lib/characters/actions'
 import { figuresOf, routeIdOf } from '../../../../../../lib/characters/cast'
 import { setQueueIntent, useNewCharacterOpen, useQueueIntent } from '../../../../../../lib/characters/compose'
 import { publishCharacterFacts } from '../../../../../../lib/characters/facts'
-import type { DialogueEdge } from '../../../../../../lib/characters/graph'
 import { useModalToast } from '../../../../../../lib/characters/modal-toast'
 import { pairKey } from '../../../../../../lib/characters/relationships'
 import type { Derivable, SceneIndexRef } from '../../../../../../lib/characters/server'
@@ -23,7 +22,6 @@ import { CharacterCanvas } from './canvas/character-canvas'
 import { CharacterDrawer } from './character-drawer'
 import { CharactersToolbar } from './characters-toolbar'
 import { EmptyCharacters } from './empty-characters'
-import { RelationshipsView } from './graph/relationships-view'
 import { ListView } from './list/list-view'
 import { NewCharacterDrawer } from './new-character-drawer'
 import { QueuePanel } from './queue-panel'
@@ -32,16 +30,18 @@ import { useCharactersView } from './view-state'
 
 /**
  * The Characters route's body inside the main-surface card (the fourth
- * pass, 2026-09-20): the toolbar row (`characters-toolbar.tsx`), one of
- * the three views - the Canvas, the Relationships graph, the List - or
- * the empty card, the 28px status bar, and **one thing in the drawer
- * slot**: the `New character` drawer, the `Needs a decision` panel, or the
- * record the URL names. The relationship modal floats over all of it.
+ * pass, 2026-09-20; the Relationships graph removed again 2026-09-21 - the
+ * canvas's threads already carry a relationship between two cards): the
+ * toolbar row (`characters-toolbar.tsx`), one of the two views - the
+ * Canvas, the List - or the empty card, the 28px status bar, and **one
+ * thing in the drawer slot**: the `New character` drawer, the `Needs a
+ * decision` panel, or the record the URL names. The relationship modal
+ * floats over all of it.
  *
  * ## `:characterId` is the URL; everything else is state
  *
  * The selected record is the path, and the drawer is what the path renders
- * over the view. The three views are state the layout holds
+ * over the view. The two views are state the layout holds
  * (`view-state.tsx`, ruled 2026-09-16 - the URL stays `/characters`), so
  * the pill's tabs are buttons; `data-sub-view` keeps its name for the
  * smoke test that reads it. Whether the queue panel is open (the pill, or
@@ -83,7 +83,6 @@ export const CharactersWorkspace = ({
   pairs,
   walkOns,
   relationships,
-  dialogue,
   derivable,
   storage,
   profile,
@@ -99,7 +98,6 @@ export const CharactersWorkspace = ({
   readonly pairs: readonly PairItem[]
   readonly walkOns: readonly ResolveItem[]
   readonly relationships: readonly Relationship[]
-  readonly dialogue: readonly DialogueEdge[]
   readonly derivable: Derivable | null
   readonly storage: boolean
   /** The record the drawer shows, when the path names one. */
@@ -199,17 +197,6 @@ export const CharactersWorkspace = ({
 
       {empty ? (
         <EmptyCharacters projectId={projectId} derivable={derivable ?? { count: 0, top: [] }} run={run} />
-      ) : view === 'relationships' ? (
-        <RelationshipsView
-          figures={figures}
-          relationships={relationships}
-          dialogue={dialogue}
-          selected={selected?.id ?? null}
-          onOpen={open}
-          onEditRelationship={(edge) => {
-            editPair(edge.a, edge.b)
-          }}
-        />
       ) : view === 'list' ? (
         <ListView projectId={projectId} figures={figures} episodeOrdinals={episodeOrdinals} selectedId={selected?.id ?? null} />
       ) : (

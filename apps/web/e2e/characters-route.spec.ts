@@ -8,9 +8,10 @@ import type { WalkOptions } from '../playwright.config'
 /**
  * The Characters route, walked in a browser against the real backend -
  * the fourth pass (2026-09-20, "Characters, fourth pass" in
- * `docs/build-decisions.md`): laper.ai's route shape - a canvas of cards,
- * a Relationships graph, a List, a form drawer - with the identity layer
- * a pill away in the `Needs a decision` panel.
+ * `docs/build-decisions.md`), its Relationships graph removed again
+ * 2026-09-21 ("Characters, relationships view removed"): laper.ai's route
+ * shape - a canvas of cards, a List, a form drawer - with the identity
+ * layer a pill away in the `Needs a decision` panel.
  *
  * What this proves, in order:
  *
@@ -19,13 +20,12 @@ import type { WalkOptions } from '../playwright.config'
  *      2026-09-16) so a stale link opens the canvas; a non-UUID is a 404.
  *   2. **Records come from cues.** `✦ Read the script` → three cards on
  *      the canvas, the `Needs a decision · N` pill equal to the rail
- *      badge, three tabs with icons; no sidebar.
+ *      badge, two tabs with icons; no sidebar.
  *   3. **A dragged card stays where it was dropped, across a reload.**
  *   4. **A relationship is made by dragging a grip onto a card** → the
- *      modal → `Create` → a thread with a two-label pill; the graph draws
- *      the edge with two labels; `Force · Dialogue · Chord` each move the
- *      tiles, deterministically; a label opens the modal; `Delete` removes
- *      the edge.
+ *      modal → `Create` → a thread with a two-label pill readable at a
+ *      glance (13.5px, raised 2026-09-21); the pill itself re-opens the
+ *      modal; `Delete` removes the thread.
  *   5. **The List sorts, shows a Display column, exports a CSV.**
  *   6. **The drawer**: a rename on an on-page record previews, rewrites the
  *      cues in the Script, and `Undo` restores them; `＋ New character` lands
@@ -161,8 +161,8 @@ test('empty state, both themes; a stale ?view= is ignored, a bad id is a 404', a
   // No sidebar on this route (ruling 2).
   await expect(page.locator('aside[data-sidebar]')).toHaveCount(0)
   await expect(page.locator('[data-route-crumb]')).toHaveText('Characters')
-  await expect(page.locator('[data-writing-header] [data-view-pill] button[data-view-tab]')).toHaveText(['Canvas', 'Relationships', 'List'])
-  await expect(page.locator('[data-writing-header] [data-view-pill] button[data-view-tab] svg')).toHaveCount(3)
+  await expect(page.locator('[data-writing-header] [data-view-pill] button[data-view-tab]')).toHaveText(['Characters', 'List'])
+  await expect(page.locator('[data-writing-header] [data-view-pill] button[data-view-tab] svg')).toHaveCount(2)
   await expect(page.locator('[data-writing-header] [data-view-pill] [data-view-tab="canvas"]')).toHaveAttribute('aria-current', 'page')
   await expect(page.locator('[data-route-id]')).toHaveText('characters')
   for (const theme of ['dark', 'light'] as const) {
@@ -233,7 +233,7 @@ test('a dragged card stays where it was dropped, across a reload', async ({ page
   expect(page.url()).toBe(charactersUrl)
 })
 
-test('a relationship: grip → modal → thread and pill; the graph draws it, lays out three ways, edits and deletes it', async ({ page, account }) => {
+test('a relationship: grip → modal → thread and pill; the pill re-opens the modal, edits and deletes it', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(charactersUrl)
   await dragTo(page, node(page, 'MEERA').locator('[data-connect-grip]'), node(page, 'SURESH KADAM').locator('[data-node-face]'))
@@ -251,58 +251,19 @@ test('a relationship: grip → modal → thread and pill; the graph draws it, la
   await expect(pill.locator('[data-pill-b]')).toHaveText('landlord')
   await expect(page.locator('[data-status-left]')).toContainText('1 relationship')
 
-  // The graph.
-  await page.locator('[data-writing-header] [data-view-tab="relationships"]').click()
-  await expect(page.locator('main[data-route="characters"]')).toHaveAttribute('data-sub-view', 'relationships')
-  expect(page.url()).toBe(charactersUrl)
-  const view = page.locator('[data-relationships-view]')
-  await expect(view.locator('[data-graph-node]')).toHaveCount(3)
-  await expect(view.locator('[data-edge]')).toHaveCount(1)
-  await expect(view.locator('[data-edge-label="a"]')).toHaveText('tenant')
-  await expect(view.locator('[data-edge-label="b"]')).toHaveText('landlord')
-  await expect(view.locator('[data-graph-empty]')).toHaveCount(0)
-  const positionsOf = async (): Promise<string[]> => {
-    const tiles = view.locator('[data-graph-node]')
-    const n = await tiles.count()
-    const out: string[] = []
-    for (let i = 0; i < n; i += 1) out.push(`${(await tiles.nth(i).getAttribute('data-graph-x')) ?? ''},${(await tiles.nth(i).getAttribute('data-graph-y')) ?? ''}`)
-    return out
-  }
-  const force = await positionsOf()
-  await view.locator('[data-layout-pill] [data-view-tab="chord"]').click()
-  await expect(view).toHaveAttribute('data-layout', 'chord')
-  const chord = await positionsOf()
-  expect(chord).not.toEqual(force)
-  await expect(view.locator('[data-edge][data-kind="chord"]')).toHaveCount(1)
-  await view.locator('[data-layout-pill] [data-view-tab="dialogue"]').click()
-  await expect(view).toHaveAttribute('data-layout', 'dialogue')
-  await expect(view.locator('[data-edge-label]')).toHaveCount(0)
-  await expect(view.locator('[data-edge][data-kind="dialogue"]').first()).toBeVisible()
-  // Deterministic: back to Force gives the same picture.
-  await view.locator('[data-layout-pill] [data-view-tab="force"]').click()
-  await expect(view).toHaveAttribute('data-layout', 'force')
-  expect(await positionsOf()).toEqual(force)
   for (const theme of ['dark', 'light'] as const) {
     await setTheme(page, theme)
-    await page.locator('[data-writing-header] [data-view-tab="relationships"]').click()
-    await page.screenshot({ path: `test-results/characters-graph-${theme}.png`, fullPage: false })
+    await page.screenshot({ path: `test-results/characters-thread-pill-${theme}.png`, fullPage: false })
   }
 
-  // A tile drag overrides until Relayout.
-  await expect(view.locator('[data-relayout]')).toHaveCount(0)
-  await dragTo(page, view.locator('[data-graph-node]').first(), view.locator('[data-graph-node]').first(), { x: 60, y: 40 })
-  await expect(view.locator('[data-relayout]')).toBeVisible()
-  await view.locator('[data-relayout]').click()
-  await expect(view.locator('[data-relayout]')).toHaveCount(0)
-
-  // A label opens the modal; Delete removes the edge.
-  await view.locator('[data-edge-label="a"]').click()
+  // The pill itself opens the modal; Delete removes the thread.
+  await pill.click()
   await expect(modal).toBeVisible()
   await expect(modal.locator('[data-rel-delete]')).toBeVisible()
   await modal.locator('[data-rel-delete]').click()
   await saved(page)
-  await expect(view.locator('[data-edge]')).toHaveCount(0, { timeout: 60_000 })
-  await expect(view.locator('[data-graph-empty]')).toContainText('No relationships yet')
+  await expect(page.locator('[data-threads] [data-thread]')).toHaveCount(0, { timeout: 60_000 })
+  await expect(page.locator('[data-status-left]')).toContainText('0 relationships')
 })
 
 test('the List sorts, shows a Display column and exports a CSV', async ({ page, account }) => {

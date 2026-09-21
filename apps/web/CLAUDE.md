@@ -141,28 +141,32 @@ routes and `packages/ui/src/tokens/` are the pattern.
   `continuity.ts`, not rulings. Details: `docs/build-decisions.md`, "Timeline rebuild, phases 2-5"
   and "phase 1".
 - **The Characters route (the fourth pass, 2026-09-20 - laper.ai's shape by the client's
-  ruling):** `_characters/characters-workspace.tsx` is the body - the toolbar row
+  ruling; the Relationships graph removed again 2026-09-21 - the canvas's own threads already
+  show a relationship between two cards, so the graph was a redundant second view of it):**
+  `_characters/characters-workspace.tsx` is the body - the toolbar row
   (`characters-toolbar.tsx`: the count, the `Needs a decision · N` pill, `＋ New character`), one
-  of Canvas / Relationships / List (`view-state.tsx`, client state) or the empty card, the status
+  of Characters / List (`view-state.tsx`, client state) or the empty card, the status
   bar with its `toast` slot (`_chrome/use-toast.ts`; the rename's undo offer is
   `lib/characters/undo.ts`), **one thing in the drawer slot** (the New drawer, the queue panel, or
   the edit drawer) and the relationship modal (`relationship-modal.tsx` on the new
   `_chrome/modal.tsx`). `_chrome/characters-layout.tsx` has **no sidebar** - the header with the
-  three tabs, the surface, the drawer slot. `canvas/character-canvas.tsx` is the Storyboard's
+  two tabs, the surface, the drawer slot. `canvas/character-canvas.tsx` is the Storyboard's
   canvas with a person per card (`_storyboard/canvas/use-canvas-viewport.ts` imported; the zoom
   pill, node drag and measure lifted to `_chrome/canvas/`): `character-node.tsx` (redrawn 2026-09-21: a
   `Portrait · Advanced · Look sheet` strip on the card's top edge, component state; the face is
   the grip and the click, a deep tint off `--face-*` with the name printed white on it;
   `Edit · Upload`, then `✦ Generate` disabled; the ring connect grip) and
   `relationship-threads.tsx` (`.folio-rel-thread` glow + rail + gradient dash per row, a
-  two-label pill at the midpoint that lights its thread on hover);
+  two-label pill at the midpoint - 13.5px, raised from 11.5px 2026-09-21 so the two labels read
+  at a glance - that lights its thread on hover and opens the relationship modal on click);
   positions persist through `placeCharacterOnCanvas` (`0024`), an unplaced card takes the first
-  free grid cell (`lib/characters/canvas.ts`, `lib/workspace/canvas.ts`).
-  `graph/relationships-view.tsx` draws 72×90 tiles on a static ground with `graph-edges.tsx`
-  (dashed, a rotated label at each end; the hovered / focused / selected tile's edges go 2px
-  accent and the rest step back - "Characters, card and connector redesign") over `lib/characters/graph.ts`'s deterministic
-  Fruchterman-Reingold (`Force` on authored rows, `Dialogue` on the derivation's exchanges) and
-  circle (`Chord`); tile drags override until `Relayout`. `list/list-view.tsx` +
+  free grid cell (`lib/characters/canvas.ts`, `lib/workspace/canvas.ts`). The Relationships graph
+  (`graph/relationships-view.tsx`, its `graph-edges.tsx` and `graph-node.tsx`) is gone
+  (2026-09-21, "Characters, relationships view removed"); `lib/characters/graph.ts`'s deterministic
+  Fruchterman-Reingold, circle and dialogue-edge arithmetic stays - still tested
+  (`tests/characters-graph.test.ts`), `authoredEdges` still feeds the canvas's own threads - but
+  `dialogueEdges` and the loader's `dialogue` field are now unread past `lib/characters/server.ts`,
+  same treatment as `character_findings`. `list/list-view.tsx` +
   `display-menu.tsx` sort `lib/characters/list.ts`'s columns and export its CSV. The identity
   layer is unchanged and re-homed: `queue-panel.tsx` hosts `unmatched-queue.tsx` (never
   dismissed, a reason chip, confidence-weighted buttons, pair rows) and `walk-ons-line.tsx` behind
@@ -175,8 +179,8 @@ routes and `packages/ui/src/tokens/` are the pattern.
   relationships.ts` sorts a pair and reads a row from either side; `facts.ts` publishes the open
   record, the no-description and the no-relationship lists for the assistant's report chips.
   `lib/characters/heal.ts` binds the name's cue to a record that has none on the next derive.
-  Details: `docs/build-decisions.md`, "Characters, fourth pass"; the third pass's "Characters
-  rebuild" is history.
+  Details: `docs/build-decisions.md`, "Characters, fourth pass" and "Characters, relationships
+  view removed"; the third pass's "Characters rebuild" is history.
 - **The Script autosave is a delta and every write it runs is one statement.** Over the
   transaction pooler a parameterised statement costs two round trips and cannot be pipelined
   (`packages/db/src/client.ts`), so on the request path the cost is statement count, not row

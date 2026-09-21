@@ -59,7 +59,6 @@ export const CharactersRoute = async ({
       pairs={load.pairs}
       walkOns={load.walkOns}
       relationships={load.relationships}
-      dialogue={load.dialogue}
       derivable={load.derivable}
       storage={load.storage}
       profile={profile}

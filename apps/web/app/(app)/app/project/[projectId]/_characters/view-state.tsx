@@ -9,14 +9,15 @@ import { ViewPill } from '../_chrome/view-pill'
 import type { ViewPillItem } from '../_chrome/view-pill'
 
 /**
- * Which of the Characters route's three views is showing: `Canvas ·
- * Relationships · List` (the fourth pass, 2026-09-20 - laper.ai's route
- * shape by the client's ruling; ruling 1 brought the Relationships graph
- * back in place of the Presence grid, reversing 2026-09-17). Drawn in the
- * header's centre like every route's views (`_chrome/writing-header.tsx`;
- * `CharactersHeaderViews` below is what the layout hands it), each tab
- * an icon beside its name - the Storyboard's and Scenes' shape, since the
- * canvas is theirs.
+ * Which of the Characters route's two views is showing: `Characters ·
+ * List` (the fourth pass, 2026-09-20 - laper.ai's route shape by the
+ * client's ruling; the Relationships graph, brought back by ruling 1 in
+ * place of the Presence grid, was removed again 2026-09-21 - the canvas's
+ * threads already show a relationship between two cards, so the graph was
+ * a second way to see the same thing). Drawn in the header's centre like
+ * every route's views (`_chrome/writing-header.tsx`; `CharactersHeaderViews`
+ * below is what the layout hands it), each tab an icon beside its name -
+ * the Storyboard's and Scenes' shape, since the canvas is theirs.
  *
  * ## State, not a URL - ruled 2026-09-16
  *
@@ -40,11 +41,10 @@ import type { ViewPillItem } from '../_chrome/view-pill'
  * on every full load: a peek that must not survive a navigation away.
  */
 
-export type CharactersView = 'canvas' | 'relationships' | 'list'
+export type CharactersView = 'canvas' | 'list'
 
 export const CHARACTERS_VIEWS: readonly ViewPillItem<CharactersView>[] = [
-  { id: 'canvas', title: 'Canvas', icon: 'canvas' },
-  { id: 'relationships', title: 'Relationships', icon: 'relationships' },
+  { id: 'canvas', title: 'Characters', icon: 'canvas' },
   { id: 'list', title: 'List', icon: 'list' },
 ]
 
