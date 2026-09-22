@@ -442,8 +442,6 @@ export type {
   ClipLength,
   ClipState,
   Continuity,
-  DescriptionPart,
-  DescriptionPartKind,
   DurationPreset,
   EpisodeSettings,
   FieldId,

@@ -1,4 +1,4 @@
-import type { CharacterId, LocationId, NodeId } from '@folio/script'
+import type { CharacterId, DescriptionPart, LocationId, NodeId } from '@folio/script'
 import { z } from 'zod'
 
 import type { ArtStyleId, AssetId, ClipId, EpisodeId, ProductionGenerationId, ReelId, ReelShotId, SheetId, UserId } from './ids'
@@ -278,8 +278,8 @@ export const CONTINUITIES = ['natural', 'match'] as const
 export type Continuity = (typeof CONTINUITIES)[number]
 export const ContinuitySchema = z.enum(CONTINUITIES)
 
-export const DESCRIPTION_PART_KINDS = ['text', 'mention', 'dialogue'] as const
-export type DescriptionPartKind = (typeof DESCRIPTION_PART_KINDS)[number]
+/** The kinds of `@folio/script`'s `DescriptionPart`, for the enum. */
+export const DESCRIPTION_PART_KINDS = ['text', 'mention', 'dialogue'] as const satisfies readonly DescriptionPart['kind'][]
 
 export const SHOT_CHARACTER_SOURCES = ['auto', 'manual'] as const
 export type ShotCharacterSource = (typeof SHOT_CHARACTER_SOURCES)[number]
@@ -403,13 +403,6 @@ export const DEFAULT_SETTINGS: Omit<EpisodeSettings, 'episodeId' | 'artStyleId' 
 /** The preset the mockup selects by default. */
 export const DEFAULT_ART_STYLE_KEY = 'netflix-prestige-drama'
 
-export type DescriptionPart = {
-  readonly kind: DescriptionPartKind
-  readonly text: string
-  /** The record a `mention` resolved to, or null for an unmatched `@Name`. */
-  readonly characterId: CharacterId | null
-}
-
 export type Asset = {
   readonly id: AssetId
   readonly kind: AssetKind
@@ -427,7 +420,8 @@ export type ReelShot = {
   readonly number: number
   readonly position: string
   readonly title: string | null
-  readonly durationS: DurationPreset | null
+  /** Whole seconds, 1–15: the menu writes a preset, the timing bar's drag any second. Null = none. */
+  readonly durationS: number | null
   /** The writer's override, or null: derive it (`derive.ts`, the spec's order). */
   readonly status: ShotStatus | null
   readonly shotType: ShotType
@@ -499,6 +493,7 @@ export type Clip = {
 
 export type Generation = {
   readonly id: ProductionGenerationId
+  readonly episodeId: EpisodeId
   readonly targetType: GenerationTarget
   readonly targetId: string
   readonly job: GenerationJob
@@ -661,7 +656,7 @@ export const ShotPatchSchema = z
     title: text(120).nullable().optional(),
     description: text(2000).optional(),
     dialogue: text(2000).nullable().optional(),
-    durationS: DurationPresetSchema.nullable().optional(),
+    durationS: z.number().int().min(1).max(15).nullable().optional(),
     status: ShotStatusSchema.nullable().optional(),
     shotType: ShotTypeSchema.optional(),
     cameraAngle: text(60).optional(),

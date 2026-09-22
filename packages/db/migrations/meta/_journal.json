@@ -190,6 +190,20 @@
       "when": 1790060670851,
       "tag": "0026_production_v12",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790061130532,
+      "tag": "0027_shot_references",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790061708796,
+      "tag": "0028_shot_duration_range",
+      "breakpoints": true
     }
   ]
 }

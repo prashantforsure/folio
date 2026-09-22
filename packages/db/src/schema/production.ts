@@ -1,4 +1,4 @@
-import { CLIP_LENGTHS, DURATION_PRESETS } from '@folio/contracts'
+import { CLIP_LENGTHS } from '@folio/contracts'
 import { sql } from 'drizzle-orm'
 import {
   boolean,
@@ -161,7 +161,7 @@ export const reels = pgTable(
     continuity: continuityEnum('continuity').notNull().default('natural'),
     status: reelStatusEnum('status').notNull().default('writing'),
     finalized: boolean('finalized').notNull().default(false),
-    position: numeric('position', { precision: 30, scale: 15 }).notNull(),
+    position: numeric('position', { precision: 30, scale: 15, mode: 'number' }).notNull(),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
     deletedAt: timestampColumn('deleted_at'),
@@ -185,9 +185,9 @@ export const reelShots = pgTable(
       .notNull()
       .references(() => reels.id, { onDelete: 'cascade' }),
     number: integer('number').notNull(),
-    position: numeric('position', { precision: 30, scale: 15 }).notNull(),
+    position: numeric('position', { precision: 30, scale: 15, mode: 'number' }).notNull(),
     title: text('title'),
-    /** One of the duration presets, or null for `none`. */
+    /** Whole seconds, 1–15 (the menu's presets, or any second the timing bar's drag lands on), or null for `none`. */
     durationS: smallint('duration_s'),
     /** The writer's override. Null = derive (`apps/web/lib/production/derive.ts`). */
     status: shotStatusEnum('status'),
@@ -214,6 +214,13 @@ export const reelShots = pgTable(
     frameProgress: smallint('frame_progress'),
     frameKept: boolean('frame_kept').notNull().default(false),
     takeIndex: integer('take_index').array(),
+    /**
+     * The drawer's References row: assets of kind `reference` the writer
+     * uploaded for this shot (the client's ruling on the `＋`, 2026-09-22).
+     * Not in the spec's `shots`; an id list rather than a join table because
+     * a reference belongs to one shot and is deleted with it.
+     */
+    referenceAssetIds: uuid('reference_asset_ids').array().notNull().default(sql`ARRAY[]::uuid[]`),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
@@ -226,10 +233,7 @@ export const reelShots = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index('reel_shots_reel_position_idx').on(table.reelId, table.position),
     index('reel_shots_project_idx').on(table.projectId),
-    check(
-      'reel_shots_duration_preset',
-      sql`${table.durationS} IS NULL OR ${table.durationS} = any(${sql.raw(`ARRAY[${DURATION_PRESETS.join(', ')}]::smallint[]`)})`,
-    ),
+    check('reel_shots_duration_range', sql`${table.durationS} IS NULL OR (${table.durationS} BETWEEN 1 AND 15)`),
     /** "`blocked` means moderation refused a shot, and it must show the refusal reason." */
     check('reel_shots_blocked_states_reason', sql`(NOT ${table.blocked}) OR ${table.blockReason} IS NOT NULL`),
     check(

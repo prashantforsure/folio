@@ -18,7 +18,7 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0026` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0028` are applied to the dev Supabase project** and are forward-only.
   (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
   pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
   `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
@@ -83,7 +83,9 @@ authored / derived-cache / measurement. Touching `episodes` needs
   scene image + setup-override columns on `scenes`; RLS block hand-written on the `0016` pattern
   (`art_styles` lets every member read a preset, nobody write one). Additive, generated with the
   real env present, applied through the direct migrator on 2026-09-22. `schema/production.ts` names
-  the two deviations (`reel_shots`, `scene_node_id`).
+  the two deviations (`reel_shots`, `scene_node_id`). `0027` adds `reel_shots.reference_asset_ids` (the
+  drawer's References `＋`, ruled 2026-09-22); `0028` widens `duration_s` from the preset list to any
+  whole second 1–15 (the timing bar's drag lands on 6 s and 7 s). Both additive, both applied.
 - **`env.ts` also exports `modelEnv`** - `GEMINI_API_KEY`, optional, `null` when unset; the only reader is
   `apps/web/lib/production/pipeline/gemini.ts`. The model ids live in `@folio/contracts` (`MODEL_REGISTRY`).
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`

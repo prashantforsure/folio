@@ -426,3 +426,6 @@ export {
 export type { ActionCue, HeadingBind, PlacementProposal, PlacementReason, SceneTimeCues } from './time-cues'
 export { CUE_ACTION_LINES, proposePlacements, timeCuesOf } from './time-cues'
 
+
+export type { DescriptionName, DescriptionPart, DescriptionPartKind } from './description'
+export { dialogueOf, mentionedCharacters, parseDescription, partsText } from './description'
