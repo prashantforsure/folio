@@ -72,7 +72,7 @@ const SECRET_VARIABLES = [
   'DATABASE_URL_TRANSACTION',
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
-  'ANTHROPIC_API_KEY',
+  /** The assistant's ANTHROPIC_API_KEY is not listed: the panel prints its *name* in its not-connected line, on purpose. */
   'GEMINI_API_KEY',
 ]
 
