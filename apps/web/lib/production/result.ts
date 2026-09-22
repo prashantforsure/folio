@@ -18,8 +18,8 @@ export type SettingsResult =
 
 export type ReelResult = { readonly status: 'saved'; readonly reel: Reel } | Failure
 
-/** A write that can change more than one reel (a move across reels). */
-export type ReelsResult = { readonly status: 'saved'; readonly reels: readonly Reel[] } | Failure
+/** A move: the reels it touched, by id. The client keeps the order it drew and the next read confirms it. */
+export type MovedResult = { readonly status: 'saved'; readonly reelIds: readonly Reel['id'][] } | Failure
 
 export type DeleteReelResult = { readonly status: 'deleted' } | { readonly status: 'busy'; readonly message: string } | Failure
 

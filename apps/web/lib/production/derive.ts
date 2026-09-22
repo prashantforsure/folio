@@ -41,14 +41,16 @@ export const shotStatusOf = (shot: ReelShot): ShotStatus => {
 
 export const MAX_SECONDS = 15
 
-export const secondsOf = (shot: ReelShot): number => shot.durationS ?? 0
+type Timed = { readonly id: ReelShot['id']; readonly durationS: number | null; readonly proposed: boolean }
+
+export const secondsOf = (shot: Pick<Timed, 'durationS'>): number => shot.durationS ?? 0
 
 /** `used_seconds = Σ shots.duration_s where proposed = false`. */
-export const usedSeconds = (reel: Pick<Reel, 'shots'>): number =>
+export const usedSeconds = (reel: { readonly shots: readonly Pick<Timed, 'durationS' | 'proposed'>[] }): number =>
   reel.shots.reduce((total, shot) => total + (shot.proposed ? 0 : secondsOf(shot)), 0)
 
 /** Every shot's seconds, proposals included - the bar's denominator with the clip length. */
-export const totalSeconds = (reel: Pick<Reel, 'shots'>): number => reel.shots.reduce((total, shot) => total + secondsOf(shot), 0)
+export const totalSeconds = (reel: { readonly shots: readonly Pick<Timed, 'durationS'>[] }): number => reel.shots.reduce((total, shot) => total + secondsOf(shot), 0)
 
 export type TimingTone = 'ok' | 'bad' | 'dim'
 
@@ -75,7 +77,7 @@ export type ReelTiming = {
 const pct = (part: number, whole: number): string => (whole <= 0 ? '0.00%' : `${((part / whole) * 100).toFixed(2)}%`)
 
 /** §3.1–3.2: `{used} / {target} s`, green when equal, red when over, dim when under; widths over `max(clipLength, total)`. */
-export const reelTiming = (reel: Pick<Reel, 'shots' | 'clipLengthS'>): ReelTiming => {
+export const reelTiming = (reel: { readonly shots: readonly Timed[]; readonly clipLengthS: number }): ReelTiming => {
   const used = usedSeconds(reel)
   const total = totalSeconds(reel)
   const target = Math.min(reel.clipLengthS, MAX_SECONDS)
@@ -103,14 +105,14 @@ export const segmentTone = (index: number): 'seg-1' | 'seg-2' | 'seg-3' | 'seg-4
   (['seg-1', 'seg-2', 'seg-3', 'seg-4'] as const)[index % 4] ?? 'seg-1'
 
 /** §3.2: a retime is clamped to `1 … min(clipLength, 15) − sum(other shots)`, whole seconds. */
-export const clampRetime = (reel: Pick<Reel, 'shots' | 'clipLengthS'>, shotId: ReelShot['id'], next: number): number => {
+export const clampRetime = (reel: { readonly shots: readonly Pick<Timed, 'id' | 'durationS'>[]; readonly clipLengthS: number }, shotId: ReelShot['id'], next: number): number => {
   const others = reel.shots.filter((shot) => shot.id !== shotId).reduce((total, shot) => total + secondsOf(shot), 0)
   const max = Math.max(1, Math.min(reel.clipLengthS, MAX_SECONDS) - others)
   return Math.max(1, Math.min(max, Math.round(next)))
 }
 
 /** The bar's `{from}–{to}s` clock per shot, proposals included as the mockup counts them. */
-export const shotClocks = (reel: Pick<Reel, 'shots'>): readonly { readonly shotId: ReelShot['id']; readonly from: number; readonly to: number }[] => {
+export const shotClocks = (reel: { readonly shots: readonly Pick<Timed, 'id' | 'durationS'>[] }): readonly { readonly shotId: ReelShot['id']; readonly from: number; readonly to: number }[] => {
   let clock = 0
   return reel.shots.map((shot) => {
     const from = clock
@@ -167,7 +169,7 @@ export const sceneDot = (scene: Pick<ProductionScene, 'reels'>): SceneDot => {
 }
 
 /** §4: `{reels} reels · {shots} shots · {secs} s`. */
-export const sceneSummary = (scene: Pick<ProductionScene, 'reels'>): string => {
+export const sceneSummary = (scene: { readonly reels: readonly { readonly shots: readonly Pick<Timed, 'durationS' | 'proposed'>[] }[] }): string => {
   const reels = scene.reels.length
   const shots = scene.reels.reduce((total, reel) => total + reel.shots.length, 0)
   const secs = scene.reels.reduce((total, reel) => total + usedSeconds(reel), 0)

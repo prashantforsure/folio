@@ -467,7 +467,8 @@ const listReelsOf = async (db: Db, scope: ProjectScope, sceneIds: readonly NodeI
   return reelRows.map((row) => reelFromRow(row, shotsOf.get(row.id) ?? [], sheetOf.get(row.id) ?? null, clipOf.get(row.id) ?? null))
 }
 
-const readAssets = async (scope: ProjectScope, ids: readonly AssetId[]): Promise<ReadonlyMap<AssetId, AssetRecord>> => {
+/** The asset rows behind a list of ids - what an action needs to resolve one shot or reel it just wrote. */
+export const readAssetRecords = async (scope: ProjectScope, ids: readonly AssetId[]): Promise<ReadonlyMap<AssetId, AssetRecord>> => {
   const wanted = [...new Set(ids)]
   if (wanted.length === 0) return new Map()
   const rows = await dbOf(scope)
@@ -594,7 +595,7 @@ export const readProductionEpisode = async (scope: ProjectScope, episodeId: Epis
       assetIds.push(...shot.referenceAssetIds)
     }
   }
-  const [assetMap, noteMap] = await Promise.all([readAssets(scope, assetIds), readLatestNotes(scope, noteTargets)])
+  const [assetMap, noteMap] = await Promise.all([readAssetRecords(scope, assetIds), readLatestNotes(scope, noteTargets)])
   return { scenes: sceneRows, reels: reelRows, assets: assetMap, settings, artStyles: styles, notes: noteMap, live, preferences }
 }
 
@@ -1024,29 +1025,33 @@ export const bulkPatchShots = async (scope: ProjectScope, input: BulkPatch): Pro
   })
 }
 
-export type MoveShotResult = { readonly status: 'moved'; readonly reels: readonly ReelRecord[] } | { readonly status: 'no-shot' } | { readonly status: 'no-reel' }
+export type MoveShotResult = { readonly status: 'moved'; readonly reelIds: readonly ReelId[] } | { readonly status: 'no-shot' } | { readonly status: 'no-reel' }
 
-/** Put a shot before `beforeId` in `reelId` (or last). One position write, then the touched reels renumber. */
+/**
+ * Put a shot before `beforeId` in `reelId` (or last). One read for the shot,
+ * the target reel and its siblings together; one position write; then the
+ * touched reels renumber. The rows are not read back - the client already
+ * holds the order it asked for, and every statement here is a far round
+ * trip (`Script save path`).
+ */
 export const moveReelShot = async (scope: ProjectScope, shotId: ReelShotId, reelId: ReelId, beforeId: ReelShotId | null): Promise<MoveShotResult> => {
   return dbOf(scope).transaction(async (tx) => {
-    const found = await tx
-      .select({ reelId: reelShots.reelId })
-      .from(reelShots)
-      .where(scoped(scope, reelShots, eq(reelShots.id, shotId), isNull(reelShots.deletedAt)))
-      .limit(1)
-    const from = found[0]
-    if (from === undefined) return { status: 'no-shot' }
-    const target = await tx
-      .select({ id: reels.id })
-      .from(reels)
-      .where(scoped(scope, reels, eq(reels.id, reelId), isNull(reels.deletedAt)))
-      .limit(1)
-    if (target.length === 0) return { status: 'no-reel' }
-    const siblings = await tx
-      .select({ id: reelShots.id, position: reelShots.position })
-      .from(reelShots)
-      .where(scoped(scope, reelShots, eq(reelShots.reelId, reelId), isNull(reelShots.deletedAt), sql`${reelShots.id} <> ${shotId}`))
-      .orderBy(asc(reelShots.position), asc(reelShots.createdAt))
+    const rows = await tx.execute<{
+      readonly id: string
+      readonly reel_id: string
+      readonly position: string
+      readonly target_exists: boolean
+    }>(sql`
+      select s.id, s.reel_id, s.position,
+             exists (select 1 from ${reels} as r where r.id = ${reelId} and r.project_id = ${scope.projectId} and r.deleted_at is null) as target_exists
+      from ${reelShots} as s
+      where s.project_id = ${scope.projectId} and s.deleted_at is null and (s.id = ${shotId} or s.reel_id = ${reelId})
+      order by s.position asc, s.created_at asc
+    `)
+    const moved = rows.find((row) => row.id === shotId)
+    if (moved === undefined) return { status: 'no-shot' }
+    if (rows[0]?.target_exists !== true) return { status: 'no-reel' }
+    const siblings = rows.filter((row) => row.id !== shotId && row.reel_id === reelId).map((row) => ({ id: row.id, position: Number(row.position) }))
     const at = beforeId === null ? siblings.length : siblings.findIndex((row) => row.id === beforeId)
     const index = at < 0 ? siblings.length : at
     const before = index === 0 ? null : (siblings[index - 1]?.position ?? null)
@@ -1056,13 +1061,12 @@ export const moveReelShot = async (scope: ProjectScope, shotId: ReelShotId, reel
       .set({ reelId: reelId as string, position: positionBetween(before, after), number: 100000 + index, updatedAt: new Date() })
       .where(scoped(scope, reelShots, eq(reelShots.id, shotId)))
     await renumberReel(tx, scope, reelId)
-    const fromReel = from.reelId as ReelId
+    const fromReel = moved.reel_id as ReelId
     if (fromReel !== reelId) await renumberReel(tx, scope, fromReel)
     await staleReel(tx, scope, reelId)
     if (fromReel !== reelId) await staleReel(tx, scope, fromReel)
     await logActivity(tx, scope, 'shot.move', 'shot', shotId as string, { reelId, beforeId })
-    const touched = fromReel === reelId ? [reelId] : [reelId, fromReel]
-    return { status: 'moved', reels: await listReelsOfTx(tx, scope, touched) }
+    return { status: 'moved', reelIds: fromReel === reelId ? [reelId] : [reelId, fromReel] }
   })
 }
 
@@ -1083,6 +1087,17 @@ export const softDeleteShot = async (scope: ProjectScope, shotId: ReelShotId): P
     const [reel] = await listReelsOfTx(tx, scope, [reelId])
     return reel ?? null
   })
+}
+
+/** Which reel a live shot is in, or null. One row, for an action that needs the reel before it writes. */
+export const readReelIdOfShot = async (scope: ProjectScope, shotId: ReelShotId): Promise<ReelId | null> => {
+  const rows = await dbOf(scope)
+    .select({ reelId: reelShots.reelId })
+    .from(reelShots)
+    .where(scoped(scope, reelShots, eq(reelShots.id, shotId), isNull(reelShots.deletedAt)))
+    .limit(1)
+  const row = rows[0]
+  return row === undefined ? null : (row.reelId as ReelId)
 }
 
 /** The timing bar's drag: the clamp is the caller's (`derive.ts`) and re-checked by the action. */

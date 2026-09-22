@@ -1,6 +1,6 @@
 'use server'
 
-import type { Asset, CameraMotion, ProductionScene, Reel, ReelShot, ShotType } from '@folio/contracts'
+import type { Asset, AssetId, CameraMotion, Reel, ReelShot, ShotType } from '@folio/contracts'
 import {
   BulkPatchSchema,
   MoveShotSchema,
@@ -25,13 +25,16 @@ import {
   insertAsset,
   insertReel,
   insertReelShots,
+  listStoryboardScenes,
   moveReelShot,
   patchReel as patchReelRow,
   patchShot as patchShotRow,
-  readProductionEpisode,
-  readReel,
+  readAssetRecords,
   readBoundCues,
   readDocumentByKind,
+  readReel,
+  readReelIdOfShot,
+  readSceneHeader,
   readScreenplayNodes,
   retimeShot as retimeShotRow,
   saveViewPreferences as saveViewPreferencesRow,
@@ -41,12 +44,10 @@ import {
   softDeleteShot,
   upsertEpisodeSettings,
 } from '@folio/db'
-import type { CharacterId, DescriptionPart, ShotSpec } from '@folio/script'
+import type { CharacterId, DescriptionPart, NodeId, ShotSpec } from '@folio/script'
 import { boundCueMap, parseDescription, proposeShots as proposeShotSpecs } from '@folio/script'
-import { revalidatePath } from 'next/cache'
 
 import { isRefusal, openEpisode } from '../script/gate'
-import type { EpisodeGate } from '../script/gate'
 import { IMAGE_EXTENSION, readImage } from '../storage/image'
 import { publicUrl, putObject, storageAvailable } from '../storage/r2'
 import { cutScene } from '../storyboard/scene-cut'
@@ -56,14 +57,14 @@ import type {
   DeleteReelResult,
   Failure,
   PreferencesResult,
+  MovedResult,
   ReelResult,
-  ReelsResult,
   SavedResult,
   SettingsResult,
   ShotResult,
   UploadResult,
 } from './result'
-import { composeScenes, readCastAndPlaces } from './server'
+import { readCastAndPlaces } from './server'
 
 /**
  * The Production route's writes - `docs/production/production.md` §7,
@@ -74,12 +75,22 @@ import { composeScenes, readCastAndPlaces } from './server'
  * authoring surface.
  *
  * Every action: zod first, then the gate (`openEpisode` - identity,
- * membership, the episode), then one repository call, then
- * `revalidatePath` for the route. Results are discriminated (`result.ts`).
- * Membership, not role, as everywhere.
+ * membership, the episode), then one repository call. Results are
+ * discriminated (`result.ts`). Membership, not role, as everywhere.
+ *
+ * ## Round trips are counted
+ *
+ * The dev pooler is far away and unprepared (`Script save path`, ~400 ms a
+ * statement), so an action answers with what it wrote and one asset read,
+ * never with the whole episode re-read: `resolveShot` / `resolveReel` turn
+ * the repository's record into the client's row with a single statement
+ * for the asset keys. A scene is checked with `readSceneHeader`, one row.
+ * No `revalidatePath` either: it re-renders the whole route inside the
+ * action's response (the full episode read again, several seconds here),
+ * and the route is dynamic, so the next navigation reads fresh anyway;
+ * the workspace calls `router.refresh()` itself where a write changes more
+ * than it returns.
  */
-
-const productionPath = (projectId: string): string => `/app/project/${projectId}`
 
 const NOT_A_SHOT = 'That shot is not on this board. Reload the page.'
 const NOT_A_REEL = 'That reel is not in this episode. Reload the page.'
@@ -87,24 +98,58 @@ const NOT_A_SCENE = 'That scene is not in this episode. Reload the page.'
 
 const error = (message: string): Failure => ({ status: 'error', message })
 
-/** A shot record with its assets resolved - what the client holds. */
-const shotOf = async (scope: ProjectScope, episodeId: EpisodeGate['episode']['id'], shot: ReelShotRecord): Promise<ReelShot> => {
-  const scenes = await scenesOf(scope, episodeId)
-  for (const scene of scenes) for (const reel of scene.reels) for (const candidate of reel.shots) if (candidate.id === shot.id) return candidate
-  // The row exists but its scene is not present: hand back the record with nothing resolved.
-  const { frameAssetId: _frame, referenceAssetIds: _refs, ...rest } = shot
-  return { ...rest, frame: null, references: [] }
+const assetView = (map: ReadonlyMap<AssetId, AssetRecord>, id: AssetId | null): Asset | null => {
+  if (id === null) return null
+  const record = map.get(id)
+  if (record === undefined) return null
+  const { storageKey, ...rest } = record
+  return { ...rest, url: publicUrl(storageKey) }
 }
 
-const reelOf = async (scope: ProjectScope, episodeId: EpisodeGate['episode']['id'], reelId: ReelRecord['id']): Promise<Reel | null> => {
-  const scenes = await scenesOf(scope, episodeId)
-  for (const scene of scenes) for (const reel of scene.reels) if (reel.id === reelId) return reel
-  return null
+const shotView = (shot: ReelShotRecord, map: ReadonlyMap<AssetId, AssetRecord>): ReelShot => {
+  const { frameAssetId, referenceAssetIds, ...rest } = shot
+  return {
+    ...rest,
+    frame: assetView(map, frameAssetId),
+    references: referenceAssetIds.map((id) => assetView(map, id)).filter((asset): asset is Asset => asset !== null),
+  }
 }
 
-const scenesOf = async (scope: ProjectScope, episodeId: EpisodeGate['episode']['id']): Promise<readonly ProductionScene[]> => {
-  const [record, { cast, locations }] = await Promise.all([readProductionEpisode(scope, episodeId), readCastAndPlaces(scope)])
-  return composeScenes(record, cast, locations)
+const reelView = (reel: ReelRecord, map: ReadonlyMap<AssetId, AssetRecord>): Reel => {
+  const { shots, sheet, clip, ...rest } = reel
+  return {
+    ...rest,
+    shots: shots.map((shot) => shotView(shot, map)),
+    sheet:
+      sheet === null
+        ? null
+        : {
+            ...sheet,
+            asset: assetView(map, sheet.assetId),
+            frames: sheet.frames.map((frame) => ({ ...frame, asset: assetView(map, frame.assetId) })),
+          },
+    clip: clip === null ? null : { ...clip, poster: assetView(map, clip.posterAssetId), video: assetView(map, clip.videoAssetId) },
+  }
+}
+
+const assetIdsOf = (reel: ReelRecord): readonly AssetId[] => [
+  ...reel.shots.flatMap((shot) => [...(shot.frameAssetId === null ? [] : [shot.frameAssetId]), ...shot.referenceAssetIds]),
+  ...(reel.sheet?.assetId ? [reel.sheet.assetId] : []),
+  ...(reel.sheet?.frames.flatMap((frame) => (frame.assetId === null ? [] : [frame.assetId])) ?? []),
+  ...(reel.clip?.posterAssetId ? [reel.clip.posterAssetId] : []),
+  ...(reel.clip?.videoAssetId ? [reel.clip.videoAssetId] : []),
+]
+
+/** The record as the client's row: one asset read. */
+const resolveShot = async (scope: ProjectScope, shot: ReelShotRecord): Promise<ReelShot> => {
+  const ids = [...(shot.frameAssetId === null ? [] : [shot.frameAssetId]), ...shot.referenceAssetIds]
+  return shotView(shot, await readAssetRecords(scope, ids))
+}
+
+const resolveReel = async (scope: ProjectScope, reelId: Reel['id']): Promise<Reel | null> => {
+  const reel = await readReel(scope, reelId)
+  if (reel === null) return null
+  return reelView(reel, await readAssetRecords(scope, assetIdsOf(reel)))
 }
 
 const partsOf = async (scope: ProjectScope, description: string): Promise<readonly DescriptionPart[]> => {
@@ -123,7 +168,6 @@ export const saveSettings = async (projectId: string, episode: string, raw: unkn
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
   const written = await upsertEpisodeSettings(gate.scope, gate.episode.id, input.data)
-  revalidatePath(productionPath(gate.project.id), 'layout')
   return written
 }
 
@@ -136,12 +180,9 @@ export const addReel = async (projectId: string, episode: string, rawSceneNodeId
   if (!sceneNodeId.success) return error(NOT_A_SCENE)
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
-  const scenes = await scenesOf(gate.scope, gate.episode.id)
-  if (!scenes.some((scene) => scene.sceneNodeId === sceneNodeId.data)) return error(NOT_A_SCENE)
+  if ((await readSceneHeader(gate.scope, gate.episode.id, sceneNodeId.data)) === null) return error(NOT_A_SCENE)
   const reel = await insertReel(gate.scope, sceneNodeId.data)
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  const full = await reelOf(gate.scope, gate.episode.id, reel.id)
-  return full === null ? error(NOT_A_REEL) : { status: 'saved', reel: full }
+  return { status: 'saved', reel: reelView(reel, new Map()) }
 }
 
 /** `PATCH /reels/:id` - `name`, `clip_length_s`. */
@@ -154,9 +195,7 @@ export const patchReel = async (projectId: string, episode: string, rawReelId: u
   if (isRefusal(gate)) return gate
   const written = await patchReelRow(gate.scope, reelId.data, patch.data)
   if (written.status === 'no-reel') return error(NOT_A_REEL)
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  const full = await reelOf(gate.scope, gate.episode.id, reelId.data)
-  return full === null ? error(NOT_A_REEL) : { status: 'saved', reel: full }
+  return { status: 'saved', reel: reelView(written.reel, await readAssetRecords(gate.scope, assetIdsOf(written.reel))) }
 }
 
 export const deleteReel = async (projectId: string, episode: string, rawReelId: unknown): Promise<DeleteReelResult> => {
@@ -167,7 +206,6 @@ export const deleteReel = async (projectId: string, episode: string, rawReelId: 
   const result = await softDeleteReel(gate.scope, reelId.data)
   if (result.status === 'no-reel') return error(NOT_A_REEL)
   if (result.status === 'busy') return { status: 'busy', message: 'Something is still generating for this reel. Wait for it, or cancel it, then delete.' }
-  revalidatePath(productionPath(gate.project.id), 'layout')
   return { status: 'deleted' }
 }
 
@@ -181,14 +219,11 @@ export const addShot = async (projectId: string, episode: string, raw: unknown):
   if (!input.success) return error(NOT_A_REEL)
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
-  const reel = await readReel(gate.scope, input.data.reelId)
-  if (reel === null) return error(NOT_A_REEL)
   const description = input.data.description ?? ''
-  const parts = await partsOf(gate.scope, description)
-  const [shot] = await insertReelShots(gate.scope, reel.id, [{ description, parts, durationS: input.data.durationS ?? null }])
-  if (shot === undefined) return error(NOT_A_SHOT)
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  return { status: 'saved', shot: await shotOf(gate.scope, gate.episode.id, shot) }
+  const parts = description.length === 0 ? [] : await partsOf(gate.scope, description)
+  const [shot] = await insertReelShots(gate.scope, input.data.reelId, [{ description, parts, durationS: input.data.durationS ?? null }])
+  if (shot === undefined) return error(NOT_A_REEL)
+  return { status: 'saved', shot: shotView(shot, new Map()) }
 }
 
 /** `PATCH /shots/:id` - any field. A changed description is re-read into parts and its auto characters. */
@@ -202,8 +237,7 @@ export const patchShot = async (projectId: string, episode: string, rawShotId: u
   const parts = patch.data.description === undefined ? null : await partsOf(gate.scope, patch.data.description)
   const written = await patchShotRow(gate.scope, shotId.data, patch.data, parts)
   if (written.status === 'no-shot') return error(NOT_A_SHOT)
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  return { status: 'saved', shot: await shotOf(gate.scope, gate.episode.id, written.shot) }
+  return { status: 'saved', shot: await resolveShot(gate.scope, written.shot) }
 }
 
 /** `PATCH /shots/bulk` - the bulk bar. */
@@ -213,12 +247,11 @@ export const bulkPatchShots = async (projectId: string, episode: string, raw: un
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
   const changed = await bulkPatchShotRows(gate.scope, input.data)
-  revalidatePath(productionPath(gate.project.id), 'layout')
   return { status: 'saved', changed }
 }
 
-/** `POST /shots/:id/move { reel_id, before_id }` - within or across reels. */
-export const moveShot = async (projectId: string, episode: string, raw: unknown): Promise<ReelsResult> => {
+/** `POST /shots/:id/move { reel_id, before_id }` - within or across reels. Answers with the reels touched; the client keeps the order it drew. */
+export const moveShot = async (projectId: string, episode: string, raw: unknown): Promise<MovedResult> => {
   const input = MoveShotSchema.safeParse(raw)
   if (!input.success) return error(NOT_A_SHOT)
   const gate = await openEpisode(projectId, episode)
@@ -226,10 +259,7 @@ export const moveShot = async (projectId: string, episode: string, raw: unknown)
   const moved = await moveReelShot(gate.scope, input.data.shotId, input.data.reelId, input.data.beforeId)
   if (moved.status === 'no-shot') return error(NOT_A_SHOT)
   if (moved.status === 'no-reel') return error(NOT_A_REEL)
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  const scenes = await scenesOf(gate.scope, gate.episode.id)
-  const ids = new Set(moved.reels.map((reel) => reel.id))
-  return { status: 'saved', reels: scenes.flatMap((scene) => scene.reels.filter((reel) => ids.has(reel.id))) }
+  return { status: 'saved', reelIds: moved.reelIds }
 }
 
 /** The timing bar's drag. The spec's clamp is re-applied here against the reel as stored. */
@@ -238,14 +268,14 @@ export const retimeShot = async (projectId: string, episode: string, raw: unknow
   if (!input.success) return error('A shot is between 1 and 15 seconds.')
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
-  const scenes = await scenesOf(gate.scope, gate.episode.id)
-  const reel = scenes.flatMap((scene) => scene.reels).find((candidate) => candidate.shots.some((shot) => shot.id === input.data.shotId))
-  if (reel === undefined) return error(NOT_A_SHOT)
+  const reelId = await readReelIdOfShot(gate.scope, input.data.shotId)
+  if (reelId === null) return error(NOT_A_SHOT)
+  const reel = await readReel(gate.scope, reelId)
+  if (reel === null) return error(NOT_A_REEL)
   const seconds = clampRetime(reel, input.data.shotId, input.data.durationS)
   const written = await retimeShotRow(gate.scope, input.data.shotId, seconds)
   if (written.status === 'no-shot') return error(NOT_A_SHOT)
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  const full = await reelOf(gate.scope, gate.episode.id, reel.id)
+  const full = await resolveReel(gate.scope, reel.id)
   return full === null ? error(NOT_A_REEL) : { status: 'saved', reel: full }
 }
 
@@ -257,9 +287,7 @@ export const deleteShot = async (projectId: string, episode: string, rawShotId: 
   if (isRefusal(gate)) return gate
   const reel = await softDeleteShot(gate.scope, shotId.data)
   if (reel === null) return error(NOT_A_SHOT)
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  const full = await reelOf(gate.scope, gate.episode.id, reel.id)
-  return full === null ? error(NOT_A_REEL) : { status: 'saved', reel: full }
+  return { status: 'saved', reel: reelView(reel, await readAssetRecords(gate.scope, assetIdsOf(reel))) }
 }
 
 // ---------------------------------------------------------------------------
@@ -320,26 +348,21 @@ export const proposeShots = async (projectId: string, episode: string, rawSceneN
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
   const { scope } = gate
-  const scenes = await scenesOf(scope, gate.episode.id)
-  const scene = scenes.find((candidate) => candidate.sceneNodeId === sceneNodeId.data)
-  if (scene === undefined) return error(NOT_A_SCENE)
-  const document = await readDocumentByKind(scope, gate.episode.id, 'screenplay')
+  const [scene, document, present] = await Promise.all([
+    readSceneHeader(scope, gate.episode.id, sceneNodeId.data),
+    readDocumentByKind(scope, gate.episode.id, 'screenplay'),
+    listStoryboardScenes(scope, gate.episode.id),
+  ])
+  if (scene === null) return error(NOT_A_SCENE)
   if (document === null) return error('This episode has no script to read.')
   const [read, bound, { names }] = await Promise.all([readScreenplayNodes(scope, document.id), readBoundCues(scope), readCastAndPlaces(scope)])
   if (!read.ok) return error(`The script would not read at ${read.error.at || 'a node'}: ${read.error.reason.kind}.`)
   const nodes = read.value.map((entry) => entry.node)
-  const sceneNodes = cutScene(nodes, scene.sceneNodeId, new Set(scenes.map((candidate) => candidate.sceneNodeId as string)))
+  const sceneNodes = cutScene(nodes, scene.sceneNodeId, new Set(present.map((header) => header.sceneNodeId as string)))
   if (sceneNodes.length === 0) return error(NOT_A_SCENE)
-  const record = await readProductionEpisode(scope, gate.episode.id)
-  const header = record.scenes.find((candidate) => candidate.sceneNodeId === scene.sceneNodeId)
-  const specs = proposeShotSpecs({
-    reading: header?.reading ?? null,
-    nodes: sceneNodes,
-    boundCues: boundCueMap(bound),
-    locationId: scene.locationId,
-  })
+  const specs = proposeShotSpecs({ reading: scene.reading, nodes: sceneNodes, boundCues: boundCueMap(bound), locationId: scene.locationId })
   const nameOf = new Map(names.map((name) => [name.id, name.name]))
-  const target = reelId === null ? await insertReel(scope, scene.sceneNodeId) : await readReel(scope, reelId.data)
+  const target = reelId === null ? await insertReel(scope, scene.sceneNodeId as NodeId) : await readReel(scope, reelId.data)
   if (target === null) return error(NOT_A_REEL)
   await insertReelShots(
     scope,
@@ -358,8 +381,7 @@ export const proposeShots = async (projectId: string, episode: string, rawSceneN
       }
     }),
   )
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  const full = await reelOf(scope, gate.episode.id, target.id)
+  const full = await resolveReel(scope, target.id)
   return full === null ? error(NOT_A_REEL) : { status: 'saved', reel: full }
 }
 
@@ -372,10 +394,8 @@ export const setSceneSetup = async (projectId: string, episode: string, raw: unk
   if (!patch.success) return error(NOT_A_SCENE)
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
-  const scenes = await scenesOf(gate.scope, gate.episode.id)
-  if (!scenes.some((scene) => scene.sceneNodeId === patch.data.sceneNodeId)) return error(NOT_A_SCENE)
+  if ((await readSceneHeader(gate.scope, gate.episode.id, patch.data.sceneNodeId)) === null) return error(NOT_A_SCENE)
   await setSceneSetupRow(gate.scope, patch.data)
-  revalidatePath(productionPath(gate.project.id), 'layout')
   return { status: 'saved' }
 }
 
@@ -386,7 +406,6 @@ export const saveNote = async (projectId: string, episode: string, raw: unknown)
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
   await appendNote(gate.scope, input.data.targetType, input.data.targetId, input.data.body)
-  revalidatePath(productionPath(gate.project.id), 'layout')
   return { status: 'saved' }
 }
 
@@ -422,7 +441,7 @@ const storeImage = async (
   return { ok: true, asset }
 }
 
-const assetView = (asset: AssetRecord): Asset => {
+const uploadedView = (asset: AssetRecord): Asset => {
   const { storageKey, ...rest } = asset
   return { ...rest, url: publicUrl(storageKey) }
 }
@@ -434,13 +453,11 @@ export const uploadSceneImage = async (projectId: string, episode: string, rawSc
   if (!storageAvailable()) return { status: 'refused', message: STORAGE_OFF }
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
-  const scenes = await scenesOf(gate.scope, gate.episode.id)
-  if (!scenes.some((scene) => scene.sceneNodeId === sceneNodeId.data)) return error(NOT_A_SCENE)
+  if ((await readSceneHeader(gate.scope, gate.episode.id, sceneNodeId.data)) === null) return error(NOT_A_SCENE)
   const stored = await storeImage(gate.scope, gate.project.id, 'still', form, 'image')
   if (!stored.ok) return stored.failure
   await setSceneStill(gate.scope, sceneNodeId.data, stored.asset.id)
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  return { status: 'saved', asset: assetView(stored.asset) }
+  return { status: 'saved', asset: uploadedView(stored.asset) }
 }
 
 /** The drawer's References `＋`. */
@@ -454,7 +471,5 @@ export const uploadReference = async (projectId: string, episode: string, rawSho
   if (!stored.ok) return stored.failure
   const pointed = await addShotReference(gate.scope, shotId.data, stored.asset.id)
   if (!pointed) return error(NOT_A_SHOT)
-  revalidatePath(productionPath(gate.project.id), 'layout')
-  return { status: 'saved', asset: assetView(stored.asset) }
+  return { status: 'saved', asset: uploadedView(stored.asset) }
 }
-

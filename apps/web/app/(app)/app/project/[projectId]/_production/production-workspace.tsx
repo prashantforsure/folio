@@ -381,9 +381,7 @@ export const ProductionWorkspace = ({ projectId, episode, load }: ProductionWork
           }))
         })
         void authoring.moveShot(projectId, episode, { shotId, reelId, beforeId }).then((result) => {
-          if (failed(result)) return router.refresh()
-          if (result.status === 'saved') setScenes((current) => result.reels.reduce((acc, reel) => withReel(acc, reel), current))
-          return undefined
+          if (failed(result)) router.refresh()
         })
       },
       previewRetime: (reelId, shotId, seconds) => {

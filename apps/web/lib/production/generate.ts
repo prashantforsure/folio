@@ -13,7 +13,6 @@ import {
 } from '@folio/db'
 import { modelEnv } from '@folio/db/env'
 import type { InlineContent } from '@folio/script'
-import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { z } from 'zod'
 
@@ -45,8 +44,6 @@ import { composeScenes, readCastAndPlaces } from './server'
  * reserves. "Reserve then execute": the balance is checked in the insert's
  * `WHERE`, never inside the run.
  */
-
-const productionPath = (projectId: string): string => `/app/project/${projectId}`
 
 const NOT_A_REEL = 'That reel is not in this episode. Reload the page.'
 const NOT_A_SCENE = 'That scene is not in this episode. Reload the page.'
@@ -126,7 +123,6 @@ const launch = async (
   })
   if (created.status === 'insufficient') return created
   after(() => runGeneration({ scope, id: created.generation.id, spec, scene, reel, names: g.names }))
-  revalidatePath(productionPath(g.gate.project.id), 'layout')
   return { status: 'queued', generation: created.generation }
 }
 
@@ -253,6 +249,5 @@ export const cancelGeneration = async (projectId: string, episode: string, rawId
   if (isRefusal(gate)) return gate
   const result = await cancelGenerationRow(gate.scope, id.data)
   if (result.status === 'no-generation') return error('That generation is not in this episode.')
-  revalidatePath(productionPath(gate.project.id), 'layout')
   return result.status === 'cancelled' ? { status: 'cancelled' } : { status: 'already-over' }
 }
