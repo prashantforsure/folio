@@ -5,6 +5,8 @@ import type { ReactNode } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
+import { useFocusTrap } from './use-focus-trap'
+
 /**
  * A small form dialog over the whole app: the Scenes detail's ground
  * (`.folio-modal-scrim`, the same scrim and blur) under a 440px `--sunk`
@@ -16,7 +18,8 @@ import { createPortal } from 'react-dom'
  * Portal to `body`, so a modal opened from inside a canvas's transformed
  * world is not scaled with it. Escape and the scrim close it; the first
  * field takes focus on open and the element that opened it gets focus
- * back on close, so a keyboard user lands where they were.
+ * back on close, so a keyboard user lands where they were; Tab stays
+ * inside while it is open (`use-focus-trap.ts`, 2026-09-22).
  */
 export const Modal = ({
   attr,
@@ -56,6 +59,8 @@ export const Modal = ({
     const first = panel.current?.querySelector<HTMLElement>('input, textarea, select, button:not([data-modal-close])')
     first?.focus()
   }, [mounted])
+
+  useFocusTrap(panel, mounted)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {

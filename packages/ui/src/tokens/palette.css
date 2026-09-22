@@ -432,15 +432,12 @@
 }
 
 /*
- * The Production route's tokens. `docs/ui design/Route - Production v2.dc.html`
- * is the one mockup that declares a fifth hue beyond the README's four:
- * `--bad`, red, for a refused shot, the frame it cannot have, and a reel
- * that runs over its clip - things that are neither a decision waiting
- * (amber) nor destructive or live (orange). Transcribed verbatim in the
- * three-block shape; the README's "No other hues" and this mockup disagree,
- * and the mockup is the spec for its route (recorded in
- * `docs/build-decisions.md`, the Production phase). Nothing outside that
- * route may reach for it.
+ * `--bad`, the fifth hue: red, for a refused shot, the frame it cannot
+ * have, and a reel that runs over its clip - things that are neither a
+ * decision waiting (amber) nor destructive or live (orange). Born with the
+ * v2 Production mockup, kept app-wide because the tone classes every record
+ * route draws (`.folio-tone-*[data-tone='bad']`) read it. The v12 block
+ * below restates it for the Production surface.
  */
 :root {
   --bad: oklch(0.7 0.16 25);
@@ -458,15 +455,141 @@
 }
 
 /*
- * The four segment colours of a reel's timing bar - one per shot, cycling -
- * as `Route - Production v2.dc.html` writes them inline (`segColors`), with
- * no light override in the mockup. Named here so the bar reads a token.
+ * The four segment colours of a reel's timing bar - one per shot, cycling.
+ * App-wide so the Tailwind bridge (`theme.css`) can name them; the v12
+ * block below carries the light set the v12 mockup added.
  */
 :root {
   --seg-1: oklch(0.7 0.11 250);
   --seg-2: oklch(0.74 0.11 150);
   --seg-3: oklch(0.78 0.1 75);
   --seg-4: oklch(0.7 0.12 300);
+}
+
+/*
+ * The Production route, v12 (2026-09-22). `docs/production/production.md` §8:
+ * "Copy the `:root` and `[data-theme="light"]` blocks from the top of the
+ * mockup verbatim - that is the design system." Copied verbatim below, both
+ * themes, **scoped to `[data-production-root]`** - the route's surface and
+ * every portal it opens (the settings modal, the drawer, a menu, the bulk
+ * bar) carry the attribute. Scoped rather than on `:root` because six
+ * values drift from the app palette above (light `--warn`, `--live` and
+ * `--frame-b`; the light `--seg-*` set, which the v2 palette never had;
+ * `--ok-bg` / `--warn-bg` as exact alphas rather than `color-mix`; the
+ * `--sans` / `--mono` names) and the other eight routes stay
+ * pixel-identical. Where a value agrees with the palette it is still
+ * written, so this block reads as the mockup's does.
+ *
+ * The three-block shape holds inside the scope: the dark set, the light
+ * override after it, the dark island last.
+ */
+[data-production-root] {
+  --sans: 'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, monospace;
+  --bg: #0a0a0c;
+  --sunk: #08080a;
+  --s1: rgba(255, 255, 255, 0.035);
+  --s2: rgba(255, 255, 255, 0.055);
+  --s3: rgba(255, 255, 255, 0.085);
+  --line: rgba(255, 255, 255, 0.085);
+  --line2: rgba(255, 255, 255, 0.05);
+  --ink: #f3f2ef;
+  --ink2: rgba(243, 242, 239, 0.62);
+  --ink3: rgba(243, 242, 239, 0.36);
+  --read: rgba(243, 242, 239, 0.8);
+  --hover: rgba(255, 255, 255, 0.06);
+  --accent: oklch(0.72 0.12 245);
+  --accent-bg: oklch(0.72 0.12 245 / 0.16);
+  --ok: oklch(0.76 0.1 150);
+  --ok-bg: oklch(0.76 0.1 150 / 0.12);
+  --warn: oklch(0.8 0.11 75);
+  --warn-bg: oklch(0.8 0.11 75 / 0.12);
+  --live: oklch(0.72 0.14 40);
+  --bad: oklch(0.7 0.16 25);
+  --bad-bg: oklch(0.7 0.16 25 / 0.13);
+  --seg-1: oklch(0.7 0.11 250);
+  --seg-2: oklch(0.74 0.11 150);
+  --seg-3: oklch(0.78 0.1 75);
+  --seg-4: oklch(0.7 0.12 300);
+  --solid: #f3f2ef;
+  --solid-ink: #0d0d10;
+  --frame-a: oklch(0.34 0.02 60);
+  --frame-b: oklch(0.16 0.01 60);
+  --frame-ink: rgba(255, 255, 255, 0.78);
+  --glow-cool: oklch(0.55 0.16 250 / 0.2);
+  --glow-warm: oklch(0.62 0.1 62 / 0.13);
+}
+
+[data-theme='light'] [data-production-root],
+[data-production-root][data-theme='light'] {
+  --bg: #f7f6f3;
+  --sunk: #f2f0ec;
+  --s1: rgba(20, 18, 14, 0.035);
+  --s2: rgba(20, 18, 14, 0.055);
+  --s3: rgba(20, 18, 14, 0.085);
+  --line: rgba(20, 18, 14, 0.11);
+  --line2: rgba(20, 18, 14, 0.06);
+  --ink: #16151a;
+  --ink2: rgba(22, 21, 26, 0.64);
+  --ink3: rgba(22, 21, 26, 0.4);
+  --read: rgba(22, 21, 26, 0.82);
+  --hover: rgba(20, 18, 14, 0.05);
+  --accent: oklch(0.52 0.15 250);
+  --accent-bg: oklch(0.52 0.15 250 / 0.12);
+  --ok: oklch(0.52 0.12 150);
+  --ok-bg: oklch(0.52 0.12 150 / 0.1);
+  --warn: oklch(0.58 0.12 75);
+  --warn-bg: oklch(0.58 0.12 75 / 0.12);
+  --live: oklch(0.55 0.16 40);
+  --bad: oklch(0.52 0.17 25);
+  --bad-bg: oklch(0.52 0.17 25 / 0.09);
+  --seg-1: oklch(0.55 0.13 250);
+  --seg-2: oklch(0.58 0.12 150);
+  --seg-3: oklch(0.62 0.11 75);
+  --seg-4: oklch(0.55 0.13 300);
+  --solid: #16151a;
+  --solid-ink: #f7f6f3;
+  --frame-a: oklch(0.8 0.02 60);
+  --frame-b: oklch(0.58 0.01 60);
+  --frame-ink: rgba(255, 255, 255, 0.9);
+  --glow-cool: oklch(0.65 0.14 250 / 0.1);
+  --glow-warm: oklch(0.72 0.1 62 / 0.1);
+}
+
+[data-theme='dark'] [data-production-root],
+[data-production-root][data-theme='dark'] {
+  --bg: #0a0a0c;
+  --sunk: #08080a;
+  --s1: rgba(255, 255, 255, 0.035);
+  --s2: rgba(255, 255, 255, 0.055);
+  --s3: rgba(255, 255, 255, 0.085);
+  --line: rgba(255, 255, 255, 0.085);
+  --line2: rgba(255, 255, 255, 0.05);
+  --ink: #f3f2ef;
+  --ink2: rgba(243, 242, 239, 0.62);
+  --ink3: rgba(243, 242, 239, 0.36);
+  --read: rgba(243, 242, 239, 0.8);
+  --hover: rgba(255, 255, 255, 0.06);
+  --accent: oklch(0.72 0.12 245);
+  --accent-bg: oklch(0.72 0.12 245 / 0.16);
+  --ok: oklch(0.76 0.1 150);
+  --ok-bg: oklch(0.76 0.1 150 / 0.12);
+  --warn: oklch(0.8 0.11 75);
+  --warn-bg: oklch(0.8 0.11 75 / 0.12);
+  --live: oklch(0.72 0.14 40);
+  --bad: oklch(0.7 0.16 25);
+  --bad-bg: oklch(0.7 0.16 25 / 0.13);
+  --seg-1: oklch(0.7 0.11 250);
+  --seg-2: oklch(0.74 0.11 150);
+  --seg-3: oklch(0.78 0.1 75);
+  --seg-4: oklch(0.7 0.12 300);
+  --solid: #f3f2ef;
+  --solid-ink: #0d0d10;
+  --frame-a: oklch(0.34 0.02 60);
+  --frame-b: oklch(0.16 0.01 60);
+  --frame-ink: rgba(255, 255, 255, 0.78);
+  --glow-cool: oklch(0.55 0.16 250 / 0.2);
+  --glow-warm: oklch(0.62 0.1 62 / 0.13);
 }
 
 /*

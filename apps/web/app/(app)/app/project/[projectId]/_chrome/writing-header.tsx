@@ -103,6 +103,7 @@ export const WritingHeader = ({
   share,
   route: given,
   views,
+  actions,
 }: {
   readonly projectId: ProjectId
   readonly projectTitle: string
@@ -115,6 +116,8 @@ export const WritingHeader = ({
   readonly route?: WorkspaceRoute
   /** The centre, when the route's views are not `?view=` and the layout is the route (Characters): its own tabs. Absent: the Storyboard's or Scenes' state tabs on their segment, else the route's `ROUTE_VIEWS` over the URL. */
   readonly views?: ReactNode
+  /** Drawn before Share: a route's own header control (Production's settings chip, 2026-09-22). */
+  readonly actions?: ReactNode
 }) => {
   // The route below the `(writing)` layout: `script`, `outline`, `storyboard`
   // or `scenes`. A layout cannot pass it; the segment hook can see it.
@@ -166,6 +169,7 @@ export const WritingHeader = ({
       </div>
 
       <div className="flex min-w-fit flex-1 items-center justify-end gap-[8px]">
+        {actions}
         <SharePopover projectId={projectId} initial={share} />
         {assistantOpen ? null : (
           <button

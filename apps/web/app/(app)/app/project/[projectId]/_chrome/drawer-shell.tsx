@@ -2,12 +2,13 @@
 
 import { Icon } from '@folio/ui'
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useViewport } from '../../../../../../lib/state/viewport'
 import { publishDrawer } from '../../../../../../lib/workspace/drawer'
 import { PANEL_IN_FLOW_MIN } from '../../../../../../lib/workspace/routes'
+import { useFocusTrap } from './use-focus-trap'
 
 /**
  * The drawer's frame - `docs/ui design/README.md`, "Panels (assistant and
@@ -22,7 +23,8 @@ import { PANEL_IN_FLOW_MIN } from '../../../../../../lib/workspace/routes'
  * ref in it is a link), the caller's actions beside it, and ✕. Body: the scrolling
  * column, `0 18px 20px`, 18px between sections. Foot: the caller's - the
  * README's "destructive action on the left and Cancel / Save on the
- * right". Escape closes.
+ * right". Escape closes; Tab stays inside while it is open
+ * (`use-focus-trap.ts`, 2026-09-22).
  *
  * One frame for every record route's drawer. Rendered through a portal into
  * the route layout's slot - `#<route>-drawer`, a sibling of the column
@@ -71,6 +73,7 @@ export const DrawerShell = ({
 }) => {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [mounted, setMounted] = useState(false)
+  const panelRef = useRef<HTMLElement>(null)
   const { width } = useViewport()
   const inFlow = !overlay && width >= PANEL_IN_FLOW_MIN
 
@@ -100,8 +103,11 @@ export const DrawerShell = ({
     }
   }, [onClose])
 
+  useFocusTrap(panelRef, overlay ? mounted : slot !== null)
+
   const panel = (
     <aside
+      ref={panelRef}
       role="dialog"
       aria-label={label}
       {...{ [`data-${route}-drawer`]: label }}
