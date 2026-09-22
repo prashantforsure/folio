@@ -400,6 +400,24 @@ export const DEFAULT_SETTINGS: Omit<EpisodeSettings, 'episodeId' | 'artStyleId' 
   lighting: 'Motivated',
 }
 
+/** The 14 presets' keys in the spec's order (§6) - the grid draws them so, whatever the rows' timestamps. */
+export const ART_STYLE_PRESET_KEYS = [
+  'netflix-prestige-drama',
+  'wes-anderson-symmetrical-fairytale',
+  'hong-kong-neon-modernism',
+  'cyberpunk-neon-futurism',
+  'new-hollywood-modern-american-realism',
+  'spaghetti-western',
+  'french-new-wave',
+  'italian-neorealism',
+  'film-noir',
+  'hollywood-golden-age-art-deco',
+  'german-expressionism',
+  'a24-contemporary-unease',
+  'anime-cinematic-style',
+  'graphic-novel-style',
+] as const
+
 /** The preset the mockup selects by default. */
 export const DEFAULT_ART_STYLE_KEY = 'netflix-prestige-drama'
 

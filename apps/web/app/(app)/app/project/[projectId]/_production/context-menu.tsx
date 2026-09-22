@@ -248,7 +248,7 @@ export const ContextMenu = () => {
                   {item.tone !== undefined ? <span className="folio-prod-dot" data-tone={STATUS_TONE[item.tone]} aria-hidden="true" /> : null}
                   <span className="min-w-0 flex-1 whitespace-nowrap">{field === 'priority' && item.value !== null ? PRIORITY_LABELS[item.value as keyof typeof PRIORITY_LABELS] : item.label}</span>
                   {mode === 'single' ? (
-                    <span className="flex-none text-11" data-check={on ? 'true' : undefined} aria-hidden="true">
+                    <span className="flex-none text-11" data-check={on ? 'true' : 'false'} aria-hidden="true">
                       ✓
                     </span>
                   ) : null}

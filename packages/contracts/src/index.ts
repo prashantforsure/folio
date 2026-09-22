@@ -485,6 +485,7 @@ export type {
   ViewPreferencesPatch,
 } from './production'
 export {
+  ART_STYLE_PRESET_KEYS,
   ASPECT_RATIOS,
   ASPECT_RATIO_CARDS,
   ASSET_KINDS,

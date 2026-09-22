@@ -32,7 +32,7 @@ import type {
   ViewPreferences,
   ViewPreferencesPatch,
 } from '@folio/contracts'
-import { DEFAULT_VIEW_PREFERENCES, FIELD_IDS } from '@folio/contracts'
+import { ART_STYLE_PRESET_KEYS, DEFAULT_VIEW_PREFERENCES, FIELD_IDS } from '@folio/contracts'
 import type { CharacterId, DescriptionPart, LocationId, NodeId, SluglineReading } from '@folio/script'
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
@@ -483,7 +483,14 @@ export const listArtStyles = async (scope: ProjectScope): Promise<readonly ArtSt
     .from(artStyles)
     .where(sql`${artStyles.projectId} IS NULL OR ${artStyles.projectId} = ${scope.projectId}`)
     .orderBy(asc(artStyles.createdAt), asc(artStyles.id))
-  return rows.map(artStyleFromRow)
+  // The presets in the spec's order, then a project's own by age.
+  const rank = (key: string): number => {
+    const at = (ART_STYLE_PRESET_KEYS as readonly string[]).indexOf(key)
+    return at < 0 ? ART_STYLE_PRESET_KEYS.length : at
+  }
+  return rows
+    .map(artStyleFromRow)
+    .sort((a, b) => (a.isPreset === b.isPreset ? (a.isPreset ? rank(a.key) - rank(b.key) : 0) : a.isPreset ? -1 : 1))
 }
 
 export const readArtStyleByKey = async (scope: ProjectScope, key: string): Promise<ArtStyle | null> => {
