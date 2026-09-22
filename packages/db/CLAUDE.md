@@ -86,6 +86,12 @@ authored / derived-cache / measurement. Touching `episodes` needs
   the two deviations (`reel_shots`, `scene_node_id`). `0027` adds `reel_shots.reference_asset_ids` (the
   drawer's References `＋`, ruled 2026-09-22); `0028` widens `duration_s` from the preset list to any
   whole second 1–15 (the timing bar's drag lands on 6 s and 7 s). Both additive, both applied.
+- **`src/seed/production.ts` is the one seed** (`pnpm --filter @folio/db seed:production -- --user <email>`,
+  launched by `scripts/seed-production.mjs` through drizzle-kit's own `tsx`): a "Monsoon Line" series
+  in every state the v12 mockup draws; a re-run bins the previous one of that title and writes a
+  fresh one. Portraits and the plate are 1×1 PNGs put to R2 when `R2_*` is set, skipped otherwise.
+  Dev only: the script goes in through the app's own import and derivation path, the Production
+  rows are written to the tables directly.
 - **`env.ts` also exports `modelEnv`** - `GEMINI_API_KEY`, optional, `null` when unset; the only reader is
   `apps/web/lib/production/pipeline/gemini.ts`. The model ids live in `@folio/contracts` (`MODEL_REGISTRY`).
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`

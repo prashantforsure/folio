@@ -52,7 +52,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   module per derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `continuity.ts`,
   `time-cues.ts`, `sets.ts`, `rename.ts`).
 - `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, forward-only
-  migrations `0000`–`0024` (which are applied to dev is tracked in its `CLAUDE.md`),
+  migrations `0000`–`0028` (which are applied to dev is tracked in its `CLAUDE.md`),
   project-scoped repositories. `packages/ui` — tokens as CSS custom properties, the inline SVG
   icon set, a few small components.
 - `apps/web` — auth, home shell, workspace chrome (`_chrome/project-shell.tsx`) and all nine
@@ -84,12 +84,17 @@ Facts easy to get wrong (full history in `docs/build-decisions.md`):
 - **`revisions` and `comment_threads` have no route** (their routes were cut) but are read by the
   Script route. `character_findings` (`0022`) and `scenes.story_time/beats` are orphaned columns
   awaiting a drop ruling.
-- **Production is a pipeline of jobs**: tiers (`Draft · Standard · Cinema`), never model names, in
-  UI or schema; every generation a `jobs` row with its cost named before it is spent. Its feature
-  doc set (`docs/production/`) was deleted 2026-09-21; AGENTS.md's open decision 14 and its
-  Architecture / Feature workflow sections still point at it — treat those pointers as dead.
+- **Production is the v12 handoff** (`docs/production/production.md` + the mockup, built
+  2026-09-22): one storyboard sheet per reel, a four-step readiness bar gating `Start shooting`,
+  no sidebar, no `?view=` (Cards | Columns is a `view_preferences` row). Every paid button is a
+  `generations` row with its credits held in the same statement (`credit_ledger`, computed
+  balance); the model is Gemini through `lib/production/pipeline/`, named only in
+  `MODEL_REGISTRY`. The shot table is `reel_shots` - `shots` is the Storyboard's. Its
+  `README.md` lists every deviation; `pnpm --filter @folio/db seed:production -- --user <email>`
+  writes a project in every state the mockup draws.
 - **Optional env**: `ANTHROPIC_API_KEY` (assistant composer draws disabled without it; model id is
-  `lib/assistant/model.ts`, not env) and the `R2_*` block (portraits, photos, frames).
+  `lib/assistant/model.ts`, not env), `GEMINI_API_KEY` (Production's generate buttons draw
+  disconnected without it) and the `R2_*` block (portraits, photos, Production media).
 
 **Nothing needs a live database** to typecheck, lint, build or unit-test. Signed-in E2E walks
 (`apps/web/e2e/*-route.spec.ts`) need `E2E_EMAIL`/`E2E_PASSWORD` and skip without them;
