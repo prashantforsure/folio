@@ -12,13 +12,17 @@ const FOCUSABLE =
  * behind; `Modal`, `DrawerShell` and the Production route's overlays all
  * take it. Focus is moved into the root on open when nothing inside has it
  * (the caller may focus a field first), and Tab / Shift+Tab wrap at the
- * ends. Escape stays the caller's - each dialog already closes on it.
+ * ends; on close, focus goes back to whatever had it before the dialog
+ * opened - the chip, the card, the field's button - when that element is
+ * still on the page. Escape stays the caller's - each dialog already
+ * closes on it.
  */
 export const useFocusTrap = (root: RefObject<HTMLElement | null>, active = true): void => {
   useEffect(() => {
     if (!active) return undefined
     const element = root.current
     if (element === null) return undefined
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null
     const focusables = (): HTMLElement[] =>
       [...element.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((node) => node.offsetParent !== null || node === document.activeElement)
     if (!element.contains(document.activeElement)) {
@@ -51,6 +55,9 @@ export const useFocusTrap = (root: RefObject<HTMLElement | null>, active = true)
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
+      if (opener !== null && opener.isConnected && (document.activeElement === null || document.activeElement === document.body || element.contains(document.activeElement))) {
+        opener.focus()
+      }
     }
   }, [root, active])
 }
