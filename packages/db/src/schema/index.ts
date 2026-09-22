@@ -42,6 +42,20 @@
  *   shots                        a scene does not say how it is shot - keyed by the heading node's id
  *   jobs                         the job row is the status; written by the system on a click
  *   frame_generations            shot to job, and on failure to the refund entry
+ *   art_styles                   the 14 presets (project_id null) and a project's own; Production v12 (0026)
+ *   episode_settings             the Production Settings modal, one row per episode, locked by the first shoot
+ *   reels                        one clip's worth of a scene - keyed by the heading node's id, like shots
+ *   reel_shots                   a reel's timed segments, the spec's vocabulary; the Storyboard's `shots` is its own
+ *   shot_description_parts       a shot's description as runs, so an @mention stays a record id
+ *   shot_characters              the Character field: auto rows from mentions, or the writer's manual rows
+ *   storyboard_sheets            one sheet per reel, with its frames in storyboard_frames
+ *   storyboard_frames
+ *   clips                        what Start shooting rendered for a reel
+ *   assets                       the stored media behind all of the above, by object key
+ *   generations                  every Production AI job: reserve, run, settle - the row is the status
+ *   notes                        the notes popover's rows; the latest is the field
+ *   view_preferences             View options and Filter & sort, per user per episode
+ *   activity_log                 one row per Production mutation; no reader yet
  *   share_links                  the in-app invite: a token, a role, revocable (0016)
  *   assistant_chats              one conversation with the assistant about one episode's script (0016)
  *   assistant_messages           its turns, a person's and the model's
@@ -114,6 +128,9 @@ export * from './measurement'
 export * from './derived'
 export * from './credits'
 export * from './storyboard'
+export * from './production-enums'
+export * from './assets'
+export * from './production'
 export * from './timeline'
 export * from './share'
 export * from './assistant'

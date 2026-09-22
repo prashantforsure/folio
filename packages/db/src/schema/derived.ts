@@ -10,6 +10,7 @@ import { sql } from 'drizzle-orm'
 import {
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -21,6 +22,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
+import { assets } from './assets'
 import {
   createdAtColumn,
   idColumn,
@@ -28,6 +30,7 @@ import {
   timestampColumn,
   updatedAtColumn,
 } from './columns'
+import { frameStateEnum, intExtEnum, priorityEnum } from './production-enums'
 import { projects, users } from './tenancy'
 
 /**
@@ -604,6 +607,13 @@ export const locationSluglineTallies = pgTable(
  * which the table split guarantees. A clock needs a day (checked); the
  * flashback flag stands alone. `story_time` predates the shape and has no
  * writer; dropping a column is asked for, so it stays.
+ *
+ * Production (v12, migration `0026`) hangs two more things here: the scene
+ * image (`still_asset_id`, `still_state` - the spec's `scenes` columns, one
+ * still per scene shared by its reels) and the scene-setup row's per-scene
+ * overrides (`camera_body` … `priority`, named as `reel_shots`' are; null =
+ * the default from the scene / first shot). The spec left the overrides
+ * unstored; `production.ts` says why they are here.
  */
 export const scenes = pgTable(
   'scenes',
@@ -622,6 +632,17 @@ export const scenes = pgTable(
     /** Story thread ids, as text. See the note above. */
     threads: text('threads').array().notNull().default(sql`ARRAY[]::text[]`),
     notes: jsonb('notes').notNull().default(sql`'{}'::jsonb`),
+    /** The scene image, one per scene. Production v12. */
+    stillAssetId: uuid('still_asset_id').references(() => assets.id, { onDelete: 'set null' }),
+    stillState: frameStateEnum('still_state').notNull().default('empty'),
+    /** The scene-setup overrides. Production v12; null = default. */
+    cameraBody: text('camera_body'),
+    lens: text('lens'),
+    prop: text('prop'),
+    locationId: uuid('location_id').references(() => locations.id, { onDelete: 'set null' }),
+    intExt: intExtEnum('int_ext'),
+    shootDate: date('shoot_date'),
+    priority: priorityEnum('priority'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },

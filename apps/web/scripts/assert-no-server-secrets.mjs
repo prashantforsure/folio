@@ -72,6 +72,8 @@ const SECRET_VARIABLES = [
   'DATABASE_URL_TRANSACTION',
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
+  'ANTHROPIC_API_KEY',
+  'GEMINI_API_KEY',
 ]
 
 /** From `refuseBrowser()` in packages/db/src/env.ts. Its presence means that module was bundled. */

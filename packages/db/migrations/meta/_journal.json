@@ -183,6 +183,13 @@
       "when": 1790059005083,
       "tag": "0025_drop_production_v1",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790060670851,
+      "tag": "0026_production_v12",
+      "breakpoints": true
     }
   ]
 }

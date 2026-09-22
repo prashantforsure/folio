@@ -18,7 +18,7 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0025` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0026` are applied to the dev Supabase project** and are forward-only.
   (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
   pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
   `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
@@ -76,6 +76,16 @@ authored / derived-cache / measurement. Touching `episodes` needs
   job rows). Applied through the direct migrator on 2026-09-22: `db:migrate` failed silently on
   `DROP CONSTRAINT shots_reel_id_reels_id_fk` (the cascading table drop had already taken it),
   fixed with `IF EXISTS`.
+  `0026` (the same rebuild) adds the v12 tables on the spec's own vocabulary - 26 enums, `assets`,
+  `art_styles` (the 14 presets inserted at its foot, `ON CONFLICT (key) DO NOTHING`), `episode_settings`,
+  `reels`, `reel_shots`, `shot_description_parts`, `shot_characters`, `storyboard_sheets`,
+  `storyboard_frames`, `clips`, `generations`, `notes`, `view_preferences`, `activity_log` - and the
+  scene image + setup-override columns on `scenes`; RLS block hand-written on the `0016` pattern
+  (`art_styles` lets every member read a preset, nobody write one). Additive, generated with the
+  real env present, applied through the direct migrator on 2026-09-22. `schema/production.ts` names
+  the two deviations (`reel_shots`, `scene_node_id`).
+- **`env.ts` also exports `modelEnv`** - `GEMINI_API_KEY`, optional, `null` when unset; the only reader is
+  `apps/web/lib/production/pipeline/gemini.ts`. The model ids live in `@folio/contracts` (`MODEL_REGISTRY`).
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`
   when none is set. The only reader is `apps/web/lib/storage/r2.ts`. And `assistantEnv` -
   `ANTHROPIC_API_KEY`, optional, `null` when unset; the only reader is

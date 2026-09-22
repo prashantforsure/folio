@@ -173,6 +173,20 @@ const AssistantEnvSchema = z.object({
 export type AssistantEnv = z.infer<typeof AssistantEnvSchema>
 
 /**
+ * The Production route's models - Google's Gemini API, by the client's
+ * ruling (2026-09-22). Server only, optional the way the assistant is:
+ * unset, `modelEnv` is `null` and every generate button is drawn
+ * disabled with a line saying the model is not connected. The model ids
+ * are not environment variables either: they are the registry in
+ * `@folio/contracts` (`MODEL_REGISTRY`), the only place a model is named.
+ */
+const ModelEnvSchema = z.object({
+  GEMINI_API_KEY: z.string().min(20, 'looks too short to be a Gemini API key'),
+})
+
+export type ModelEnv = z.infer<typeof ModelEnvSchema>
+
+/**
  * What each variable is and where it comes from.
  *
  * Carried here rather than only in `.env.example` so the failure message can
@@ -192,6 +206,7 @@ const PROVENANCE: Readonly<Record<string, string>> = {
   R2_BUCKET: 'The bucket name, as created in the Cloudflare dashboard.',
   R2_PUBLIC_URL: 'The origin the bucket is served from - its custom domain, or the r2.dev public URL - with no trailing slash.',
   ANTHROPIC_API_KEY: 'Anthropic Console, API keys. Server only. Unset, the assistant panel is drawn disconnected.',
+  GEMINI_API_KEY: 'Google AI Studio, Get API key. Server only. Unset, Production draws its generate buttons disconnected.',
 }
 
 // ---------------------------------------------------------------------------
@@ -300,3 +315,13 @@ export const assistantEnv: AssistantEnv | null =
   process.env.ANTHROPIC_API_KEY === undefined || process.env.ANTHROPIC_API_KEY === ''
     ? null
     : parseOrThrow(AssistantEnvSchema, { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY }, 'assistant')
+
+/**
+ * Server-only. `null` when `GEMINI_API_KEY` is unset - Production's
+ * generations are not connected, and every reader treats that as a
+ * disabled button, never as a broken one.
+ */
+export const modelEnv: ModelEnv | null =
+  process.env.GEMINI_API_KEY === undefined || process.env.GEMINI_API_KEY === ''
+    ? null
+    : parseOrThrow(ModelEnvSchema, { GEMINI_API_KEY: process.env.GEMINI_API_KEY }, 'model')

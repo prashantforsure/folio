@@ -91,6 +91,18 @@ export type GenerationId = Branded<'GenerationId'>
 export type StoryThreadId = Branded<'StoryThreadId'>
 /** A reel: one clip's worth of a scene, with the shots that fill it. Authored; keyed to the heading node like a shot. See `production.ts`. */
 export type ReelId = Branded<'ReelId'>
+/** A Production shot: one timed segment of a reel. Its own space beside the Storyboard's `ShotId` (2026-09-22). See `production.ts`. */
+export type ReelShotId = Branded<'ReelShotId'>
+/** A storyboard sheet: one image per reel. See `production.ts`. */
+export type SheetId = Branded<'SheetId'>
+/** A clip: what `Start shooting` renders for a reel. See `production.ts`. */
+export type ClipId = Branded<'ClipId'>
+/** A stored image or video: a frame, a sheet, a still, a reference, a clip. See `production.ts`. */
+export type AssetId = Branded<'AssetId'>
+/** One AI job in Production: shotlist, sheet, scene image, frame, reel. Not the Storyboard's `GenerationId`. */
+export type ProductionGenerationId = Branded<'ProductionGenerationId'>
+/** An art style: one of the 14 presets or a project's own. See `production.ts`. */
+export type ArtStyleId = Branded<'ArtStyleId'>
 /** A share link: the in-app invite AGENTS.md, Constraints names. One row per issued link. See `share.ts`. */
 export type ShareLinkId = Branded<'ShareLinkId'>
 /** An assistant chat, per episode. See `assistant.ts`. */
@@ -121,6 +133,12 @@ export const shotId = (raw: string): ShotId => raw as ShotId
 export const generationId = (raw: string): GenerationId => raw as GenerationId
 export const storyThreadId = (raw: string): StoryThreadId => raw as StoryThreadId
 export const reelId = (raw: string): ReelId => raw as ReelId
+export const reelShotId = (raw: string): ReelShotId => raw as ReelShotId
+export const sheetId = (raw: string): SheetId => raw as SheetId
+export const clipId = (raw: string): ClipId => raw as ClipId
+export const assetId = (raw: string): AssetId => raw as AssetId
+export const productionGenerationId = (raw: string): ProductionGenerationId => raw as ProductionGenerationId
+export const artStyleId = (raw: string): ArtStyleId => raw as ArtStyleId
 export const shareLinkId = (raw: string): ShareLinkId => raw as ShareLinkId
 export const assistantChatId = (raw: string): AssistantChatId => raw as AssistantChatId
 export const assistantMessageId = (raw: string): AssistantMessageId => raw as AssistantMessageId
@@ -166,6 +184,12 @@ export const ShotIdSchema = brandedUuid(shotId)
 export const GenerationIdSchema = brandedUuid(generationId)
 export const StoryThreadIdSchema = brandedUuid(storyThreadId)
 export const ReelIdSchema = brandedUuid(reelId)
+export const ReelShotIdSchema = brandedUuid(reelShotId)
+export const SheetIdSchema = brandedUuid(sheetId)
+export const ClipIdSchema = brandedUuid(clipId)
+export const AssetIdSchema = brandedUuid(assetId)
+export const ProductionGenerationIdSchema = brandedUuid(productionGenerationId)
+export const ArtStyleIdSchema = brandedUuid(artStyleId)
 export const ShareLinkIdSchema = brandedUuid(shareLinkId)
 export const AssistantChatIdSchema = brandedUuid(assistantChatId)
 export const AssistantMessageIdSchema = brandedUuid(assistantMessageId)
