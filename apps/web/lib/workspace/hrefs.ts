@@ -41,6 +41,7 @@ type ProjectPath = `/app/project/${string}`
 export type ProjectRoutePath = `${ProjectPath}/${ProjectRoute}`
 export type CharacterPath = `${ProjectPath}/characters/${string}`
 export type LocationPath = `${ProjectPath}/locations/${string}`
+export type PropPath = `${ProjectPath}/props/${string}`
 export type ResearchSourcePath = `${ProjectPath}/research/${string}`
 type CollapsedEpisodePath = `${ProjectPath}/${EpisodeRoute}`
 type EpisodicEpisodePath = `${ProjectPath}/${string}/${EpisodeRoute}`
@@ -96,6 +97,13 @@ export const sceneHref = (address: EpisodeAddress, sceneNodeId: string): ScenePa
  */
 export const locationHref = (projectId: ProjectId, locationId: string): LocationPath =>
   `/app/project/${projectId}/locations/${locationId}`
+
+/**
+ * One prop's record: `/props/:propId`. The record's UUID, for the reason
+ * `characterHref` gives - a prop is renamed freely and its URL never moves.
+ */
+export const propHref = (projectId: ProjectId, propId: string): PropPath =>
+  `/app/project/${projectId}/props/${propId}`
 
 /**
  * One research source: `/research/:sourceId`, the path the Research mockup's

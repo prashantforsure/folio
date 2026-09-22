@@ -16,7 +16,7 @@ import type {
   ViewPreferences,
   ViewPreferencesPatch,
 } from '@folio/contracts'
-import type { LocationId, NodeId } from '@folio/script'
+import type { LocationId, NodeId, PropId } from '@folio/script'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { createContext, useContext } from 'react'
 
@@ -93,6 +93,8 @@ export type ProductionValue = {
   readonly defaults: EpisodeSettings
   readonly artStyles: readonly ArtStyle[]
   readonly locations: readonly { readonly id: LocationId; readonly name: string }[]
+  /** The project's props, for the `Prop` menu and every surface that prints one's name. */
+  readonly props: readonly { readonly id: PropId; readonly name: string }[]
   readonly members: readonly Assignee[]
   readonly balance: CreditBalance
   readonly live: readonly Generation[]

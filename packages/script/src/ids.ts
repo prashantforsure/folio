@@ -45,8 +45,17 @@ export type CharacterId = Branded<'CharacterId'>
 /** A location record. Locations are a tree; this is a node in that tree. */
 export type LocationId = Branded<'LocationId'>
 
+/**
+ * A prop record. A prop is **authored** - nothing in this package mints one -
+ * and `props.ts` reads the script back as evidence for the pool the caller
+ * hands it. Like every other brand here it carries no format; `packages/db`
+ * mints and `packages/contracts` validates.
+ */
+export type PropId = Branded<'PropId'>
+
 export const nodeId = (raw: string): NodeId => raw as NodeId
 export const documentId = (raw: string): DocumentId => raw as DocumentId
 export const runId = (raw: string): RunId => raw as RunId
 export const characterId = (raw: string): CharacterId => raw as CharacterId
 export const locationId = (raw: string): LocationId => raw as LocationId
+export const propId = (raw: string): PropId => raw as PropId

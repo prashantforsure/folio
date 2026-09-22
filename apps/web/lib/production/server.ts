@@ -5,6 +5,7 @@ import type {
   Assignee,
   Clip,
   CreditBalance,
+  EpisodeId,
   EpisodeSettings,
   Generation,
   ProductionCastMember,
@@ -16,9 +17,9 @@ import type {
 } from '@folio/contracts'
 import { DEFAULT_ART_STYLE_KEY, DEFAULT_SETTINGS, hueOfColor } from '@folio/contracts'
 import type { AssetRecord, ClipRecord, ProductionEpisodeRecord, ProjectScope, ReelRecord, ReelShotRecord, SheetRecord } from '@folio/db'
-import { listCharacterRecords, listLocationRecords, listMemberProfiles, readBalance, readProductionEpisode } from '@folio/db'
+import { failGeneration, listCharacterRecords, listLiveGenerations, listLocationRecords, listMemberProfiles, listPropRecords, readBalance, readProductionEpisode } from '@folio/db'
 import { modelEnv } from '@folio/db/env'
-import type { CharacterId, LocationId } from '@folio/script'
+import type { CharacterId, LocationId, PropId } from '@folio/script'
 import { cache } from 'react'
 
 import { initialsOf } from '../characters/cast'
@@ -42,6 +43,8 @@ export type ProductionLoad = {
   readonly defaults: EpisodeSettings
   readonly artStyles: readonly ArtStyle[]
   readonly locations: readonly { readonly id: LocationId; readonly name: string }[]
+  /** The project's props, for the `Prop` menu. Props is authoritative (`prop_id`, migration `0030`). */
+  readonly props: readonly { readonly id: PropId; readonly name: string }[]
   readonly members: readonly Assignee[]
   readonly preferences: ViewPreferences
   readonly balance: CreditBalance
@@ -135,12 +138,42 @@ export const composeScenes = (
   })
 }
 
+/**
+ * How long a generation may sit `queued` or `running` before this page
+ * decides the process that was carrying it died without saying so - a
+ * serverless function killed between `startGeneration` and the provider
+ * answering (defect 0.6). `runner.ts`'s `catch` only ever sees a *throw*;
+ * a kill produces neither a throw nor a row update, so nothing else notices.
+ *
+ * There is no worker to sweep for this (`apps/worker` is empty), so the
+ * page's own poll does it: every load checks the episode's live generations
+ * against this age, and one that is too old is failed here exactly as
+ * `runner.ts` would fail it - reservation released, target unmarked - so
+ * the writer sees "failed" and can retry instead of a spinner with nothing
+ * behind it. Ten minutes is well past `shoot_reel`, the slowest job.
+ */
+const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
+
+const settleStuckGenerations = async (scope: ProjectScope, episodeId: EpisodeId): Promise<void> => {
+  const live = await listLiveGenerations(scope, episodeId)
+  const now = Date.now()
+  const stuck = live.filter((generation) => now - new Date(generation.startedAt ?? generation.createdAt).getTime() > GENERATION_TIMEOUT_MS)
+  if (stuck.length === 0) return
+  await Promise.all(
+    stuck.map((generation) =>
+      failGeneration(scope, generation.id, 'Timed out: the request running this died before it finished.'),
+    ),
+  )
+}
+
 export const loadProduction = cache(async (context: EpisodeContext): Promise<ProductionLoad> => {
   const { scope, episode } = context
-  const [record, characters, locationRows, members, balance] = await Promise.all([
+  await settleStuckGenerations(scope, episode.id)
+  const [record, characters, locationRows, propRows, members, balance] = await Promise.all([
     readProductionEpisode(scope, episode.id),
     listCharacterRecords(scope),
     listLocationRecords(scope),
+    listPropRecords(scope),
     listMemberProfiles(scope),
     readBalance(scope),
   ])
@@ -168,6 +201,7 @@ export const loadProduction = cache(async (context: EpisodeContext): Promise<Pro
     defaults: { episodeId: episode.id, ...DEFAULT_SETTINGS, artStyleId: preset.id, lockedAt: null },
     artStyles: record.artStyles,
     locations: locationRows.map((location) => ({ id: location.id, name: location.name })),
+    props: propRows.map((prop) => ({ id: prop.id, name: prop.name })),
     members: members.map((member) => ({ id: member.userId, name: member.displayName })),
     preferences: record.preferences,
     balance,

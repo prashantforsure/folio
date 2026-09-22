@@ -1,7 +1,7 @@
 import type { IconName } from '@folio/ui'
 
 /**
- * The route tree of the project workspace, as data. Nine routes.
+ * The route tree of the project workspace, as data. Ten routes.
  *
  * AGENTS.md, Routing, plus rulings the client made for this and later phases
  * (recorded in `docs/build-decisions.md`):
@@ -24,8 +24,9 @@ import type { IconName } from '@folio/ui'
  *
  * ## Three lists, and they differ on purpose
  *
- * `RAIL` is the six sections in the rail's fixed order (README, "Shell"):
- * Writing, Characters, Locations, Timeline, Research, Production. `SIDEBAR`
+ * `RAIL` is the seven sections in the rail's fixed order (README, "Shell"):
+ * Writing, Characters, Locations, Props, Timeline, Research, Production.
+ * Props was added by the Props pass, after Locations. `SIDEBAR`
  * is the four rows of the writing sidebar - Script, Storyboard, Outline,
  * Scenes - one per writing route, in that order. `WRITING_ROUTES` is the
  * same four in URL-table order. Storyboard was the other half of a Write /
@@ -57,17 +58,22 @@ export const EPISODE_ROUTES = [...WRITING_ROUTES, 'production'] as const
 
 export type EpisodeRoute = (typeof EPISODE_ROUTES)[number]
 
-/** The four project-scoped routes, in rail order. */
-export const PROJECT_ROUTES = ['characters', 'locations', 'timeline', 'research'] as const
+/**
+ * The five project-scoped routes, in rail order. Props joined them with the
+ * Props pass: a prop is the film's, not one episode's - the same ball is
+ * carried across three episodes and sourced once - so it is project-wide
+ * with no episode segment, as Characters and Locations are.
+ */
+export const PROJECT_ROUTES = ['characters', 'locations', 'props', 'timeline', 'research'] as const
 
 export type ProjectRoute = (typeof PROJECT_ROUTES)[number]
 
 export type WorkspaceRoute = EpisodeRoute | ProjectRoute
 
-/** The nine. The smoke test asserts this number. */
+/** The ten. The smoke test asserts this number. */
 export const WORKSPACE_ROUTES: readonly WorkspaceRoute[] = [...EPISODE_ROUTES, ...PROJECT_ROUTES]
 
-export const WORKSPACE_ROUTE_COUNT = 9
+export const WORKSPACE_ROUTE_COUNT = 10
 
 export const isEpisodeRoute = (value: string): value is EpisodeRoute =>
   (EPISODE_ROUTES as readonly string[]).includes(value)
@@ -87,6 +93,7 @@ export const ROUTE_TITLE: Record<WorkspaceRoute, string> = {
   production: 'Production',
   characters: 'Characters',
   locations: 'Locations',
+  props: 'Props',
   timeline: 'Timeline',
   research: 'Research',
 }
@@ -96,13 +103,18 @@ export const ROUTE_TITLE: Record<WorkspaceRoute, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * The six rail sections. `writing` covers the four writing routes; every
+ * The seven rail sections. `writing` covers the four writing routes; every
  * other section is exactly one route.
+ *
+ * Props sits after Locations, which keeps the rail reading as the shoot
+ * reads: who, where, what with - then when, what it is about, and how it is
+ * made. The order the v2 design fixed is otherwise untouched.
  */
 export const RAIL_SECTIONS = [
   'writing',
   'characters',
   'locations',
+  'props',
   'timeline',
   'research',
   'production',
@@ -116,11 +128,12 @@ export type RailItem = {
   readonly icon: IconName
 }
 
-/** Writing · Characters · Locations · Timeline · Research · Production - README, "Rail". */
+/** Writing · Characters · Locations · Props · Timeline · Research · Production. */
 export const RAIL: readonly RailItem[] = [
   { section: 'writing', label: 'Writing', icon: 'writing' },
   { section: 'characters', label: 'Characters', icon: 'characters' },
   { section: 'locations', label: 'Locations', icon: 'locations' },
+  { section: 'props', label: 'Props', icon: 'props' },
   { section: 'timeline', label: 'Timeline', icon: 'timeline' },
   { section: 'research', label: 'Research', icon: 'research' },
   { section: 'production', label: 'Production', icon: 'production' },

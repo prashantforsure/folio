@@ -33,6 +33,12 @@
  *   locations                    name, parent, scheduled days, description, the merge tombstone, and
  *                                since 0018 its scouting status, address and photo key
  *   location_bound_sluglines
+ *   props                        a thing the film has to put in front of the camera: name, category (free
+ *                                text, never an enum), description, status, photo key, merge tombstone.
+ *                                AUTHORED with no derived half at all - nothing in a node list is a prop,
+ *                                so what the script says about one is read at request time and never stored
+ *   prop_aliases                 the alias table's authored half - `location_bound_sluglines` minus its
+ *                                unique-per-project index, because two props may both be "the bag" (0030)
  *   scenes                       synopsis, story time (day, clock, flashback), beat links (opaque), thread links
  *   story_threads                a named, coloured storyline; the scenes it runs through are `scenes.threads`
  *   timeline_findings            the writer's `It's deliberate` on a continuity finding (0023) - the check is
@@ -106,9 +112,12 @@
  *
  * ## What is deliberately absent
  *
- * Props, lenses, and any table for project
+ * Lenses, and any table for project
  * settings `transfer` or `keys`. The last of those is AGENTS.md open decision
- * 7 and was left open on purpose. The rest are out of scope so far. Jobs,
+ * 7 and was left open on purpose. **Props** were on this list beside lenses
+ * until the Props pass; `props.ts` is what one now is, and `scenes.prop` and
+ * `reel_shots.prop` - free text while there was no table - are `prop_id`
+ * foreign keys since `0030`. The rest are out of scope so far. Jobs,
  * generations and storyboard shots were on this list until the Storyboard
  * phase, story threads until the Timeline phase, research sources until the
  * Research v2 pass (2026-09-16); `storyboard.ts`, `timeline.ts` and
@@ -125,6 +134,7 @@ export * from './documents'
 export * from './threads'
 export * from './history'
 export * from './measurement'
+export * from './props'
 export * from './derived'
 export * from './credits'
 export * from './storyboard'

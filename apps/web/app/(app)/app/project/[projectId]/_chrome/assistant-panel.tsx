@@ -14,6 +14,8 @@ import { useCharacterFacts } from '../../../../../../lib/characters/facts'
 import { citeOf } from '../../../../../../lib/characters/figures'
 import type { LocationFacts } from '../../../../../../lib/locations/facts'
 import { useLocationFacts } from '../../../../../../lib/locations/facts'
+import type { PropFacts } from '../../../../../../lib/props/facts'
+import { usePropFacts } from '../../../../../../lib/props/facts'
 import { useEphemeral } from '../../../../../../lib/state/ephemeral'
 import type { TimelineFacts } from '../../../../../../lib/timeline/facts'
 import { useTimelineFacts } from '../../../../../../lib/timeline/facts'
@@ -181,6 +183,23 @@ const locationsSubhead = (places: LocationFacts | null): string =>
   places?.open == null ? LOCATIONS_SUBHEAD : `Ask about the locations, or have me describe ${places.open.name} from its scenes.`
 
 /**
+ * The Props route's chips. The first names the drawer's record when one is
+ * open, as Characters' and Locations' do; the other two are reports the
+ * route already counts from its facts cell (`lib/props/facts.ts`) -
+ * arithmetic, no model.
+ */
+const propsChips = (things: PropFacts | null): readonly Chip[] => [
+  { label: things?.open == null ? 'Describe a prop from its scenes' : `Describe ${things.open.name} from its scenes`, tone: 'accent' },
+  { label: 'Which props has nobody found yet?', tone: 'warn', kind: 'report' },
+  { label: 'Which props does the script never mention?', tone: 'ok', kind: 'report' },
+]
+
+const propsSubhead = (things: PropFacts | null): string =>
+  things?.open == null
+    ? 'Ask about the props, or have me describe one from its scenes.'
+    : `Ask about the props, or have me describe ${things.open.name} from its scenes.`
+
+/**
  * The Timeline route's chips (the rebuild, phase 5): three reports the
  * route already computes - the unplaced scenes, why the drawer's scene is
  * flagged, where a thread goes quiet - answered from the facts cell
@@ -195,7 +214,13 @@ const timelineChips = (times: TimelineFacts | null): readonly Chip[] => [
 
 const formatRef = (ref: { readonly episodeOrdinal: number; readonly number: number }): string => `E${String(ref.episodeOrdinal)} Sc ${String(ref.number)}`
 
-const chipsFor = (route: WorkspaceRoute | null, facts: CharacterFacts | null, places: LocationFacts | null, times: TimelineFacts | null): readonly Chip[] =>
+const chipsFor = (
+  route: WorkspaceRoute | null,
+  facts: CharacterFacts | null,
+  places: LocationFacts | null,
+  times: TimelineFacts | null,
+  things: PropFacts | null,
+): readonly Chip[] =>
   route === 'outline'
     ? OUTLINE_CHIPS
     : route === 'storyboard'
@@ -206,11 +231,19 @@ const chipsFor = (route: WorkspaceRoute | null, facts: CharacterFacts | null, pl
           ? charactersChips(facts)
           : route === 'locations'
             ? locationsChips(places)
-            : route === 'timeline'
-              ? timelineChips(times)
-              : CHIPS
+            : route === 'props'
+              ? propsChips(things)
+              : route === 'timeline'
+                ? timelineChips(times)
+                : CHIPS
 
-const subheadFor = (route: WorkspaceRoute | null, section: RailSection | null, facts: CharacterFacts | null, places: LocationFacts | null): string =>
+const subheadFor = (
+  route: WorkspaceRoute | null,
+  section: RailSection | null,
+  facts: CharacterFacts | null,
+  places: LocationFacts | null,
+  things: PropFacts | null,
+): string =>
   route === 'outline'
     ? OUTLINE_SUBHEAD
     : route === 'storyboard'
@@ -221,10 +254,12 @@ const subheadFor = (route: WorkspaceRoute | null, section: RailSection | null, f
           ? charactersSubhead(facts)
           : route === 'locations'
             ? locationsSubhead(places)
-            : SUBHEAD[section ?? 'writing']
+            : route === 'props'
+              ? propsSubhead(things)
+              : SUBHEAD[section ?? 'writing']
 
-/** The project-scoped routes: the panel says what it reads - the whole project on all three. */
-const PROJECT_ROUTES: readonly WorkspaceRoute[] = ['characters', 'locations', 'timeline']
+/** The project-scoped routes: the panel says what it reads - the whole project on all four. */
+const PROJECT_ROUTES: readonly WorkspaceRoute[] = ['characters', 'locations', 'props', 'timeline']
 
 /** The routes the model reads the whole project on: Characters by the 2026-09-17 ruling, Locations by the 2026-09-18 one (with the location records beside the cast), Timeline by the rebuild's phase 5 (with story time and the findings). */
 const WHOLE_PROJECT_ROUTES: readonly WorkspaceRoute[] = ['characters', 'locations', 'timeline']
@@ -297,6 +332,39 @@ const placeReportFor = (label: string, places: LocationFacts): Omit<Report, 'id'
           ? 'No heading is an exterior at night.'
           : `${String(nights.length)} ${nights.length === 1 ? 'set has' : 'sets have'} night exteriors: ${nights.map((place) => `${place.name} (${String(place.nights)})`).join(', ')}.`,
       cites: nights.flatMap((place) => cite(place.first)),
+      people: [],
+    }
+  }
+  return null
+}
+
+/** The Props route's reports, over the facts its workspace publishes: arithmetic, no model. */
+const thingReportFor = (label: string, things: PropFacts): Omit<Report, 'id' | 'createdAt'> | null => {
+  const cite = (ref: PropFacts['index'][number] | null): readonly CitationChip[] =>
+    ref === null ? [] : [citeOf(things.projectId, things.shape, ref)]
+  if (label === 'Which props has nobody found yet?') {
+    const waiting = things.unsourced
+    return {
+      role: 'report',
+      label,
+      sentence:
+        waiting.length === 0
+          ? 'Every prop is sourced or on set.'
+          : `${String(waiting.length)} ${waiting.length === 1 ? 'prop is' : 'props are'} still needed: ${waiting.map((thing) => thing.name).join(', ')}.`,
+      cites: waiting.flatMap((thing) => cite(thing.first)),
+      people: [],
+    }
+  }
+  if (label === 'Which props does the script never mention?') {
+    const quiet = things.unwritten
+    return {
+      role: 'report',
+      label,
+      sentence:
+        quiet.length === 0
+          ? 'Every prop has a line of action that reads as it.'
+          : `${String(quiet.length)} ${quiet.length === 1 ? 'prop has' : 'props have'} no line in the script: ${quiet.map((thing) => thing.name).join(', ')}. Either the page has not asked for it yet, or nothing is bound to what the page calls it.`,
+      cites: [],
       people: [],
     }
   }
@@ -414,6 +482,7 @@ const SUBHEAD: Record<RailSection, string> = {
   writing: 'Ask about the draft, or have me rough out a scene, a beat or a character.',
   characters: 'Ask about the cast, who shares scenes with whom, or a character who needs a record.',
   locations: 'Ask about the sets, what happens where, or a slugline that needs a home.',
+  props: 'Ask about the props, what the page says about one, or what a scene needs on the table.',
   timeline: 'Ask how the story sits in time, or where a thread goes quiet.',
   research: 'Ask about the draft. Research sources are not readable yet.',
   production: 'Ask about the shots and reels, or what a scene needs to shoot.',
@@ -460,8 +529,9 @@ export const AssistantPanel = ({
   const { assistantPrompt, setAssistantPrompt, assistantFocus } = useEphemeral()
   const facts = useCharacterFacts()
   const places = useLocationFacts()
+  const things = usePropFacts()
   const times = useTimelineFacts()
-  const routeFacts = route === 'characters' ? facts : route === 'locations' ? places : route === 'timeline' ? times : null
+  const routeFacts = route === 'characters' ? facts : route === 'locations' ? places : route === 'props' ? things : route === 'timeline' ? times : null
   const readOrdinal = routeFacts?.episodes.find((entry) => entry.slug === episode)?.ordinal ?? null
   const projectScoped = route !== null && PROJECT_ROUTES.includes(route)
   const wholeProject = route !== null && WHOLE_PROJECT_ROUTES.includes(route)
@@ -684,7 +754,7 @@ export const AssistantPanel = ({
               ) : projectScoped && reading !== null ? (
                 <span data-assistant-reading>Reading {reading}. </span>
               ) : null}
-              {subheadFor(route, section, facts, places)}
+              {subheadFor(route, section, facts, places, things)}
             </span>
           </div>
         </div>
@@ -740,7 +810,7 @@ export const AssistantPanel = ({
 
       {empty ? (
         <div className="flex flex-none flex-col items-start gap-[7px] px-[20px] pb-[14px]">
-          {chipsFor(route, facts, places, times).map((chip) => (
+          {chipsFor(route, facts, places, times, things).map((chip) => (
             <button
               key={chip.label}
               type="button"
@@ -751,11 +821,13 @@ export const AssistantPanel = ({
                   const report =
                     route === 'locations' && places !== null
                       ? placeReportFor(chip.label, places)
-                      : route === 'timeline' && times !== null
-                        ? timeReportFor(chip.label, times)
-                        : facts === null
-                          ? null
-                          : reportFor(chip.label, facts)
+                      : route === 'props' && things !== null
+                        ? thingReportFor(chip.label, things)
+                        : route === 'timeline' && times !== null
+                          ? timeReportFor(chip.label, times)
+                          : facts === null
+                            ? null
+                            : reportFor(chip.label, facts)
                   if (report !== null) {
                     const stamp = new Date().toISOString()
                     setTurns((existing) => [...existing, { ...report, id: `report:${stamp}`, createdAt: stamp }])

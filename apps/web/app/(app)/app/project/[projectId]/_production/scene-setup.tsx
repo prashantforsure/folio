@@ -14,7 +14,7 @@ import { useProduction } from './production-context'
  * shot and are overridable per scene; a hidden field leaves the row.
  */
 export const SceneSetup = ({ scene }: { readonly scene: ProductionScene }) => {
-  const { act, shown, locations } = useProduction()
+  const { act, shown, locations, props } = useProduction()
   const first = scene.reels.flatMap((reel) => reel.shots)[0] ?? null
   const setup = scene.setup
   const body = setup.cameraBody ?? first?.cameraBody ?? 'No camera'
@@ -23,7 +23,8 @@ export const SceneSetup = ({ scene }: { readonly scene: ProductionScene }) => {
   const intExt = setup.intExt ?? scene.intExt ?? 'No INT/EXT'
   const rows: readonly { readonly field: MenuField; readonly show: FieldId; readonly label: string; readonly value: string }[] = [
     { field: 'lens', show: 'lens', label: 'Camera', value: `${body} · ${lens}` },
-    { field: 'prop', show: 'prop', label: 'Props', value: setup.prop ?? 'No prop' },
+    // `prop_id` since `0030`: the name comes from the props table, so two shots naming one prop print one word.
+    { field: 'prop', show: 'prop', label: 'Props', value: (setup.propId === null ? null : (props.find((prop) => prop.id === setup.propId)?.name ?? null)) ?? 'No prop' },
     { field: 'loc', show: 'loc', label: 'Location', value: locationName },
     { field: 'intext', show: 'intext', label: '', value: intExt },
     { field: 'date', show: 'date', label: 'Shoot day', value: setup.shootDate ?? 'No date' },

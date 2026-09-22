@@ -55,8 +55,8 @@ export const PACKAGE_NAME = '@folio/script'
 export type { Result } from './result'
 export { err, isErr, isOk, ok } from './result'
 
-export type { CharacterId, DocumentId, LocationId, NodeId, RunId } from './ids'
-export { characterId, documentId, locationId, nodeId, runId } from './ids'
+export type { CharacterId, DocumentId, LocationId, NodeId, PropId, RunId } from './ids'
+export { characterId, documentId, locationId, nodeId, propId, runId } from './ids'
 
 export type { Provenance, ProvenanceSource } from './provenance'
 export { PROVENANCE_SOURCES, byAgent, isAgentAuthored, typed } from './provenance'
@@ -288,6 +288,9 @@ export { sidesFor } from './sides'
 
 export type { EstablishingLine, MentionLabelFor, Quadrant, SetMatch, SetPool, SimilarSets } from './sets'
 export { NO_QUADRANT, addQuadrants, establishingLines, matchSetNames, quadrantOf, similarSets } from './sets'
+
+export type { PropEvidence, PropPool } from './props'
+export { PROP_EVIDENCE_LIMIT, propEvidence, propEvidenceCounts, propScenes } from './props'
 
 export type { CueRestore, CueRevert, CueRewrite, HeadingRewrite } from './rename'
 export { cueSpelling, renameCharacterCues, renameLocationHeadings, revertCueRewrites, setSpelling } from './rename'

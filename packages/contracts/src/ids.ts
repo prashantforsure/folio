@@ -1,5 +1,5 @@
-import { characterId, documentId, locationId, nodeId, runId } from '@folio/script'
-import type { CharacterId, DocumentId, LocationId, NodeId, RunId } from '@folio/script'
+import { characterId, documentId, locationId, nodeId, propId, runId } from '@folio/script'
+import type { CharacterId, DocumentId, LocationId, NodeId, PropId, RunId } from '@folio/script'
 import { z } from 'zod'
 
 import { assertExact } from './equality'
@@ -168,6 +168,7 @@ export const DocumentIdSchema = brandedUuid(documentId)
 export const RunIdSchema = brandedUuid(runId)
 export const CharacterIdSchema = brandedUuid(characterId)
 export const LocationIdSchema = brandedUuid(locationId)
+export const PropIdSchema = brandedUuid(propId)
 
 export const ProjectIdSchema = brandedUuid(projectId)
 export const EpisodeIdSchema = brandedUuid(episodeId)
@@ -206,6 +207,7 @@ assertExact<Equals<z.infer<typeof DocumentIdSchema>, DocumentId>>()
 assertExact<Equals<z.infer<typeof RunIdSchema>, RunId>>()
 assertExact<Equals<z.infer<typeof CharacterIdSchema>, CharacterId>>()
 assertExact<Equals<z.infer<typeof LocationIdSchema>, LocationId>>()
+assertExact<Equals<z.infer<typeof PropIdSchema>, PropId>>()
 
 // ---------------------------------------------------------------------------
 // The one slug
@@ -252,6 +254,12 @@ export const formatEpisodeSlug = (ordinal: number): EpisodeSlug =>
  * (`docs/build-decisions.md`, "Bible route removed"), same treatment as
  * `build`/`search` - not reserved once cut.
  *
+ * `props` is **not** in AGENTS.md's sentence: the Props route was built after
+ * it was written (the Props pass), and a name in the episode's path position
+ * must be reserved the day its route exists or `/props` and an episode slug
+ * compete for the segment. It is appended rather than slotted in, so the
+ * eight AGENTS.md names keep their order and the diff says which one is new.
+ *
  * `ep_NNN` cannot collide with any of them, which is the point of the shape.
  * The list is here rather than in the router because "do not rely on
  * static-first precedence" is a rule about the data, not about Next.js.
@@ -265,6 +273,7 @@ export const RESERVED_PROJECT_SEGMENTS = [
   'production',
   'settings',
   'assets',
+  'props',
 ] as const
 
 export type ReservedProjectSegment = (typeof RESERVED_PROJECT_SEGMENTS)[number]

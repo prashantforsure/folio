@@ -187,10 +187,14 @@ export type EditorAction = {
 export const drawLabel = (shot: ShotRow, cost: number): string =>
   `${shot.frame.kind === 'drawn' || shot.frame.kind === 'failed' || shot.frame.kind === 'blocked' ? 'Redraw' : 'Draw frame'} · ${String(cost)} cr`
 
-export const drawTitle = (cost: number, available: number): string =>
-  available < cost
-    ? `${String(available)} credits available · ${String(cost)} needed`
-    : `Reserves ${String(cost)} credits · ${String(available)} available`
+/**
+ * `apps/worker` is deliberately empty and Storyboard, unlike Production, has
+ * no `after()` runner standing in for it - `requestFrame` would reserve
+ * credits and queue a job nothing ever picks up (defect 0.4). Drawn disabled
+ * with the reason until one of the two exists, the same treatment Characters'
+ * `✦ Generate` already gets for the same missing worker.
+ */
+export const DRAW_FRAME_DISABLED = 'Needs a frame-drawing worker - not built yet'
 
 /**
  * The editor's footer for a shot: what can be undone on the left, what can
@@ -199,9 +203,9 @@ export const drawTitle = (cost: number, available: number): string =>
  */
 export const editorActionsFor = (
   shot: ShotRow,
-  view: Pick<ViewProps, 'cost' | 'available' | 'handlers'>,
+  view: Pick<ViewProps, 'cost' | 'handlers'>,
 ): { readonly destructive: EditorAction; readonly secondary: EditorAction } => {
-  const { handlers, cost, available } = view
+  const { handlers, cost } = view
   if (shot.state === 'proposed') {
     return {
       destructive: {
@@ -246,7 +250,8 @@ export const editorActionsFor = (
     secondary: {
       label: drawLabel(shot, cost),
       attrs: { 'data-draw-frame': '', 'data-cost': String(cost) },
-      title: drawTitle(cost, available),
+      disabled: true,
+      title: DRAW_FRAME_DISABLED,
       onClick: () => {
         handlers.onDraw(shot.id)
       },

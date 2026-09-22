@@ -40,7 +40,13 @@ describe('parseEpisodeSegment - the router', () => {
     }
   })
 
-  it('names the eight AGENTS.md lists, in its order, with assets kept', () => {
+  it("names the eight AGENTS.md lists, in its order, with assets kept - and props after them", () => {
+    // AGENTS.md, Routing names eight, quoted verbatim. `props` is appended
+    // rather than slotted in: the route was built after that sentence was
+    // written, and a name in the episode's path position has to be reserved
+    // the day its route exists or `/props` and an episode slug compete for
+    // the segment. Appending keeps the eight in their order, so the diff
+    // says which one is new.
     expect(RESERVED_PROJECT_SEGMENTS).toEqual([
       'characters',
       'locations',
@@ -50,6 +56,7 @@ describe('parseEpisodeSegment - the router', () => {
       'production',
       'settings',
       'assets',
+      'props',
     ])
   })
 

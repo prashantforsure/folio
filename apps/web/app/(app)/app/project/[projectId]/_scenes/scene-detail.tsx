@@ -14,7 +14,7 @@ import type { SceneCard } from '../../../../../../lib/scenes/server'
 import { ABSENT, count } from '../../../../../../lib/workspace/format'
 import { setQueueIntent } from '../../../../../../lib/characters/compose'
 import type { EpisodeRoutePath } from '../../../../../../lib/workspace/hrefs'
-import { characterHref, locationHref, projectRouteHref } from '../../../../../../lib/workspace/hrefs'
+import { characterHref, locationHref, projectRouteHref, propHref } from '../../../../../../lib/workspace/hrefs'
 import { CastChip, eighthsLabel, pageRange, sceneNo, timeLabel } from './scene-parts'
 
 /**
@@ -220,6 +220,34 @@ export const SceneDetail = ({
               ))}
               {card.derived.castSize === 0 ? <span className="text-11-5 text-ink3">Nobody speaks or is mentioned.</span> : null}
             </div>
+          </div>
+
+          <div className="flex flex-col gap-[7px]" data-scene-props={card.props.length}>
+            <span className="folio-eyebrow">Props · {count(card.props.length)}</span>
+            <div className="flex flex-wrap items-center gap-[6px]">
+              {card.props.map((prop) => (
+                <Link
+                  key={prop.id}
+                  href={propHref(projectId, prop.id)}
+                  data-scene-prop={prop.id}
+                  className="folio-cite no-underline hover:border-accent hover:text-accent hover:no-underline"
+                >
+                  {prop.name}
+                </Link>
+              ))}
+              {card.props.length === 0 ? (
+                <span className="text-11-5 text-ink3">
+                  No prop reads in this scene. A prop is a record on{' '}
+                  <Link href={projectRouteHref(projectId, 'props')} data-props-link className="text-ink3 underline hover:text-accent">
+                    Props
+                  </Link>
+                  , matched by the spellings the page uses.
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-[7px]">
             {card.derived.unresolvedCues.length === 0 ? null : (
               <p className="m-0 text-11-5 leading-[1.5] text-warn">
                 {count(card.derived.unresolvedCues.length)} cue{card.derived.unresolvedCues.length === 1 ? '' : 's'} not yet matched to a record:{' '}

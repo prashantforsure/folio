@@ -11,11 +11,11 @@ import type { Point, Size } from '../../../../../../../lib/storyboard/canvas'
 import { contentToText, textToContent } from '../../../../../../../lib/storyboard/mentions'
 import type { ViewProps } from '../handlers'
 import {
+  DRAW_FRAME_DISABLED,
   Description,
   FrameTile,
   ShotEditor,
   TONE_DOT,
-  drawTitle,
   editorActionsFor,
   frameNotice,
   lensLabel,
@@ -95,7 +95,7 @@ export const ShotNode = ({
   const inFlight = shot.frame.kind === 'queued' || shot.frame.kind === 'running'
   const badge = `${sizeShort(shot)} · ${lensLabel(shot.lensMm)}`
   const notice = frameNotice(shot)
-  const { handlers, cost, available, pending } = view
+  const { handlers, cost, pending } = view
 
   useLayoutEffect(() => {
     const node = root.current
@@ -317,8 +317,8 @@ export const ShotNode = ({
                 type="button"
                 data-generate-frame
                 data-cost={cost}
-                disabled={pending}
-                title={drawTitle(cost, available)}
+                disabled
+                title={DRAW_FRAME_DISABLED}
                 className="folio-pill-button flex-1 rounded-[10px] px-[10px] py-[9px] text-12-5 disabled:opacity-60"
                 onClick={() => {
                   handlers.onDraw(shot.id)

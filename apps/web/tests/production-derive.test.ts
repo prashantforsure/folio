@@ -42,7 +42,7 @@ const shot = (over: Partial<ReelShot> & { readonly n: number }): ReelShot => ({
   proposed: false,
   blocked: false,
   blockReason: null,
-  prop: null,
+  propId: null,
   locationId: null,
   intExt: null,
   shootDate: null,
@@ -101,7 +101,7 @@ const scene = (reels: readonly Reel[], over: Partial<ProductionScene> = {}): Pro
   plateReady: true,
   still: null,
   stillState: 'drawn',
-  setup: { cameraBody: null, lens: null, prop: null, locationId: null, intExt: null, shootDate: null, priority: null, note: null },
+  setup: { cameraBody: null, lens: null, propId: null, locationId: null, intExt: null, shootDate: null, priority: null, note: null },
   reels,
   ...over,
 })
@@ -248,8 +248,10 @@ describe('filter & sort (§2.5)', () => {
 describe('fields (§2.4, §4)', () => {
   const all = Object.fromEntries(['title', 'status', 'desc', 'dialogue', 'refs', 'type', 'motion', 'duration', 'cast', 'prop', 'lens', 'date', 'loc', 'intext', 'notes', 'assignee', 'priority'].map((f) => [f, true])) as Record<string, boolean>
   it('drops a hidden column from the table template and flips Hide/Show all', () => {
-    expect(tableTemplate({ fieldVisibility: all as never })).toBe('56px 200px 130px 140px minmax(220px,1.3fr) 130px 100px 150px 140px')
-    expect(tableTemplate({ fieldVisibility: { ...all, desc: false, cast: false } as never })).toBe('56px 200px 130px 140px 130px 100px 140px')
+    // The trailing 140px is the Prop column, added with the Props route - `prop` was in `FIELD_IDS` from the v12 build with no column.
+    expect(tableTemplate({ fieldVisibility: all as never })).toBe('56px 200px 130px 140px minmax(220px,1.3fr) 130px 100px 150px 140px 140px')
+    expect(tableTemplate({ fieldVisibility: { ...all, desc: false, cast: false } as never })).toBe('56px 200px 130px 140px 130px 100px 140px 140px')
+    expect(tableTemplate({ fieldVisibility: { ...all, prop: false } as never })).toBe('56px 200px 130px 140px minmax(220px,1.3fr) 130px 100px 150px 140px')
     expect(hideAllLabel({ fieldVisibility: all as never })).toBe('Hide all')
     const off = toggleAll({ fieldVisibility: all as never })
     expect(Object.values(off).every((v) => !v)).toBe(true)
@@ -267,7 +269,8 @@ describe('menus (§5.3)', () => {
     cast: [member('Ade', true), member('Nia', true)],
     locations: [{ id: 'loc-1', name: 'Community pitch' }],
     members: [{ id: id(1, 'user'), name: 'Ada O.' }],
-    usedProps: ['Flat ball'],
+    // The props table, not "what somebody typed into another shot" - the Props route owns this list since `0030`.
+    props: [{ id: 'prop-1', name: 'Flat ball' }],
     usedLenses: ['50mm T2.0', '24mm T2.8'],
   }
   it('lists the spec values with a clearing first item, and merges used values without repeats', () => {
@@ -275,16 +278,20 @@ describe('menus (§5.3)', () => {
     expect(menuItems('duration', context)[0]).toEqual({ value: null, label: 'No duration' })
     expect(menuItems('lens', context).map((i) => i.label)).toEqual(['No lens', '24mm T2.8', '35mm T2.0', '50mm T2.0', '85mm T1.8'])
     expect(menuItems('prop', context).map((i) => i.label)).toEqual(['No prop', 'Flat ball'])
+    // A prop item's value is the record's id, so the menu writes `prop_id`, not a name.
+    expect(menuItems('prop', context).map((i) => i.value)).toEqual([null, 'prop-1'])
     expect(menuItems('cast', context).map((i) => i.label)).toEqual(['No character', 'Ade', 'Nia'])
     expect(menuItems('priority', context).map((i) => i.value)).toEqual([null, 'low', 'medium', 'high'])
     expect(showsSearch(menuItems('status', context))).toBe(true)
     expect(showsSearch(menuItems('intext', context))).toBe(false)
     expect(filterItems(menuItems('motion', context), 'tr').map((i) => i.label)).toEqual(['Track'])
-    expect(acceptsFreeText('prop')).toBe(true)
+    // A typed string is no longer a prop: a prop is a record, made on the Props route.
+    expect(acceptsFreeText('prop')).toBe(false)
+    expect(acceptsFreeText('lens')).toBe(true)
     expect(acceptsFreeText('status')).toBe(false)
   })
-  it('collects used props and lenses across an episode', () => {
-    const scenes = [scene([reel([shot({ n: 1, prop: 'Bench', lens: '85mm T1.8' }), shot({ n: 2, prop: ' Bench ', lens: '' })])])]
-    expect(usedValues(scenes)).toEqual({ usedProps: ['Bench'], usedLenses: ['85mm T1.8'] })
+  it('collects used lenses across an episode - props come from the table now', () => {
+    const scenes = [scene([reel([shot({ n: 1, lens: '85mm T1.8' }), shot({ n: 2, lens: '' })])])]
+    expect(usedValues(scenes)).toEqual({ usedLenses: ['85mm T1.8'] })
   })
 })

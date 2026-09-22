@@ -53,7 +53,9 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 - `packages/script` — the pure core, **no dependencies, keep it that way**: node model,
   operations, Fountain and FDX both ways, derivation, pagination, the draft diff, and one read
   module per derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `continuity.ts`,
-  `time-cues.ts`, `sets.ts`, `rename.ts`).
+  `time-cues.ts`, `sets.ts`, `props.ts`, `rename.ts`). `props.ts` is the odd one: a prop is
+  **authored**, so it reads the script back as *evidence* for records the caller hands it and
+  never proposes one.
 - `packages/contracts` — Zod boundary schemas; `production.ts` holds `MODEL_REGISTRY`, the only
   place a model is named. `packages/db` — Drizzle schema, forward-only migrations `0000`–`0029`
   (which are applied to dev is tracked in its `CLAUDE.md`), project-scoped repositories, the
@@ -61,9 +63,9 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   few small components.
 - `apps/web` — auth, the account shell and its four routes (`app/(app)/app/(home)/`: New,
   Projects, Trash, Settings; `/app/recents`, `/app/screenwriting` and `/app/filmmaking` redirect
-  to Projects since 2026-09-22), workspace chrome (`_chrome/project-shell.tsx`) and all nine
-  route bodies: Script, Outline, Storyboard, Scenes, Characters, Locations, Timeline, Research,
-  Production. Each is `app/(app)/app/project/[projectId]/_<route>/` plus `lib/<route>/` for its
+  to Projects since 2026-09-22), workspace chrome (`_chrome/project-shell.tsx`) and all ten
+  route bodies: Script, Outline, Storyboard, Scenes, Characters, Locations, Props, Timeline,
+  Research, Production. Each is `app/(app)/app/project/[projectId]/_<route>/` plus `lib/<route>/` for its
   actions. `lib/workspace/routes.ts` is the route tree; `lib/workspace/views.ts` tables each
   route's `?view=` tabs, drawn in the header's centre. The assistant (`lib/assistant/`) and
   share links (`lib/share/`) are cross-route. `lib/production/pipeline/` is the Gemini spec,
@@ -79,7 +81,7 @@ Facts easy to get wrong (history in git):
   are authored columns (`0029`); archiving is not trashing. Half of account settings is drawn
   disabled with the reason on the control — that is deliberate, and `apps/web/CLAUDE.md` lists
   every one.
-- **Only Research still uses `?view=`.** Storyboard, Scenes, Characters, Locations and Timeline
+- **Only Research still uses `?view=`.** Storyboard, Scenes, Characters, Locations, Props and Timeline
   hold their views as client state (`_<route>/view-state.tsx`, URL unchanged); Production's
   Cards / Columns is a `view_preferences` row. Each was ruled per route; a new `?view=` needs a
   row in `ROUTE_VIEWS` or `tests/workspace-routes.test.ts` fails.

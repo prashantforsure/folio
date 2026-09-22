@@ -3,7 +3,6 @@
 import type { ShotRow } from '@folio/contracts'
 import {
   CanvasPositionSchema,
-  FRAME_GENERATION_COST,
   FRAME_UPLOAD_MAX_BYTES,
   JobIdSchema,
   NodeIdSchema,
@@ -21,7 +20,6 @@ import {
   listStoryboardScenes,
   moveShot as moveShotRow,
   placeShotOnCanvas as placeShotOnCanvasRow,
-  queueFrameGeneration,
   readBoundCues,
   readDocumentByKind,
   readSceneHeader,
@@ -60,12 +58,10 @@ import { cutScene } from './scene-cut'
  * replacing any proposal still waiting. Nothing is accepted here; the
  * writer does that, per shot or all at once, and editing is accepting.
  *
- * **The frame** - one money write. `queueFrameGeneration` reserves the cost
- * and writes the job and generation rows in one statement, only if the
- * balance covers it - "reserve then execute", and the button named the
- * cost before the click. `cancelFrame` releases a queued job's reservation
- * in one statement, or asks a running one to stop. Each is one statement
- * after the gate: the shot and job checks ride inside it.
+ * **The frame** - `requestFrame` refuses outright (defect 0.4): no runner
+ * exists to draw a queued job, so nothing reserves credits for one.
+ * `cancelFrame` still releases a queued job's reservation in one statement,
+ * or asks a running one to stop - both real states a job can already be in.
  *
  * **The canvas** (2026-09-17) - `placeShotOnCanvas` writes where a card
  * was dropped, and nothing else: the sequence is still `order_key`. Not
@@ -423,35 +419,23 @@ export const placeShot = async (
 // ---------------------------------------------------------------------------
 
 /**
- * Draw (or redraw) a shot's frame: reserve the cost, write the job. The
- * job is `queued` from here; the frame shows that until a worker exists to
- * run it (`apps/worker` is empty on purpose, and a queue library needs
- * approval). Cost and balance are the ledger's numbers.
+ * Draw (or redraw) a shot's frame.
  *
- * One statement after the gate. The shot's checks - this episode's, a
- * present scene's, accepted - ride inside it, because on the request path
- * every sequential statement is two round trips (`@folio/db`, `client.ts`).
+ * Refused outright (defect 0.4): `apps/worker` is empty on purpose and,
+ * unlike Production, nothing inside `web` stands in for it. Queuing the job
+ * anyway - what this did before the fix - would reserve the cost and leave
+ * it held forever with nothing ever drawing the frame. The button that calls
+ * this is disabled with the same reason (`DRAW_FRAME_DISABLED`,
+ * `shot-parts.tsx`); this refuses whatever reaches the action directly.
+ * `queueFrameGeneration` (`@folio/db`) is what resumes this once a runner
+ * exists to pick up what it queues.
  */
 export const requestFrame = async (projectId: string, episode: string, rawShotId: string): Promise<FrameResult> => {
   const id = ShotIdSchema.safeParse(rawShotId)
   if (!id.success) return { status: 'error', message: NOT_A_SHOT }
   const gate = await openEpisode(projectId, episode)
   if (isRefusal(gate)) return gate
-
-  const queued = await queueFrameGeneration(gate.scope, gate.episode.id, id.data, FRAME_GENERATION_COST)
-  if (queued.status === 'no-shot') {
-    return queued.state === 'proposed'
-      ? { status: 'error', message: 'Accept the shot before drawing its frame. A proposal has no frame.' }
-      : { status: 'error', message: NOT_A_SHOT }
-  }
-  if (queued.status === 'insufficient') {
-    return { status: 'insufficient', available: queued.available, cost: FRAME_GENERATION_COST }
-  }
-  return {
-    status: 'queued',
-    frame: { kind: 'queued', jobId: queued.jobId, cost: FRAME_GENERATION_COST },
-    available: queued.available,
-  }
+  return { status: 'refused', message: 'Needs a frame-drawing worker - not built yet.' }
 }
 
 /** Stop a frame job. Queued: cancelled and released. Running: asked to stop. One statement after the gate. */

@@ -1,4 +1,4 @@
-import type { CharacterId, DescriptionPart, LocationId, NodeId } from '@folio/script'
+import type { CharacterId, DescriptionPart, LocationId, NodeId, PropId } from '@folio/script'
 import { z } from 'zod'
 
 import type { ArtStyleId, AssetId, ClipId, EpisodeId, ProductionGenerationId, ReelId, ReelShotId, SheetId, UserId } from './ids'
@@ -7,6 +7,7 @@ import {
   CharacterIdSchema,
   LocationIdSchema,
   NodeIdSchema,
+  PropIdSchema,
   ReelIdSchema,
   ReelShotIdSchema,
   UserIdSchema,
@@ -40,7 +41,7 @@ import type { Timestamp } from './primitives'
  *
  * ## What the mockup shows that the spec left unstored
  *
- * The scene-setup row's per-scene overrides (camera, prop, location,
+ * The scene-setup row's per-scene overrides (camera, prop record, location,
  * INT/EXT, shoot day, priority) are columns on the authored `scenes` row,
  * named as the shot's are. Notes are rows in `notes`, the latest one shown.
  */
@@ -454,7 +455,8 @@ export type ReelShot = {
   readonly proposed: boolean
   readonly blocked: boolean
   readonly blockReason: string | null
-  readonly prop: string | null
+  /** The prop this shot needs, as a record id. Free text until the Props route existed (`0030`). */
+  readonly propId: PropId | null
   readonly locationId: LocationId | null
   readonly intExt: IntExt | null
   /** `YYYY-MM-DD`. */
@@ -559,7 +561,8 @@ export type ProductionCastMember = {
 export type SceneSetup = {
   readonly cameraBody: string | null
   readonly lens: string | null
-  readonly prop: string | null
+  /** The prop this scene's setup names, as a record id. Props is authoritative for it. */
+  readonly propId: PropId | null
   readonly locationId: LocationId | null
   readonly intExt: IntExt | null
   readonly shootDate: string | null
@@ -681,7 +684,7 @@ export const ShotPatchSchema = z
     cameraMotion: CameraMotionSchema.optional(),
     cameraBody: text(80).optional(),
     lens: text(40).optional(),
-    prop: text(80).nullable().optional(),
+    propId: PropIdSchema.nullable().optional(),
     locationId: LocationIdSchema.nullable().optional(),
     intExt: IntExtSchema.nullable().optional(),
     shootDate: isoDate.nullable().optional(),
@@ -732,7 +735,7 @@ export const SceneSetupPatchSchema = z
     sceneNodeId: NodeIdSchema,
     cameraBody: text(80).nullable().optional(),
     lens: text(40).nullable().optional(),
-    prop: text(80).nullable().optional(),
+    propId: PropIdSchema.nullable().optional(),
     locationId: LocationIdSchema.nullable().optional(),
     intExt: IntExtSchema.nullable().optional(),
     shootDate: isoDate.nullable().optional(),

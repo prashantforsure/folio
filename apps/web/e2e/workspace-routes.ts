@@ -4,9 +4,9 @@
  *
  * AGENTS.md, Validation: "The E2E smoke test walks all the routes in both
  * themes and both states. It is not optional coverage - it is the thing that
- * catches a route shipped without its empty state." Nine now - Notes and
- * Revisions were built, then cut, so was Bible, and Insights was removed with
- * the v2 redesign (2026-09-16).
+ * catches a route shipped without its empty state." Ten now - Notes and
+ * Revisions were built, then cut, so was Bible, Insights was removed with
+ * the v2 redesign (2026-09-16), and Props was added by the Props pass.
  *
  * One row per route. `workspace.spec.ts` walks the rows; a later phase adds
  * to a row what its route must show - the empty-state copy, the populated
@@ -17,7 +17,7 @@
  * read the same table.
  */
 
-export type RailSection = 'writing' | 'characters' | 'locations' | 'timeline' | 'research' | 'production'
+export type RailSection = 'writing' | 'characters' | 'locations' | 'props' | 'timeline' | 'research' | 'production'
 
 export type WorkspaceRouteRow = {
   readonly route: string
@@ -44,12 +44,13 @@ export const RAIL_ORDER: readonly RailSection[] = [
   'writing',
   'characters',
   'locations',
+  'props',
   'timeline',
   'research',
   'production',
 ]
 
-export const RAIL_LABELS: readonly string[] = ['Writing', 'Characters', 'Locations', 'Timeline', 'Research', 'Production']
+export const RAIL_LABELS: readonly string[] = ['Writing', 'Characters', 'Locations', 'Props', 'Timeline', 'Research', 'Production']
 
 export const RAIL_WIDTH = 56
 
@@ -85,6 +86,8 @@ export const HEADER_VIEWS: Readonly<Record<string, { readonly tabs: readonly str
   production: null,
   characters: { tabs: ['Cast', 'Presence', 'Sheet'], icons: 0 },
   locations: { tabs: ['Places', 'Scenes here', 'Sheet'], icons: 0 },
+  /** The Props pass: the views are state, the URL stays `/props`. */
+  props: { tabs: ['Overview', 'List'], icons: 0 },
   /** The rebuild (2026-09-18): the views are state. The Continuity tab carries a count badge only while a finding is open - none on the walk's fresh project. */
   timeline: { tabs: ['Story order', 'Chronology', 'Continuity'], icons: 0 },
   research: { tabs: ['Library', 'Source', 'Clips'], icons: 0 },
@@ -131,6 +134,18 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     emptyState: { text: 'No locations yet' },
   },
   {
+    route: 'props',
+    scope: 'project',
+    rail: 'props',
+    /** The toolbar's `h1` is not drawn on the empty state, which the walk's fresh project is. */
+    title: null,
+    /** The views are state; the bare path still writes `data-sub-view="overview"`. */
+    defaults: { view: 'overview' },
+    /** The sidebar card is the prop list - category groups and the counts widget. */
+    column: { kind: 'card', width: SIDEBAR_WIDTH },
+    emptyState: { text: 'No props yet' },
+  },
+  {
     route: 'timeline',
     scope: 'project',
     rail: 'timeline',
@@ -155,10 +170,11 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
 ]
 
 /**
- * Nine. Decision 5 episode-scoped production, decision 6 cut, assets
+ * Ten. Decision 5 episode-scoped production, decision 6 cut, assets
  * reserved; Beats cut 2026-09-12; Revisions and Notes cut 2026-09-14; Bible
- * cut 2026-09-15; Insights removed with the redesign 2026-09-16.
+ * cut 2026-09-15; Insights removed with the redesign 2026-09-16; Props
+ * added by the Props pass, project-scoped, after Locations in the rail.
  */
-export const WORKSPACE_ROUTE_COUNT = 9
+export const WORKSPACE_ROUTE_COUNT = 10
 
 export const THEMES = ['dark', 'light'] as const

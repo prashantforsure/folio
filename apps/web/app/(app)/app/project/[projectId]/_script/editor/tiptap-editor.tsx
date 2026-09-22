@@ -220,6 +220,20 @@ export const ScriptEditor = ({
     store.caret.set({ blockId: block === null ? null : blockAttrsOf(block.node).id, type: block?.type ?? null })
   }, [editor, store])
 
+  // `content` is a creation-time option; Tiptap never looks at it again.
+  // `nodes` itself does not change from typing - the document lives in the
+  // editor, never React state - so the only way its reference moves while
+  // `documentId` (and so `extensions`, and so the editor instance) stays put
+  // is a fresh server render of the *same* document: an import replacing it
+  // whole. That is the one case this pushes into the live editor.
+  const contentRef = useRef(content)
+  useEffect(() => {
+    if (editor === null || editor.isDestroyed) return
+    if (content === contentRef.current) return
+    contentRef.current = content
+    editor.commands.setContent(content, { emitUpdate: true })
+  }, [content, editor])
+
   return (
     <>
       {editor === null ? fallback : null}

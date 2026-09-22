@@ -1,5 +1,7 @@
 import type { DocumentRecord, Measurement, MeasurementScene, SceneBoardRow } from '@folio/contracts'
 import {
+  listPropAliases,
+  listPropRecords,
   listSceneBoard,
   listSceneMeasurements,
   readDocumentByKind,
@@ -7,8 +9,8 @@ import {
   readMentionLabels,
   readScreenplayNodes,
 } from '@folio/db'
-import type { CharacterId, NodeId } from '@folio/script'
-import { labelBook } from '@folio/script'
+import type { CharacterId, NodeId, PropId } from '@folio/script'
+import { labelBook, propEvidence, propScenes } from '@folio/script'
 import { cache } from 'react'
 
 import { nodeDigest } from '../script/server'
@@ -31,6 +33,12 @@ import type { SceneExcerpt, UnacceptedHeading } from './excerpt'
  *                           card prints `—`. Nothing here paginates.
  *   `scenes[].cast`         `characters.name` through the record id   (`readMentionLabels`)
  *   `scenes[].excerpt`      the node list, cut at derivation's headings (`cutExcerpts`)
+ *   `scenes[].props`        the project's props whose bound spellings read in
+ *                           this scene's action (`@folio/script`, `props.ts`).
+ *                           A **reading, not a store**, like every other
+ *                           evidence pass: the Props route owns the records
+ *                           and this route only says which ones the page asks
+ *                           for here.
  *   `measurement`           the `measurements` header at the project's format,
  *                           `paged` - the same row the nav and the project
  *                           card count from (`workspace.ts`, "one measurement,
@@ -50,6 +58,8 @@ export type SceneCard = {
   readonly measured: MeasurementScene | null
   readonly cast: readonly { readonly id: CharacterId; readonly name: string }[]
   readonly excerpt: SceneExcerpt
+  /** Props the page asks for in this scene, in the props list's order. Read at request time. */
+  readonly props: readonly { readonly id: PropId; readonly name: string }[]
 }
 
 export type ScenesLoad =
@@ -81,10 +91,12 @@ export const loadScenes = cache(
     }
     const nodes = read.value.map((entry) => entry.node)
 
-    const [board, labels, measurement] = await Promise.all([
+    const [board, labels, measurement, propRecords, propAliases] = await Promise.all([
       listSceneBoard(scope, document.id),
       readMentionLabels(scope),
       readMeasurement(scope, document.id, project.format, 'paged'),
+      listPropRecords(scope),
+      listPropAliases(scope),
     ])
     const measuredScenes =
       measurement === null ? [] : await listSceneMeasurements(scope, measurement.id)
@@ -101,6 +113,29 @@ export const loadScenes = cache(
       book,
     )
 
+    // Which props the page asks for, scene by scene. One pass over the
+    // episode's nodes, from the records the Props route owns - nothing is
+    // minted and nothing is stored (`packages/script/src/props.ts`).
+    const aliasesOf = new Map<PropId, string[]>()
+    for (const entry of propAliases) {
+      const list = aliasesOf.get(entry.propId) ?? []
+      list.push(entry.alias)
+      aliasesOf.set(entry.propId, list)
+    }
+    const evidence = propEvidence(
+      nodes,
+      propRecords.map((record) => ({ id: record.id, name: record.name, aliases: aliasesOf.get(record.id) ?? [] })),
+      book.labelFor,
+    )
+    const propsByScene = new Map<NodeId, { readonly id: PropId; readonly name: string }[]>()
+    for (const record of propRecords) {
+      for (const scene of propScenes(evidence.get(record.id) ?? [])) {
+        const list = propsByScene.get(scene) ?? []
+        list.push({ id: record.id, name: record.name })
+        propsByScene.set(scene, list)
+      }
+    }
+
     const scenes: SceneCard[] = board.map((derived) => ({
       derived,
       measured: measuredById.get(derived.sceneNodeId) ?? null,
@@ -109,6 +144,7 @@ export const loadScenes = cache(
         sceneNodeId: derived.sceneNodeId,
         lines: [],
       },
+      props: propsByScene.get(derived.sceneNodeId) ?? [],
     }))
 
     return {

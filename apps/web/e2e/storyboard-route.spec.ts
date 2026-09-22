@@ -1,8 +1,7 @@
 import { expect, test as base } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import type { WalkOptions } from '../playwright.config'
 
@@ -33,12 +32,12 @@ import type { WalkOptions } from '../playwright.config'
  *      reads it back in its overlay; drag to reorder on the board, add by
  *      hand at the column's foot, remove from the node's `⋯`; the filter
  *      hides what has no frame.
- *   4. **The frame names its cost, reserves it, and can be released.** The
- *      node's `Generate` says the cost and, in its title, the balance;
- *      with no credits the server refuses with the numbers; with a grant on
- *      the ledger a click writes a queued job; a reload still shows it
- *      queued, on the canvas and on the board card's tile; cancelling
- *      releases it.
+ *   4. **The frame names its cost but cannot be drawn yet.** The node's
+ *      `Generate` says the cost; with no runner behind the queue
+ *      (`apps/worker` is empty and nothing stands in for it the way
+ *      Production's `after()` runner does) the button is disabled and its
+ *      title gives the reason, so nothing reserves credits it can never
+ *      spend (defect 0.4).
  *   5. **Canvas and list draw the same rows.** The node's `⋯` moves it in
  *      the sequence; the zoom pill scales the world; a card dragged by its
  *      grip keeps its position across a reload while its number does not
@@ -48,8 +47,7 @@ import type { WalkOptions } from '../playwright.config'
  *      with it; the stepper and the sidebar pick the scene; the list's
  *      `Display` sorts.
  *
- * Needs a real account; skips without one. Leaves one project behind per
- * run, with a grant of 8 credits on its ledger.
+ * Needs a real account; skips without one. Leaves one project behind per run.
  */
 
 const test = base.extend<WalkOptions>({
@@ -132,35 +130,6 @@ const toView = async (page: Page, view: 'board' | 'canvas' | 'list'): Promise<vo
 
 const waitSaved = async (page: Page): Promise<void> => {
   await expect(page.locator('[data-storyboard-save]')).toHaveAttribute('data-save-state', 'saved', { timeout: 60_000 })
-}
-
-/**
- * A `grant` on the project's ledger, written the way a purchase webhook
- * would write one. Run inside `packages/db`, where the `postgres` driver
- * resolves, from the `.env` that package reads. A fixture, not a feature:
- * the app has no way to grant itself credits, and must not.
- */
-const grantCredits = (rootDir: string, projectId: string, amount: number): void => {
-  const cwd = resolve(rootDir, '../../../packages/db')
-  // `packages/db/.env` is what drizzle-kit reads; a checkout without one has the same values in `apps/web/.env`.
-  const script = `
-    import { existsSync } from 'node:fs'
-    import postgres from 'postgres'
-    process.loadEnvFile(existsSync('.env') ? '.env' : '../../apps/web/.env')
-    const sql = postgres(process.env.DATABASE_URL_SESSION, { prepare: true })
-    await sql\`insert into credit_ledger (project_id, kind, delta, idempotency_key, reason)
-      values (\${'${projectId}'}, 'grant', \${${String(amount)}}, \${'e2e:grant:${projectId}'}, 'E2E storyboard walk')
-      on conflict (project_id, idempotency_key) do nothing\`
-    await sql.end()
-  `
-  const file = join(cwd, '.e2e-grant.mjs')
-  writeFileSync(file, script)
-  try {
-    execFileSync('node', [file], { cwd, stdio: 'pipe' })
-  } finally {
-    // Not left behind: the file is a fixture and `packages/db` is a package.
-    unlinkSync(file)
-  }
 }
 
 let scriptUrl = ''
@@ -376,12 +345,11 @@ test('a card opens its canvas; a shot is authored: edit with an @mention, drag t
   await expect(shots).toHaveCount(4)
 })
 
-test('the frame names its cost, refuses without credits, reserves with them, and releases on cancel', async ({ page, account }) => {
+test('the frame names its cost but Draw frame is disabled - no runner exists yet (defect 0.4)', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(storyboardUrl)
   await waitMounted(page)
   await toView(page, 'canvas')
-  const main = page.locator('main[data-route="storyboard"]')
   const nodes = page.locator('[data-shot-node]')
   const generate = (index: number) => nodes.nth(index).locator('[data-generate-frame]')
   await expect(nodes).toHaveCount(4)
@@ -389,59 +357,11 @@ test('the frame names its cost, refuses without credits, reserves with them, and
   cost = Number((await generate(0).getAttribute('data-cost')) ?? '0')
   expect(cost).toBeGreaterThan(0)
   await expect(generate(0)).toContainText(`Generate · ${String(cost)} cr`)
-  await expect(generate(0)).toHaveAttribute('title', `0 credits available · ${String(cost)} needed`)
-
-  // No credits: the server refuses with the numbers; nothing is written.
-  await generate(0).click()
-  await expect(page.locator('[data-storyboard-error]')).toContainText(`Not enough credits: 0 available, ${String(cost)} needed`, { timeout: 60_000 })
+  // `apps/worker` is empty and, unlike Production, nothing stands in for it -
+  // a queued job would never be drawn, so the button reserves nothing.
+  await expect(generate(0)).toBeDisabled()
+  await expect(generate(0)).toHaveAttribute('title', 'Needs a frame-drawing worker - not built yet')
   await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
-
-  // A grant on the ledger, as a purchase would leave one. Twice the cost.
-  grantCredits(test.info().config.rootDir, projectId, cost * 2)
-  await page.reload()
-  await waitMounted(page)
-  await toView(page, 'canvas')
-
-  // Reserve then execute: the job is queued and the balance drops by exactly the cost.
-  await expect(generate(0)).toHaveAttribute('title', `Reserves ${String(cost)} credits · ${String(cost * 2)} available`)
-  await generate(0).click()
-  await waitSaved(page)
-  await expect(nodes.nth(0).locator('[data-cancel-frame]')).toBeVisible()
-  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await expect(nodes.nth(0)).toContainText(`Queued · ${String(cost)} credits reserved`)
-
-  // Survives a closed tab: the job row is the truth - on the canvas, and in the board card's tile.
-  // A full load starts on the board (the view is state, not the URL); the canvas is a tab away.
-  await page.reload()
-  await waitMounted(page)
-  await expect(main).toHaveAttribute('data-sub-view', 'board')
-  await toView(page, 'canvas')
-  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await toView(page, 'board')
-  const shots = page.locator('[data-scene-column]').nth(0).locator('[data-shot]')
-  await expect(shots.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await expect(shots.nth(0).locator('[data-frame-notice]')).toContainText(`Queued · ${String(cost)} credits reserved`)
-  // And the card opens its canvas.
-  await shots.nth(0).click()
-  await expect(main).toHaveAttribute('data-sub-view', 'canvas')
-
-  // Cancel a queued job: released, and the balance comes back.
-  await nodes.nth(0).locator('[data-cancel-frame]').click()
-  await waitSaved(page)
-  await expect(generate(0)).toHaveAttribute('title', `Reserves ${String(cost)} credits · ${String(cost * 2)} available`)
-  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'cancelled')
-
-  // Two more reservations exhaust the grant; a third is refused with the numbers.
-  await generate(0).click()
-  await waitSaved(page)
-  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await generate(1).click()
-  await waitSaved(page)
-  await expect(nodes.nth(1).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await expect(generate(2)).toHaveAttribute('title', `0 credits available · ${String(cost)} needed`)
-  await generate(2).click()
-  await expect(page.locator('[data-storyboard-error]')).toContainText(`Not enough credits: 0 available, ${String(cost)} needed`, { timeout: 60_000 })
-  await expect(nodes.nth(2).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
 })
 
 test('canvas and list draw the same rows', async ({ page, account }) => {
@@ -454,8 +374,10 @@ test('canvas and list draw the same rows', async ({ page, account }) => {
   await expect(page.locator('[data-shot-count]')).toHaveText('Scene 01 · 4 shots')
   const nodes = page.locator('[data-shot-node]')
   await expect(nodes).toHaveCount(4)
-  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'queued')
-  await expect(nodes.nth(0).locator('[data-node-state]')).toHaveText('queued')
+  // No runner exists to draw a frame (defect 0.4, `Draw frame` disabled), so
+  // every shot is still without one.
+  await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
+  await expect(nodes.nth(0).locator('[data-node-state]')).toHaveText('no frame')
   await expect(nodes.nth(2).locator('[data-generate-frame]')).toContainText(`Generate · ${String(cost)} cr`)
   await expect(nodes.nth(2).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
 

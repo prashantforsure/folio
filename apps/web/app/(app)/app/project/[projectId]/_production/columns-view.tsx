@@ -147,12 +147,13 @@ const ReelRows = ({ scene, reel, template }: { readonly scene: ProductionScene; 
 }
 
 const ShotRow = ({ scene, reel, shot, template }: { readonly scene: ProductionScene; readonly reel: Reel; readonly shot: ReelShot; readonly template: string }) => {
-  const { act, picked, detail, dragging, shown, members } = useProduction()
+  const { act, picked, detail, dragging, shown, members, props } = useProduction()
   const status = shotStatusOf(shot)
   const index = reel.shots.findIndex((candidate) => candidate.id === shot.id)
   const selected = picked.has(shot.id)
   const cast = shot.characters.map((entry) => scene.cast.find((member) => member.id === entry.characterId)?.name).filter((name): name is string => name !== undefined)
   const assignee = shot.assigneeId === null ? null : (members.find((member) => member.id === shot.assigneeId)?.name ?? null)
+  const propName = shot.propId === null ? null : (props.find((prop) => prop.id === shot.propId)?.name ?? null)
   const tileLabel = shot.frame?.url ? '' : shot.blocked ? 'refused' : shot.frameState === 'empty' ? 'describe the shot' : shot.frameState === 'ready' ? 'ready to draw' : shot.frameState === 'gen' ? 'generating' : shot.frameState === 'queued' ? 'queued' : shot.frameState === 'failed' ? 'failed · refunded' : shot.frameState === 'cancelled' ? 'cancelled' : 'frame'
   return (
     <div
@@ -288,6 +289,20 @@ const ShotRow = ({ scene, reel, shot, template }: { readonly scene: ProductionSc
         >
           <button type="button" aria-haspopup="menu" aria-label={`Character: ${cast.length === 0 ? 'No character' : cast.join(', ')}`} className="folio-prod-cellbtn" data-empty={cast.length === 0 ? 'true' : undefined}>
             {cast.length === 0 ? 'No character' : cast.join(', ')}
+            <span className="folio-prod-caret ml-[6px]">▾</span>
+          </button>
+        </span>
+      ) : null}
+      {shown('prop') ? (
+        <span
+          role="cell"
+          className="folio-prod-tcell text-12-5"
+          onClick={(event) => {
+            act.openMenu('prop', { kind: 'shot', id: shot.id }, event)
+          }}
+        >
+          <button type="button" aria-haspopup="menu" aria-label={`Prop: ${propName ?? 'No prop'}`} className="folio-prod-cellbtn" data-empty={propName === null ? 'true' : undefined}>
+            {propName ?? 'No prop'}
             <span className="folio-prod-caret ml-[6px]">▾</span>
           </button>
         </span>

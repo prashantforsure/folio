@@ -115,7 +115,7 @@ const first = <const T extends readonly [string, ...string[]]>(values: T) =>
 
 /**
  * One schema per route. A route with no sub-view has an empty object, so
- * `parseSubViews` is total over the nine and a page cannot forget to call
+ * `parseSubViews` is total over the ten and a page cannot forget to call
  * it.
  */
 export const SUB_VIEW_SCHEMAS = {
@@ -126,6 +126,8 @@ export const SUB_VIEW_SCHEMAS = {
   production: z.object({}),
   characters: z.object({}),
   locations: z.object({}),
+  /** The Props route's two views are client state, ruled with the route. */
+  props: z.object({}),
   timeline: z.object({}),
   research: z.object({ view: first(['library', 'source', 'clips']) }),
 } as const satisfies Record<WorkspaceRoute, z.ZodObject>

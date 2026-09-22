@@ -28,7 +28,7 @@ import { useFocusTrap } from './use-focus-trap'
  *
  * One frame for every record route's drawer. Rendered through a portal into
  * the route layout's slot - `#<route>-drawer`, a sibling of the column
- * (`characters-layout.tsx`, `locations-layout.tsx`, `research-layout.tsx`, `timeline-layout.tsx`) - so it sits beside the
+ * (`characters-layout.tsx`, `locations-layout.tsx`, `props-layout.tsx`, `research-layout.tsx`, `timeline-layout.tsx`) - so it sits beside the
  * column, full height, as the mockups draw it; a page renders inside the
  * surface and could not otherwise reach that position. The slot exists
  * only after hydration, so the drawer's first paint is a client paint.
@@ -47,7 +47,7 @@ export const DrawerShell = ({
   children,
 }: {
   /** Which route's slot to fill: `characters` portals into `#characters-drawer`. Unread when `overlay`. */
-  readonly route: 'characters' | 'locations' | 'research' | 'timeline'
+  readonly route: 'characters' | 'locations' | 'props' | 'research' | 'timeline'
   /**
    * Floating over the whole app instead of docked in the route's slot: a
    * blurred scrim (`.folio-modal-scrim`, the same ground `_chrome/modal.tsx`

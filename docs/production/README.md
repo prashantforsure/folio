@@ -62,8 +62,11 @@ Deviations from the spec, each with its reason:
 - **The shot table is `reel_shots`** - `shots` is the Storyboard's, untouched. Scenes are keyed by
   `scene_node_id` (the heading node's id, open decision 10); scene facts, cast and lines are
   derived from the script at read time, never stored (`scene_cast`, `scene_script_lines` not built).
-- **Scene setup overrides live on `scenes`** (`camera_body, lens, prop, location_id, int_ext,
+- **Scene setup overrides live on `scenes`** (`camera_body, lens, prop_id, location_id, int_ext,
   shoot_date, priority`, plus `still_asset_id` / `still_state`) - the spec leaves them unstored.
+  `prop` was free text here and on `reel_shots` until the Props route existed; both are
+  `prop_id` foreign keys since migration `0030`, and **Props is authoritative for a prop**
+  (`apps/web/CLAUDE.md`). Both columns held zero rows, so nothing was migrated.
 - **Credits** reuse the append-only `credit_ledger` (the generation id in `job_id`); the balance is
   computed, so no `balance_after`. Costs the spec does not price: shot frame 4, scene image 40,
   AI shotlist 0, propose 0 (sheet 40 and shoot 375 as specified).
@@ -81,5 +84,6 @@ Deviations from the spec, each with its reason:
 - **Reel `⋯`** = Rename · Delete; the drawer's References `＋` uploads an image
   (`assets.kind = 'reference'`, `reel_shots.reference_asset_ids`).
 - **Veo** durations are 4 / 6 / 8 s (a 5 s clip asks for 6, the longer three for 8); a shoot that the key
-  cannot run fails and refunds. Free-text lens / prop values come through the menu's search.
+  cannot run fails and refunds. Free-text **lens** values come through the menu's search; a prop is
+  picked from the props table (`0030`), and a new one is made on `/props`.
 - **`✦ AI Shotlist` without `GEMINI_API_KEY`** falls back to the rule-based proposal and says so.

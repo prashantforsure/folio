@@ -144,6 +144,38 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   script are `@folio/script`'s `sets.ts`, computed in `lib/locations/server.ts` - nothing new is
   stored. Trap: a queue decision's `Undo` is `revokeDecision`, keyed by the row's key, and a `New
   location` undo deletes the minted record only while it is blank.
+- **The Props route (built by the Props pass - this paragraph and the route as built are its only
+  spec):** the one record route with **no derived half at all**. Nothing in a screenplay's grammar
+  is a prop - a cue is a person, a slugline is a set, a bat is a noun in a line of action - so
+  there is no derivation pass, no tally table and no resolve queue, and **the script is read back
+  at request time as evidence** (`packages/script/src/props.ts`, `propEvidence`), never stored.
+  The empty card therefore has **no `✦ Derive`**: there is nothing to derive, and minting records
+  out of prose is what `entities.ts` deliberately refuses. `_props/props-workspace.tsx` is the
+  body - toolbar (count chip, one `Display` menu holding the status filter, `＋ New`), one of
+  `overview-view.tsx` (the card grid) or `list-view.tsx` (`Name ⇅ · Category ⇅ · Description`,
+  the sort on the columns, not in a menu), the status bar, and `prop-drawer.tsx`. The views are
+  client state (`_props/view-state.tsx`, **the provider is in the layout** or opening the drawer
+  resets the tab); the URL stays `/props`, and `/props/:propId` is the drawer.
+  `_chrome/props-layout.tsx` is the shell; the sidebar groups by **category**, because that is
+  the only grouping a writer here has authored and the status is already the dot on every row.
+  **The alias table is the route.** "Game Ball" is a record name; the page writes "the ball", so
+  a record collects nothing until a spelling is bound (`prop_aliases`, `alias-table.tsx`) - and
+  that table is `location_bound_sluglines` **minus its unique-per-project index**, because two
+  props may both be "the bag" and both should collect the line. So binding has no `taken`
+  outcome, there is no conflict block and there is no queue. Category is **free text offered from
+  what the project already uses** (an input with a `<datalist>`, never a `<select>` and never an
+  enum). A rename is **not** a write-back: a prop's name is written nowhere the app owns, so
+  `renameProp` swaps the spelling that *was* the name and touches no node - AGENTS.md's "there is
+  no third case" is untouched. Every derived line is `lib/props/view.ts`, pure and tested
+  (`tests/props-view.test.ts`); `lib/props/server.ts` is one `cache()`d `loadProps` with every
+  read in one `Promise.all` and **the evidence scored once at the alias level** (one entry per
+  `(record, spelling)` pair) rather than once per record, so the node list is walked once.
+  **Props is authoritative for a prop**, so Production's `scenes.prop` and `reel_shots.prop` are
+  `prop_id` foreign keys (migration `0030`): `menuItems('prop')` reads the props table,
+  `acceptsFreeText('prop')` is gone, the shot drawer has a `Prop` row and the Columns view a
+  `Prop` column - none of which could be reached before, because that menu's vocabulary was the
+  distinct values already stored and nothing could put a first one there. Trap: `result.ts` holds
+  every constant, because a `'use server'` module may export nothing but async functions.
 - **The Timeline route (rebuilt 2026-09-18 in five phases - the written plan is the spec):**
   `_timeline/timeline-workspace.tsx` is the body and runs the pure core itself - the loader
   (`lib/timeline/server.ts`) hands rows, threads, episodes, the introductions and the verdict keys,

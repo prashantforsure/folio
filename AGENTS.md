@@ -174,7 +174,7 @@ Stop and ask before you:
 apps/web/                    Next.js app. UI and server actions only — no logic that belongs in packages/script.
   app/(app)/                 Signed-in shell: the 238px account sidebar, theme, the account menu. Everything user-facing lives under /app.
   app/(app)/app/(home)/      The account routes: new, projects (+ three redirects), trash, settings.
-  app/(app)/project/         Project workspace: rail, writing sidebar and header, the assistant panel, the nine routes.
+  app/(app)/project/         Project workspace: rail, writing sidebar and header, the assistant panel, the ten routes.
   lib/                       Web-only glue: auth session, server action helpers, query client. Not domain logic.
 apps/worker/                 BullMQ consumers. Long-running. Generation, export, agent runs. Never a serverless fn.
                              Still the one-constant stub; Production runs its jobs in web (after() + polling) until it exists.
@@ -273,13 +273,19 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   Settings route's section nav, are **client state** - the URL never moves (the exception table).
 - `:episodeId` shares a path position with the project-scoped names. Validate every episode id
   against `characters`, `locations`, `timeline`, `research`, `insights`, `production`,
-  `settings`, `assets`, and keep ids to the `ep_NNN` shape. Static-first precedence saves this
-  tree by accident; do not rely on it.
+  `settings`, `assets` - and `props`, **appended** by the Props pass, since this sentence was
+  written before that route existed - and keep ids to the `ep_NNN` shape. Static-first precedence
+  saves this tree by accident; do not rely on it.
 - `projectType: 'film'` **hides** the episode segment. The database still stores one episode row.
   The router special-cases the shape; the schema never does.
 - Rail order is fixed (the v2 design's "Rail", retired 2026-09-20 - the order stands): Writing · Characters · Locations ·
-  Timeline · Research · Production. Writing stays lit across all four writing routes. Insights
-  was removed with the v2 redesign (2026-09-16); its name stays reserved.
+  **Props** · Timeline · Research · Production. Writing stays lit across all four writing routes. Insights
+  was removed with the v2 redesign (2026-09-16); its name stays reserved. **Props** was added by
+  the Props pass, after Locations - the rail then reads as the shoot reads (who, where, what
+  with, then when, what it is about, how it is made) and the v2 order is otherwise untouched. It
+  is project-scoped, has no episode segment, and its name is reserved in
+  `RESERVED_PROJECT_SEGMENTS` - **appended** to the eight this document names above, which were
+  written before the route existed.
 - The writing sidebar lists **Script · Storyboard · Outline · Scenes** (ruled 2026-09-17, reversing
   2026-09-16: the header's Write / Storyboard mode pill is gone on every route, Storyboard is a row
   under Script). The header's centre is the **current route's sub-views** - `?view=` tabs, each its
@@ -502,6 +508,7 @@ share a file.
 | Locations' `places \| scenes \| sheet` | Ruled 2026-09-18 (the client), with the rebuild: the same ask, and the URL must stay `/locations` | React state in the route's layout (`_locations/view-state.tsx`, the Characters shape - the route has a layout of its own), so it survives opening the drawer; `?view=` is an unknown key there |
 | the Timeline's `story \| chrono \| continuity` | Ruled 2026-09-18 (the client), with the rebuild: the same ask, and the URL must stay `/timeline` | React state in the route's layout (`_timeline/view-state.tsx`, the Locations shape), beside the selected scene and the solo thread - the drawer is not a path (open decision 10); `?view=` is an unknown key there |
 | which document the Script shows, the title-page or the script | Component state (ruled 2026-09-11); a scene the sidebar scrolls to is a `#n-<node id>` fragment, never `?selected=` | Not a param |
+| Props' `overview \| list` | Ruled with the route (the Props pass): the same ask a sixth time - smooth, and the URL must stay `/props` (or `/props/:id` with the drawer open) | React state in the route's layout (`_props/view-state.tsx`, the Locations shape - the provider must be in the layout or opening the drawer resets the tab); `?view=` is an unknown key there |
 | the Projects route's filter, sort, grid \| list and selection | Ruled 2026-09-22 (the client's account-routes handoff): they are a view over one array already in memory, not a sub-view of a route - and the three kind routes they replaced *were* routes | `useState` in `_projects/projects-workspace.tsx`; the counts are counts of the same array. `?view=` and `?filter=` are unknown keys there |
 | account settings' section nav | The same ruling, the same day: seven sections of one page | `useState` over `lib/settings/sections.ts`; the URL stays `/app/settings` |
 
@@ -615,7 +622,7 @@ pnpm --filter web test:e2e
 pnpm --filter @folio/db seed:production -- --user <email>   # a dev project in every Production state, for the walk
 ```
 
-The E2E smoke test walks all nine routes in both themes and both states. It is not optional
+The E2E smoke test walks all ten routes in both themes and both states. It is not optional
 coverage — it is the thing that catches a route shipped without its empty state.
 
 ---

@@ -15,11 +15,19 @@ import {
  * (radio), multi-select (character), special (`date` is a calendar,
  * `notes` a textarea). Pure over the page's data.
  *
- * The lens presets are the mockup's (ARRI Alexa Mini LF primes); the prop
- * list is what the episode's shots already use, since props are not a
- * table (`schema/index.ts`, "deliberately absent"). Both take a new value
- * through the menu's search box (`Use "…"`) - the spec draws the search
- * and no other way in, so that is where a new prop is typed. Flagged.
+ * The lens presets are the mockup's (ARRI Alexa Mini LF primes).
+ *
+ * The prop list is the **project's props** (`/props`), which is what
+ * makes the field work at all. It used to be "the distinct values the
+ * episode's shots already use", back when props were not a table - a
+ * vocabulary that was always empty, because the only way to put a value in
+ * it was to pick one out of it. Nothing could ever be set, and
+ * `acceptsFreeText('prop')` was the escape hatch that would have let a
+ * writer type one in, except that the search box it lived on only appears
+ * past six items. Props is the authoritative record now (`prop_id`,
+ * migration `0030`), so a prop is picked from the list and a new one is
+ * made on the Props route, where it can also be photographed, described
+ * and sourced.
  */
 
 export type MenuField = Exclude<FieldId, 'title' | 'desc' | 'dialogue' | 'refs'>
@@ -64,8 +72,9 @@ export type MenuContext = {
   readonly cast: readonly ProductionCastMember[]
   readonly locations: readonly { readonly id: string; readonly name: string }[]
   readonly members: readonly Assignee[]
-  /** Distinct values already on the episode's shots, for prop and lens. */
-  readonly usedProps: readonly string[]
+  /** The project's props, by id. The Props route owns this list. */
+  readonly props: readonly { readonly id: string; readonly name: string }[]
+  /** Distinct lens values already on the episode's shots - lenses are still free text with no table. */
   readonly usedLenses: readonly string[]
 }
 
@@ -94,7 +103,7 @@ export const menuItems = (field: MenuField, context: MenuContext): readonly Menu
     case 'cast':
       return [{ value: null, label: 'No character' }, ...context.cast.map((member) => ({ value: member.id, label: member.name }))]
     case 'prop':
-      return [{ value: null, label: 'No prop' }, ...withUsed([], context.usedProps).map((value) => ({ value, label: value }))]
+      return [{ value: null, label: 'No prop' }, ...context.props.map((prop) => ({ value: prop.id, label: prop.name }))]
     case 'lens':
       return [{ value: null, label: 'No lens' }, ...withUsed(LENS_PRESETS, context.usedLenses).map((value) => ({ value, label: value }))]
     case 'loc':
@@ -111,8 +120,15 @@ export const menuItems = (field: MenuField, context: MenuContext): readonly Menu
   }
 }
 
-/** A field whose list may grow by typing: the search box's `Use "…"` item. */
-export const acceptsFreeText = (field: MenuField): boolean => field === 'prop' || field === 'lens'
+/**
+ * A field whose list may grow by typing: the search box's `Use "…"` item.
+ *
+ * Lens only, since `0030`. A prop is a record with an id now, so a typed
+ * string is not a prop - it is a name with nothing behind it. The menu
+ * sends writers to the Props route for a new one instead of minting a
+ * value that no other surface can see.
+ */
+export const acceptsFreeText = (field: MenuField): boolean => field === 'lens'
 
 /** The menu shows a search field when the list has more than six items (§5.3). */
 export const showsSearch = (items: readonly MenuItem[]): boolean => items.length > 6
@@ -122,17 +138,20 @@ export const filterItems = (items: readonly MenuItem[], query: string): readonly
   return q.length === 0 ? items : items.filter((item) => item.label.toLowerCase().includes(q))
 }
 
-/** Distinct prop / lens values across an episode, for the menus. */
-export const usedValues = (scenes: readonly ProductionScene[]): { readonly usedProps: readonly string[]; readonly usedLenses: readonly string[] } => {
-  const props = new Set<string>()
+/**
+ * Distinct lens values across an episode, for the menu.
+ *
+ * The prop half of this went with `0030`: props come from the props table
+ * now, not from what somebody happened to type into another shot.
+ */
+export const usedValues = (scenes: readonly ProductionScene[]): { readonly usedLenses: readonly string[] } => {
   const lenses = new Set<string>()
   for (const scene of scenes) {
     for (const reel of scene.reels) {
       for (const shot of reel.shots) {
-        if (shot.prop !== null && shot.prop.trim().length > 0) props.add(shot.prop.trim())
         if (shot.lens.trim().length > 0) lenses.add(shot.lens.trim())
       }
     }
   }
-  return { usedProps: [...props].sort(), usedLenses: [...lenses].sort() }
+  return { usedLenses: [...lenses].sort() }
 }

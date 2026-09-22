@@ -40,6 +40,18 @@ export const ICONS = {
   characters: P(20, 'M12.9 7.4a2.9 2.9 0 1 1-5.8 0 2.9 2.9 0 0 1 5.8 0z', 'M4.4 16.2c.9-2.7 3-4.1 5.6-4.1s4.7 1.4 5.6 4.1'),
   /** Rail: Locations. A pin. */
   locations: P(20, 'M12.4 8a2.4 2.4 0 1 1-4.8 0 2.4 2.4 0 0 1 4.8 0z', 'M10 17c3.2-3.8 4.8-6.4 4.8-8.4A4.8 4.8 0 0 0 5.2 8.6c0 2 1.6 4.6 4.8 8.4z'),
+  /**
+   * Rail: Props. An open crate, seen from the front: the box, its lid line
+   * and the seam down the middle.
+   *
+   * Authored rather than transcribed, because there is no mockup that draws
+   * it - the v2 design package had no Props route - and no box or archive
+   * mark anywhere else in this set to reuse. Written on the same 20-unit
+   * box, 1.35 stroke, round caps as every other icon here, so it is the
+   * same family even though it is the one glyph in the file nobody drew
+   * first. Flagged: a design pass may replace it.
+   */
+  props: P(20, 'M3.4 6.6h13.2v9a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6z', 'M3.4 6.6 5.6 2.8h8.8l2.2 3.8', 'M10 6.6v10.6'),
   /** Rail: Timeline. Three lines, shortening. */
   timeline: P(20, 'M3.6 6h12.8M3.6 10h8.4M3.6 14h5.2'),
   /** Rail: Research. Four tiles. */

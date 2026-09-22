@@ -113,6 +113,23 @@ describe('screenplayEnter', () => {
     expect(h.ids()).toEqual(['a', 'b'])
   })
 
+  it('Enter just before the closing paren of a filled Parenthetical leaves for Dialogue (defect 0.2)', () => {
+    // `(V.O.)` opens with the caret between the parens and typing can never
+    // move it past the `)`, so "the end of the block" the writer can reach
+    // is one position short of `content.size`. Enter there used to fall
+    // through to a mid-block split (`(soft` / `)`); it must leave for
+    // Dialogue instead, the same as any other block's Enter-at-end.
+    const h = harness([block('a', 'paren', '(V.O.)')], counterMint())
+    h.select(0, 5)
+    h.run((tr) => {
+      screenplayEnter(tr)
+    })
+    expect(h.state.doc.childCount).toBe(2)
+    expect(h.state.doc.child(0).textContent).toBe('(V.O.)')
+    expect(h.state.doc.child(1).type.name).toBe('dialogue')
+    expect(h.ids()).toEqual(['a', 'm1'])
+  })
+
   it('Enter at the end of a Comment creates an Action (ruled 2026-09-11)', () => {
     const h = harness([block('a', 'comment', 'note')], counterMint())
     h.select(0, 4)

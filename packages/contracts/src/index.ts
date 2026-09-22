@@ -36,9 +36,11 @@
  *
  * What is deliberately **not** here, and why:
  *
- *   - **Props and lenses.** Real entities, sketched in the design handoff's
- *     Appendix A, and out of scope so far - each brief names its tables and
- *     these are not among them. Story threads were on this list until the
+ *   - **Lenses.** A real entity, sketched in the design handoff's Appendix A,
+ *     and out of scope so far - no brief has named its table. **Props** were on
+ *     this list beside it until the Props pass; `props.ts` is what one now is,
+ *     and it is the authoritative record Production's two free-text `prop`
+ *     columns became foreign keys to. Story threads were on this list until the
  *     Timeline phase, research sources until the Research v2 pass
  *     (2026-09-16); `timeline.ts` and `research.ts` say what each now is.
  *     Bible entries were on it too, until the Bible phase, then off it again
@@ -108,6 +110,7 @@ export {
   MembershipIdSchema,
   NodeIdSchema,
   ProjectIdSchema,
+  PropIdSchema,
   RESERVED_PROJECT_SEGMENTS,
   ReelIdSchema,
   ReelShotIdSchema,
@@ -647,6 +650,16 @@ export {
   LocationStatusSchema,
   ParentEditSchema,
 } from './locations'
+
+export type { PropAliasView, PropEdit, PropEvidenceRow, PropRow, PropShotRow, PropStatus } from './props'
+export {
+  PROP_PHOTO_MAX_BYTES,
+  PROP_STATUSES,
+  PROP_STATUS_LABELS,
+  PropAliasSchema,
+  PropEditSchema,
+  PropStatusSchema,
+} from './props'
 
 export type { ShareLink, ShareLinkRole } from './share'
 export { SHARE_LINK_ROLES, ShareLinkRoleSchema, ShareLinkSchema, ShareTokenSchema } from './share'

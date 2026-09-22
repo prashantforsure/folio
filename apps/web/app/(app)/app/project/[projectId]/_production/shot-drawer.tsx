@@ -22,7 +22,7 @@ import { useProduction } from './production-context'
  * Closes on `✕` or Escape; Tab stays inside while it is open.
  */
 export const ShotDrawer = ({ scene, reel, shot }: { readonly scene: ProductionScene; readonly reel: Reel; readonly shot: ReelShot }) => {
-  const { act, members, storage } = useProduction()
+  const { act, members, storage, props } = useProduction()
   const [mounted, setMounted] = useState(false)
   const panel = useRef<HTMLElement>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -35,11 +35,16 @@ export const ShotDrawer = ({ scene, reel, shot }: { readonly scene: ProductionSc
   const cast = shot.characters.map((entry) => scene.cast.find((member) => member.id === entry.characterId)?.name).filter((name): name is string => name !== undefined)
   const assignee = shot.assigneeId === null ? 'Unassigned' : (members.find((member) => member.id === shot.assigneeId)?.name ?? 'Unassigned')
   const dialogue = shot.dialogue ?? dialogueOf(shot.parts)
+  const propName = shot.propId === null ? null : (props.find((prop) => prop.id === shot.propId)?.name ?? null)
   const rows: readonly { readonly label: string; readonly value: string; readonly field: MenuField | null; readonly dim?: boolean }[] = [
     { label: 'Status', value: SHOT_STATUS_LABELS[status], field: 'status' },
     { label: 'Shot type', value: shot.shotType, field: 'type' },
     { label: 'Duration', value: secondsLabel(shot.durationS), field: null, dim: true },
     { label: 'Character', value: cast.length === 0 ? 'No character' : cast.join(', '), field: 'cast' },
+    // `prop` was in `FIELD_IDS` from the v12 build with no row to open it,
+    // because nothing could reach `openMenu('prop', …)`. The Props route
+    // (`prop_id`, migration `0030`) gives the menu a vocabulary, so the row is drawn.
+    { label: 'Prop', value: propName ?? 'No prop', field: 'prop' },
     { label: 'Assignee', value: assignee, field: 'assignee' },
     { label: 'Priority', value: PRIORITY_LABELS[shot.priority], field: 'priority' },
     { label: 'Location', value: `${scene.locationName ?? scene.set} · ${sceneFacts(scene)}`, field: null, dim: true },

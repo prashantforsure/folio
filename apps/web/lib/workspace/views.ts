@@ -20,16 +20,17 @@ import type { WorkspaceRoute } from './routes'
  * the schema's order, so the first tab is the default and links to the bare
  * path. A route with no sub-view param has an empty row and no pill.
  *
- * Five routes' views are not a param, by ruling (AGENTS.md, the exception
+ * Six routes' views are not a param, by ruling (AGENTS.md, the exception
  * table): Characters' `cast | presence | sheet` (2026-09-16; Presence replaced Relationships 2026-09-18), the
  * Storyboard's `board | canvas | list` and Scenes' `cards | index | list`
  * (both 2026-09-17), Locations' `places | scenes | sheet` and the
  * Timeline's `story | chrono | continuity` (both 2026-09-18) are client
  * state, so their rows are empty here and their tabs are
  * `_characters/view-state.tsx`, `_storyboard/view-state.tsx`,
- * `_scenes/view-state.tsx`, `_locations/view-state.tsx` and
- * `_timeline/view-state.tsx`, drawn into the same header slot as buttons.
- * All five use this `ViewTab` shape, so the pill is still one shape.
+ * `_scenes/view-state.tsx`, `_locations/view-state.tsx`,
+ * `_timeline/view-state.tsx` and - with the Props pass, `Overview | List` -
+ * `_props/view-state.tsx`, drawn into the same header slot as buttons.
+ * All six use this `ViewTab` shape, so the pill is still one shape.
  *
  * ## Titles and labels
  *
@@ -65,6 +66,7 @@ export const ROUTE_VIEWS: { readonly [R in WorkspaceRoute]: readonly ViewTab<Rou
   production: [],
   characters: [],
   locations: [],
+  props: [],
   timeline: [],
   research: [
     { id: 'library', title: 'Library' },

@@ -24,9 +24,11 @@ import {
   readMentionLabels,
   readNodeRows,
   readScreenplayNodes,
+  readTombstones,
   replaceNodes,
   replyToThread,
   retireNodes,
+  reviveNodeIds,
   setProjectFormat,
   setProjectPagination,
   setThreadState,
@@ -237,13 +239,27 @@ export const saveScript = async (raw: SaveScriptInput): Promise<SaveScriptResult
     return { nodeId, mergedInto: survivor === null ? null : (survivor as NodeId) }
   })
 
-  const [written, lockedPages, snapshot] = await Promise.all([
+  const [firstWrite, lockedPages, snapshot] = await Promise.all([
     commitNodePlan(scope, document.id, 'screenplay', plan, tombstones),
     readLatestLockedPages(scope, episode.id),
     input.snapshot
       ? snapshotVersion(scope, document.id, 'autosave', next, next.length).then(() => true)
       : Promise.resolve(false),
   ])
+
+  // A save that reintroduces a tombstoned id - undo after a delete, chiefly -
+  // is not reuse (ADR 0001; `reviveNodeIds`'s header is the argument): it is
+  // the same node taking its own id back. Lift the tombstone and retry once
+  // before refusing the write; an id still unusable after that is a real
+  // conflict (it collides with a live node, not a retired one).
+  let written = firstWrite
+  if ('unusable' in written) {
+    const revivable = (await readTombstones(scope, written.unusable)).map((t) => t.nodeId)
+    if (revivable.length > 0) {
+      await reviveNodeIds(scope, revivable)
+      written = await commitNodePlan(scope, document.id, 'screenplay', plan, tombstones)
+    }
+  }
   if ('unusable' in written) return { status: 'ids-unusable', ids: written.unusable }
   rememberRows(documentId, written.updatedAt, rowsAfterWrite(rows, next, plan, 'screenplay'))
 

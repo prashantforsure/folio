@@ -18,7 +18,8 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0029` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0029` are applied to the dev Supabase project** and are forward-only;
+  `0030` is written and checked but **not yet applied**.
   (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
   pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
   `0000` was reordered once, before it had ever run anywhere (the shell routes pass, git
@@ -93,6 +94,22 @@ authored / derived-cache / measurement. Touching `episodes` needs
   with the real env present, applied to dev through `db:migrate` on 2026-09-22 (it went in clean;
   the two `ADD COLUMN`s touch no existing row, and the 124 projects on dev read back with both
   columns null).
+  `0030` (the Props route) adds `prop_status`, `props` and `prop_aliases` - both AUTHORED, and
+  the first pair of record tables here with **no derived half at all**: nothing in a node list is
+  a prop, so there is no `prop_derivations`, no tally table and no resolve queue, and what the
+  script says about one is read at request time (`@folio/script`, `props.ts`) and never stored.
+  `prop_aliases` is `location_bound_sluglines` **minus its unique-per-project index**: a slugline
+  resolves to one set, but a prop alias resolves nothing - it only makes a line of action worth
+  quoting - and two props may both be "the bag". It also swaps `scenes.prop` and
+  `reel_shots.prop` (free text, both holding **zero rows**) for `prop_id uuid references
+  props(id) on delete set null`, so Props is authoritative for a prop. Generated through
+  `drizzle-kit/api` in **two prompt-free diffs** from a one-off script (the `0024` method: a
+  same-table `DROP COLUMN prop` + `ADD COLUMN prop_id` makes both `db:generate` and the API
+  prompt "is `prop_id` `prop` renamed?" and exit without a TTY, so `0029` -> an intermediate
+  snapshot with the two `prop` columns absent -> the schema). The two old columns are dropped at
+  the foot of the file, after their replacements exist. RLS block hand-written on the `0022`
+  pattern. `db:check` clean. **NOT applied to dev** by the pass that wrote it - run
+  `db:migrate`, or the direct migrator if it fails silently.
 - **`src/seed/production.ts` is the one seed** (`pnpm --filter @folio/db seed:production -- --user <email>`,
   launched by `scripts/seed-production.mjs` through drizzle-kit's own `tsx`): a "Monsoon Line" series
   in every state the v12 mockup draws; a re-run bins the previous one of that title and writes a

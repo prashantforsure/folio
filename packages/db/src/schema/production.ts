@@ -45,6 +45,7 @@ import {
   sortModeEnum,
   statusFilterEnum,
 } from './production-enums'
+import { props } from './props'
 import { episodes, projects, users } from './tenancy'
 
 /**
@@ -202,7 +203,8 @@ export const reelShots = pgTable(
     proposed: boolean('proposed').notNull().default(false),
     blocked: boolean('blocked').notNull().default(false),
     blockReason: text('block_reason'),
-    prop: text('prop'),
+    /** The prop this shot needs. A foreign key into `props` since `0030`; free text before it. */
+    propId: uuid('prop_id').references(() => props.id, { onDelete: 'set null' }),
     locationId: uuid('location_id').references(() => locations.id, { onDelete: 'set null' }),
     intExt: intExtEnum('int_ext'),
     shootDate: date('shoot_date'),

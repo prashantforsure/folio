@@ -384,6 +384,23 @@ export const ScriptWorkspace = ({
   const [store] = useState<EditorStore>(() => createEditorStore((draft?.nodes ?? []).map((node) => node.id as string)))
   const ids = useSlice(store.ids)
 
+  // `baseUpdatedAt` and `baseline` are seeded once, lazily, from the `draft`
+  // this component first mounted with. `draft` itself only moves again on a
+  // fresh server render of the *same* route - which, short of an episode
+  // switch (a remount), means an import replaced the document whole. Reseed
+  // both from the new draft so the next autosave diffs against what is
+  // actually stored, instead of a pre-import baseline that would report a
+  // false conflict or - had 0.1 not been fixed - reintroduce tombstoned ids.
+  const draftRef = useRef(draft)
+  useEffect(() => {
+    if (draft === draftRef.current) return
+    draftRef.current = draft
+    if (draft === null) return
+    baseUpdatedAt.current = draft.updatedAt
+    baseline.current = baselineOf(draft.nodes, draft.nodes.map((node) => JSON.stringify(node)))
+    setConflict(null)
+  }, [draft])
+
   const sheetInputs = useMemo<SheetInputs>(
     () => ({ sheet, record, paged, labelFor, cueFor, colourCues, threadsByNode, composerAt }),
     [colourCues, composerAt, cueFor, labelFor, paged, record, sheet, threadsByNode],

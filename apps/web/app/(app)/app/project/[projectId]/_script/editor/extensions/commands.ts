@@ -115,7 +115,14 @@ export const screenplayEnter = (tr: Transaction): boolean => {
     tr.delete(block.pos + 1, block.pos + 1 + block.node.content.size)
     return setBlockTypeAt(tr, block.pos, 'dialogue')
   }
-  const atEnd = tr.selection.$from.parentOffset === block.node.content.size
+  // A filled Parenthetical opens as `()` with the caret already between the
+  // parens, so typing never moves it past the closing paren - true "end of
+  // content" is unreachable by typing. The position the writer can reach is
+  // immediately before the `)`, and that is what Enter must treat as the end
+  // so the block still leaves for Dialogue (`ENTER_TRANSITION`).
+  const atParenClose =
+    block.type === 'paren' && text.endsWith(')') && tr.selection.$from.parentOffset === text.length - 1
+  const atEnd = tr.selection.$from.parentOffset === block.node.content.size || atParenClose
   if (atEnd) {
     const next = freshBlock(tr.doc.type.schema, ENTER_TRANSITION[block.type])
     return next === null ? false : insertBlockAfter(tr, block.pos, next)

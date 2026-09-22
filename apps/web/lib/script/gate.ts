@@ -1,4 +1,4 @@
-import type { Episode, Project, ProjectId, UserId } from '@folio/contracts'
+import type { Episode, MembershipRole, Project, ProjectId, UserId } from '@folio/contracts'
 import { ProjectIdSchema, parseEpisodeSegment, userId as brandUserId } from '@folio/contracts'
 import {
   openProjectForRequest,
@@ -135,6 +135,15 @@ export type ProjectGate = {
   readonly actor: UserId
   readonly scope: ProjectScope<'transaction'>
   readonly project: Project
+  /**
+   * The caller's own role. Membership, not role, is still the gate for
+   * everything the scope reads or writes - `memberships.role` is enforced
+   * nowhere in general, and deciding that broadly is open decision 16, not
+   * this file's to resolve. Carried here so the one place that already
+   * distinguishes roles (issuing and revoking share links, defect 0.5) does
+   * not have to re-read the membership row to do it.
+   */
+  readonly role: MembershipRole
 }
 
 export const openProject = async (rawProjectId: unknown): Promise<ProjectGate | GateRefusal> => {
@@ -153,5 +162,5 @@ export const openProject = async (rawProjectId: unknown): Promise<ProjectGate | 
   ])
   if (membership === null) return REFUSED
   if (project === null || project.kind !== 'screenwriting') return REFUSED
-  return { actor, scope, project }
+  return { actor, scope, project, role: membership.role }
 }

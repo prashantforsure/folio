@@ -37,6 +37,8 @@ export const TABLE_COLUMNS: readonly { readonly id: FieldId | '#' | 'preview'; r
   { id: 'type', width: '130px', label: 'Shot type' },
   { id: 'duration', width: '100px', label: 'Duration' },
   { id: 'cast', width: '150px', label: 'Character' },
+  /** `prop` has been in `FIELD_IDS` since the v12 build; it gets a column now that it names a record (`0030`). */
+  { id: 'prop', width: '140px', label: 'Prop' },
   { id: 'assignee', width: '140px', label: 'Assignee' },
 ]
 

@@ -261,7 +261,7 @@ export const ProductionWorkspace = ({ projectId, episode, load }: ProductionWork
             })
             return
           }
-          const key = field === 'loc' ? 'locationId' : field === 'intext' ? 'intExt' : field === 'date' ? 'shootDate' : field === 'lens' ? 'lens' : field === 'prop' ? 'prop' : 'priority'
+          const key = field === 'loc' ? 'locationId' : field === 'intext' ? 'intExt' : field === 'date' ? 'shootDate' : field === 'lens' ? 'lens' : field === 'prop' ? 'propId' : 'priority'
           const patch = { sceneNodeId: target.id, [key]: value } as Parameters<typeof authoring.setSceneSetup>[2]
           setScenes((current) => current.map((scene) => (scene.sceneNodeId === target.id ? { ...scene, setup: { ...scene.setup, [key]: value } } : scene)))
           void authoring.setSceneSetup(projectId, episode, patch).then((result) => {
@@ -283,7 +283,7 @@ export const ProductionWorkspace = ({ projectId, episode, load }: ProductionWork
             return patchShot(shotId, { durationS: seconds }, { durationS: seconds })
           }
           case 'prop':
-            return patchShot(shotId, { prop: value }, { prop: value })
+            return patchShot(shotId, { propId: value as ReelShot['propId'] }, { propId: value as ReelShot['propId'] })
           case 'lens':
             return patchShot(shotId, { lens: value ?? '' }, { lens: value ?? '' })
           case 'date':
@@ -497,6 +497,7 @@ export const ProductionWorkspace = ({ projectId, episode, load }: ProductionWork
       defaults: load.defaults,
       artStyles: load.artStyles,
       locations: load.locations,
+      props: load.props,
       members: load.members,
       balance: load.balance,
       live: load.live,

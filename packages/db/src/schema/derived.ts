@@ -31,6 +31,7 @@ import {
   updatedAtColumn,
 } from './columns'
 import { frameStateEnum, intExtEnum, priorityEnum } from './production-enums'
+import { props } from './props'
 import { projects, users } from './tenancy'
 
 /**
@@ -638,7 +639,14 @@ export const scenes = pgTable(
     /** The scene-setup overrides. Production v12; null = default. */
     cameraBody: text('camera_body'),
     lens: text('lens'),
-    prop: text('prop'),
+    /**
+     * The prop this scene's setup names. A foreign key since `0030`: it was
+     * `text` until the Props route existed, which made "Game ball" and "the
+     * ball" two props and neither of them a record. `set null`, like
+     * `location_id` beside it - deleting the record clears the field rather
+     * than the row.
+     */
+    propId: uuid('prop_id').references(() => props.id, { onDelete: 'set null' }),
     locationId: uuid('location_id').references(() => locations.id, { onDelete: 'set null' }),
     intExt: intExtEnum('int_ext'),
     shootDate: date('shoot_date'),

@@ -31,7 +31,7 @@ const currentValue = (field: string, target: MenuTarget, scenes: ReturnType<type
       case 'lens':
         return scene.setup.lens
       case 'prop':
-        return scene.setup.prop
+        return scene.setup.propId
       case 'loc':
         return scene.setup.locationId
       case 'intext':
@@ -60,7 +60,7 @@ const currentValue = (field: string, target: MenuTarget, scenes: ReturnType<type
         case 'duration':
           return shot.durationS === null ? null : String(shot.durationS)
         case 'prop':
-          return shot.prop
+          return shot.propId
         case 'lens':
           return shot.lens.length === 0 ? null : shot.lens
         case 'date':
@@ -84,7 +84,7 @@ const currentValue = (field: string, target: MenuTarget, scenes: ReturnType<type
 }
 
 export const ContextMenu = () => {
-  const { menu, scenes, members, locations, act } = useProduction()
+  const { menu, scenes, members, locations, props, act } = useProduction()
   const root = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState('')
   const field = menu?.field ?? 'status'
@@ -95,7 +95,7 @@ export const ContextMenu = () => {
     return scene?.cast ?? scenes.flatMap((candidate) => candidate.cast)
   }, [scenes, target])
   const used = useMemo(() => usedValues(scenes), [scenes])
-  const items = useMemo(() => menuItems(field, { cast, locations, members, ...used }), [cast, field, locations, members, used])
+  const items = useMemo(() => menuItems(field, { cast, locations, props, members, ...used }), [cast, field, locations, props, members, used])
   const current = menu === null ? null : currentValue(field, target, scenes)
   const [note, setNote] = useState(current ?? '')
   const picked = useMemo(() => {

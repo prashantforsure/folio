@@ -6,6 +6,7 @@ import type { EpisodeNavMeta } from '@folio/contracts'
 
 import { CHARACTERS_VIEWS } from '../app/(app)/app/project/[projectId]/_characters/view-state'
 import { LOCATIONS_VIEWS } from '../app/(app)/app/project/[projectId]/_locations/view-state'
+import { PROPS_VIEWS } from '../app/(app)/app/project/[projectId]/_props/view-state'
 import { SCENES_VIEWS, VIEW_LABEL } from '../app/(app)/app/project/[projectId]/_scenes/view-state'
 import { STORYBOARD_VIEWS } from '../app/(app)/app/project/[projectId]/_storyboard/view-state'
 import {
@@ -39,7 +40,7 @@ import { ROUTE_VIEWS, currentView, viewsLabel } from '../lib/workspace/views'
  */
 
 describe('the route tree', () => {
-  it('is nine routes under the rulings on decisions 5, 6, assets and the redesign', () => {
+  it('is ten routes under the rulings on decisions 5, 6, assets and the redesign, plus Props', () => {
     expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
     expect(WORKSPACE_ROUTES).toEqual([
       'script',
@@ -49,6 +50,7 @@ describe('the route tree', () => {
       'production',
       'characters',
       'locations',
+      'props',
       'timeline',
       'research',
     ])
@@ -67,11 +69,12 @@ describe('the route tree', () => {
 })
 
 describe('the rail', () => {
-  it('is six items in the README order, each with an icon in the set, and 56px', () => {
+  it('is seven items in the README order, each with an icon in the set, and 56px', () => {
     expect(RAIL.map((item) => `${item.label} ${item.icon}`)).toEqual([
       'Writing writing',
       'Characters characters',
       'Locations locations',
+      'Props props',
       'Timeline timeline',
       'Research research',
       'Production production',
@@ -126,8 +129,9 @@ describe("the header's views", () => {
     expect(ROUTE_VIEWS.characters).toEqual([])
     expect(ROUTE_VIEWS.storyboard).toEqual([])
     expect(ROUTE_VIEWS.scenes).toEqual([])
-    // Locations' three and the Timeline's three joined them on 2026-09-18.
+    // Locations' three and the Timeline's three joined them on 2026-09-18; Props' two with the route.
     expect(ROUTE_VIEWS.locations).toEqual([])
+    expect(ROUTE_VIEWS.props).toEqual([])
     expect(ROUTE_VIEWS.timeline).toEqual([])
   })
 
@@ -147,7 +151,8 @@ describe("the header's views", () => {
     expect(SCENES_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['cards Cards', 'board Index cards', 'list Scene list'])
     expect(CHARACTERS_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['canvas Characters', 'list List'])
     expect(LOCATIONS_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['- Places', '- Scenes here', '- Sheet'])
-    for (const tab of [...STORYBOARD_VIEWS, ...SCENES_VIEWS, ...CHARACTERS_VIEWS, ...LOCATIONS_VIEWS]) {
+    expect(PROPS_VIEWS.map((tab) => `${tab.icon ?? '-'} ${tab.label ?? tab.title}`)).toEqual(['- Overview', '- List'])
+    for (const tab of [...STORYBOARD_VIEWS, ...SCENES_VIEWS, ...CHARACTERS_VIEWS, ...LOCATIONS_VIEWS, ...PROPS_VIEWS]) {
       expect(tab.title.length).toBeGreaterThan(0)
       if (tab.icon !== undefined) expect(ICONS[tab.icon]).toBeDefined()
     }
@@ -165,12 +170,13 @@ describe("the header's views", () => {
     expect(currentView('storyboard', 'canvas')).toBeNull()
     expect(currentView('scenes', 'index')).toBeNull()
     expect(currentView('locations', 'sheet')).toBeNull()
+    expect(currentView('props', 'list')).toBeNull()
     expect(viewsLabel('Storyboard')).toBe('Storyboard views')
   })
 })
 
 describe('sub-view params', () => {
-  it('has a schema for every one of the nine', () => {
+  it('has a schema for every one of the ten', () => {
     expect(Object.keys(SUB_VIEW_SCHEMAS).sort()).toEqual([...WORKSPACE_ROUTES].sort())
   })
 
@@ -180,6 +186,7 @@ describe('sub-view params', () => {
     expect(parseSubViews('production', {})).toEqual({ ok: true, params: {} }) // Cards | Columns is a saved preference - the v12 spec, 2026-09-22
     expect(parseSubViews('characters', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-16
     expect(parseSubViews('locations', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-18
+    expect(parseSubViews('props', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled with the route
     expect(parseSubViews('timeline', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-18
     expect(parseSubViews('research', {})).toEqual({ ok: true, params: { view: 'library' } })
     expect(parseSubViews('outline', {})).toEqual({ ok: true, params: {} })
@@ -192,8 +199,8 @@ describe('sub-view params', () => {
     expect(parseSubViews('script', { doc: 'grid', panel: 'composer' })).toEqual({ ok: true, params: {} })
   })
 
-  it('gives characters, storyboard, scenes, locations, timeline and production no `view`: their tabs are client state or a preference', () => {
-    // A stale `?view=` link - a real view or not - is an unknown key on all six: it opens the first view, not a 404.
+  it('gives characters, storyboard, scenes, locations, props, timeline and production no `view`: their tabs are client state or a preference', () => {
+    // A stale `?view=` link - a real view or not - is an unknown key on all seven: it opens the first view, not a 404.
     expect(parseSubViews('characters', { view: 'presence' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('characters', { view: 'relationships' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('storyboard', { view: 'canvas' })).toEqual({ ok: true, params: {} })
@@ -202,6 +209,8 @@ describe('sub-view params', () => {
     expect(parseSubViews('scenes', { view: 'grid' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('locations', { view: 'sheet' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('locations', { view: 'grid' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('props', { view: 'list' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('props', { view: 'grid' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('timeline', { view: 'chrono' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('timeline', { view: 'lens/nobody' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('production', { view: 'episode' })).toEqual({ ok: true, params: {} })

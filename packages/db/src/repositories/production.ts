@@ -33,7 +33,7 @@ import type {
   ViewPreferencesPatch,
 } from '@folio/contracts'
 import { ART_STYLE_PRESET_KEYS, DEFAULT_VIEW_PREFERENCES, FIELD_IDS } from '@folio/contracts'
-import type { CharacterId, DescriptionPart, LocationId, NodeId, SluglineReading } from '@folio/script'
+import type { CharacterId, DescriptionPart, LocationId, NodeId, PropId, SluglineReading } from '@folio/script'
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
 import type { FolioDatabase } from '../client'
@@ -187,7 +187,7 @@ const shotFromRow = (
   proposed: row.proposed,
   blocked: row.blocked,
   blockReason: row.blockReason,
-  prop: row.prop,
+  propId: row.propId === null ? null : (row.propId as PropId),
   locationId: row.locationId === null ? null : (row.locationId as LocationId),
   intExt: row.intExt,
   shootDate: row.shootDate,
@@ -344,7 +344,7 @@ const listScenes = async (scope: ProjectScope, episodeId: EpisodeId): Promise<re
     setup: {
       cameraBody: row.authored?.cameraBody ?? null,
       lens: row.authored?.lens ?? null,
-      prop: row.authored?.prop ?? null,
+      propId: row.authored?.propId === null || row.authored === null ? null : (row.authored.propId as PropId),
       locationId: row.authored?.locationId === null || row.authored === null ? null : (row.authored.locationId as LocationId),
       intExt: row.authored?.intExt ?? null,
       shootDate: row.authored?.shootDate ?? null,
@@ -842,8 +842,18 @@ export type ShotSeed = {
   readonly frameState?: ReelShot['frameState']
 }
 
-/** The fields of a shot the spec says a writer changes when they "edit the shot": the frame is out of date after. */
-const FRAME_FIELDS = ['description', 'shotType', 'cameraAngle', 'cameraMotion', 'cameraBody', 'lens'] as const
+/**
+ * The fields of a shot the spec says a writer changes when they "edit the
+ * shot": the frame is out of date after.
+ *
+ * `propId` joined them with the Props route (`0030`). A judgement call, not
+ * a ruling: the spec's list predates props being a record, and a prop is a
+ * thing that is *in* the drawn frame - swapping the ball for a brick makes
+ * the picture wrong in exactly the way a changed lens or a rewritten
+ * description does. Open decision 14 owns the stale rules, so this is
+ * flagged rather than settled.
+ */
+const FRAME_FIELDS = ['description', 'shotType', 'cameraAngle', 'cameraMotion', 'cameraBody', 'lens', 'propId'] as const
 
 const writeParts = async (db: Db, scope: ProjectScope, shotId: ReelShotId, parts: readonly DescriptionPart[]): Promise<void> => {
   await db.delete(shotDescriptionParts).where(scoped(scope, shotDescriptionParts, eq(shotDescriptionParts.shotId, shotId)))

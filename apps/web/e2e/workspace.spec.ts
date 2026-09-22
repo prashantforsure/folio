@@ -193,10 +193,11 @@ let seriesId = ''
 let filmId = ''
 const RUN = Date.now().toString(36)
 
-test('the contract is nine routes', () => {
+test('the contract is ten routes', () => {
   expect(WORKSPACE_ROUTES).toHaveLength(WORKSPACE_ROUTE_COUNT)
   expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'episode')).toHaveLength(5)
-  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'project')).toHaveLength(4)
+  // Five project-scoped since the Props pass: characters, locations, props, timeline, research.
+  expect(WORKSPACE_ROUTES.filter((row) => row.scope === 'project')).toHaveLength(5)
 })
 
 test('a series opens on ep_001/script and a film on /script', async ({ page, account }) => {
@@ -360,7 +361,7 @@ test('an episode id of `characters` is rejected, and so are the other bad segmen
   // `/characters/script` is the URL static-first precedence does not save:
   // there is no static `characters/script`, so `characters` reaches the
   // episode validator - which refuses it by name.
-  for (const segment of ['characters', 'assets', 'settings', 'production', 'ep_999', 'episode-1', 'EP_001']) {
+  for (const segment of ['characters', 'assets', 'settings', 'production', 'props', 'ep_999', 'episode-1', 'EP_001']) {
     const response = await page.goto(`/app/project/${seriesId}/${segment}/script`)
     expect(response?.status(), segment).toBe(404)
   }

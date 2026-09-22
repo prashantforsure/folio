@@ -211,6 +211,13 @@
       "when": 1790075190120,
       "tag": "0029_project_logline_and_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790140000000,
+      "tag": "0030_props_route",
+      "breakpoints": true
     }
   ]
 }
