@@ -124,17 +124,19 @@ const STORYBOARD_CHIPS: readonly Chip[] = [
 const STORYBOARD_SUBHEAD = 'Ask about the boards, or have me propose coverage for a scene.'
 
 /**
- * The Production route's chips and subhead - `docs/ui design/Route -
- * Production v2.dc.html`, verbatim. The same ruling again: the copy is
- * the route's, the context is the script, and a chip is a question typed
- * for the writer. "Rewrite shot 2 without violence" is also what a refused
- * shot's `Suggest rewrite` asks, with the refusal in the writer's terms
- * (`useEphemeral().assistantPrompt`).
+ * The Production route's chips and subhead (v12, 2026-09-22; the spec
+ * draws the orb and leaves the panel's copy to the route). The same ruling
+ * again: the copy is the route's, the context is the script, and a chip is
+ * a question typed for the writer - the board's own `✦ Propose shots` and
+ * `✦ AI Shotlist` are what write shots. "Rewrite the refused shot" is also
+ * what a refused shot's `Suggest rewrite` asks, with the refusal in the
+ * writer's terms (`useEphemeral().assistantPrompt`).
  */
 const PRODUCTION_CHIPS: readonly Chip[] = [
-  { label: 'Propose shots for Scene 1', tone: 'accent' },
-  { label: 'Tighten Reel 1 to 10 seconds', tone: 'warn' },
-  { label: 'Rewrite shot 2 without violence', tone: 'live' },
+  { label: 'Propose shots for this scene', tone: 'accent' },
+  { label: 'Tighten this reel to 10 seconds', tone: 'warn' },
+  { label: 'Rewrite the refused shot', tone: 'live' },
+  { label: 'What does this scene need before it can shoot?', tone: 'ok' },
 ]
 
 const PRODUCTION_SUBHEAD = 'Ask about this reel, or have me propose shots from the scene.'
