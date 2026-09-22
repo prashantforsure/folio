@@ -47,9 +47,10 @@ days.
 | Auth | Supabase Auth — Google OAuth **and** email + password | `auth.users` is identity; `users`/`memberships` are ours. Confirmation and reset mail goes through Supabase's built-in sender; see Constraints |
 | Tenancy | Project-scoped repositories **plus** RLS as defence in depth | Server uses the service-role key, which bypasses RLS |
 | Storage | Supabase Storage | Signed URLs for everything |
-| Jobs | BullMQ + Redis on a long-running Railway service | |
+| Jobs | BullMQ + Redis on a long-running Railway service | Not yet: `apps/worker` is a stub and Production's generations (2026-09-22) run inside `web` — `after()` and a 3 s poll — until the worker exists |
 | Payments | Dodo Payments | Merchant of record; webhooks reconciled idempotently |
-| AI | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17), `/locations` and `/timeline` (2026-09-18). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) were removed with the route's fourth pass (2026-09-20); their caps stay in `lib/assistant/model.ts` for the next action of that shape. Tool use and proposals are still its next life |
+| AI — assistant | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17), `/locations` and `/timeline` (2026-09-18); on `/production` it carries that route's chips (2026-09-22). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) were removed with the route's fourth pass (2026-09-20); their caps stay in `lib/assistant/model.ts` for the next action of that shape. Tool use and proposals are still its next life |
+| AI — generation | Google Gemini over `fetch`, no SDK (client ruling, 2026-09-22) | Production only: `apps/web/lib/production/pipeline/gemini.ts`, keyed by `GEMINI_API_KEY`. The model ids are `MODEL_REGISTRY` in `packages/contracts/src/production.ts` and nowhere else; the writer sees tiers. Veo is not on the free tier — a shoot the key cannot make fails and refunds |
 | PDF | `pdf-lib` or `pdfkit` on our own layout engine | |
 | FDX | `fast-xml-parser` + custom mapping | |
 | Fountain | Custom, in `packages/script` | |
@@ -116,8 +117,11 @@ run identically in the browser, in server code, in the worker and in tests.
    one route at a time. Never build four routes to 80%.
 8. **Test where correctness is load-bearing**, not uniformly: the parser, derivation, node
    identity, pagination, and the agent's allowlist enforcement.
-9. **Read the design bundle before building a route.** Where two bundles disagree on chrome,
-   `Route - Script.dc.html` wins.
+9. **Read the route's spec before building it.** Since the design package was retired
+   (2026-09-20) and `docs/build-decisions.md` deleted (2026-09-22), the spec is the route as
+   built plus its paragraph in `apps/web/CLAUDE.md`; for Production it is
+   `docs/production/production.md` with the mockup beside it. The shell's shape is set in UI
+   fidelity below and is the same on every route.
 10. **Never invent a product decision.** Unresolved questions are listed below. Escalate them;
     do not quietly pick one.
 
@@ -149,16 +153,18 @@ Stop and ask before you:
 | 2 | The numeric thresholds separating review tiers 1 / 2 / 3 | The whole agent review flow |
 | 3 | Whether rename rewrites unlinked prose mentions in action, or only cues, sluglines and `@mentions` | Rename blast radius |
 | 4 | ~~The `?lens=` value shape — `lens/<id>` as written, or just `<id>`~~ Moot: Insights was removed with the v2 redesign (2026-09-16). Reopens if a report route returns | — |
-| 5 | ~~Whether `/production` is project- or episode-scoped~~ **Ruled: episode-scoped** (`docs/build-decisions.md`, Workspace shell phase) | — |
-| 6 | ~~Whether `/build` and `/search` are cut or merely undesigned~~ **Ruled: cut** (`docs/build-decisions.md`, Workspace shell phase) | — |
+| 5 | ~~Whether `/production` is project- or episode-scoped~~ **Ruled: episode-scoped** (the workspace shell pass; the v12 route keeps it, `docs/production/README.md`) | — |
+| 6 | ~~Whether `/build` and `/search` are cut or merely undesigned~~ **Ruled: cut** (the workspace shell pass) | — |
 | 7 | Where project settings `transfer`, `keys` and `episodes` went | Settings |
+| 15 | What duplicating a project copies — `@mention`s are bound to character and location ids, so a copied node list points at the original's records; and what becomes of its notes, revisions and its append-only ledger. The control is drawn on the Projects route and refuses in words (`lib/projects/actions.ts`) | `Duplicate`, on a card and in the bulk bar |
+| 16 | Whether a role means anything. `memberships.role` is stored, shown in account settings, and **enforced nowhere** — any member may write anything in a project they belong to. Named here rather than in a comment, because every action written since has had to decide not to check it | Every server action's gate; the Collaborators section's permission table |
 | 8 | Sheet width for `format: asian` — A4 is ~794px, not 816px | Pagination engine |
-| 9 | The `/app/filmmaking` ADR | Anything past a project list |
+| 9 | The `/app/filmmaking` ADR | Anything past a project list. The list is `/app/projects` since 2026-09-22; `/app/filmmaking` redirects to it and a filmmaking project still opens there |
 | 10 | Whether `SCENE_xxx` is a node id or the derived scene record's id. ADR 0001 ruled the latter, in a separate id space — but `packages/script`'s `SceneRecord.id` is implemented as the heading node's own id, so the ADR and the code contradict each other | `?selected=`, any URL naming a scene |
 | 11 | The revision colour sequence past green (`nextRevisionColour` refuses at green) | Issuing a sixth revision |
 | 12 | Locked-page numbering past the last lock — a judgement call is implemented (the sequence continues unprotected), not ruled | Export, revision compare |
 | 13 | Whether an assistant message costs credits, and how much. The panel is real and read-only (2026-09-16) and writes no ledger row; the Characters drawer's `Draft from the script` and `Check for contradictions` (2026-09-18) took the same standing until the route's fourth pass removed them (2026-09-20) | Charging the assistant; "cost named before it is spent" on its send button; a rate limit on it |
-| 14 | The Production feature set's escalations — the credit unit and margin, refund on cancel-while-running, the costs the v12 spec does not price, the stale rules. The D-1 … D-21 list went with the first doc set (deleted 2026-09-21); the v12 pass (2026-09-22) took provisional answers, each listed under "Implementation" in `docs/production/README.md` | Changing a cost, a refund rule or a stale rule in `apps/web/lib/production/` |
+| 14 | The Production feature set's escalations — the credit unit and margin, refund on cancel-while-running, the costs the v12 spec does not price (shot frame 4, scene image 40, AI shotlist 0, propose 0 are provisional), the stale rules. The D-1 … D-21 list went with the first doc set (deleted with `docs/build-decisions.md`, 2026-09-22); the v12 pass took provisional answers, each listed under "Implementation" in `docs/production/README.md` | Changing a cost, a refund rule or a stale rule in `apps/web/lib/production/` or `packages/contracts/src/production.ts` |
 
 ---
 
@@ -166,16 +172,20 @@ Stop and ask before you:
 
 ```
 apps/web/                    Next.js app. UI and server actions only — no logic that belongs in packages/script.
-  app/(app)/                 Signed-in shell: sidebar, theme, avatar. Everything user-facing lives under /app.
+  app/(app)/                 Signed-in shell: the 238px account sidebar, theme, the account menu. Everything user-facing lives under /app.
+  app/(app)/app/(home)/      The account routes: new, projects (+ three redirects), trash, settings.
   app/(app)/project/         Project workspace: rail, writing sidebar and header, the assistant panel, the nine routes.
   lib/                       Web-only glue: auth session, server action helpers, query client. Not domain logic.
 apps/worker/                 BullMQ consumers. Long-running. Generation, export, agent runs. Never a serverless fn.
+                             Still the one-constant stub; Production runs its jobs in web (after() + polling) until it exists.
 apps/sync/                   Deferred. Do not create this directory until realtime is actually scheduled.
 packages/script/             PURE. Node model, parser, derivation, pagination, Fountain. No React, no DB, no I/O.
 packages/ui/                 Primitives, tokens, theme. Presentational only — no data fetching, no domain knowledge.
-packages/db/                 Drizzle schema, forward-only migrations, project-scoped repositories. The only place SQL lives.
+packages/db/                 Drizzle schema, forward-only migrations, project-scoped repositories, the dev seed. The only place SQL lives.
 packages/contracts/          Zod schemas shared by web and worker. Types flow from here; do not redeclare them downstream.
-docs/                        ADRs, build-decisions.md, roadmap.md. Design bundles (*.dc.html) are read-only reference.
+                             production.ts holds MODEL_REGISTRY — the only place a model is named.
+docs/                        adr/ and production/ (the v12 spec: production.md, the runnable mockup, its data and runtime).
+                             Nothing else: build-decisions.md and the design bundles are deleted; their reasoning is git history.
 ```
 
 `packages/script` importing anything framework- or database-shaped is a **lint error, not a code
@@ -255,6 +265,12 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 
 - Everything under `/app/`. One prefix for the signed-in product.
 - Sub-views are **query params**, never separate routes. Each defaults to its first value.
+- The account routes are **`/app/new`, `/app/projects`, `/app/trash`, `/app/settings`** (the client's
+  handoff, 2026-09-22). `/app/recents`, `/app/screenwriting` and `/app/filmmaking` were three views
+  over one query; they are now **redirects to `/app/projects`**, where the kind is a filter chip.
+  The three paths stay because links to them exist outside this app and because open decision 9
+  names `/app/filmmaking`. The Projects route's filters, sort, layout and selection, and the
+  Settings route's section nav, are **client state** - the URL never moves (the exception table).
 - `:episodeId` shares a path position with the project-scoped names. Validate every episode id
   against `characters`, `locations`, `timeline`, `research`, `insights`, `production`,
   `settings`, `assets`, and keep ids to the `ep_NNN` shape. Static-first precedence saves this
@@ -267,38 +283,50 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 - The writing sidebar lists **Script · Storyboard · Outline · Scenes** (ruled 2026-09-17, reversing
   2026-09-16: the header's Write / Storyboard mode pill is gone on every route, Storyboard is a row
   under Script). The header's centre is the **current route's sub-views** - `?view=` tabs, each its
-  name beside its icon where the design draws one (`lib/workspace/views.ts`); a route with one view
-  has an empty centre. Route toolbars do not draw a second view switcher.
+  name beside its icon where the design draws one (`lib/workspace/views.ts`), or the same-shaped
+  buttons a state route hands in; a route with one view has an empty centre. Route toolbars do not
+  draw a second view switcher. Research is the only route still on `?view=`.
 - The rail's Characters icon navigates to `/characters` from every route (re-ruled by the client
   2026-09-16; the writing mockups' 330px peek overlay was built in the first shell pass and
   removed).
-- Characters' `Canvas · Relationships · List` tabs (the fourth pass, 2026-09-20) are **not**
-  `?view=` (ruled 2026-09-16, the Script route's precedent): the URL stays `/characters`, the view
-  is React state in the route's layout. The Storyboard's `Boards · Canvas · Shot list` and Scenes' `Cards · Index cards · Scene
-  list` took the same ruling on 2026-09-17: the URL stays `/storyboard` or `/scenes`, the view is
-  a client cell the header and the body share. Locations' `Places · Scenes here · Sheet` took it
-  on 2026-09-18: the URL stays `/locations`, the view is React state in the route's layout
-  (`_locations/view-state.tsx`). See the exception table.
+- Characters' `Characters · List` tabs (the fourth pass, 2026-09-20; the Relationships tab
+  between them was removed 2026-09-21) are **not** `?view=` (ruled 2026-09-16, the Script route's
+  precedent): the URL stays `/characters`, the view is React state in the route's layout. The
+  Storyboard's `Boards · Canvas · Shot list` and Scenes' `Cards · Index cards · Scene list` took
+  the same ruling on 2026-09-17: the URL stays `/storyboard` or `/scenes`, the view is a client
+  cell the header and the body share. Locations' `Places · Scenes here · Sheet` and the
+  Timeline's `Story · Chronology · Continuity` took it on 2026-09-18, as React state in each
+  route's layout. Production's `Cards · Columns` (2026-09-22) is a `view_preferences` row, per
+  the v12 spec. See the exception table.
 
 ### UI fidelity
 
+- **The account routes were built from a handoff that is not in the repository.**
+  `handoff-account-v2/` (three `Route - *.dc.html` files, `support.js` and a README, the
+  client's, 2026-09-22) was supplied with the brief and never committed — the same standing the
+  v2 design package ended with, so **the spec for `/app/projects`, `/app/new` and `/app/settings`
+  is the routes as built plus their paragraphs in `apps/web/CLAUDE.md`**, and comments naming
+  `handoff-account-v2/` name that artefact, not a path. It was a design, not a product decision:
+  where it drew a control this product has no store for, the control is drawn **disabled with the
+  reason on it** or refuses in words, and every such deviation is listed in `apps/web/CLAUDE.md`.
+  Its `--sheet` / `--sheet-ink` map onto this palette's `--sunk` / `--read`; nothing else in it
+  was a new colour.
 - **The design package was the spec, and is retired.** The v2 design package (`docs/ui design/`,
   a README and nine `Route - * v2.dc.html` mockups, 2026-09-16) was the spec for the shell and the
   routes rebuilt to it; the client deleted it on 2026-09-20, on purpose, and it is not to be read
   back from git history. Its `:root` token block lives on as `packages/ui/src/tokens/palette.css`,
   copied verbatim; its language, tokens and patterns (plain lower-case-leaning copy, live counts,
-  both states, both themes) still bind every route. Route by route the spec is now the written
-  record in `docs/build-decisions.md`: **ruled 2026-09-17, `Route - Characters v2.dc.html` no
-  longer binds the Characters route** - the client retired it (too close to laper.ai, visually
-  weak, not useful); the route was rebuilt in four phases to a written plan ("Characters rebuild"),
-  **then a fourth pass on 2026-09-20 to laper.ai's route shape by the client's ruling** (a canvas of
-  cards, a Relationships graph, a List, a form drawer; "Characters, fourth pass") - **ruled
-  2026-09-18, `Route - Locations v2.dc.html` no longer binds the Locations route** (the same audit
-  found the same shape; "Locations rebuild"); **the Timeline's followed on 2026-09-18** ("Timeline
-  rebuild"); **and ruled 2026-09-19, `Route - Production v2.dc.html` no longer binds the Production
-  route** — that doc set was deleted 2026-09-21 and **the v12 handoff replaced it
-  (2026-09-22): `docs/production/production.md` plus the runnable mockup beside it is the
-  Production spec**, built in one pass ("Implementation" in its `README.md` lists the deviations).
+  both states, both themes) still bind every route. The written route record
+  (`docs/build-decisions.md`) was deleted on 2026-09-22 as well, so **route by route the spec is
+  the route as built and its paragraph in `apps/web/CLAUDE.md`**; the reasoning behind a ruling is
+  git history. Four routes left their mockup before that: **Characters** (ruled 2026-09-17 - the
+  client retired the mockup as too close to laper.ai; rebuilt to a written plan, **then a fourth
+  pass on 2026-09-20 to laper.ai's route shape by the client's ruling** - a canvas of cards, a
+  List, a form drawer; the Relationships graph came and went 2026-09-21), **Locations** and the
+  **Timeline** (both 2026-09-18, the same audit, each rebuilt to a written plan), and
+  **Production** (ruled 2026-09-19; **the v12 handoff is its spec, 2026-09-22:
+  `docs/production/production.md` plus the runnable mockup beside it**, the one route with a spec
+  on disk - "Implementation" in its `README.md` lists where each piece lives and every deviation).
 - **Icons are inline stroke SVGs** from `packages/ui/src/icons.tsx` - 18px, 1.35 stroke, the
   mockups' own paths. The routes built before the redesign still print the older Unicode glyph
   set as text: `✎ ◍ ⌖ ◷ ▧ ▶ ☾ ☀ ⚙ ▤ ⋮ ▥ ▢ ⇄ ❝` (`⧗` left with Beats, `◈` with Bible, `◎` with
@@ -315,11 +343,15 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   begins.
 - Badges are **live counts**, never placeholders: Characters = unresolved cues · Locations =
   unmatched sluglines. A third badge, Bible = open canon conflicts, existed while the Bible route
-  did (`docs/build-decisions.md`, "Bible route removed").
+  did (cut 2026-09-15).
 - Empty meta follows a convention: things that legitimately count to zero show `0`; things that
   either exist or don't show `—`; the script says `empty`.
 - Project cards show **real derived metadata** — episode, scene and page counts, last edited —
-  never a placeholder string. If a project has no script, the card says so.
+  never a placeholder string. If a project has no script, the card says so. Since the account
+  routes pass (2026-09-22) the card also draws the script's **own opening lines** as its
+  thumbnail (the node list, mentions resolved to names), the people on it (`memberships`), and a
+  live chip only while a generation is queued or running. A stage is derived from what exists —
+  never a draft number, which this schema does not have.
 - Theme is `dark` by default, via `data-theme`. Revision colours (White → Blue → Pink → Yellow →
   Green) are industry artefacts, not palette tokens, and must survive a theme switch intact.
 - Specified copy is specified. The design README's tone: "Plain, specific, lower-case-leaning.
@@ -352,8 +384,8 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 - **Parser parity** — agent output is parsed exactly like typed text. Ambiguous cues surface in
   the diff as merge / create / alias.
 - ~~**Canon pre-flight** — bible conflict checking runs against proposed nodes, before review.~~
-  No source for this since the Bible route was cut 2026-09-15 (`docs/build-decisions.md`, "Bible
-  route removed") — there is no `canon` status left to check against.
+  No source for this since the Bible route was cut 2026-09-15 — there is no `canon` status left
+  to check against.
 - **One context gate, enforced server-side in the context builder, never in the UI**: the
   per-source research `readable` toggle. (A second gate, bible entry status, existed while the
   Bible route did.)
@@ -464,19 +496,21 @@ share a file.
 | `production.state` | The generation job's status | Drive it from the job row. All six states get built |
 | theme, zoom, panels, palette, aiScope | Per user or per session | localStorage or session state |
 | the assistant panel | The same panel on every route | `assistantOpen` is session state |
-| Characters' `canvas \| relationships \| list` | Ruled 2026-09-16 (the client; the views were renamed by the fourth pass, 2026-09-20, which brought the Relationships graph back in place of the Presence grid): switching must be instant and the URL must stay `/characters`, as the Script's switches were ruled 2026-09-11 | React state in the route's layout (`_characters/view-state.tsx`), so it survives opening the drawer; `?view=` is an unknown key there |
+| Characters' `canvas \| list` | Ruled 2026-09-16 (the client; the views were renamed by the fourth pass, 2026-09-20, and its `relationships` graph removed 2026-09-21 as a second view of the canvas's own threads): switching must be instant and the URL must stay `/characters`, as the Script's switches were ruled 2026-09-11 | React state in the route's layout (`_characters/view-state.tsx`), so it survives opening the drawer; `?view=` is an unknown key there |
 | the Storyboard's `board \| canvas \| list` | Ruled 2026-09-17 (the client): the same ask - a tab must switch smoothly and the URL must stay `/storyboard`; as a param each click re-ran the page's server read | A client cell the header's tabs and the workspace both reach (`_storyboard/view-state.tsx`, the `coverage.ts` shape - the shared writing layout cannot host one route's provider); resets to the board when the workspace unmounts; `?view=` is an unknown key there |
 | Scenes' `cards \| index \| list` | Ruled 2026-09-17 (the client): the same ask again, in the same words - smooth, and the URL must stay `/scenes` | The Storyboard's cell shape (`_scenes/view-state.tsx`); the route's own client `<main>` (`_scenes/scenes-main.tsx`) writes `data-sub-view` and resets the cell to the cards on unmount; `?view=` is an unknown key there |
 | Locations' `places \| scenes \| sheet` | Ruled 2026-09-18 (the client), with the rebuild: the same ask, and the URL must stay `/locations` | React state in the route's layout (`_locations/view-state.tsx`, the Characters shape - the route has a layout of its own), so it survives opening the drawer; `?view=` is an unknown key there |
 | the Timeline's `story \| chrono \| continuity` | Ruled 2026-09-18 (the client), with the rebuild: the same ask, and the URL must stay `/timeline` | React state in the route's layout (`_timeline/view-state.tsx`, the Locations shape), beside the selected scene and the solo thread - the drawer is not a path (open decision 10); `?view=` is an unknown key there |
 | which document the Script shows, the title-page or the script | Component state (ruled 2026-09-11); a scene the sidebar scrolls to is a `#n-<node id>` fragment, never `?selected=` | Not a param |
+| the Projects route's filter, sort, grid \| list and selection | Ruled 2026-09-22 (the client's account-routes handoff): they are a view over one array already in memory, not a sub-view of a route - and the three kind routes they replaced *were* routes | `useState` in `_projects/projects-workspace.tsx`; the counts are counts of the same array. `?view=` and `?filter=` are unknown keys there |
+| account settings' section nav | The same ruling, the same day: seven sections of one page | `useState` over `lib/settings/sections.ts`; the URL stays `/app/settings` |
 
 ### The agent may write anywhere — except
 
 | Surface | Reason | Rule |
 | --- | --- | --- |
 | Research | Source material must stay trustworthy | Read-only |
-| ~~Bible~~ | Route cut 2026-09-15 (`docs/build-decisions.md`, "Bible route removed") | — |
+| ~~Bible~~ | Route cut 2026-09-15; its tables dropped in `0015` | — |
 | Settings, people, billing, keys, export | Not creative surfaces | Never |
 
 ### Every route ships both states — no exceptions
@@ -491,9 +525,9 @@ There is no case where an empty state is optional. A new project is entirely emp
   email + password, with address confirmation and password reset both delivered by **Supabase
   Auth's own built-in SMTP sender** — rate limited project-wide to a handful of messages an hour,
   and documented by Supabase as unsuitable for production. That cost was named and accepted, not
-  discovered; full history in [docs/build-decisions.md](docs/build-decisions.md), "Auth phase:
-  email sign-in, and what it cost." The sender is reachable only through Supabase's own auth
-  templates — the app has no way to compose mail — so every consequence below still holds:
+  discovered (the auth pass; the reasoning is git history). The sender is reachable only through
+  Supabase's own auth templates — the app has no way to compose mail — so every consequence below
+  still holds:
   - **Nothing notifies asynchronously.** No "your export is ready", no "@mentioned you", no
     digest, no reminder, no failure alert.
   - **Job completion is in-app only.** A closed tab means you find out when you come back.
@@ -518,7 +552,16 @@ There is no case where an empty state is optional. A new project is entirely emp
 - **`/app/filmmaking` is a project list and a creation entry point. Stop there.** It needs an ADR
   first. A project with no Writing section is a generation surface with no script behind it, and
   "the screenplay is the source of truth" stops holding.
-- **Project `/settings` is a stub.** No design exists.
+- **Project `/settings` is a stub.** No design exists. **Account `/app/settings` is built**
+  (2026-09-22) and is a different route: profile, plan and credits, editor defaults,
+  notifications, collaborators, integrations, security. Half of it is drawn disabled with the
+  reason on the control - there is no plan table, no mail provider, no per-person editor store,
+  no third-party integration and no device list - and deleting an account refuses in words, like
+  deleting a project. Nothing on it is a placeholder that looks live.
+- **A project card's `logline` and `archived_at` are authored columns** (migration `0029`). A
+  logline is the writer's sentence about the project; archiving is not trashing - an archived
+  project is still live, still openable and still in the ledger, and the two states are two
+  columns because a writer may do both.
 - **Cut, do not build:** Community, writing leaderboard, activity heatmap. The sidebar credits
   card, once on this list, is built (2026-09-16, the v2 design draws it): the same per-project
   balance the Production header spends, read from the ledger.
@@ -531,11 +574,10 @@ There is no case where an empty state is optional. A new project is entirely emp
 
 ## Feature workflow
 
-1. **Locate the route** in the route document and read its design bundle. Where two bundles
-   disagree on chrome, `Route - Script.dc.html` wins. For the four routes whose bundle is retired
-   (Characters, Locations, Timeline, Production) the written plan is the spec; for Production that
-   is `docs/production/production.md` (v12) with the mockup beside it — click the mockup through,
-   never import it.
+1. **Locate the route** in `lib/workspace/routes.ts` and read its spec: its paragraph in
+   `apps/web/CLAUDE.md` and the route as built. For Production the spec is
+   `docs/production/production.md` (v12) with the mockup beside it — click the mockup through,
+   never import it; where the two disagree the spec wins.
 2. **Check the open decisions table.** If the feature depends on one, stop and ask — do not pick.
 3. **Schema first** if the data is new: a forward-only drizzle-kit migration, in the repo. Never
    the Supabase dashboard.
@@ -567,9 +609,10 @@ Scoped runs while iterating:
 
 ```bash
 pnpm --filter @folio/script test
-pnpm --filter @folio/script test -- --coverage
-pnpm --filter @folio/db drizzle-kit check
+pnpm --filter @folio/script test --coverage
+pnpm --filter @folio/db db:check
 pnpm --filter web test:e2e
+pnpm --filter @folio/db seed:production -- --user <email>   # a dev project in every Production state, for the walk
 ```
 
 The E2E smoke test walks all nine routes in both themes and both states. It is not optional

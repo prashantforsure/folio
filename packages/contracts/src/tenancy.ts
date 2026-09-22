@@ -6,6 +6,7 @@ import {
   ProjectKindSchema,
   ProjectTypeSchema,
   RevisionColourSchema,
+  ScreenplayNodeTypeSchema,
   ScriptFormatSchema,
 } from './enums'
 import {
@@ -91,9 +92,16 @@ export type Membership = z.infer<typeof MembershipSchema>
  * derived value, and the exception table puts page counts on a **measurement
  * record**. The card reads the measurement; the project row does not carry one.
  *
- * `trashedAt` is soft delete. AGENTS.md, When to ask first: "Delete or purge
- * user data" needs asking, so nothing in this phase hard-deletes a project.
+ * `trashedAt` is soft delete and `archivedAt` is not the same thing (the
+ * account routes pass, 2026-09-22): archived is finished work put out of the
+ * way - listed under its own filter, still openable - and trashed is deleted
+ * and waiting to be restored. A project can be both, and restoring undoes one
+ * of them. AGENTS.md, When to ask first: "Delete or purge user data" needs
+ * asking, so nothing here hard-deletes a project.
  */
+/** A logline: a sentence or two. Trimmed; an empty box is `null`, never `''`. */
+export const LoglineSchema = z.string().trim().min(1).max(600)
+
 export const ProjectSchema = z.object({
   id: ProjectIdSchema,
   title: TitleSchema,
@@ -115,10 +123,19 @@ export const ProjectSchema = z.object({
   liveRepaginate: z.boolean(),
   /** Free tags, as the project cards show them. Lower case, deduplicated by the repository. */
   tags: z.array(z.string().trim().min(1).max(40)).max(24),
+  /**
+   * What the project is about, in the writer's words: the line the project
+   * card prints under its title, and what the New route's compose box
+   * collects (the account routes pass, 2026-09-22; migration `0029`).
+   * Authored, never derived, and `null` until the writer writes one - the
+   * card leaves the line out rather than inventing a summary.
+   */
+  logline: LoglineSchema.nullable(),
   createdBy: UserIdSchema,
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
   trashedAt: TimestampSchema.nullable(),
+  archivedAt: TimestampSchema.nullable(),
 })
 
 export type Project = z.infer<typeof ProjectSchema>
@@ -141,6 +158,8 @@ export const CreateProjectInputSchema = z.object({
   kind: ProjectKindSchema,
   projectType: ProjectTypeSchema,
   format: ScriptFormatSchema,
+  /** The compose box's text, when the project began there. The card copes without one. */
+  logline: LoglineSchema.nullable().optional(),
 })
 
 export type CreateProjectInput = z.infer<typeof CreateProjectInputSchema>
@@ -214,6 +233,17 @@ export type Episode = z.infer<typeof EpisodeSchema>
  *                   `documents.updated_at` - the project row and the document
  *                   headers, because `replaceNodes` stamps the header on every
  *                   write to the node list.
+ *   `members`       `memberships` joined to `users` - everyone on the project
+ *                   in the order they joined; the list's Team column, and the
+ *                   card's `Shared` mark when someone else created it.
+ *   `generating`    `generations` - how many of this project's generations are
+ *                   queued or running right now. The card's live chip, and the
+ *                   only value on it that can change without anybody typing.
+ *   `preview`       `nodes` - the first blocks of the opening episode's
+ *                   screenplay, type and text, for the card's page thumbnail.
+ *                   Empty when there is no script, and the card draws a blank
+ *                   sheet that says so. A mention run prints as its record's
+ *                   name, resolved by the repository; nothing is a placeholder.
  *
  * AGENTS.md, UI fidelity: "things that legitimately count to zero show `0`;
  * things that either exist or don't show `—`; the script says `empty`."
@@ -221,6 +251,27 @@ export type Episode = z.infer<typeof EpisodeSchema>
  * This is a **read model**, assembled by one repository query. It is not a
  * table, and there is no column anywhere it could be cached in.
  */
+/** One person on a project, as the Team column draws them. */
+export const ProjectMemberSchema = z.object({
+  id: UserIdSchema,
+  displayName: z.string(),
+  avatarUrl: z.string().nullable(),
+  role: MembershipRoleSchema,
+})
+
+export type ProjectMember = z.infer<typeof ProjectMemberSchema>
+
+/** One block of the page thumbnail: its element type and its text, mentions already named. */
+export const PreviewLineSchema = z.object({
+  type: ScreenplayNodeTypeSchema,
+  text: z.string(),
+})
+
+export type PreviewLine = z.infer<typeof PreviewLineSchema>
+
+/** How many blocks the thumbnail shows: four fill a 142px sheet at 9px. */
+export const PREVIEW_LINES = 4
+
 export const ProjectCardSchema = z.object({
   project: ProjectSchema,
   episodes: z.int().min(1),
@@ -236,6 +287,10 @@ export const ProjectCardSchema = z.object({
    * for a film the router drops it (AGENTS.md, Routing) and it is unused.
    */
   openingEpisode: EpisodeSlugSchema,
+  members: z.array(ProjectMemberSchema),
+  /** Queued or running generations. Zero for every project that is not generating. */
+  generating: z.int().min(0),
+  preview: z.array(PreviewLineSchema).max(PREVIEW_LINES),
 })
 
 export type ProjectCard = z.infer<typeof ProjectCardSchema>

@@ -135,6 +135,20 @@ export const users = pgTable('users', {
  * `trashed_at` is soft delete. AGENTS.md, When to ask first: deleting user data
  * needs a question, so nothing here hard-deletes.
  *
+ * `archived_at` is the second soft state, and it is not the same one (the
+ * account routes pass, 2026-09-22; migration `0029`). The Projects route draws
+ * an `Archived` filter beside a `Trash` route, so a project is live, archived
+ * or trashed: archived is finished work put out of the way - still listed,
+ * still openable, still counted in the ledger - and trashed is deleted and
+ * waiting to be restored. One column each, because a single `state` column
+ * would have to decide which wins when a writer trashes an archived project,
+ * and the answer is that both are true and restoring undoes one of them.
+ *
+ * `logline` is the writer's own sentence about the project, collected by the
+ * New route's compose box and printed on the card under the title. Authored,
+ * never derived - the note above about count columns is about values the node
+ * list already determines, and this is not one of them.
+ *
  * ## `page_mode` and `live_repaginate` - the pagination preference, per project
  *
  * AGENTS.md's "Sub-views are query params - except" table: "`pageMode` +
@@ -163,12 +177,16 @@ export const projects = pgTable(
     /** A cadence flag: repaginate on every keystroke. Changes no output. */
     liveRepaginate: boolean('live_repaginate').notNull().default(false),
     tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
+    /** The writer's own sentence about the project. Authored; `null` until written (`0029`). */
+    logline: text('logline'),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
     trashedAt: timestampColumn('trashed_at'),
+    /** Put out of the way, not deleted. See the header (`0029`). */
+    archivedAt: timestampColumn('archived_at'),
   },
   (table) => [
     index('projects_created_by_idx').on(table.createdBy),

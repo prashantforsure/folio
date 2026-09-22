@@ -414,7 +414,7 @@ test('/app/project/:id lands on the last opened episode, else the first', async 
 
 test('the project rail does not appear on the home shell, and vice versa', async ({ page, account }) => {
   await signIn(page, account)
-  await page.goto('/app/recents')
+  await page.goto('/app/projects')
   await expect(page.locator('nav[data-rail]')).toHaveCount(0)
   await expect(page.getByRole('navigation', { name: 'Sections', exact: true })).toBeVisible()
   await page.goto(`/app/project/${seriesId}/ep_001/script`)

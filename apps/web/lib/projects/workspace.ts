@@ -28,21 +28,23 @@ import { episodeRouteHref } from '../workspace/hrefs'
  * template type `hrefs.ts` returns and the checker verifies it against a page
  * that is actually there.
  *
- * ## Filmmaking goes to its list, not to `script`
+ * ## Filmmaking goes to the list, not to `script`
  *
  * AGENTS.md open decision 9: `/app/filmmaking` "is a project list and a
  * creation entry point. Stop there. It needs an ADR first." Which route a
  * filmmaking project lands on - whether it even has a `script` route - is the
  * substance of that ADR, so this function does not guess it. A filmmaking
- * project opens on the list it was created from, where its card is. When the
- * ADR lands, this is the branch it changes. (The workspace layout enforces the
- * same thing from the other side: a filmmaking project's URL redirects back.)
+ * project opens on the list, where its card is. The list is `/app/projects`
+ * since 2026-09-22 - `/app/filmmaking` is now a redirect to it, and the kind
+ * is a chip there rather than a route. When the ADR lands, this is the branch
+ * it changes. (The workspace layout enforces the same thing from the other
+ * side: a filmmaking project's URL redirects back.)
  */
 export const workspaceHref = (
   project: Pick<Project, 'id' | 'kind' | 'projectType'>,
   episode: EpisodeSlug,
-): EpisodeRoutePath | '/app/filmmaking' => {
-  if (project.kind === 'filmmaking') return '/app/filmmaking'
+): EpisodeRoutePath | '/app/projects' => {
+  if (project.kind === 'filmmaking') return '/app/projects'
   return episodeRouteHref(
     {
       projectId: project.id,

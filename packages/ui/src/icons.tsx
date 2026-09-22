@@ -106,6 +106,41 @@ export const ICONS = {
   sliders: P(18, 'M3 5.5h12M3 12.5h12', 'M8.9 5.5a1.9 1.9 0 1 1-3.8 0 1.9 1.9 0 0 1 3.8 0z', 'M13.5 12.5a1.9 1.9 0 1 1-3.8 0 1.9 1.9 0 0 1 3.8 0z'),
   /** The sidebar's find field (`Route - Characters v2.dc.html`): a lens and its handle, 1.4 stroke on a 14 box. */
   search: P(14, 'M10.1 6.2a3.9 3.9 0 1 1-7.8 0 3.9 3.9 0 0 1 7.8 0z', 'M9.2 9.2l2.6 2.6'),
+
+  /*
+   * The account routes (`handoff-account-v2/`, 2026-09-22). Every path below
+   * is the handoff's own, on its 18-unit box; the two it draws as `<rect>`
+   * and `<circle>` are written as the equivalent rounded-corner and arc
+   * paths, because this set is paths and nothing else.
+   */
+  /** Home sidebar: New. A plus. */
+  plus: P(18, 'M9 3.6v10.8M3.6 9h10.8'),
+  /** Home sidebar: Projects, and the grid view. Four rounded squares. */
+  grid: P(
+    18,
+    'M4.1 2.8h2.8a1.3 1.3 0 0 1 1.3 1.3v2.8a1.3 1.3 0 0 1-1.3 1.3H4.1a1.3 1.3 0 0 1-1.3-1.3V4.1a1.3 1.3 0 0 1 1.3-1.3z',
+    'M11.1 2.8h2.8a1.3 1.3 0 0 1 1.3 1.3v2.8a1.3 1.3 0 0 1-1.3 1.3h-2.8a1.3 1.3 0 0 1-1.3-1.3V4.1a1.3 1.3 0 0 1 1.3-1.3z',
+    'M4.1 9.8h2.8a1.3 1.3 0 0 1 1.3 1.3v2.8a1.3 1.3 0 0 1-1.3 1.3H4.1a1.3 1.3 0 0 1-1.3-1.3v-2.8a1.3 1.3 0 0 1 1.3-1.3z',
+    'M11.1 9.8h2.8a1.3 1.3 0 0 1 1.3 1.3v2.8a1.3 1.3 0 0 1-1.3 1.3h-2.8a1.3 1.3 0 0 1-1.3-1.3v-2.8a1.3 1.3 0 0 1 1.3-1.3z',
+  ),
+  /** Home sidebar: Trash. A lid and a bin. */
+  trash: P(18, 'M3.4 5.4h11.2M7 5.4V3.8h4v1.6M4.8 5.4l.7 9.2h7l.7-9.2'),
+  /** Home sidebar: Settings. A cog. */
+  gear: P(
+    18,
+    'M11.6 9a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 0 1 5.2 0z',
+    'M9 1.8v2M9 14.2v2M1.8 9h2M14.2 9h2M3.9 3.9l1.4 1.4M12.7 12.7l1.4 1.4M14.1 3.9l-1.4 1.4M5.3 12.7l-1.4 1.4',
+  ),
+  /** The workspace header's switcher: a chevron up over a chevron down. */
+  switcher: P(18, 'M5.6 7.4L9 4l3.4 3.4M12.4 10.6L9 14l-3.4-3.4'),
+  /** The compose box's Attach. A paperclip. */
+  clip: P(18, 'M12.4 8.2l-4.2 4.2a2.4 2.4 0 0 1-3.4-3.4l5-5a1.6 1.6 0 0 1 2.3 2.3l-5 5'),
+  /** The Projects toolbar's sort menu. Three lines, shortening. */
+  sort: P(18, 'M4.4 4.2h9.2M4.4 9h6M4.4 13.8h3.2'),
+  /** The import row: a page with its corner turned. */
+  file: P(18, 'M10.6 2.6H5.4a1.4 1.4 0 0 0-1.4 1.4v10a1.4 1.4 0 0 0 1.4 1.4h7.2a1.4 1.4 0 0 0 1.4-1.4V6z', 'M10.4 2.6V6H14'),
+  /** The frame placeholder's play mark. A triangle. */
+  play: P(18, 'M6.6 4.4l6.8 4.6-6.8 4.6z'),
 } as const
 
 export type IconName = keyof typeof ICONS

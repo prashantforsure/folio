@@ -252,6 +252,23 @@
  * The aliases. See the header: the previous palette's names, each resolved
  * to the nearest new token, for the routes not yet rebuilt. Nothing new may
  * be written against these.
+ *
+ * ## Why the block is repeated under both themes (2026-09-22)
+ *
+ * A `var()` inside a custom property is substituted **where the property is
+ * declared**, not where it is used, and the result is what inherits. So an
+ * alias declared only on `:root` carries the *page's* value into a nested
+ * `[data-theme='light']` island: the island redeclares `--s1`, but `--sheet`
+ * was already resolved against the page's `--s1` and inherits unchanged. An
+ * unrebuilt route drawing `bg-sheet` inside a light sheet on a dark page
+ * therefore got the dark value - the exact failure AGENTS.md's ban on
+ * Tailwind's global dark variant exists to prevent, reintroduced one layer
+ * down by an alias.
+ *
+ * `e2e/theme.spec.ts`, "a light island nests inside a dark page", is the test
+ * that catches it, and it was failing. Repeating the block inside each theme
+ * makes every alias re-resolve where the island redeclares its source; there
+ * is no way to express "substitute later" in CSS.
  */
 :root {
   --desk: var(--bg);
@@ -272,6 +289,33 @@
   --grid: var(--line);
   --slate: var(--solid);
   --slate-ink: var(--solid-ink);
+}
+
+[data-theme='light'],
+[data-theme='dark'] {
+  --desk: var(--bg);
+  --panel: var(--sunk);
+  --rail: var(--bg);
+  --sheet: var(--s1);
+  --sheet-ink: var(--ink);
+  --sheet-line: var(--line);
+  --sheet-edge: var(--line2);
+  --sel: var(--s2);
+  --add: var(--ok);
+  --add-bg: var(--ok-bg);
+  --del: var(--live);
+  --del-bg: var(--live-bg);
+  --note: var(--warn);
+  --note-bg: var(--warn-bg);
+  --shadow: none;
+  --grid: var(--line);
+  --slate: var(--solid);
+  --slate-ink: var(--solid-ink);
+  --ok-bg: color-mix(in oklch, var(--ok) 13%, transparent);
+  --warn-bg: color-mix(in oklch, var(--warn) 13%, transparent);
+  --live-bg: color-mix(in oklch, var(--live) 13%, transparent);
+  --accent-line: color-mix(in oklch, var(--accent) 40%, transparent);
+  --focus: var(--accent);
 }
 
 /*

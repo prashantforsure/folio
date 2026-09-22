@@ -11,17 +11,23 @@
  * the attempt as a whole - not a member, not enabled - and renders above the
  * buttons.
  *
- * There is no `'done'` status: every action here either redirects or
- * revalidates the list it changed, so a success never returns.
+ * `'done'` was added with the account routes (2026-09-22): a rename, an
+ * archive and a trash all happen in place on a list the writer is looking at,
+ * so they revalidate and come back rather than redirecting, and the dialog
+ * that posted needs to know it may close. Creation still redirects and still
+ * never returns.
  */
 
-export type ProjectField = 'title' | 'kind' | 'projectType' | 'format' | 'form'
+export type ProjectField = 'title' | 'kind' | 'projectType' | 'format' | 'logline' | 'file' | 'form'
 
 export type ProjectActionResult =
   | { readonly status: 'idle' }
+  | { readonly status: 'done' }
   | { readonly status: 'error'; readonly field: ProjectField; readonly message: string }
 
 export const IDLE: ProjectActionResult = { status: 'idle' }
+
+export const DONE: ProjectActionResult = { status: 'done' }
 
 export const failure = (field: ProjectField, message: string): ProjectActionResult => ({
   status: 'error',

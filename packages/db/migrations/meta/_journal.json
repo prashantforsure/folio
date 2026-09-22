@@ -204,6 +204,13 @@
       "when": 1790061708796,
       "tag": "0028_shot_duration_range",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790075190120,
+      "tag": "0029_project_logline_and_archive",
+      "breakpoints": true
     }
   ]
 }

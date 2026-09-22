@@ -170,17 +170,26 @@
   /* 14.5px/500 is the Research library card's title (`Route - Research v2.dc.html`). */
   --text-14-5: 14.5px;
   --text-15: 15px;
+  /* 15.5px is the compose box's own text (`handoff-account-v2/Route - New v2`). */
+  --text-15-5: 15.5px;
   --text-16: 16px;
   --text-17: 17px;
   --text-18: 18px;
   --text-20: 20px;
   --text-21: 21px;
+  /* Account settings' section title. */
+  --text-23: 23px;
+  /* The account routes' page title (25) and the New route's greeting (31). */
+  --text-25: 25px;
   /* 26px/300 is the Production route's stat tile figure (`Route - Production v2.dc.html`). */
   --text-26: 26px;
   --text-27: 27px;
   /* 32px is the outline's title block (`Route - Outline v2.dc.html`), a step under the older 34. */
+  --text-31: 31px;
   --text-32: 32px;
   --text-34: 34px;
+  /* The credit balance on account settings' Plan section. */
+  --text-40: 40px;
 
   /*
    * README, "Shape and motion": "Radii: 7-10px controls, 12-13px cards, 16px

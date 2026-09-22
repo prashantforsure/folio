@@ -81,8 +81,9 @@ export const loadProject = cache(async (rawProjectId: string): Promise<ProjectCo
 
   // AGENTS.md, Constraints: "/app/filmmaking is a project list and a creation
   // entry point. Stop there." A filmmaking project has no workspace until the
-  // ADR that decides what one is; its card opens the list it lives on.
-  if (project.kind === 'filmmaking') redirect('/app/filmmaking')
+  // ADR that decides what one is; its card opens the list it lives on, which
+  // is `/app/projects` since the account routes pass (2026-09-22).
+  if (project.kind === 'filmmaking') redirect('/app/projects')
 
   const episodes = await listEpisodes(scope)
   if (episodes.length === 0) {

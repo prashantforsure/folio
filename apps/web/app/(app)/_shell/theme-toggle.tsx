@@ -18,13 +18,30 @@ import { useTheme } from '../../../lib/state/theme'
  * the accessible name says which one is coming. `aria-live` is absent too: the
  * whole page visibly changes, which is its own announcement.
  *
- * Two variants: `rail` is the redesigned 38px icon button (`@folio/ui`'s
- * stroke SVGs); `sidebar` is the home shell's 78px glyph button, kept until
- * that shell has its own pass.
+ * Three variants: `rail` is the workspace's 38px icon button (`@folio/ui`'s
+ * stroke SVGs); `circle` is the account routes' 34px round outline button in
+ * the header's right-hand slot (`handoff-account-v2/`); `sidebar` is the old
+ * home shell's 78px glyph button, which nothing draws any more and which goes
+ * when the last reader of the Unicode glyph set does.
  */
-export const ThemeToggle = ({ variant = 'sidebar' }: { readonly variant?: 'rail' | 'sidebar' }) => {
+export const ThemeToggle = ({ variant = 'sidebar' }: { readonly variant?: 'rail' | 'circle' | 'sidebar' }) => {
   const { theme, toggle } = useTheme()
   const next = theme === 'dark' ? 'light' : 'dark'
+
+  if (variant === 'circle') {
+    return (
+      <button
+        type="button"
+        onClick={toggle}
+        title={`Switch to ${next} theme`}
+        aria-label={`Switch to ${next} theme`}
+        data-theme-toggle={theme}
+        className="folio-pill-button grid h-[34px] w-[34px] flex-none place-items-center rounded-full border-line text-ink2"
+      >
+        <Icon name={next === 'dark' ? 'moon' : 'sun'} size={15} strokeWidth={1.5} />
+      </button>
+    )
+  }
 
   if (variant === 'rail') {
     return (

@@ -18,11 +18,11 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0028` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0029` are applied to the dev Supabase project** and are forward-only.
   (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
   pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
-  `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
-  `docs/build-decisions.md`); `0010` is the sanctioned `DROP TABLE beats`, alone in its file;
+  `0000` was reordered once, before it had ever run anywhere (the shell routes pass, git
+  history); `0010` is the sanctioned `DROP TABLE beats`, alone in its file;
   `0013` is the sanctioned drop of the first Characters profile (nine columns, one table), on
   the client's explicit ruling; `0014` adds `reels` and `reel_renders` and the `reel_id` /
   `kept_at` / `render_resolution` columns, with `reels.order_key` collated `C` by hand as
@@ -86,6 +86,13 @@ authored / derived-cache / measurement. Touching `episodes` needs
   the two deviations (`reel_shots`, `scene_node_id`). `0027` adds `reel_shots.reference_asset_ids` (the
   drawer's References `＋`, ruled 2026-09-22); `0028` widens `duration_s` from the preset list to any
   whole second 1–15 (the timing bar's drag lands on 6 s and 7 s). Both additive, both applied.
+  `0029` (the account routes pass, 2026-09-22) adds two authored columns to `projects`:
+  `logline` (the writer's sentence about the project, printed on its card) and `archived_at`
+  (the second soft state — archived is out of the way, trashed is deleted, and a project may be
+  both, which is why it is a column rather than a value in `trashed_at`). Additive, generated
+  with the real env present, applied to dev through `db:migrate` on 2026-09-22 (it went in clean;
+  the two `ADD COLUMN`s touch no existing row, and the 124 projects on dev read back with both
+  columns null).
 - **`src/seed/production.ts` is the one seed** (`pnpm --filter @folio/db seed:production -- --user <email>`,
   launched by `scripts/seed-production.mjs` through drizzle-kit's own `tsx`): a "Monsoon Line" series
   in every state the v12 mockup draws; a re-run bins the previous one of that title and writes a
@@ -115,9 +122,9 @@ config failure, not a schema failure; the journal is clean.
 
 **`db:generate` needs a TTY** when one diff drops a table and creates another — it prompts for
 rename-or-drop and exits under a non-interactive runner. `0010`/`0011` were produced through
-`drizzle-kit/api` from a one-off script ("Timeline route phase" in `docs/build-decisions.md`).
+`drizzle-kit/api` from a one-off script (the Timeline route pass), as `0024` was.
 
-AGENTS.md's `pnpm --filter @folio/db drizzle-kit check` does not run at all
+`pnpm --filter @folio/db drizzle-kit check` does not run at all
 (`ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT` — not a script name). Use `db:check`.
 
 **`db:migrate` hides the failing statement.** When a migration errors, `drizzle-kit migrate` prints

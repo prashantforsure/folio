@@ -1,171 +1,180 @@
-import type { ProjectCard as ProjectCardModel } from '@folio/contracts'
-import { Glyph } from '@folio/ui'
+'use client'
+
+import type { ProjectCard as Card } from '@folio/contracts'
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 
 import { relativeTime } from '../../../../../lib/format/relative-time'
-import {
-  FORMAT_SHEET,
-  KIND_GLYPH,
-  KIND_LABEL,
-  PROJECT_TYPE_LABEL,
-} from '../../../../../lib/projects/labels'
 import { workspaceHref } from '../../../../../lib/projects/workspace'
+import {
+  STAGE_LABEL,
+  STAGE_TONE,
+  isArchived,
+  isShared,
+  kindLine,
+  stageOf,
+  statsLine,
+} from '../../../../../lib/projects/view'
+import type { CardAction } from './card-menu'
+import { CardMenu } from './card-menu'
+import { ProjectPreview } from './project-preview'
 
 /**
- * The project card. One component for Recents, Screenwriting and Filmmaking;
- * its two inner pieces are shared with the Trash row.
+ * One project on the grid: the tile, the kind, a status chip when there is
+ * something to say, the title, the logline, the stats and the edit time.
  *
- * ## Every value on it is read, none is computed
+ * **Every value on it is read; none is computed here.** `episodes` is a count
+ * of the `episodes` table, `scenes` of the derived cache, `pages` of the
+ * measurement record, `preview` of the node list, `members` of `memberships`,
+ * and `generating` of `generations`. The one thing done in this file is
+ * turning a timestamp into "31 minutes ago", with the absolute time kept on
+ * the `<time>` element. AGENTS.md, UI fidelity: project cards show "real
+ * derived metadata ... never a placeholder string".
  *
- * The card renders `ProjectCard` from `@folio/contracts` and nothing else. It
- * does not count, sum, or infer: `episodes` is a count of the `episodes` table,
- * `scenes` of the derived cache, `pages` of the measurement record, `script`
- * of the `documents` table, and `lastEditedAt` the later of two timestamps -
- * all assembled by `listProjectsFor` in `@folio/db`, whose header lists each
- * source. The design README: "real derived metadata ... never a placeholder
- * string", and the surest way to keep that true is for the component to have
- * nothing to compute with.
+ * ## The status chip is live or it is absent
  *
- * The one thing done here is turning a timestamp into "31 minutes ago", with
- * the absolute time kept on the `<time>` element.
+ * The handoff's cards carry `Rendering 4/12`, `In production`, `6 new notes`.
+ * The only one of those this product can answer is the first: a generation is
+ * a row with a state, and while one is queued or running the chip says so and
+ * its dot pulses. Archived says `Archived`. Everything else draws no chip,
+ * because a chip that is always there says nothing.
  *
- * ## The empty-meta convention, applied to three slots
+ * ## Why the whole card is not a `<a>`
  *
- * AGENTS.md, UI fidelity: "things that legitimately count to zero show `0`;
- * things that either exist or don't show `—`; the script says `empty`."
- *
- *   Scenes   counts to zero              `Scenes 0`
- *   Pages    a measurement exists or not `Pages —`
- *   Script   the script itself           `Script empty`, in place of Pages
- *
- * A project with no script is the designed state a new project is in, and it
- * is not rendered as zero pages: the Pages slot becomes `Script empty`, which
- * is the convention's own word and the explicit statement the README asks for.
- *
- * `Episodes` is shown for a series only. A film has exactly one episode row by
- * construction (AGENTS.md, Routing), and printing `Episodes 1` on every film
- * card would surface the schema's shape rather than the project's.
- *
- * ## Chrome
- *
- * Built from the tokens, patterned on the six shell-route observations in
- * `docs/ui design/` (`Route - Recents.dc.html` and siblings): a 12px-padded
- * `--panel` card with a `--line` border, a Courier 9.5px uppercase kind line,
- * the title in Newsreader 15px/500, a Courier 10px meta line, and a footer
- * rule with the edit time. Those observations carry a logline and a "Draft 5"
- * stage; neither exists in the schema, so neither is drawn.
- *
- * Colocated here, not in `packages/ui`, although three routes use it: it knows
- * what a project is, and that package "has no domain knowledge" (AGENTS.md,
- * Architecture). The three routes are one list implementation with a filter,
- * and this is that implementation's component.
+ * It carries a menu button and a checkbox, and a link cannot contain either.
+ * So the card is a container with one stretched link over it
+ * (`.folio-project-open`), and the controls sit above it on the z-axis - the
+ * pattern the Storyboard's cards use. The link is what a keyboard reaches and
+ * what a middle click opens; the stretched span is what a mouse hits. It
+ * carries an `aria-label` and no text: a second copy of the title in the DOM
+ * is a second thing a search, a screen reader's list and a test all have to
+ * disambiguate.
  */
-
-/** `✎ SCREENWRITING · FILM · US LETTER`. */
-export const ProjectKindLine = ({ card }: { readonly card: ProjectCardModel }) => {
+export const ProjectCard = ({
+  card,
+  now,
+  selected,
+  menuOpen,
+  onMenu,
+  onAct,
+}: {
+  readonly card: Card
+  readonly now: Date
+  readonly selected: boolean
+  readonly menuOpen: boolean
+  readonly onMenu: () => void
+  readonly onAct: (action: CardAction) => void
+}) => {
   const { project } = card
+  const stage = stageOf(card)
+  const chip = stage === 'generating' || stage === 'archived' ? STAGE_LABEL[stage] : null
+  const tone = STAGE_TONE[stage]
+
   return (
-    <div className="flex items-start gap-[7px]">
-      <Glyph name={KIND_GLYPH[project.kind]} className="mt-[2px] text-ink3" style={{ fontSize: 11 }} />
-      <span className="min-w-0 flex-1 font-mono text-9-5 uppercase leading-[1.5] tracking-[.06em] text-ink3">
-        {KIND_LABEL[project.kind]} · {PROJECT_TYPE_LABEL[project.projectType]} ·{' '}
-        {FORMAT_SHEET[project.format]}
-      </span>
+    <div className="folio-project-card" data-selected={selected} data-project-card={project.id}>
+      <Link
+        href={workspaceHref(project, card.openingEpisode)}
+        aria-label={`Open ${project.title}`}
+        className="folio-project-open"
+      />
+
+      <button
+        type="button"
+        onClick={onMenu}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label={`${project.title} actions`}
+        className="folio-ghost-button absolute right-[10px] top-[10px] z-[4] grid h-[22px] w-[22px] place-items-center rounded-[7px] bg-s2 text-12 text-ink2"
+      >
+        ⋯
+      </button>
+      {menuOpen ? (
+        <div className="absolute right-[10px] top-[4px] z-[25]">
+          <CardMenu card={card} onAct={onAct} onClose={onMenu} />
+        </div>
+      ) : null}
+
+      <ProjectPreview card={card} />
+
+      <div className="relative z-[2] flex flex-1 flex-col gap-[7px] px-[15px] pb-[12px] pt-[13px]">
+        <div className="pointer-events-none flex items-center gap-[8px]">
+          <span className="folio-eyebrow min-w-0 flex-1 truncate text-10-5">{kindLine(card)}</span>
+          {chip === null ? null : (
+            <span
+              className="folio-tone-pill flex items-center gap-[5px]"
+              data-tone={tone === 'warn' ? 'warn' : 'none'}
+              data-muted={tone === 'none' ? 'true' : undefined}
+            >
+              <span
+                className="h-[5px] w-[5px] rounded-full bg-current"
+                style={stage === 'generating' ? { animation: 'folio-pulsedot 1.8s ease-in-out infinite' } : undefined}
+              />
+              {chip}
+              {stage === 'generating' && card.generating > 1 ? (
+                <span className="tabular">{card.generating}</span>
+              ) : null}
+            </span>
+          )}
+        </div>
+
+        <span className="pointer-events-none text-15 font-medium leading-[1.3] tracking-title">
+          {project.title}
+        </span>
+        {project.logline === null ? null : (
+          <p className="folio-clamp-3 pointer-events-none m-0 text-12-5 leading-[1.55] text-ink2">
+            {project.logline}
+          </p>
+        )}
+
+        <span className="flex-1" />
+        <span className="tabular pointer-events-none font-mono text-10-5 text-ink3">{statsLine(card)}</span>
+        <div className="pointer-events-none flex items-center gap-[8px] border-t border-line2 pt-[10px]">
+          <span className="flex-1 text-11-5 text-ink3">
+            Edited{' '}
+            <time dateTime={card.lastEditedAt} title={new Date(card.lastEditedAt).toISOString()}>
+              {relativeTime(card.lastEditedAt, now)}
+            </time>
+          </span>
+          {isArchived(card) ? null : <Team card={card} />}
+        </div>
+      </div>
     </div>
   )
 }
 
-const Meta = ({
-  label,
-  value,
-  title,
-}: {
-  readonly label: string
-  readonly value: string
-  readonly title?: string | undefined
-}) => (
-  // The bare spaces are for the clipboard and for text extraction: a flex
-  // container collapses whitespace-only text nodes, so they draw nothing, but
-  // "Scenes 34" copies as two words rather than one.
-  <div className="flex items-baseline gap-[4px]" title={title}>
-    <dt className="text-ink3">{label}</dt>{' '}
-    <dd className="tabular m-0 text-ink2">{value}</dd>
-  </div>
-)
-
-const Dot = () => (
-  <span aria-hidden="true" className="text-ink3">
-    {' · '}
-  </span>
-)
-
-/** `Episodes 6 · Scenes 34 · Pages 104`, with the convention applied. */
-export const ProjectMeta = ({ card }: { readonly card: ProjectCardModel }) => (
-  <dl className="m-0 flex flex-wrap items-baseline gap-x-[7px] gap-y-[2px] font-mono text-10">
-    {card.project.projectType === 'series' ? (
-      <>
-        <Meta label="Episodes" value={String(card.episodes)} />
-        <Dot />
-      </>
-    ) : null}
-    {card.script === 'absent' ? (
-      <>
-        <Meta label="Script" value="empty" title="No script yet. The project opens on a blank sheet." />
-        <Dot />
-        <Meta label="Scenes" value={String(card.scenes)} />
-      </>
-    ) : (
-      <>
-        <Meta label="Scenes" value={String(card.scenes)} />
-        <Dot />
-        <Meta
-          label="Pages"
-          value={card.pages === null ? '—' : String(card.pages)}
-          title={card.pages === null ? 'Not paginated yet.' : undefined}
-        />
-      </>
-    )}
-  </dl>
-)
-
-export const ProjectCard = ({ card, now }: { readonly card: ProjectCardModel; readonly now: Date }) => {
-  const { project } = card
+/**
+ * The people on the project: nothing for one member, a `Shared` mark and the
+ * initials for more. Read from `memberships` - a project with two rows in it
+ * is shared, whoever created it.
+ */
+export const Team = ({ card, me }: { readonly card: Card; readonly me?: string }) => {
+  if (card.members.length <= 1) return null
+  const mine = me === undefined ? false : isShared(card, me)
   return (
-    <Link
-      href={workspaceHref(project, card.openingEpisode)}
-      className="flex min-h-[196px] flex-col gap-[7px] rounded-chrome border border-line bg-panel p-[12px] text-ink no-underline hover:border-accent-line hover:text-ink hover:no-underline"
-    >
-      <ProjectKindLine card={card} />
-      <h2 className="m-0 font-serif text-15 font-medium leading-[1.25] tracking-title">
-        {project.title}
-      </h2>
-      <div className="flex-1" />
-      <ProjectMeta card={card} />
-      <EditedFooter iso={card.lastEditedAt} now={now} />
-    </Link>
+    <span className="flex items-center gap-[6px] text-11 text-ink3">
+      {mine ? 'Shared with you' : 'Shared'}
+      <span className="flex">
+        {card.members.slice(0, 3).map((member, index) => (
+          <span
+            key={member.id}
+            title={member.displayName}
+            className="grid h-[20px] w-[20px] place-items-center rounded-full border-[1.5px] border-bg bg-s3 text-8-5 text-ink2"
+            style={index === 0 ? undefined : { marginLeft: -6 }}
+          >
+            {initialsOf(member.displayName)}
+          </span>
+        ))}
+      </span>
+    </span>
   )
 }
 
-/** The footer rule and the edit time. Exported for the Trash row, which swaps the verb. */
-export const EditedFooter = ({
-  iso,
-  now,
-  verb = 'Edited',
-  children,
-}: {
-  readonly iso: string
-  readonly now: Date
-  readonly verb?: string
-  readonly children?: ReactNode
-}) => (
-  <div className="flex items-center gap-[8px] border-t border-line2 pt-[7px] text-10-5 text-ink3">
-    <span className="flex-1">
-      {verb}{' '}
-      <time dateTime={iso} title={new Date(iso).toISOString()}>
-        {relativeTime(iso, now)}
-      </time>
-    </span>
-    {children}
-  </div>
-)
+/** Two letters from a name. The same reading `lib/auth/identity.ts` makes of the signed-in one. */
+export const initialsOf = (name: string): string => {
+  const words = name.trim().split(/\s+/u).filter((word) => word.length > 0)
+  const first = words[0]
+  if (first === undefined) return '?'
+  const head = [...first][0] ?? '?'
+  const second = words[1]
+  if (second === undefined) return head.toUpperCase()
+  return (head + ([...second][0] ?? '')).toUpperCase()
+}

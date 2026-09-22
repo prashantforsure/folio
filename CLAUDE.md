@@ -3,9 +3,11 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Only what applies to every task lives here. `packages/script`, `packages/db` and `apps/web` each
-have a `CLAUDE.md` that loads when you work there. Route history is `docs/build-decisions.md`,
-one section per pass, newest first (`grep -n '^## ' docs/build-decisions.md`); it restarted on
-2026-09-16 with the v2 redesign, so older phases in git history are not the reference.
+have a `CLAUDE.md` that loads when you work there. `docs/` holds the ADRs and `docs/production/`
+(the v12 Production spec) and nothing else: the route history (`docs/build-decisions.md`) and the
+first Production doc set were deleted on 2026-09-22. A route's spec is now the route as built plus
+its paragraph in `apps/web/CLAUDE.md`; the reasoning behind an older ruling is git history
+(`git log -S'<phrase>'`, or `git show e733475^:docs/build-decisions.md` for the deleted file).
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -14,8 +16,8 @@ surface quietly becoming authoritative.
 **The design package is gone.** The v2 mockups (`docs/ui design/`) were the spec; the client
 deleted them on 2026-09-20 on purpose — do not read them, not from git history either. Their
 tokens live in `packages/ui/src/tokens/palette.css`; their language (plain lower-case-leaning
-copy, live counts, both states, both themes) still binds. Each route's build-decisions section is
-now its spec.
+copy, live counts, both states, both themes) still binds. Production is the one route with a
+written spec on disk: `docs/production/production.md` and the runnable mockup beside it.
 
 ## AGENTS.md is the contract — read the section for your task, not all of it
 
@@ -28,7 +30,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 | derive, characters, locations, aliases | Domain rules → Derivation; Entity identity |
 | pages, the sheet, revisions | Domain rules → Pagination and the sheet |
 | a route, a URL, anything visual | Domain rules → Routing; UI fidelity |
-| the agent, jobs, credits | Domain rules → The AI agent; Jobs, credits and cost |
+| the agent, jobs, credits, a generation | Domain rules → The AI agent; Jobs, credits and cost |
 | a table or a query | Domain rules → Tenancy and data access |
 | any new import | Tech stack → Adding a dependency |
 | naming, layout, commits, reporting | Conventions; Feature workflow; Validation |
@@ -37,8 +39,9 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 
 | Before you… | Read |
 | --- | --- |
-| build or change a route, or touch UI | its section in [docs/build-decisions.md](docs/build-decisions.md); `packages/ui/src/tokens/` and the built routes are the pattern |
-| answer something the spec leaves open | "Open, and blocking" at the top of `docs/build-decisions.md` — the live list |
+| build or change a route, or touch UI | its paragraph in [apps/web/CLAUDE.md](apps/web/CLAUDE.md); `packages/ui/src/tokens/` and the built routes are the pattern |
+| touch Production | [docs/production/production.md](docs/production/production.md) is the spec; the "Implementation" table in [docs/production/README.md](docs/production/README.md) says where each piece lives and lists every deviation |
+| answer something the spec leaves open | the open decisions table in AGENTS.md — the only live list |
 | change node identity or the id shape | [ADR 0001](docs/adr/0001-node-identity.md) — both rulings are reversible |
 | touch `episodes` or join on one | [ADR 0002](docs/adr/0002-episode-identity.md) — `ep_NNN` is a slug over an opaque key |
 | add a table, or ask what may write one | [packages/db/src/schema/index.ts](packages/db/src/schema/index.ts) — every table classified |
@@ -51,22 +54,35 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   operations, Fountain and FDX both ways, derivation, pagination, the draft diff, and one read
   module per derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `continuity.ts`,
   `time-cues.ts`, `sets.ts`, `rename.ts`).
-- `packages/contracts` — Zod boundary schemas. `packages/db` — Drizzle schema, forward-only
-  migrations `0000`–`0028` (which are applied to dev is tracked in its `CLAUDE.md`),
-  project-scoped repositories. `packages/ui` — tokens as CSS custom properties, the inline SVG
-  icon set, a few small components.
-- `apps/web` — auth, home shell, workspace chrome (`_chrome/project-shell.tsx`) and all nine
+- `packages/contracts` — Zod boundary schemas; `production.ts` holds `MODEL_REGISTRY`, the only
+  place a model is named. `packages/db` — Drizzle schema, forward-only migrations `0000`–`0029`
+  (which are applied to dev is tracked in its `CLAUDE.md`), project-scoped repositories, the
+  Production dev seed. `packages/ui` — tokens as CSS custom properties, the inline SVG icon set, a
+  few small components.
+- `apps/web` — auth, the account shell and its four routes (`app/(app)/app/(home)/`: New,
+  Projects, Trash, Settings; `/app/recents`, `/app/screenwriting` and `/app/filmmaking` redirect
+  to Projects since 2026-09-22), workspace chrome (`_chrome/project-shell.tsx`) and all nine
   route bodies: Script, Outline, Storyboard, Scenes, Characters, Locations, Timeline, Research,
   Production. Each is `app/(app)/app/project/[projectId]/_<route>/` plus `lib/<route>/` for its
   actions. `lib/workspace/routes.ts` is the route tree; `lib/workspace/views.ts` tables each
   route's `?view=` tabs, drawn in the header's centre. The assistant (`lib/assistant/`) and
-  share links (`lib/share/`) are cross-route.
-- `apps/worker` — deliberately empty (one exported constant). Do not create `apps/sync/`.
+  share links (`lib/share/`) are cross-route. `lib/production/pipeline/` is the Gemini spec,
+  client and runner.
+- `apps/worker` — deliberately empty (one exported constant). Production's generations run
+  inside `web` (`after()` + 3 s polling) until it exists. Do not create `apps/sync/`.
 
-Facts easy to get wrong (full history in `docs/build-decisions.md`):
+Facts easy to get wrong (history in git):
 
-- **Views are client state on Characters, Storyboard, Scenes and Timeline** (`_<route>/view-state.tsx`,
-  URL unchanged); the other routes use `?view=`. Expect the same ask per route; do not pre-empt it.
+- **The project list is `/app/projects`** (the account routes pass, 2026-09-22): one route, one
+  query, filter chips where three routes used to be. Its filters, sort, layout and selection are
+  client state, as is account settings' section nav. `projects.logline` and `projects.archived_at`
+  are authored columns (`0029`); archiving is not trashing. Half of account settings is drawn
+  disabled with the reason on the control — that is deliberate, and `apps/web/CLAUDE.md` lists
+  every one.
+- **Only Research still uses `?view=`.** Storyboard, Scenes, Characters, Locations and Timeline
+  hold their views as client state (`_<route>/view-state.tsx`, URL unchanged); Production's
+  Cards / Columns is a `view_preferences` row. Each was ruled per route; a new `?view=` needs a
+  row in `ROUTE_VIEWS` or `tests/workspace-routes.test.ts` fails.
 - **Characters is a canvas** (fourth pass 2026-09-20, laper.ai's shape): `Characters · List`, no
   sidebar, a card per record with authored relationships as threads between cards
   (`character_relationships`, one row per pair, two directional labels, migration `0024`). The
@@ -78,27 +94,27 @@ Facts easy to get wrong (full history in `docs/build-decisions.md`):
 - **Both editors are Tiptap 3**; the document lives in the editor, never React state. Boundary
   files: `lib/script/pm-model.ts`, `lib/outline/pm-model.ts`. Approved `apps/web` deps:
   `@tiptap/{core,pm,react,suggestion}`, `@floating-ui/dom`, `@anthropic-ai/sdk`,
-  `fast-xml-parser`, `aws4fetch` — nothing else without asking.
+  `fast-xml-parser`, `aws4fetch` — nothing else without asking. Gemini is called over `fetch`,
+  no SDK.
 - **The Script body is Geist on the canvas**; the engine still paginates in Courier
   (`lib/script/pages.ts` draws `Page N` dividers).
 - **`revisions` and `comment_threads` have no route** (their routes were cut) but are read by the
   Script route. `character_findings` (`0022`) and `scenes.story_time/beats` are orphaned columns
   awaiting a drop ruling.
-- **Production is the v12 handoff** (`docs/production/production.md` + the mockup, built
-  2026-09-22): one storyboard sheet per reel, a four-step readiness bar gating `Start shooting`,
-  no sidebar, no `?view=` (Cards | Columns is a `view_preferences` row). Every paid button is a
-  `generations` row with its credits held in the same statement (`credit_ledger`, computed
-  balance); the model is Gemini through `lib/production/pipeline/`, named only in
-  `MODEL_REGISTRY`. The shot table is `reel_shots` - `shots` is the Storyboard's. Its
-  `README.md` lists every deviation; `pnpm --filter @folio/db seed:production -- --user <email>`
-  writes a project in every state the mockup draws.
+- **Production is v12** (built 2026-09-22 from the handoff in `docs/production/`; migration
+  `0025` dropped v1). Tiers (`Draft · Standard · Cinema`), never model names, in UI or schema;
+  every generation a `generations` row with its cost named before it is spent, reserved on the
+  shared `credit_ledger`. **`reel_shots` is Production's shot table; `shots` is the
+  Storyboard's.** Scenes are keyed by `scene_node_id`; cast and lines are derived at read time.
 - **Optional env**: `ANTHROPIC_API_KEY` (assistant composer draws disabled without it; model id is
-  `lib/assistant/model.ts`, not env), `GEMINI_API_KEY` (Production's generate buttons draw
-  disconnected without it) and the `R2_*` block (portraits, photos, Production media).
+  `lib/assistant/model.ts`, not env), `GEMINI_API_KEY` (every Production generate button draws
+  disabled without it; `✦ AI Shotlist` falls back to the rule-based proposal) and the `R2_*`
+  block (portraits, photos, frames, Production media — the image and video buttons need both).
 
 **Nothing needs a live database** to typecheck, lint, build or unit-test. Signed-in E2E walks
 (`apps/web/e2e/*-route.spec.ts`) need `E2E_EMAIL`/`E2E_PASSWORD` and skip without them;
-`E2E_PORT` points them at a running dev server (default 3210).
+`E2E_PORT` points them at a running dev server (default 3210); `E2E_PRODUCTION_URL` points the
+Production walk at a seeded project.
 
 ## Commands
 
@@ -111,8 +127,9 @@ pnpm test:e2e    # Playwright, web only
 
 pnpm --filter @folio/script exec vitest run src/paginate.test.ts    # one file
 pnpm --filter @folio/script exec vitest run -t "the first id wins"  # one test
-pnpm --filter web exec vitest run tests/production-status.test.ts   # one web test (Node >=22.12)
+pnpm --filter web exec vitest run tests/production-derive.test.ts   # one web test (Node >=22.12)
 pnpm --filter @folio/db db:generate | db:migrate | db:check          # drizzle-kit
+pnpm --filter @folio/db seed:production -- --user <email>            # a dev project in every Production state
 ```
 
 Traps that produce a false reading:
@@ -125,6 +142,8 @@ Traps that produce a false reading:
 4. **Windows: vitest prints an `EPERM` forks-worker stack after a passing run.** Read the counts.
 5. **Git Bash mangles `//#lint:root` into a path.** `pnpm lint` is fine; prefix
    `MSYS_NO_PATHCONV=1` when using `turbo run` for that task.
+6. **`db:migrate` hides the failing statement** — run `drizzle-orm/postgres-js/migrator` directly
+   to see it (`packages/db/CLAUDE.md`).
 
 ## Rules the config enforces
 

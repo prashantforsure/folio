@@ -1,14 +1,14 @@
 'use client'
 
 import type { ProjectCard } from '@folio/contracts'
-import { Glyph } from '@folio/ui'
 import { useActionState, useId, useRef } from 'react'
 import { useFormStatus } from 'react-dom'
 
+import { relativeTime } from '../../../../../lib/format/relative-time'
 import { purgeProject, restoreProject } from '../../../../../lib/projects/actions'
-import { KIND_GLYPH } from '../../../../../lib/projects/labels'
 import { IDLE } from '../../../../../lib/projects/result'
-import { EditedFooter, ProjectKindLine, ProjectMeta } from '../_projects/project-card'
+import { kindLine, statsLine } from '../../../../../lib/projects/view'
+import { ProjectPreview } from '../_projects/project-preview'
 
 /**
  * One trashed project: what it was, when it was trashed, and the two ways out.
@@ -52,14 +52,14 @@ const Button = ({
   const { pending } = useFormStatus()
   const toneClass =
     tone === 'danger'
-      ? 'border-line2 text-ink3 hover:bg-del-bg hover:text-del'
+      ? 'border-line2 text-ink3 hover:bg-live-bg hover:text-live'
       : 'border-line2 text-ink2 hover:bg-hover hover:text-ink'
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={pending}
-      className={`cursor-pointer rounded-chrome border bg-transparent px-[10px] py-[4px] text-11 disabled:cursor-default disabled:opacity-60 ${toneClass}`}
+      className={`cursor-pointer rounded-[9px] border bg-transparent px-[11px] py-[5px] text-11-5 disabled:cursor-default disabled:opacity-60 ${toneClass}`}
     >
       {pending && type === 'submit' ? 'Working…' : children}
     </button>
@@ -74,16 +74,26 @@ export const TrashRow = ({ card, nowMs }: { readonly card: ProjectCard; readonly
   const { project } = card
   const now = new Date(nowMs)
 
+  const trashedAt = project.trashedAt ?? project.updatedAt
+
   return (
-    <li className="flex flex-col gap-[7px] border-b border-line2 py-[10px]">
-      <div className="flex items-start gap-[12px]">
-        <Glyph name={KIND_GLYPH[project.kind]} className="mt-[3px] w-[13px] text-center text-ink3" style={{ fontSize: 11 }} />
-        <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
-          <span className="truncate font-serif text-15 font-medium leading-[1.25] tracking-title">
-            {project.title}
+    <li className="flex flex-col gap-[7px] rounded-card border border-line2 bg-s1 p-[12px]">
+      <div className="flex items-start gap-[13px]">
+        <span className="w-[92px] flex-none overflow-hidden rounded-[8px] border border-line2">
+          <span className="block scale-[.65] [transform-origin:top_left] [width:142px]">
+            <ProjectPreview card={card} />
           </span>
-          <ProjectKindLine card={card} />
-          <ProjectMeta card={card} />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
+          <span className="truncate text-15 font-medium leading-[1.25] tracking-title">{project.title}</span>
+          <span className="folio-eyebrow text-10-5">{kindLine(card)}</span>
+          <span className="tabular font-mono text-10-5 text-ink3">{statsLine(card)}</span>
+          <span className="text-11-5 text-ink3">
+            Trashed{' '}
+            <time dateTime={trashedAt} title={new Date(trashedAt).toISOString()}>
+              {relativeTime(trashedAt, now)}
+            </time>
+          </span>
         </div>
 
         <form action={restoreAction} className="flex items-center gap-[8px]">
@@ -103,23 +113,19 @@ export const TrashRow = ({ card, nowMs }: { readonly card: ProjectCard; readonly
       </div>
 
       {restoreResult.status === 'error' ? (
-        <p role="alert" className="m-0 pl-[25px] text-10-5 text-del">
+        <p role="alert" className="m-0 text-10-5 text-live">
           {restoreResult.message}
         </p>
       ) : null}
 
-      <div className="pl-[25px]">
-        <EditedFooter iso={project.trashedAt ?? project.updatedAt} now={now} verb="Trashed" />
-      </div>
-
       <dialog
         ref={dialog}
         aria-labelledby={titleId}
-        className="m-auto w-[min(440px,92vw)] rounded-chrome border border-line bg-panel p-0 text-ink backdrop:bg-scrim"
+        className="m-auto w-[min(440px,92vw)] rounded-panel border border-line bg-bg p-0 text-ink backdrop:bg-scrim"
       >
         <form action={purgeAction} className="flex flex-col">
           <div className="flex flex-col gap-[8px] px-[16px] pb-[12px] pt-[14px]">
-            <h2 id={titleId} className="m-0 font-serif text-15 font-medium tracking-title">
+            <h2 id={titleId} className="m-0 text-15 font-medium tracking-title">
               Delete “{project.title}” forever?
             </h2>
             <p className="m-0 text-11-5 leading-[1.55] text-ink2">
@@ -129,7 +135,7 @@ export const TrashRow = ({ card, nowMs }: { readonly card: ProjectCard; readonly
             {purgeResult.status === 'error' ? (
               <p
                 role="alert"
-                className="m-0 rounded-chrome border border-note-bg bg-note-bg px-[9px] py-[7px] text-11 leading-[1.5] text-ink"
+                className="m-0 rounded-[9px] border border-warn-bg bg-warn-bg px-[9px] py-[7px] text-11 leading-[1.5] text-ink"
               >
                 {purgeResult.message}
               </p>

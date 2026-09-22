@@ -37,10 +37,12 @@ export const toProject = (row: ProjectRow): Project => ({
   pageMode: row.pageMode,
   liveRepaginate: row.liveRepaginate,
   tags: row.tags,
+  logline: row.logline,
   createdBy: row.createdBy as UserId,
   createdAt: stamp(row.createdAt),
   updatedAt: stamp(row.updatedAt),
   trashedAt: stampOrNull(row.trashedAt),
+  archivedAt: stampOrNull(row.archivedAt),
 })
 
 export const toEpisode = (row: EpisodeRow): Episode => ({
@@ -103,6 +105,37 @@ export const restoreProject = async (scope: ProjectScope): Promise<void> => {
   await dbOf(scope)
     .update(projects)
     .set({ trashedAt: null, updatedAt: new Date() })
+    .where(scoped(scope, projects))
+}
+
+/**
+ * Put a project out of the way, or bring it back (`archived_at`, `0029`).
+ *
+ * Archiving is not trashing and does not touch `trashed_at`: an archived
+ * project is finished work the writer does not want in the main list, and it
+ * stays listed under its own filter, stays openable, and keeps its ledger.
+ * The Projects route's `Archive` and `Unarchive` are these two.
+ *
+ * `updatedAt` moves, because the card's `Edited` line is the later of this row
+ * and its documents and the writer did just change something about it.
+ */
+export const setProjectArchived = async (scope: ProjectScope, archived: boolean): Promise<void> => {
+  const now = new Date()
+  await dbOf(scope)
+    .update(projects)
+    .set({ archivedAt: archived ? now : null, updatedAt: now })
+    .where(scoped(scope, projects))
+}
+
+/**
+ * Set or clear the logline - the writer's sentence about the project
+ * (`logline`, `0029`). An empty box clears it: the column is nullable and the
+ * card leaves the line out, rather than printing an empty paragraph.
+ */
+export const setProjectLogline = async (scope: ProjectScope, logline: string | null): Promise<void> => {
+  await dbOf(scope)
+    .update(projects)
+    .set({ logline, updatedAt: new Date() })
     .where(scoped(scope, projects))
 }
 

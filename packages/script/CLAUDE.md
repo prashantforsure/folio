@@ -49,8 +49,8 @@ holds locked pages and the colours.
 
 - **`resolveSheet('asian')` refuses** — open decision 8 (A4 width) is unruled; it returns both
   candidate widths as evidence. Do not give it a default.
-- **`LINES_PER_INCH = 6` is one constant, ruled 2026-09-11** — the ruling is in
-  `docs/build-decisions.md`, "Script route phase". Re-ruling is a one-line change plus a golden
+- **`LINES_PER_INCH = 6` is one constant, ruled 2026-09-11** (the Script route pass, against the
+  then-design's sheet; AGENTS.md, Pagination). Re-ruling is a one-line change plus a golden
   regeneration and moves page counts by roughly 2×. It needs a human.
 - **Golden page maps are a contract; there is no `-u`.** On a mismatch
   [golden-page-map.test.ts](src/golden-page-map.test.ts) prints the full replacement JSON and

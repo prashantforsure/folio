@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { ACCOUNT_SETTINGS, SIDEBAR, TRASH } from '../app/(app)/_shell/nav'
+import { HOME_NAV, PROJECTS } from '../app/(app)/_shell/home-nav'
+import { ACCOUNT_SETTINGS, TRASH } from '../app/(app)/_shell/nav'
 import { AI_SCOPES } from '../lib/state/ephemeral'
 import { DEFAULT_PROJECT_PAGINATION, PAGE_MODES } from '../lib/state/project-preferences'
 import { useSession } from '../lib/state/session'
@@ -13,53 +14,51 @@ import { useSession } from '../lib/state/session'
  * asserted rather than trusted to a comment.
  */
 
-describe('the sidebar', () => {
-  it('is exactly four items, in this order', () => {
-    expect(SIDEBAR.map((item) => item.label)).toEqual([
-      'New',
-      'Recents',
-      'Screenwriting',
-      'Filmmaking',
-    ])
+describe('the home sidebar', () => {
+  it('is exactly four rows, in this order', () => {
+    // The account routes pass (2026-09-22) replaced Recents · Screenwriting ·
+    // Filmmaking with one Projects route, and brought Trash and Settings in
+    // from the header and the avatar menu. Four rows either way.
+    expect(HOME_NAV.map((item) => item.label)).toEqual(['New', 'Projects', 'Trash', 'Settings'])
   })
 
   it('points each one at its route under the /app prefix', () => {
     // AGENTS.md, Routing: "Everything under `/app/`. One prefix for the
     // signed-in product."
-    expect(SIDEBAR.map((item) => item.href)).toEqual([
+    expect(HOME_NAV.map((item) => item.href)).toEqual([
       '/app/new',
-      '/app/recents',
-      '/app/screenwriting',
-      '/app/filmmaking',
+      PROJECTS,
+      TRASH,
+      ACCOUNT_SETTINGS,
+    ])
+    expect(PROJECTS).toBe('/app/projects')
+  })
+
+  it('counts only the Projects row, and it is a live count', () => {
+    // AGENTS.md, UI fidelity: "Badges are live counts, never placeholders."
+    // The badge is a number the layout reads; the table only says which row
+    // carries one.
+    expect(HOME_NAV.filter((item) => item.counted === true).map((item) => item.label)).toEqual([
+      'Projects',
     ])
   })
 
-  it('does not carry Trash or Account settings', () => {
-    // Trash is reached from the project list; account settings from the avatar
-    // menu. Neither is a sidebar item.
-    const labels = SIDEBAR.map((item) => item.label.toLowerCase())
-    expect(labels).not.toContain('trash')
-    expect(labels).not.toContain('settings')
-    expect(labels).not.toContain('account settings')
-    expect(SIDEBAR.map((item) => item.href)).not.toContain(ACCOUNT_SETTINGS)
-  })
-
   it('does not carry anything AGENTS.md cut', () => {
-    // "Cut, do not build: Community, writing leaderboard, activity heatmap,
-    // sidebar credits card." Credits belong in the Production header.
-    const labels = SIDEBAR.map((item) => item.label.toLowerCase())
-    for (const cut of ['community', 'leaderboard', 'heatmap', 'credits']) {
+    // "Cut, do not build: Community, writing leaderboard, activity heatmap."
+    const labels = HOME_NAV.map((item) => item.label.toLowerCase())
+    for (const cut of ['community', 'leaderboard', 'heatmap']) {
       expect(labels).not.toContain(cut)
     }
   })
 
-  it('keeps Trash off the sidebar even now that it exists', () => {
-    // The route landed with the shell routes; the sidebar stayed four items.
-    // Trash is reached from the project list header.
-    expect(SIDEBAR.map((item) => item.href)).not.toContain(TRASH)
-    expect(TRASH).toBe('/app/trash')
+  it('leaves the three old list routes out of the nav, redirect or not', () => {
+    const hrefs = HOME_NAV.map((item) => String(item.href))
+    for (const gone of ['/app/recents', '/app/screenwriting', '/app/filmmaking']) {
+      expect(hrefs).not.toContain(gone)
+    }
   })
 })
+
 
 describe('session state', () => {
   it('starts panels at null, which means automatic rather than closed', () => {

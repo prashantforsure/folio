@@ -5983,3 +5983,293 @@ html[data-nav-open='false'] [data-context-column] {
     transition: none !important;
   }
 }
+
+/*
+ * The account shell and its three routes - Projects, New and Settings
+ * (2026-09-22). The handoff in `handoff-account-v2/` is their spec: a 238px
+ * sidebar beside the 60px header and the surface card, the same tokens as
+ * every other route, and the controls below.
+ *
+ * Two names in the handoff are already taken in this palette and are mapped
+ * rather than redeclared: its `--sheet` / `--sheet-ink` (the card's little
+ * script page) are this app's `--sunk` / `--read`, because `--sheet` here is
+ * an alias the unrebuilt routes still read. Nothing else is new colour.
+ *
+ *   .folio-chip           a filter chip: 28px pill, hairline, `--s2` while
+ *                         pressed. Carries its own live count.
+ *   .folio-pill-group     the handoff's segmented control - a `--s2` tray with
+ *                         `--bg` under the selected button. `.folio-segment`
+ *                         above is the older routes' and looks different.
+ *   .folio-switch         the settings toggle, 36x21 over `--accent`.
+ *   .folio-project-card   a card on the Projects grid; `--ink3` border on
+ *                         hover, `--accent` while selected.
+ *   .folio-page-preview   the card's script page: mono, `--sunk`, a gradient
+ *                         fade at its foot.
+ *   .folio-frame-preview  the 16:9 placeholder for a project with no script
+ *                         page to show - the Storyboard's frame gradient.
+ *   .folio-list-row       one row of the list view, on a shared grid.
+ */
+@layer components {
+  .folio-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 11px;
+    background: transparent;
+    border: 1px solid var(--line2);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: var(--text-12);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-chip:hover {
+    border-color: var(--ink3);
+    color: var(--ink);
+  }
+
+  .folio-chip[aria-pressed='true'] {
+    background: var(--s2);
+    border-color: var(--line);
+    color: var(--ink);
+  }
+
+  .folio-chip-count {
+    font-family: var(--font-mono);
+    font-size: var(--text-10-5);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink3);
+  }
+
+  .folio-chip[aria-pressed='true'] .folio-chip-count {
+    color: var(--ink2);
+  }
+
+  .folio-pill-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: var(--s2);
+    border-radius: 10px;
+  }
+
+  .folio-pill-group > button {
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 11px;
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: var(--text-12);
+    color: var(--ink3);
+    white-space: nowrap;
+  }
+
+  .folio-pill-group > button:hover:not(:disabled) {
+    color: var(--ink2);
+  }
+
+  .folio-pill-group > button[aria-pressed='true'] {
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  .folio-pill-group > button:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  .folio-switch {
+    flex: none;
+    width: 36px;
+    height: 21px;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .folio-switch[aria-checked='true'] {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .folio-switch:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  .folio-switch-knob {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--ink3);
+    transform: translateX(0);
+    transition: transform 0.15s, background 0.15s;
+  }
+
+  .folio-switch[aria-checked='true'] .folio-switch-knob {
+    background: var(--bg);
+    transform: translateX(15px);
+  }
+
+  .folio-project-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+    border: 1px solid var(--line2);
+    border-radius: 15px;
+    background: var(--s1);
+    overflow: hidden;
+    text-align: left;
+  }
+
+  .folio-project-card:hover {
+    border-color: var(--ink3);
+  }
+
+  .folio-project-card[data-selected='true'] {
+    border-color: var(--accent);
+  }
+
+  .folio-project-open {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .folio-project-open:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--focus);
+  }
+
+  .folio-page-preview {
+    position: relative;
+    height: 142px;
+    flex: none;
+    padding: 20px 22px 0;
+    background: var(--sunk);
+    color: var(--read);
+    border-bottom: 1px solid var(--line2);
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: var(--text-9);
+    line-height: 1.55;
+  }
+
+  .folio-page-preview::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 54px;
+    background: linear-gradient(transparent, var(--sunk));
+  }
+
+  .folio-page-line {
+    display: block;
+    margin-top: 7px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .folio-page-line[data-line='scene'],
+  .folio-page-line[data-line='character'],
+  .folio-page-line[data-line='transition'] {
+    text-transform: uppercase;
+  }
+
+  .folio-page-line[data-line='character'] {
+    padding-left: 38%;
+  }
+
+  .folio-page-line[data-line='dialogue'] {
+    margin-top: 0;
+    padding-left: 18%;
+    padding-right: 16%;
+  }
+
+  .folio-page-line[data-line='paren'] {
+    margin-top: 0;
+    padding-left: 30%;
+  }
+
+  .folio-page-line[data-line='subtitle'],
+  .folio-page-line[data-line='comment'] {
+    padding-left: 10%;
+    font-style: italic;
+  }
+
+  .folio-page-line[data-line='transition'] {
+    text-align: right;
+  }
+
+  .folio-page-line:first-of-type {
+    margin-top: 0;
+  }
+
+  .folio-frame-preview {
+    position: relative;
+    height: 142px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(160deg, var(--frame-a), var(--frame-b));
+    border-bottom: 1px solid var(--line2);
+  }
+
+  .folio-list-row {
+    display: grid;
+    grid-template-columns: 28px minmax(200px, 2.4fr) 116px 104px 84px 92px 104px 34px;
+    gap: 12px;
+    align-items: center;
+    min-width: 860px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line2);
+  }
+
+  .folio-list-row[data-selected='true'] {
+    background: var(--accent-bg);
+  }
+
+  .folio-list-row:not([data-head='true']):hover {
+    background: var(--hover);
+  }
+
+  .folio-checkbox {
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    background: var(--s2);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    cursor: pointer;
+    color: transparent;
+    font-size: var(--text-10);
+  }
+
+  .folio-checkbox[aria-checked='true'] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+
+}

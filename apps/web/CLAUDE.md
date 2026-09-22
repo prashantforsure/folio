@@ -6,29 +6,67 @@ Loads when you work in this directory. Root `CLAUDE.md` still applies.
 
 Before touching auth or reaching for a Supabase client, read
 [lib/auth/NO-BROWSER-CLIENT.md](lib/auth/NO-BROWSER-CLIENT.md). Before putting anything in a
-client store, read [lib/state/README.md](lib/state/README.md). Before building a route, read
-that route's section in [docs/build-decisions.md](../../docs/build-decisions.md) - the v2 design
-package was deleted by the client on 2026-09-20 and is not to be read from git history; the built
-routes and `packages/ui/src/tokens/` are the pattern.
+client store, read [lib/state/README.md](lib/state/README.md). Before building a route, read its
+paragraph below and the route as built - the v2 design package was deleted by the client on
+2026-09-20 and is not to be read from git history, and `docs/build-decisions.md` (the written
+route record) was deleted on 2026-09-22; the built routes and `packages/ui/src/tokens/` are the
+pattern, and Production alone has a spec on disk (`docs/production/`).
 
-- **State:** Google OAuth **and** email + password (AGENTS.md Constraints was rewritten for this —
-  `docs/build-decisions.md`), session in Server Components, route protection in two places. Two
+- **State:** Google OAuth **and** email + password (AGENTS.md Constraints was rewritten for
+  this), session in Server Components, route protection in two places. Two
   shells under one boundary: [app/(app)/layout.tsx](app/(app)/layout.tsx) is `requireUser()` and
   the frame; [app/(app)/app/(home)/layout.tsx](app/(app)/app/(home)/layout.tsx) draws the
-  four-item sidebar for the six list routes (three views over one query in `_projects/`, plus
-  `new`, `trash`, `settings`); [app/(app)/app/project/[projectId]/layout.tsx](app/(app)/app/project/[projectId]/layout.tsx)
+  **238px account sidebar** for the four account routes (`new`, `projects`, `trash`, `settings`,
+  plus three redirects) and reads the two live numbers it prints;
+  [app/(app)/app/project/[projectId]/layout.tsx](app/(app)/app/project/[projectId]/layout.tsx)
   draws the workspace shell through `_chrome/project-shell.tsx` (56px rail, the assistant panel), and `_chrome/writing-layout.tsx` the 236px sidebar, 60px header and
-  main-surface card for the four writing routes. Seven of the nine workspace routes have bodies
-  (root `CLAUDE.md`, Repository map).
+  main-surface card for the four writing routes. All nine workspace routes have bodies (root
+  `CLAUDE.md`, Repository map).
+- **The account routes (2026-09-22, the client's `handoff-account-v2/` - supplied with the brief,
+  never committed; the routes as built and this paragraph are the spec):** the shell is
+  `_shell/home-sidebar.tsx` (the workspace header with a disabled switcher, `home-nav.ts`'s four
+  rows with a live count on Projects, the scrolling middle, `credits-card.tsx`, `account-menu.tsx`)
+  beside `_shell/route-frame.tsx` (the 60px breadcrumb header with the round theme toggle, then
+  `.folio-surface`; `scroll={false}` when a route lays the panel out itself). `_shell/sidebar.tsx`
+  and `nav.ts`'s `SIDEBAR` went with it; `nav.ts` keeps the two shared paths.
+  **Projects** (`(home)/projects/page.tsx` + `_projects/`) is one query - `listProjectsFor` with
+  `kind: 'all'`, which now also reads each project's members, its first blocks of script and its
+  live generation count - over `projects-workspace.tsx`: chips, sort, grid/list, selection and
+  every write, all client state (AGENTS.md's exception table), with `project-card.tsx`,
+  `project-row.tsx`, `project-preview.tsx` and `card-menu.tsx` drawing. `lib/projects/view.ts` is
+  the pure half (filters, counts, sort, stage, the stats line), tested in
+  `tests/projects-view.test.ts`. **New** (`(home)/new/`) is `compose-new.tsx` or `first-run.tsx`,
+  decided by the project count: the compose box collects the **logline** and opens
+  `new-project-dialog.tsx` (the one creation form, also behind the grid's dashed card), and the
+  first-run card walks the three axes with the progress bar reading how many are answered.
+  **Settings** (`(home)/settings/`) is `settings-workspace.tsx` over `lib/settings/sections.ts`'s
+  seven sections, with `profile-form.tsx` and `security-section.tsx` split out; the writes are
+  `lib/settings/actions.ts`. Deviations from the handoff, each drawn rather than dropped:
+  `Duplicate` refuses (open decision 15), `Pin to sidebar` and `Export PDF` are disabled (nothing
+  to pin to; no PDF engine), `Delete` is `Move to trash` (deleting for good is the Trash route's
+  refusal), the card's stage and chips are derived from what exists (no draft numbers, no
+  schedule), the plan tiers carry no prices (nothing is wired to Dodo), the editor and
+  notification toggles are disabled with the reason on each (no per-person store; no mail
+  provider), Collaborators has no invite field (an invite is a project's share link) and no
+  permission table (roles are enforced nowhere - open decision 16), and there is no device list
+  (Supabase does not expose one user's sessions; `Sign out everywhere` is `scope: 'global'`).
+  Traps: the dialogs are native `<dialog>` elements with `showModal()`, not the workspace's
+  portal `Modal`, so Escape, the backdrop and the focus trap are the browser's; `useDismiss` moved
+  to `lib/chrome/use-dismiss.ts` and the workspace path re-exports it; and **a `'use server'`
+  module may export nothing but async functions** - `lib/settings/actions.ts` briefly exported its
+  idle constant, which typechecked, linted and built and then 500'd on every post ("A 'use server'
+  file can only export async functions, found object"). The constants live in a sibling
+  `result.ts`, as `lib/projects/` and `lib/auth/` already had them. Only a browser walk finds it.
 - **The header's centre is the route's views (2026-09-17).** `lib/workspace/views.ts` is the
   table (one row per route, typed against `SUB_VIEW_SCHEMAS`, `label`/`title`/`icon`);
   `_chrome/header-views.tsx` reads `?view=` with `useSearchParams` and draws `_chrome/view-pill.tsx`
-  in `WritingHeader`'s centre slot; Characters hands the header its own state-driven tabs as
-  `views`, and the header draws the Storyboard's (`_storyboard/view-state.tsx`, a cell the
-  workspace also reads - ruled 2026-09-17, the Characters ruling again) itself on that segment,
-  since the shared writing layout cannot hand them in. Route toolbars draw no view switcher, and
-  `SIDEBAR` is Script · Storyboard · Outline · Scenes. Trap: a new `?view=` value needs a row in
-  `ROUTE_VIEWS` or `tests/workspace-routes.test.ts` fails (it asserts the table against the schemas).
+  in `WritingHeader`'s centre slot. Research is the only route with a `?view=` row left: the
+  record routes with a layout of their own (Characters, Locations, Timeline) hand the header
+  their state-driven tabs as `views`, and the header draws the Storyboard's and Scenes' cells
+  (`_<route>/view-state.tsx`) itself on those segments, since the shared writing layout cannot
+  hand them in. Route toolbars draw no view switcher, and `SIDEBAR` is Script · Storyboard ·
+  Outline · Scenes. Trap: a new `?view=` value needs a row in `ROUTE_VIEWS` or
+  `tests/workspace-routes.test.ts` fails (it asserts the table against the schemas).
 - **The shell owns `html[data-nav-open]`.** Route bodies read `useSession().navOpen` for their own
   geometry and never write the attribute; `useViewport()` (`lib/state/viewport.ts`) is the one
   resize listener. Below 1200px an open assistant panel forces the sidebar closed there.
@@ -62,15 +100,14 @@ routes and `packages/ui/src/tokens/` are the pattern.
   `Boards drawn` widget (`_chrome/sidebar-group.tsx`, `_chrome/sidebar-widget.tsx`) read the cell
   the workspace publishes (`lib/storyboard/coverage.ts`), seeded by `readBoardCoverage`; every
   derived count and colour is `lib/storyboard/board.ts`, pure and tested. Toolbar dropdowns share
-  `_chrome/use-dismiss.ts`. Details: `docs/build-decisions.md`, "Redesign phase 3".
+  `_chrome/use-dismiss.ts`.
 - **The Storyboard canvas (2026-09-17)** is a free surface: `_storyboard/canvas/` holds the view,
   the viewport hook (pan by pointer capture, zoom by ctrl/cmd + wheel), the SVG threads, the card
   with its `Storyboard | Lens` tabs, the lens selects and the `⋯` menu; every number it needs is
   `lib/storyboard/canvas.ts`, pure and tested. A card's position is `shots.canvas_x` / `canvas_y`
   (migration `0020`), cosmetic - the thread and the number follow `order_key`. Trap: the ground's
   `wheel` listener is added by hand with `{ passive: false }`; React's `onWheel` is passive and
-  `preventDefault` there does nothing. Details: `docs/build-decisions.md`, "Redesign phase 3,
-  second pass".
+  `preventDefault` there does nothing.
 - **The Scenes route (v2, 2026-09-17):** `_scenes/scene-workspace.tsx` is the body - a toolbar row
   (the selected scene, `N scenes · N pages`), the banners, one of `canvas/scene-canvas.tsx`
   (Cards), `index-view.tsx` or `list-view.tsx`, and two dialogs portalled to `body`:
@@ -85,8 +122,7 @@ routes and `packages/ui/src/tokens/` are the pattern.
   the body share, `_scenes/scenes-main.tsx` the route's own `<main data-sub-view>` that resets it
   on unmount, `_scenes/scenes-route.tsx` the server entry both `scenes/page.tsx` files render
   after `enterEpisodeRoute` - the Storyboard's shape. `_chrome/route-shell.tsx` and
-  `episode-route-page.tsx` went with it (Scenes was their last route). Details:
-  `docs/build-decisions.md`, "Redesign phase 8" and its second pass.
+  `episode-route-page.tsx` went with it (Scenes was their last route).
 - **The Research route (v2, 2026-09-16):** `_research/research-workspace.tsx` is the body -
   toolbar (the shared `_chrome/record-toolbar.tsx` pieces; the views are the header's), one of Library /
   Source / Clips or the empty card, the status bar - and `_chrome/research-layout.tsx` the shell
@@ -96,7 +132,7 @@ routes and `packages/ui/src/tokens/` are the pattern.
   (`/research/:sourceId`); a clip is cut from a text selection in `source-view.tsx` and found
   again by text (`lib/research/view.ts`, `highlightParagraphs`); a filing points at a scene by
   its heading node id with no key. Everything the route reads is one `cache()`d `loadResearch`.
-  Details: `docs/build-decisions.md`, "Redesign phase 7".
+  The only route still on `?view=` (`library | source | clips`).
 - **The Locations route (rebuilt 2026-09-18, the plan is the spec):** `_locations/locations-workspace.tsx`
   is the body - toolbar (count chip, status filter), one of `places-view.tsx` (the queue, then cards
   on `.folio-record-card` with sub-sets drawn inside their parent's card), `scenes-view.tsx` (one
@@ -138,8 +174,7 @@ routes and `packages/ui/src/tokens/` are the pattern.
   `reopenFinding` on `timeline_findings`, `0023`). Traps: the drawer's draft is keyed on the
   scene id and never reset from props; a card's id is readable on drop, not during the drag, so
   the workspace decides what a drop writes; the check's thresholds are constants in
-  `continuity.ts`, not rulings. Details: `docs/build-decisions.md`, "Timeline rebuild, phases 2-5"
-  and "phase 1".
+  `continuity.ts`, not rulings.
 - **The Characters route (the fourth pass, 2026-09-20 - laper.ai's shape by the client's
   ruling; the Relationships graph removed again 2026-09-21 - the canvas's own threads already
   show a relationship between two cards, so the graph was a redundant second view of it):**
@@ -179,8 +214,27 @@ routes and `packages/ui/src/tokens/` are the pattern.
   relationships.ts` sorts a pair and reads a row from either side; `facts.ts` publishes the open
   record, the no-description and the no-relationship lists for the assistant's report chips.
   `lib/characters/heal.ts` binds the name's cue to a record that has none on the next derive.
-  Details: `docs/build-decisions.md`, "Characters, fourth pass" and "Characters, relationships
-  view removed"; the third pass's "Characters rebuild" is history.
+- **The Production route (v12, 2026-09-22 - `docs/production/production.md` is the spec, the
+  mockup beside it clicked through, never imported; where they disagree the spec wins):**
+  `_production/` is one component per file over `_chrome/production-layout.tsx` (the header
+  gets `views={null}`; `Cards | Columns` is a `view_preferences` row, not a tab). The load is
+  `lib/production/server.ts` (`loadProduction`, `cache()`d, over `readProductionEpisode` in
+  `packages/db/src/repositories/production.ts`); authoring is `actions.ts`, the paid jobs
+  `generate.ts`, the derived values `derive.ts` (pure, tested), and `pipeline/` the
+  provider-neutral `spec.ts`, the Gemini client (`gemini.ts`, over `fetch`), the `after()`
+  runner and `shotlist.ts` (the model's shotlist read strictly). The page polls every 3 s while a generation
+  is live; there is no worker. Tables are `0026`'s on the spec's vocabulary - **`reel_shots`, not
+  `shots`** (the Storyboard's), scenes keyed by `scene_node_id` with cast and lines derived at
+  read time - plus `0027` (`reference_asset_ids`) and `0028` (`duration_s` 1–15); credits reuse
+  `credit_ledger` (the generation id in `job_id`). Every cost, every enum and `MODEL_REGISTRY`
+  are `packages/contracts/src/production.ts`; the tokens are `palette.css`'s
+  `[data-production-root]` block and `.folio-prod-*` in `app/globals.css`. Traps: without
+  `GEMINI_API_KEY` every generate button is drawn disabled and `✦ AI Shotlist` falls back to the
+  rule-based proposal and says so; image and video outputs also need `R2_*`; Veo is not on the
+  free tier, so a shoot the key cannot run lands in `failed` and refunds. The stale rules and the
+  unpriced costs are provisional (open decision 14; the README's "Implementation" table).
+  `pnpm --filter @folio/db seed:production -- --user <email>` writes a project in every state the
+  walk (`e2e/production-route.spec.ts`, `E2E_PRODUCTION_URL`) expects.
 - **The Script autosave is a delta and every write it runs is one statement.** Over the
   transaction pooler a parameterised statement costs two round trips and cannot be pipelined
   (`packages/db/src/client.ts`), so on the request path the cost is statement count, not row
@@ -191,8 +245,7 @@ routes and `packages/ui/src/tokens/` are the pattern.
   the one boundary each to its node list; the chrome reads store slices (`editor-store.ts`,
   `outline-store.ts`), never the editor value. The Outline reuses the Script's framework pieces -
   the `@mention` atom and its combobox, the identity plugin, the handles, the floating layer, the
-  slice cell, the thread cards - and shares no block node with it. Details: `docs/build-decisions.md`,
-  "Redesign phase 1" and "Redesign phase 2".
+  slice cell, the thread cards - and shares no block node with it.
 - **Every episode segment goes through `parseEpisodeSegment`** (`@folio/contracts`) in
   `[episodeId]/layout.tsx` before any lookup. Do not add a route that reads `params.episodeId`
   without it.

@@ -24,8 +24,8 @@ test.describe('route protection', () => {
   })
 
   test('a deep link under /app is preserved through the bounce', async ({ page }) => {
-    await page.goto('/app/screenwriting')
-    await expect(page).toHaveURL(/\/sign-in\?next=%2Fapp%2Fscreenwriting/)
+    await page.goto('/app/projects')
+    await expect(page).toHaveURL(/\/sign-in\?next=%2Fapp%2Fprojects/)
   })
 
   test('/ forwards a signed-out visitor to sign-in', async ({ page }) => {
