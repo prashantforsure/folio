@@ -53,6 +53,13 @@ export type WalkOptions = {
    * Iteration only; the full walk runs with it unset.
    */
   readonly scriptProjectUrl: string | null
+  /**
+   * A seeded Production-route URL (`pnpm --filter @folio/db seed:production`) for
+   * `production-route.spec.ts` to walk the five mockup states on (`E2E_PRODUCTION_URL`).
+   * Those states need a rendered reel and a refused shot, which only the seed can
+   * write; without it the spec still walks everything a fresh project can reach.
+   */
+  readonly productionUrl: string | null
 }
 
 const EMAIL = process.env['E2E_EMAIL']
@@ -62,6 +69,9 @@ const ACCOUNT: WalkOptions['account'] =
 
 /** Both set: the signed-in walk runs and the dev server keeps its real `.env`. */
 const SCRIPT_URL = process.env['E2E_SCRIPT_URL'] ?? null
+
+/** The seeded Production route, when `E2E_PRODUCTION_URL` names one. */
+const PRODUCTION_URL = process.env['E2E_PRODUCTION_URL'] ?? null
 
 /** Both set: the signed-in walk runs and the dev server keeps its real `.env`. */
 const SIGNED_IN_WALK = ACCOUNT !== null
@@ -91,6 +101,7 @@ export default defineConfig<WalkOptions>({
     baseURL: `http://localhost:${String(PORT)}`,
     account: ACCOUNT,
     scriptProjectUrl: SCRIPT_URL,
+    productionUrl: PRODUCTION_URL,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
