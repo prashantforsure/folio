@@ -387,8 +387,12 @@ export default tseslint.config(
   //
   // Node globals are declared rather than pulled from the `globals` package,
   // which is not a dependency and is not worth becoming one for two names.
+  //
+  // `packages/db/scripts/seed-production.mjs` is the dev seed's launcher
+  // (2026-09-22): it reads `process.argv` and `process.execPath`, never
+  // `process.env` - the seed itself reads the environment through `env.ts`.
   {
-    files: ['apps/web/scripts/**/*.mjs'],
+    files: ['apps/web/scripts/**/*.mjs', 'packages/db/scripts/**/*.mjs'],
     languageOptions: {
       globals: { process: 'readonly', console: 'readonly' },
     },
