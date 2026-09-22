@@ -35,7 +35,6 @@ const shot = (id: string, state: ShotRow['state'], frame: FrameState): ShotRow =
   projectId: projectId('p'),
   sceneNodeId: nodeId('scene-1'),
   orderKey: 'a',
-  reelId: null,
   canvasX: null,
   canvasY: null,
   frameUploadUrl: null,

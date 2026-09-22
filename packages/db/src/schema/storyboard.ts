@@ -5,7 +5,6 @@ import { check, index, integer, jsonb, pgEnum, pgTable, text, uniqueIndex, uuid 
 
 import { createdAtColumn, idColumn, orderKeyColumn, projectIdColumn, timestampColumn, updatedAtColumn } from './columns'
 import { creditLedger } from './credits'
-import { reels } from './production'
 import { projects, users } from './tenancy'
 
 /**
@@ -32,12 +31,6 @@ import { projects, users } from './tenancy'
  *
  * `origin` and `state` are "proposed, then accepted": a typed shot is born
  * accepted, and the check below refuses the one pair that would say otherwise.
- *
- * `reel_id` is the Production phase's grouping over the same rows: which
- * reel a shot renders in, null for a shot boarded here and not yet placed.
- * `set null` on delete - removing a reel keeps its shots. The order within
- * a reel is the scene's own `order_key`; a reel adds no second order
- * (`production.ts`).
  *
  * `canvas_x` / `canvas_y` are where the Storyboard canvas last left the
  * shot's card (world px, 2026-09-17 ruling). Position is cosmetic: null means
@@ -77,10 +70,8 @@ import { projects, users } from './tenancy'
  * "Every generation row links to its job and, on failure, to its refund ledger
  * entry." That is the whole table: which shot, which job, where the frame is
  * once there is one, and which `refund` entry made the writer whole if the job
- * failed. A shot's *frame* is the generation the writer kept - `kept_at`, at
- * most one per shot by the partial unique index - or, with none kept, its
- * latest, read with its job; there is no `frame` column on `shots` to drift
- * from it. Every other row is a take the Production route pages through.
+ * failed. A shot's *frame* is its latest generation read with its job; there
+ * is no `frame` column on `shots` to drift from it.
  */
 
 export const shotSizeEnum = pgEnum('shot_size', SHOT_SIZES)
@@ -99,8 +90,6 @@ export const shots = pgTable(
     /** The heading node's id. Not a foreign key - see the header. */
     sceneNodeId: uuid('scene_node_id').notNull(),
     orderKey: orderKeyColumn(),
-    /** The reel this shot renders in. Null until placed. See the header. */
-    reelId: uuid('reel_id').references(() => reels.id, { onDelete: 'set null' }),
     size: shotSizeEnum('size').notNull(),
     movement: shotMovementEnum('movement').notNull(),
     angle: cameraAngleEnum('angle').notNull(),
@@ -121,8 +110,6 @@ export const shots = pgTable(
   (table) => [
     /** The board's read: every shot of a scene, in order. */
     index('shots_project_scene_order_idx').on(table.projectId, table.sceneNodeId, table.orderKey),
-    /** The reel's read: its shots, in the scene's order. */
-    index('shots_reel_order_idx').on(table.reelId, table.orderKey),
     check(
       'shots_lens_and_duration_sane',
       sql`(${table.lensMm} IS NULL OR ${table.lensMm} > 0) AND (${table.durationSeconds} IS NULL OR ${table.durationSeconds} >= 0)`,
@@ -188,18 +175,12 @@ export const frameGenerations = pgTable(
     frameUrl: text('frame_url'),
     /** The `refund` entry when the job failed. Null otherwise. */
     refundEntryId: uuid('refund_entry_id').references(() => creditLedger.id, { onDelete: 'set null' }),
-    /** When the writer kept this take. At most one per shot - see the index. */
-    keptAt: timestampColumn('kept_at'),
     createdAt: createdAtColumn(),
   },
   (table) => [
     /** One generation per job: a job draws one frame. */
     uniqueIndex('frame_generations_job_key').on(table.jobId),
-    /** One kept take per shot. */
-    uniqueIndex('frame_generations_kept_key')
-      .on(table.shotId)
-      .where(sql`${table.keptAt} IS NOT NULL`),
-    /** The frame read: the kept generation, else the latest, for a shot. */
+    /** The frame read: the latest generation for a shot. */
     index('frame_generations_shot_created_idx').on(table.shotId, table.createdAt),
     index('frame_generations_project_idx').on(table.projectId),
   ],

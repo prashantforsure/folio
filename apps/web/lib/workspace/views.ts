@@ -62,10 +62,7 @@ export const ROUTE_VIEWS: { readonly [R in WorkspaceRoute]: readonly ViewTab<Rou
   outline: [],
   storyboard: [],
   scenes: [],
-  production: [
-    { id: 'scene', title: 'Scene' },
-    { id: 'episode', title: 'Episode' },
-  ],
+  production: [],
   characters: [],
   locations: [],
   timeline: [],

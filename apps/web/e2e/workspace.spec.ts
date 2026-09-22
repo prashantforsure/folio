@@ -348,7 +348,6 @@ test('a film routes without an episode segment while still having one episode', 
   await expect(page).toHaveURL(new RegExp(`/app/project/${filmId}/script$`))
   await page.goto(`/app/project/${filmId}/production`)
   await expect(page.locator('main[data-route="production"]')).toBeVisible()
-  await expect(page.locator('aside[data-sidebar] [data-production-scenes]')).toBeVisible()
   await expectRail(page, 'production')
 
   // And the reverse: a collapsed URL on a series goes to its episode.

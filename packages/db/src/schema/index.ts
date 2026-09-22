@@ -41,9 +41,7 @@
  *   credit_ledger                append-only
  *   shots                        a scene does not say how it is shot - keyed by the heading node's id
  *   jobs                         the job row is the status; written by the system on a click
- *   frame_generations            shot to job, and on failure to the refund entry; `kept_at` marks the take the writer chose
- *   reels                        a run of one scene's shots that renders as one clip - keyed by the heading node's id, like shots
- *   reel_renders                 reel to job, and on failure to the refund entry
+ *   frame_generations            shot to job, and on failure to the refund entry
  *   share_links                  the in-app invite: a token, a role, revocable (0016)
  *   assistant_chats              one conversation with the assistant about one episode's script (0016)
  *   assistant_messages           its turns, a person's and the model's
@@ -98,10 +96,11 @@
  * settings `transfer` or `keys`. The last of those is AGENTS.md open decision
  * 7 and was left open on purpose. The rest are out of scope so far. Jobs,
  * generations and storyboard shots were on this list until the Storyboard
- * phase, story threads until the Timeline phase, reels and renders until the
- * Production phase, research sources until the Research v2 pass (2026-09-16);
- * `storyboard.ts`, `timeline.ts`, `production.ts` and `research.ts` say
- * what each now is. Bible entries were also authored here, migration `0012`
+ * phase, story threads until the Timeline phase, research sources until the
+ * Research v2 pass (2026-09-16); `storyboard.ts`, `timeline.ts` and
+ * `research.ts` say what each now is. The Production v1 tables (`reels`,
+ * `reel_renders`, migration `0014`) were dropped by `0025` (2026-09-22) for
+ * the v12 rebuild. Bible entries were also authored here, migration `0012`
  * to `0015` (`docs/build-decisions.md`, "Bible route removed") - the five
  * tables and their three enums are dropped, not orphaned.
  */
@@ -115,7 +114,6 @@ export * from './measurement'
 export * from './derived'
 export * from './credits'
 export * from './storyboard'
-export * from './production'
 export * from './timeline'
 export * from './share'
 export * from './assistant'

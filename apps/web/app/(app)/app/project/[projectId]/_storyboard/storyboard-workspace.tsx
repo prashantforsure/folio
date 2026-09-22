@@ -268,7 +268,7 @@ export const StoryboardWorkspace = ({
           const result = await requestFrame(projectId, episode, shotId)
           if (result.status === 'insufficient') {
             setAvailable(result.available)
-            return `Not enough credits: ${String(result.available)} available, ${String(result.cost)} needed. Credits are bought in the Production header.`
+            return `Not enough credits: ${String(result.available)} available, ${String(result.cost)} needed.`
           }
           if (result.status !== 'queued') return result.message
           const frame: FrameState = result.frame

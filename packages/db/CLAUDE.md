@@ -18,7 +18,7 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0024` are applied to the dev Supabase project** and are forward-only.
+- **Migrations `0000`–`0025` are applied to the dev Supabase project** and are forward-only.
   (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
   pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
   `0000` was reordered once, before it had ever run anywhere ("Shell routes phase" in
@@ -69,16 +69,19 @@ authored / derived-cache / measurement. Touching `episodes` needs
   failed silently twice (the `a < b` check, then the fold's `NOT NULL` on `what`) and only the
   direct migrator showed which statement.
   `character_findings` (`0022`) is orphaned by the same pass and kept (dropping it is ask-first).
+  `0025` (the Production v12 rebuild, 2026-09-22) is the sanctioned drop of the v1 Production
+  surface `0014` added: `reels`, `reel_renders`, `shots.reel_id`, `frame_generations.kept_at`,
+  `projects.render_resolution`, and `job_kind`'s `reel_render` (drizzle-kit recreates the type;
+  two hand-written statements first release any credits a v1 render still held and delete its
+  job rows). Applied through the direct migrator on 2026-09-22: `db:migrate` failed silently on
+  `DROP CONSTRAINT shots_reel_id_reels_id_fk` (the cascading table drop had already taken it),
+  fixed with `IF EXISTS`.
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`
   when none is set. The only reader is `apps/web/lib/storage/r2.ts`. And `assistantEnv` -
   `ANTHROPIC_API_KEY`, optional, `null` when unset; the only reader is
   `apps/web/lib/assistant/server.ts`.
 - **The ledger's `settled` excludes `reserve` / `release`.** A reservation is closed by a `spend`
   or a `release`; `0007` corrected the `credit_balances` view that double-counted a held one.
-- **A finalized reel locks its shots in the repository.** Every shot write in
-  `repositories/storyboard.ts` carries `notLocked`; `readShotLock` names the refusal. The kept
-  take (`keepGeneration`) is two commands in one transaction because the partial unique index
-  refuses a clear-and-set in one statement - `repositories/production.ts` says why.
 
 ## Commands
 

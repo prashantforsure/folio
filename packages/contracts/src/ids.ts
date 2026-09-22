@@ -89,10 +89,8 @@ export type ShotId = Branded<'ShotId'>
 export type GenerationId = Branded<'GenerationId'>
 /** A story thread on the Timeline. Authored; never a comment `ThreadId`. See `timeline.ts`. */
 export type StoryThreadId = Branded<'StoryThreadId'>
-/** A reel: a run of a scene's shots that renders as one clip. Authored; keyed to the heading node like a shot. See `production.ts`. */
+/** A reel: one clip's worth of a scene, with the shots that fill it. Authored; keyed to the heading node like a shot. See `production.ts`. */
 export type ReelId = Branded<'ReelId'>
-/** One attempt at rendering a reel's clip. Links a reel to its job, and on failure to its refund. */
-export type ReelRenderId = Branded<'ReelRenderId'>
 /** A share link: the in-app invite AGENTS.md, Constraints names. One row per issued link. See `share.ts`. */
 export type ShareLinkId = Branded<'ShareLinkId'>
 /** An assistant chat, per episode. See `assistant.ts`. */
@@ -123,7 +121,6 @@ export const shotId = (raw: string): ShotId => raw as ShotId
 export const generationId = (raw: string): GenerationId => raw as GenerationId
 export const storyThreadId = (raw: string): StoryThreadId => raw as StoryThreadId
 export const reelId = (raw: string): ReelId => raw as ReelId
-export const reelRenderId = (raw: string): ReelRenderId => raw as ReelRenderId
 export const shareLinkId = (raw: string): ShareLinkId => raw as ShareLinkId
 export const assistantChatId = (raw: string): AssistantChatId => raw as AssistantChatId
 export const assistantMessageId = (raw: string): AssistantMessageId => raw as AssistantMessageId
@@ -169,7 +166,6 @@ export const ShotIdSchema = brandedUuid(shotId)
 export const GenerationIdSchema = brandedUuid(generationId)
 export const StoryThreadIdSchema = brandedUuid(storyThreadId)
 export const ReelIdSchema = brandedUuid(reelId)
-export const ReelRenderIdSchema = brandedUuid(reelRenderId)
 export const ShareLinkIdSchema = brandedUuid(shareLinkId)
 export const AssistantChatIdSchema = brandedUuid(assistantChatId)
 export const AssistantMessageIdSchema = brandedUuid(assistantMessageId)

@@ -2,7 +2,7 @@ import type { Episode, EpisodeId, EpisodeSlug, Membership, Project, TitlePage, T
 import { episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
 import { asc, eq, inArray, isNull } from 'drizzle-orm'
 
-import { commentThreads, documents, episodes, memberships, nodes, projects, reels, scenes, shots, titlePages, users } from '../schema'
+import { commentThreads, documents, episodes, memberships, nodes, projects, scenes, shots, titlePages, users } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { mintEpisodeSlug } from './episode-slug'
@@ -36,7 +36,6 @@ export const toProject = (row: ProjectRow): Project => ({
   format: row.format,
   pageMode: row.pageMode,
   liveRepaginate: row.liveRepaginate,
-  renderResolution: row.renderResolution as Project['renderResolution'],
   tags: row.tags,
   createdBy: row.createdBy as UserId,
   createdAt: stamp(row.createdAt),
@@ -127,22 +126,6 @@ export const setProjectPagination = async (
       liveRepaginate: pagination.liveRepaginate,
       updatedAt: new Date(),
     })
-    .where(scoped(scope, projects))
-}
-
-/**
- * Set the resolution every reel of the project renders at. Project-wide for
- * the pagination pair's reason (Production phase, ruling D). The value is
- * checked at the boundary (`RenderResolutionSchema`) and by the column's
- * check constraint.
- */
-export const setRenderResolution = async (
-  scope: ProjectScope,
-  renderResolution: Project['renderResolution'],
-): Promise<void> => {
-  await dbOf(scope)
-    .update(projects)
-    .set({ renderResolution, updatedAt: new Date() })
     .where(scoped(scope, projects))
 }
 
@@ -294,14 +277,13 @@ export const renameEpisode = async (scope: ProjectScope, id: EpisodeId, title: s
  * `ON DELETE CASCADE` carries most of it - `documents` (and through their
  * composite key the `nodes`), `measurements`, `revisions`, `title_pages`,
  * `location_episodes`, `assistant_chats`. Four tables are keyed by a **node
- * id with no foreign key** (the schema's own choice: a scene record, a shot,
- * a reel and a thread outlive the node they point at on purpose, so a
+ * id with no foreign key** (the schema's own choice: a scene record, a shot
+ * and a thread outlive the node they point at on purpose, so a
  * heading that leaves the script does not take its synopsis with it) and
  * would be left pointing at nodes that no longer exist. They are swept here
  * first, by the episode's node ids, in the same transaction:
  *
  *   shots            → frame_generations cascade
- *   reels            → renders cascade
  *   comment_threads  → comments cascade (the FK would only null the anchor)
  *   scenes           → scene_derivations cascade
  *
@@ -317,7 +299,6 @@ export const deleteEpisode = async (scope: ProjectScope, id: EpisodeId): Promise
       .innerJoin(documents, eq(documents.id, nodes.documentId))
       .where(scoped(scope, nodes, eq(documents.episodeId, id)))
     await tx.delete(shots).where(scoped(scope, shots, inArray(shots.sceneNodeId, owned)))
-    await tx.delete(reels).where(scoped(scope, reels, inArray(reels.sceneNodeId, owned)))
     await tx.delete(commentThreads).where(scoped(scope, commentThreads, inArray(commentThreads.anchorNodeId, owned)))
     await tx.delete(scenes).where(scoped(scope, scenes, inArray(scenes.sceneNodeId, owned)))
     await tx.delete(episodes).where(scoped(scope, episodes, eq(episodes.id, id)))

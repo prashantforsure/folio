@@ -2011,12 +2011,14 @@ html[data-nav-open='false'] [data-context-column] {
 }
 
 /*
- * The Production route - `docs/ui design/Route - Production v2.dc.html`,
- * transcribed. Colour is a `data-tone` on a handful of shapes rather than
- * a class per colour, so a component names a tone (`lib/production/view.ts`)
- * and never a hue: `none` is the neutral surface, `accent` the AI and the
- * in-flight, `ok` settled, `warn` a decision waiting, `live` money and
- * failure, `bad` the mockup's fifth hue for a refused shot.
+ * Tone and button pieces shared across the record routes. Born in the v2
+ * Production route (2026-09-16) and kept when that route was rebuilt to v12
+ * (2026-09-22, its own block: "The Production route - v12" below); the
+ * Storyboard, Characters, Locations, Timeline and Research still draw
+ * these. Colour is a `data-tone` on a handful of shapes rather than a
+ * class per colour: `none` is the neutral surface, `accent` the AI and
+ * the in-flight, `ok` settled, `warn` a decision waiting, `live` money
+ * and failure, `bad` a refused shot or an over-length reel.
  */
 @layer components {
   /* A status pill: the reel's, the episode table's. */
@@ -2118,154 +2120,6 @@ html[data-nav-open='false'] [data-context-column] {
     background: var(--s3);
   }
 
-  /* The timing bar's segments: one per shot, cycling four; the overrun is red. */
-  .folio-seg {
-    height: 100%;
-    border-right: 1px solid var(--bg);
-  }
-
-  .folio-seg[data-tone='seg-1'] {
-    background: var(--seg-1);
-  }
-
-  .folio-seg[data-tone='seg-2'] {
-    background: var(--seg-2);
-  }
-
-  .folio-seg[data-tone='seg-3'] {
-    background: var(--seg-3);
-  }
-
-  .folio-seg[data-tone='seg-4'] {
-    background: var(--seg-4);
-  }
-
-  .folio-seg[data-tone='bad'] {
-    background: var(--bad);
-  }
-
-  /* A scene tab on the strip: a dot and the mono heading; the selected one on `--s2` with a hairline. */
-  .folio-scene-tab {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 12px;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 9px;
-    cursor: pointer;
-    color: var(--ink2);
-  }
-
-  .folio-scene-tab:hover {
-    background: var(--hover);
-  }
-
-  .folio-scene-tab[aria-current='true'] {
-    background: var(--s2);
-    border-color: var(--line);
-    color: var(--ink);
-  }
-
-  /* The sidebar's scene row: number, mono heading, a 3px bar, the meta. */
-  .folio-prod-scene-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 9px;
-    width: 100%;
-    padding: 9px 10px;
-    background: transparent;
-    border: none;
-    border-radius: 11px;
-    cursor: pointer;
-    text-align: left;
-    color: var(--ink2);
-  }
-
-  .folio-prod-scene-row:hover {
-    background: var(--hover);
-  }
-
-  .folio-prod-scene-row[aria-current='true'] {
-    background: var(--s2);
-    color: var(--ink);
-  }
-
-  /* A reel card. */
-  .folio-reel {
-    display: flex;
-    flex-direction: column;
-    background: var(--s1);
-    border: 1px solid var(--line2);
-    border-radius: var(--radius-panel);
-    overflow: hidden;
-  }
-
-  /* A shot row: plain, a proposal (amber, dashed), a refused shot (red). */
-  .folio-shot-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    min-width: 0;
-    padding: 10px 11px;
-    background: var(--s1);
-    border: 1px solid var(--line2);
-    border-radius: 11px;
-  }
-
-  .folio-shot-row[data-tone='proposed'] {
-    background: var(--warn-bg);
-    border-color: var(--warn);
-    border-style: dashed;
-  }
-
-  .folio-shot-row[data-tone='flagged'] {
-    background: var(--bad-bg);
-    border-color: var(--bad);
-  }
-
-  /* The shot's number chip, coloured with its row. */
-  .folio-shot-no {
-    flex: none;
-    width: 22px;
-    height: 22px;
-    display: grid;
-    place-items: center;
-    border-radius: 7px;
-    background: var(--s2);
-    font-family: var(--font-mono);
-    font-size: var(--text-11);
-    color: var(--ink2);
-  }
-
-  .folio-shot-row[data-tone='proposed'] .folio-shot-no {
-    background: var(--warn-bg);
-    color: var(--warn);
-  }
-
-  .folio-shot-row[data-tone='flagged'] .folio-shot-no {
-    background: var(--bad-bg);
-    color: var(--bad);
-  }
-
-  /* The seconds field beside it, on the recessed ground. */
-  .folio-shot-secs {
-    flex: none;
-    display: flex;
-    align-items: center;
-    width: 44px;
-    height: 22px;
-    padding: 0 7px;
-    background: var(--sunk);
-    border: 1px solid var(--line2);
-    border-radius: 7px;
-    font-family: var(--font-mono);
-    font-size: var(--text-11);
-    color: var(--ink2);
-    font-variant-numeric: tabular-nums;
-  }
-
   /* Size · movement · angle. A click opens the editor. */
   .folio-shot-chip {
     padding: 2px 8px;
@@ -2281,115 +2135,6 @@ html[data-nav-open='false'] [data-context-column] {
   .folio-shot-chip:hover {
     background: var(--s2);
     color: var(--ink);
-  }
-
-  /* The description: 12.5px at 1.55; a spoken line in full ink, italic. */
-  .folio-shot-desc {
-    margin: 0;
-    font-size: var(--text-12-5);
-    line-height: 1.55;
-    color: var(--ink2);
-    text-wrap: pretty;
-    cursor: text;
-  }
-
-  .folio-shot-desc[data-placeholder='true'] {
-    color: var(--ink3);
-  }
-
-  .folio-shot-quote {
-    color: var(--ink);
-    font-style: italic;
-  }
-
-  /* ↑ ↓ ✕ at the row's end. */
-  .folio-shot-tool {
-    width: 22px;
-    height: 22px;
-    display: grid;
-    place-items: center;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    color: var(--ink3);
-    font-size: var(--text-11);
-  }
-
-  .folio-shot-tool:hover:not(:disabled) {
-    background: var(--hover);
-    color: var(--ink);
-  }
-
-  .folio-shot-tool[data-remove]:hover:not(:disabled) {
-    color: var(--bad);
-  }
-
-  .folio-shot-tool:disabled {
-    cursor: default;
-    opacity: 0.4;
-  }
-
-  /* A frame tile: 16:9 on the recessed ground; dashed when the frame could exist and does not. */
-  .folio-frame-tile {
-    position: relative;
-    aspect-ratio: 16 / 9;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--sunk);
-    border: 1px solid var(--line2);
-    border-radius: 10px;
-    overflow: hidden;
-  }
-
-  .folio-frame-tile[data-dashed='true'] {
-    border-style: dashed;
-  }
-
-  .folio-frame-tile[data-tone='warn'] {
-    border-color: var(--warn);
-  }
-
-  .folio-frame-tile[data-tone='bad'] {
-    border-color: var(--bad);
-  }
-
-  .folio-frame-tile > img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  /* The generating tile's glyph breathes. */
-  .folio-shimmer {
-    animation: folio-shimmer 1.6s ease-in-out infinite;
-  }
-
-  /* The progress bar under a generating tile; with no percentage to print it slides. */
-  .folio-frame-progress {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
-    height: 3px;
-    border-radius: 3px;
-    background: var(--s3);
-    overflow: hidden;
-  }
-
-  .folio-frame-progress > span {
-    display: block;
-    height: 100%;
-    border-radius: 3px;
-    background: var(--accent);
-  }
-
-  .folio-frame-progress[data-indeterminate='true'] > span {
-    width: 40%;
-    animation: folio-slide 1.6s ease-in-out infinite;
   }
 
   /* An accent action: `✦ Propose shots`, `Generate`, `Render`. Fills on hover. */
@@ -2466,64 +2211,11 @@ html[data-nav-open='false'] [data-context-column] {
     opacity: 0.5;
   }
 
-  /* The clip-length segmented control: 5 · 8 · 10 · 15. */
-  .folio-len-tab {
-    min-width: 28px;
-    height: 24px;
-    padding: 0 6px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: var(--text-11);
-    color: var(--ink3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .folio-len-tab:hover:not(:disabled) {
-    color: var(--ink);
-  }
-
-  .folio-len-tab[aria-pressed='true'] {
-    background: var(--s2);
-    color: var(--ink);
-  }
-
-  .folio-len-tab:disabled {
-    cursor: default;
-  }
-
-  /* The episode table's row. */
-  .folio-ep-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--line2);
-  }
-
-  .folio-ep-row:hover {
-    background: var(--s1);
-  }
-
   /* A text glyph the mockup writes as a character (✦ ◐ ▶ ⚠ ◍ ⌖), kept as text. */
   .folio-mark {
     font-family: var(--font-glyph);
     font-variant-emoji: text;
     line-height: 1;
-  }
-}
-
-@keyframes folio-shimmer {
-  0% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 0.8;
-  }
-  100% {
-    opacity: 0.35;
   }
 }
 
@@ -2536,15 +2228,6 @@ html[data-nav-open='false'] [data-context-column] {
 @keyframes folio-rel-thread {
   to {
     stroke-dashoffset: -16px;
-  }
-}
-
-@keyframes folio-slide {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(250%);
   }
 }
 

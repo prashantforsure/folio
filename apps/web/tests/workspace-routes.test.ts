@@ -156,9 +156,10 @@ describe("the header's views", () => {
   })
 
   it('lights the tab the URL names, else the first', () => {
-    expect(currentView('production', null)?.id).toBe('scene')
-    expect(currentView('production', 'episode')?.id).toBe('episode')
-    expect(currentView('production', 'grid')?.id).toBe('scene')
+    expect(currentView('research', null)?.id).toBe('library')
+    expect(currentView('research', 'clips')?.id).toBe('clips')
+    expect(currentView('research', 'grid')?.id).toBe('library')
+    expect(currentView('production', 'scene')).toBeNull()
     expect(currentView('script', 'anything')).toBeNull()
     expect(currentView('characters', 'list')).toBeNull()
     expect(currentView('storyboard', 'canvas')).toBeNull()
@@ -176,7 +177,7 @@ describe('sub-view params', () => {
   it('defaults each param to its first value', () => {
     expect(parseSubViews('storyboard', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-17
     expect(parseSubViews('scenes', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-17
-    expect(parseSubViews('production', {})).toEqual({ ok: true, params: { view: 'scene' } })
+    expect(parseSubViews('production', {})).toEqual({ ok: true, params: {} }) // Cards | Columns is a saved preference - the v12 spec, 2026-09-22
     expect(parseSubViews('characters', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-16
     expect(parseSubViews('locations', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-18
     expect(parseSubViews('timeline', {})).toEqual({ ok: true, params: {} }) // the views are state - ruled 2026-09-18
@@ -191,8 +192,8 @@ describe('sub-view params', () => {
     expect(parseSubViews('script', { doc: 'grid', panel: 'composer' })).toEqual({ ok: true, params: {} })
   })
 
-  it('gives characters, storyboard, scenes, locations and timeline no `view`: their tabs are client state, ruled 2026-09-16, -17 and -18', () => {
-    // A stale `?view=` link - a real view or not - is an unknown key on all five: it opens the first view, not a 404.
+  it('gives characters, storyboard, scenes, locations, timeline and production no `view`: their tabs are client state or a preference', () => {
+    // A stale `?view=` link - a real view or not - is an unknown key on all six: it opens the first view, not a 404.
     expect(parseSubViews('characters', { view: 'presence' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('characters', { view: 'relationships' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('storyboard', { view: 'canvas' })).toEqual({ ok: true, params: {} })
@@ -203,6 +204,7 @@ describe('sub-view params', () => {
     expect(parseSubViews('locations', { view: 'grid' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('timeline', { view: 'chrono' })).toEqual({ ok: true, params: {} })
     expect(parseSubViews('timeline', { view: 'lens/nobody' })).toEqual({ ok: true, params: {} })
+    expect(parseSubViews('production', { view: 'episode' })).toEqual({ ok: true, params: {} })
   })
 
   it('refuses a value that is not one of the views, naming the param', () => {
@@ -211,7 +213,7 @@ describe('sub-view params', () => {
       param: 'view',
       value: 'grid',
     })
-    expect(parseSubViews('production', { view: 'lens/nobody' })).toEqual({
+    expect(parseSubViews('research', { view: 'lens/nobody' })).toEqual({
       ok: false,
       param: 'view',
       value: 'lens/nobody',
@@ -233,7 +235,7 @@ describe('sub-view params', () => {
     })
     expect(parseSubViews('production', { state: 'generating', mode: 'blocked' })).toEqual({
       ok: true,
-      params: { view: 'scene' },
+      params: {},
     })
   })
 })

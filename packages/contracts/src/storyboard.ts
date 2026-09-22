@@ -19,7 +19,6 @@ import {
   LocationIdSchema,
   NodeIdSchema,
   ProjectIdSchema,
-  ReelIdSchema,
   ShotIdSchema,
   UserIdSchema,
 } from './ids'
@@ -97,12 +96,6 @@ export const ShotSchema = z.object({
   /** The heading node's id, as `scenes.scene_node_id`. Not a foreign key. */
   sceneNodeId: NodeIdSchema,
   orderKey: OrderKeySchema,
-  /**
-   * The reel this shot renders in, or null: a shot boarded in the Storyboard
-   * and not yet put in a reel. A reel is a Production-phase grouping over the
-   * same rows (`production.ts`); the shot list stays one list, in one order.
-   */
-  reelId: ReelIdSchema.nullable(),
   origin: ShotOriginSchema,
   state: ShotStateSchema,
   /**
@@ -174,12 +167,6 @@ export const FrameGenerationSchema = z.object({
   frameUrl: z.string().nullable(),
   /** The `refund` entry, when the job failed. Null otherwise. */
   refundEntryId: LedgerEntryIdSchema.nullable(),
-  /**
-   * When the writer kept this take. At most one per shot (a partial unique
-   * index says so); the shot's frame is the kept generation when there is
-   * one, else the latest. Null on every other row.
-   */
-  keptAt: TimestampSchema.nullable(),
   createdAt: TimestampSchema,
 })
 

@@ -123,7 +123,7 @@ export const SUB_VIEW_SCHEMAS = {
   outline: z.object({}),
   storyboard: z.object({}),
   scenes: z.object({}),
-  production: z.object({ view: first(['scene', 'episode']) }),
+  production: z.object({}),
   characters: z.object({}),
   locations: z.object({}),
   timeline: z.object({}),

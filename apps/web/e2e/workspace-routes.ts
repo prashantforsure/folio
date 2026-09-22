@@ -81,7 +81,8 @@ export const HEADER_VIEWS: Readonly<Record<string, { readonly tabs: readonly str
   outline: null,
   storyboard: { tabs: ['Boards', 'Canvas', 'Shot list'], icons: 3 },
   scenes: { tabs: ['Cards', 'Index cards', 'Scene list'], icons: 3 },
-  production: { tabs: ['Scene', 'Episode'], icons: 0 },
+  /** The v12 rebuild (2026-09-22): Cards | Columns is a saved preference in the view-options popover, not a header tab. */
+  production: null,
   characters: { tabs: ['Cast', 'Presence', 'Sheet'], icons: 0 },
   locations: { tabs: ['Places', 'Scenes here', 'Sheet'], icons: 0 },
   /** The rebuild (2026-09-18): the views are state. The Continuity tab carries a count badge only while a finding is open - none on the walk's fresh project. */
@@ -102,11 +103,11 @@ export const WORKSPACE_ROUTES: readonly WorkspaceRouteRow[] = [
     route: 'production',
     scope: 'episode',
     rail: 'production',
-    /** The v2 toolbar (2026-09-16) prints the route name as a span, not an `h1`. */
+    /** The v12 body (2026-09-22) has no `h1`: scene tabs, the reel strip and the board. */
     title: null,
-    defaults: { view: 'scene' },
-    /** The v2 pass (2026-09-16): the sidebar card with `Scenes from script` and the `Episode frames` widget. */
-    column: { kind: 'card', width: SIDEBAR_WIDTH },
+    defaults: {},
+    /** The v12 mockup draws no sidebar: rail, header, panel. */
+    column: { kind: 'none', width: 0 },
   },
   {
     route: 'characters',

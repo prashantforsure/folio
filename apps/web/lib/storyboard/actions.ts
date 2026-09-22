@@ -27,7 +27,6 @@ import {
   readSceneHeader,
   readScreenplayNodes,
   readShot,
-  readShotLock,
   setFrameUpload,
   updateShot,
 } from '@folio/db'
@@ -76,11 +75,6 @@ import { cutScene } from './scene-cut'
  * row points at it, the previous object deleted after. The row stores the
  * URL, so the delete goes back through `keyOfPublicUrl`.
  *
- * **The lock** - since the Production phase, a shot in a finalized reel
- * refuses every write above; the repository's predicate does the refusing
- * and `readShotLock` is how the refusal is named here rather than reported
- * as a missing shot.
- *
  * Membership, not role, as everywhere. The gate is the Script route's.
  */
 
@@ -93,12 +87,6 @@ const SceneAndShotsSchema = z.object({
 
 const NOT_A_SCENE = 'That scene is not in this episode. Reload the board.'
 const NOT_A_SHOT = 'That shot is not on this board. Reload the board.'
-/** A finalized reel locks its shots from both routes (`@folio/db`, `storyboard.ts`); this is the why. */
-const LOCKED = 'This shot is in a finalized reel. Unlock the reel in Production to edit it.'
-
-/** The message for a write that changed nothing: locked if the shot is, missing otherwise. */
-const refusedWrite = async (scope: ProjectScope, shotId: Parameters<typeof readShotLock>[1]): Promise<string> =>
-  (await readShotLock(scope, shotId)) ? LOCKED : NOT_A_SHOT
 
 /** The scene, checked as this episode's, or the refusal to report. */
 const sceneOf = async (
@@ -230,7 +218,7 @@ export const saveShot = async (
   if (scene === null) return { status: 'error', message: NOT_A_SCENE }
   const wasProposed = before.state === 'proposed'
   const written = await updateShot(scope, id.data, edit.data)
-  if (written === null) return { status: 'error', message: await refusedWrite(scope, id.data) }
+  if (written === null) return { status: 'error', message: NOT_A_SHOT }
   if (wasProposed) revalidatePath(workspacePath(gate.project.id), 'layout')
 
   const rows = await listSceneShotRows(scope, scene.sceneNodeId, scene.number)
@@ -300,7 +288,7 @@ export const uploadFrame = async (projectId: string, episode: string, rawShotId:
   const pointed = await setFrameUpload(scope, id.data, url)
   if (!pointed.found) {
     await deleteObject(key)
-    return { status: 'error', message: await refusedWrite(scope, id.data) }
+    return { status: 'error', message: NOT_A_SHOT }
   }
   const previous = pointed.previous === null ? null : keyOfPublicUrl(pointed.previous)
   if (previous !== null && previous !== key) await deleteObject(previous)
@@ -319,7 +307,7 @@ export const clearFrame = async (projectId: string, episode: string, rawShotId: 
   const before = await readShot(scope, id.data)
   if (before === null) return { status: 'error', message: NOT_A_SHOT }
   const pointed = await setFrameUpload(scope, id.data, null)
-  if (!pointed.found) return { status: 'error', message: await refusedWrite(scope, id.data) }
+  if (!pointed.found) return { status: 'error', message: NOT_A_SHOT }
   if (pointed.previous !== null && storageAvailable()) {
     const previous = keyOfPublicUrl(pointed.previous)
     if (previous !== null) await deleteObject(previous)
@@ -338,11 +326,7 @@ export const acceptShots = async (projectId: string, episode: string, raw: unkno
 
   const scene = await sceneOf(gate, input.data.sceneNodeId)
   if (!isScene(scene)) return scene
-  const accepted = await acceptShotRows(scope, input.data.shotIds)
-  const first = input.data.shotIds[0]
-  if (accepted === 0 && first !== undefined && (await readShotLock(scope, first))) {
-    return { status: 'error', message: LOCKED }
-  }
+  await acceptShotRows(scope, input.data.shotIds)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return sceneResult(scope, scene)
 }
@@ -359,11 +343,7 @@ export const discardShots = async (projectId: string, episode: string, raw: unkn
   if (!isScene(scene)) return scene
   const own = new Set((await listSceneShots(scope, scene.sceneNodeId)).map((shot) => shot.id as string))
   const wanted = input.data.shotIds.filter((id) => own.has(id as string))
-  const deleted = await deleteShots(scope, wanted)
-  const first = wanted[0]
-  if (deleted === 0 && first !== undefined && (await readShotLock(scope, first))) {
-    return { status: 'error', message: LOCKED }
-  }
+  await deleteShots(scope, wanted)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return sceneResult(scope, scene)
 }
@@ -398,7 +378,7 @@ export const moveShot = async (
     before: direction === 'up' ? (beyond?.orderKey ?? null) : neighbour.orderKey,
     after: direction === 'up' ? neighbour.orderKey : (beyond?.orderKey ?? null),
   })
-  if (moved === null) return { status: 'error', message: await refusedWrite(scope, shot.id) }
+  if (moved === null) return { status: 'error', message: NOT_A_SHOT }
   return sceneResult(scope, scene)
 }
 
@@ -434,7 +414,7 @@ export const placeShot = async (
     before: before?.orderKey ?? null,
     after: after?.orderKey ?? null,
   })
-  if (moved === null) return { status: 'error', message: await refusedWrite(scope, shot.id) }
+  if (moved === null) return { status: 'error', message: NOT_A_SHOT }
   return sceneResult(scope, scene)
 }
 

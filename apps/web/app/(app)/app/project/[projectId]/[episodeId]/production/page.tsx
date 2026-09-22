@@ -1,5 +1,8 @@
+import { notFound } from 'next/navigation'
+
 import { ProductionRoute } from '../../_production/production-route'
 import { enterEpisodeRoute } from '../../../../../../../lib/workspace/context'
+import { parseSubViews } from '../../../../../../../lib/workspace/params'
 
 /**
  * The Production route, episodic shape. `_production/production-route.tsx`
@@ -9,7 +12,9 @@ import { enterEpisodeRoute } from '../../../../../../../lib/workspace/context'
 const Page = async ({ params, searchParams }: PageProps<'/app/project/[projectId]/[episodeId]/production'>) => {
   const { projectId, episodeId } = await params
   const context = await enterEpisodeRoute(projectId, episodeId, 'production')
-  return <ProductionRoute context={context} searchParams={searchParams} />
+  const views = parseSubViews('production', await searchParams)
+  if (!views.ok) notFound()
+  return <ProductionRoute context={context} />
 }
 
 export default Page
