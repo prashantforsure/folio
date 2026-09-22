@@ -3832,3 +3832,2154 @@ html[data-nav-open='false'] [data-context-column] {
     opacity: 0.5;
   }
 }
+
+/*
+ * The Production route - v12 (2026-09-22). `docs/production/production.md`
+ * is the spec; `Route - Production v12.dc.html` the mockup, transcribed
+ * here from its inline styles, every number the mockup's. Tokens are the
+ * v12 block in `packages/ui/src/tokens/palette.css`, scoped to
+ * `[data-production-root]` - the route's `<main>` and each portal it opens
+ * (the settings modal, the drawer, a menu, the bulk bar) carry it.
+ *
+ * Motion (§8): 140ms colour transitions on controls; the drawer 280ms on
+ * `cubic-bezier(.22,.9,.3,1)`; `pulsedot` 1.4s on a Generating dot; all of
+ * it off under `prefers-reduced-motion`.
+ */
+@layer components {
+  .folio-prod-main {
+    position: relative;
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    background: var(--s1);
+    color: var(--ink);
+    font-family: var(--sans);
+  }
+
+  .folio-prod-main button {
+    transition:
+      background 0.14s,
+      color 0.14s,
+      border-color 0.14s,
+      opacity 0.14s;
+  }
+
+  .folio-prod-glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(900px 620px at 88% -8%, var(--glow-cool), transparent 70%),
+      radial-gradient(1100px 700px at 42% 108%, var(--glow-warm), transparent 72%);
+  }
+
+  .folio-prod-board {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 4px 0 80px;
+  }
+
+  .folio-prod-notice {
+    position: absolute;
+    left: 50%;
+    bottom: 22px;
+    z-index: 26;
+    transform: translateX(-50%);
+    padding: 8px 14px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 16px 44px var(--prod-shadow);
+    font-size: 12.5px;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-prod-eyebrow {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink3);
+  }
+
+  .folio-prod-caret {
+    opacity: 0.5;
+    font-size: 9px;
+  }
+
+  /* ── Scene tabs (§2.3) ─────────────────────────────────────────── */
+  .folio-prod-tabs {
+    position: relative;
+    z-index: 3;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px 0;
+  }
+
+  .folio-prod-tabs-row {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+  }
+
+  .folio-prod-tab {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 32px;
+    padding: 0 13px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-prod-tab:hover {
+    border-color: var(--ink3);
+  }
+
+  .folio-prod-tab[aria-current='true'] {
+    background: var(--s2);
+    border-color: var(--ink3);
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .folio-prod-tab-num {
+    color: var(--ink3);
+  }
+
+  .folio-prod-tab[aria-current='true'] .folio-prod-tab-num {
+    color: var(--ink2);
+  }
+
+  .folio-prod-tab-glyphs {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--ink3);
+  }
+
+  .folio-prod-tool {
+    width: 32px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    background: var(--s1);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--ink2);
+  }
+
+  .folio-prod-tool:hover,
+  .folio-prod-tool[data-open='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-prod-tool[data-active='true'] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── Popovers (§2.4, §2.5) ─────────────────────────────────────── */
+  .folio-prod-popover {
+    position: absolute;
+    top: 38px;
+    right: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 18px 50px var(--prod-shadow);
+  }
+
+  .folio-prod-filter {
+    width: 270px;
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .folio-prod-options {
+    width: 330px;
+    max-height: min(620px, 70vh);
+    overflow: hidden;
+  }
+
+  .folio-prod-chipbtn {
+    height: 26px;
+    padding: 0 10px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--ink2);
+  }
+
+  .folio-prod-chipbtn:hover {
+    background: var(--s3);
+  }
+
+  .folio-prod-chipbtn[aria-checked='true'] {
+    background: var(--accent-bg);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .folio-prod-x {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--ink3);
+    font-size: 13px;
+  }
+
+  .folio-prod-x:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  .folio-prod-segment {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 10px;
+  }
+
+  .folio-prod-segment > button {
+    flex: 1;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--ink2);
+  }
+
+  .folio-prod-segment > button:hover {
+    background: var(--s2);
+  }
+
+  .folio-prod-segment > button[aria-pressed='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-prod-linklike {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--ink2);
+    padding: 0;
+  }
+
+  .folio-prod-linklike:hover {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+
+  .folio-prod-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 9px;
+    font-size: 12.5px;
+    color: var(--ink3);
+  }
+
+  .folio-prod-search > input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    font: inherit;
+    color: var(--ink);
+  }
+
+  .folio-prod-search > input::placeholder {
+    color: var(--ink3);
+  }
+
+  .folio-prod-search-sm {
+    height: 30px;
+    margin: 2px 2px 6px;
+    padding: 0 9px;
+    border-radius: 8px;
+  }
+
+  .folio-prod-field-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 4px 8px;
+    border-radius: 9px;
+  }
+
+  .folio-prod-field-row:hover {
+    background: var(--hover);
+  }
+
+  .folio-prod-field-row[data-dragging='true'] {
+    opacity: 0.45;
+  }
+
+  .folio-prod-grip {
+    flex: none;
+    background: transparent;
+    border: none;
+    padding: 4px 0;
+    cursor: grab;
+    font-size: 12px;
+    letter-spacing: -0.05em;
+    color: var(--ink3);
+  }
+
+  .folio-prod-switch {
+    flex: none;
+    width: 34px;
+    height: 20px;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    background: var(--s3);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .folio-prod-switch[aria-checked='true'] {
+    background: var(--accent);
+  }
+
+  .folio-prod-switch-knob {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--ink3);
+    transform: translateX(0);
+    transition: transform 0.15s;
+  }
+
+  .folio-prod-switch[aria-checked='true'] .folio-prod-switch-knob {
+    background: var(--solid);
+    transform: translateX(14px);
+  }
+
+  /* ── Reel strip (§2.6) ─────────────────────────────────────────── */
+  .folio-prod-strip {
+    position: relative;
+    z-index: 2;
+    flex: none;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 16px 12px;
+    border-bottom: 1px solid var(--line2);
+    overflow-x: auto;
+  }
+
+  .folio-prod-reel-chip {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+  }
+
+  .folio-prod-reel-chip[data-selected='true'] {
+    background: var(--s2);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-bg);
+  }
+
+  .folio-prod-reel-name {
+    flex: none;
+    min-width: max-content;
+    max-width: 120px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+    font-size: 12px;
+    color: var(--ink2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .folio-prod-reel-name:hover,
+  .folio-prod-reel-chip[data-selected='true'] .folio-prod-reel-name {
+    color: var(--ink);
+  }
+
+  .folio-prod-reel-shoot {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 13px;
+    background: transparent;
+    border: 1px solid var(--line2);
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-prod-reel-shoot:hover {
+    background: var(--s3);
+  }
+
+  .folio-prod-reel-chip[data-selected='true'] .folio-prod-reel-shoot {
+    background: var(--s2);
+    border-color: var(--line);
+    color: var(--ink);
+  }
+
+  .folio-prod-reel-add {
+    flex: none;
+    width: 44px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    cursor: pointer;
+    color: var(--ink3);
+    font-size: 15px;
+  }
+
+  .folio-prod-reel-add:hover {
+    border-color: var(--ink3);
+    color: var(--ink);
+  }
+
+  /* A 6px dot in a tone: reel status, shot status. */
+  .folio-prod-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--ink3);
+  }
+
+  .folio-prod-dot[data-tone='ok'] {
+    background: var(--ok);
+  }
+
+  .folio-prod-dot[data-tone='accent'] {
+    background: var(--accent);
+  }
+
+  .folio-prod-dot[data-tone='warn'] {
+    background: var(--warn);
+  }
+
+  .folio-prod-dot[data-tone='bad'] {
+    background: var(--bad);
+  }
+
+  .folio-prod-dot[data-pulse='true'] {
+    animation: folio-pulsedot 1.4s ease-in-out infinite;
+  }
+
+  /* ── The reel card (§3) ────────────────────────────────────────── */
+  .folio-prod-empty-scene {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 18px;
+    border: 1px dashed var(--line);
+    border-radius: 14px;
+  }
+
+  .folio-prod-accent-small {
+    height: 28px;
+    padding: 0 12px;
+    background: var(--accent-bg);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .folio-prod-accent-small:hover:not([aria-disabled='true']) {
+    background: var(--accent);
+    color: var(--solid-ink);
+  }
+
+  .folio-prod-accent-small[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .folio-prod-line-small {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-prod-line-small:hover:not([aria-disabled='true']) {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-prod-line-small[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .folio-prod-solid-small {
+    height: 30px;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--solid-ink);
+  }
+
+  .folio-prod-solid-small:hover {
+    opacity: 0.88;
+  }
+
+  .folio-prod-reel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 12px 14px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 16px;
+  }
+
+  .folio-prod-reel-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 9px;
+    padding: 0 4px;
+  }
+
+  .folio-prod-pill {
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--s2);
+    font-size: 11.5px;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-prod-pill-sm {
+    padding: 2px 8px;
+    font-size: 11px;
+  }
+
+  .folio-prod-pill[data-tone='ok'] {
+    background: var(--ok-bg);
+    color: var(--ok);
+  }
+
+  .folio-prod-pill[data-tone='accent'] {
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+
+  .folio-prod-pill[data-tone='warn'] {
+    background: var(--warn-bg);
+    color: var(--warn);
+  }
+
+  .folio-prod-pill-sm[data-tone='none'] {
+    color: var(--ink3);
+  }
+
+  .folio-prod-clip {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: var(--s1);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+  }
+
+  .folio-prod-clip > button {
+    height: 24px;
+    padding: 0 10px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink3);
+  }
+
+  .folio-prod-clip > button:hover {
+    background: var(--s2);
+  }
+
+  .folio-prod-clip > button[aria-pressed='true'] {
+    background: var(--s3);
+    color: var(--ink);
+  }
+
+  .folio-prod-time {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .folio-prod-time[data-tone='ok'] {
+    color: var(--ok);
+  }
+
+  .folio-prod-time[data-tone='bad'] {
+    color: var(--bad);
+  }
+
+  .folio-prod-menu {
+    z-index: 41;
+    display: flex;
+    flex-direction: column;
+    padding: 5px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    box-shadow: 0 18px 50px var(--prod-shadow);
+  }
+
+  .folio-prod-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+
+  .folio-prod-menu-item:hover {
+    background: var(--hover);
+  }
+
+  .folio-prod-menu-item[data-on='true'] {
+    background: var(--s2);
+  }
+
+  .folio-prod-menu-item[data-tone='bad'] {
+    color: var(--bad);
+  }
+
+  .folio-prod-menu-item [data-check] {
+    color: transparent;
+  }
+
+  .folio-prod-menu-item [data-check='true'] {
+    color: var(--ink2);
+  }
+
+  .folio-prod-input {
+    height: 30px;
+    padding: 0 9px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 8px;
+    outline: none;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+
+  /* ── Timing bar (§3.2) ─────────────────────────────────────────── */
+  .folio-prod-bar {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 4px;
+  }
+
+  .folio-prod-seg {
+    position: relative;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--solid-ink);
+    overflow: hidden;
+  }
+
+  .folio-prod-seg[data-tone='seg-1'] {
+    background: var(--seg-1);
+  }
+
+  .folio-prod-seg[data-tone='seg-2'] {
+    background: var(--seg-2);
+  }
+
+  .folio-prod-seg[data-tone='seg-3'] {
+    background: var(--seg-3);
+  }
+
+  .folio-prod-seg[data-tone='seg-4'] {
+    background: var(--seg-4);
+  }
+
+  .folio-prod-seg[data-tone='proposed'] {
+    background: transparent;
+    background-image: repeating-linear-gradient(45deg, var(--warn) 0 3px, transparent 3px 7px);
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+
+  .folio-prod-seg[data-tone='proposed'] .folio-prod-seg-label {
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--bg);
+  }
+
+  .folio-prod-seg-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 9px;
+    height: 100%;
+    cursor: col-resize;
+    background: transparent;
+    border-radius: 0 6px 6px 0;
+  }
+
+  .folio-prod-seg-handle:hover,
+  .folio-prod-seg-handle[data-active='true'],
+  .folio-prod-seg-handle:focus-visible {
+    background: var(--accent);
+  }
+
+  .folio-prod-seg-rest {
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink3);
+    overflow: hidden;
+  }
+
+  /* ── Shotlist (§3.3) ───────────────────────────────────────────── */
+  .folio-prod-ai-button {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 13px;
+    background: var(--accent-bg);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .folio-prod-ai-button:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--solid-ink);
+  }
+
+  .folio-prod-ai-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .folio-prod-add-shot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 38px;
+    background: var(--s2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    cursor: pointer;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .folio-prod-add-shot:hover,
+  .folio-prod-add-shot[data-over='true'] {
+    background: var(--s3);
+    border-color: var(--ink3);
+  }
+
+  .folio-prod-shot {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 11px 12px;
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+  .folio-prod-shot:hover {
+    border-color: var(--line);
+  }
+
+  .folio-prod-shot[data-selected='true'],
+  .folio-prod-shot[data-open='true'] {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
+
+  .folio-prod-shot[data-dragging='true'] {
+    opacity: 0.45;
+  }
+
+  .folio-prod-shot[data-over='true'] {
+    border-color: var(--accent);
+  }
+
+  .folio-prod-badge {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--solid-ink);
+    background: var(--seg-1);
+  }
+
+  .folio-prod-badge[data-tone='seg-2'] {
+    background: var(--seg-2);
+  }
+
+  .folio-prod-badge[data-tone='seg-3'] {
+    background: var(--seg-3);
+  }
+
+  .folio-prod-badge[data-tone='seg-4'] {
+    background: var(--seg-4);
+  }
+
+  .folio-prod-durpill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 9px;
+    background: var(--s2);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink2);
+  }
+
+  .folio-prod-durpill:hover {
+    background: var(--s3);
+    color: var(--ink);
+  }
+
+  .folio-prod-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding: 0 8px;
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 11.5px;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-prod-status:hover {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-prod-status[data-tone='bad'] {
+    color: var(--bad);
+  }
+
+  .folio-prod-check {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    cursor: pointer;
+    color: transparent;
+    font-size: 10px;
+  }
+
+  .folio-prod-check:hover {
+    border-color: var(--ink3);
+  }
+
+  .folio-prod-check[aria-checked='true'] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--solid-ink);
+  }
+
+  .folio-prod-check-sm {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    font-size: 9px;
+  }
+
+  .folio-prod-trash {
+    width: 22px;
+    height: 22px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--ink3);
+  }
+
+  .folio-prod-trash:hover {
+    background: var(--s2);
+    color: var(--bad);
+  }
+
+  .folio-prod-camline {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--ink2);
+  }
+
+  .folio-prod-desc {
+    display: block;
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--read);
+    text-wrap: pretty;
+  }
+
+  .folio-prod-run {
+    border-radius: 5px;
+  }
+
+  .folio-prod-run[data-kind='mention'] {
+    padding: 1px 6px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .folio-prod-run[data-kind='dialogue'] {
+    padding: 1px 6px;
+    background: var(--ok-bg);
+    color: var(--ok);
+    font-style: italic;
+    white-space: nowrap;
+  }
+
+  .folio-prod-refusal {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: var(--bad-bg);
+    border: 1px solid var(--bad);
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--bad);
+  }
+
+  .folio-prod-refusal .folio-prod-linklike {
+    align-self: flex-start;
+    color: var(--bad);
+    text-decoration: underline;
+  }
+
+  .folio-prod-attr {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 9px;
+    background: var(--s2);
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 11.5px;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-prod-attr:hover {
+    background: var(--s3);
+    color: var(--ink);
+  }
+
+  .folio-prod-attr[data-empty='true'] {
+    color: var(--ink3);
+  }
+
+  /* ── Storyboard sheet (§3.4) ───────────────────────────────────── */
+  .folio-prod-sheet-col {
+    flex: 1 1 320px;
+    min-width: 0;
+    max-width: 440px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    border-radius: 14px;
+  }
+
+  .folio-prod-sheet {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-height: 420px;
+    overflow: hidden;
+    padding: 8px;
+    background: linear-gradient(160deg, var(--frame-a), var(--frame-b));
+    border: 1px solid var(--line2);
+    border-radius: 11px;
+    opacity: 0.5;
+  }
+
+  .folio-prod-sheet[data-state='gen'] {
+    opacity: 0.8;
+  }
+
+  .folio-prod-sheet[data-state='done'] {
+    opacity: 1;
+    border-color: var(--line);
+  }
+
+  .folio-prod-plate {
+    flex: 1 1 0;
+    min-height: 96px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--prod-sheet-line);
+    border-radius: 7px;
+    background-image: repeating-linear-gradient(135deg, var(--prod-hatch) 0 8px, transparent 8px 16px);
+    background-size: cover;
+    background-position: center;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--frame-ink);
+  }
+
+  .folio-prod-sheet-row {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+    flex: 1 1 0;
+    min-height: 88px;
+  }
+
+  .folio-prod-sheet-frame {
+    flex: 1 1 55%;
+    border: 1px solid var(--prod-sheet-line);
+    border-radius: 7px;
+    background-image: repeating-linear-gradient(135deg, var(--prod-hatch) 0 8px, transparent 8px 16px);
+    background-size: cover;
+    background-position: center;
+  }
+
+  .folio-prod-sheet-note {
+    flex: 1 1 45%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 8px;
+    border: 1px solid var(--prod-sheet-line);
+    border-radius: 7px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    line-height: 1.4;
+    color: var(--frame-ink);
+    overflow: hidden;
+  }
+
+  .folio-prod-sheet-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 20px;
+    text-align: center;
+    background: var(--prod-sheet-scrim);
+    backdrop-filter: blur(2px);
+    border-radius: 11px;
+    color: var(--prod-sheet-ink);
+  }
+
+  .folio-prod-progress {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    height: 3px;
+    border-radius: 3px;
+    background: var(--prod-progress-track);
+    overflow: hidden;
+  }
+
+  .folio-prod-progress > span {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent);
+    transition: width 0.4s;
+  }
+
+  .folio-prod-sheet-button {
+    flex: 1;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--solid-ink);
+  }
+
+  .folio-prod-sheet-button:hover:not([aria-disabled='true']) {
+    opacity: 0.88;
+  }
+
+  .folio-prod-sheet-button[data-done='true'] {
+    background: var(--s2);
+    border-color: var(--line);
+    color: var(--ink2);
+  }
+
+  .folio-prod-sheet-button[aria-disabled='true'] {
+    background: var(--s2);
+    border-color: var(--line2);
+    color: var(--ink3);
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* ── Scene setup and image (§3.5, §3.6) ────────────────────────── */
+  .folio-prod-setup {
+    flex: 1 1 430px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 11px 12px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+  }
+
+  .folio-prod-setup-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 6px;
+  }
+
+  .folio-prod-setup-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    height: 30px;
+    padding: 0 10px;
+    background: var(--s2);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--ink);
+  }
+
+  .folio-prod-setup-btn[data-empty='true'] {
+    color: var(--ink2);
+  }
+
+  .folio-prod-setup-btn:hover {
+    background: var(--s3);
+    color: var(--ink);
+  }
+
+  .folio-prod-image-col {
+    flex: 1 1 320px;
+    min-width: 0;
+    max-width: 440px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 11px 12px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+  }
+
+  .folio-prod-still {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 104px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: linear-gradient(160deg, var(--frame-a), var(--frame-b));
+    background-image: repeating-linear-gradient(135deg, var(--prod-hatch) 0 8px, transparent 8px 16px);
+    background-size: cover;
+    background-position: center;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--frame-ink);
+  }
+
+  .folio-prod-still[data-drawn='true'] {
+    background: var(--sunk);
+    background-size: cover;
+    background-position: center;
+  }
+
+  .folio-prod-still[data-busy='true'] {
+    opacity: 0.8;
+  }
+
+  .folio-prod-accent-solid {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--solid-ink);
+    white-space: nowrap;
+  }
+
+  .folio-prod-accent-solid:hover:not([aria-disabled='true']) {
+    opacity: 0.88;
+  }
+
+  .folio-prod-accent-solid[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* ── Readiness (§3.7) ──────────────────────────────────────────── */
+  .folio-prod-ready {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 11px 13px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+  }
+
+  .folio-prod-ready [data-readiness-step] > span > span:first-child {
+    color: var(--ink2);
+  }
+
+  .folio-prod-ready [data-readiness-step] > span > span[data-ok='true'] {
+    color: var(--ink);
+  }
+
+  .folio-prod-step {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid var(--line);
+    font-size: 10px;
+    color: var(--ink3);
+  }
+
+  .folio-prod-step[data-ok='true'] {
+    background: var(--ok-bg);
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+
+  .folio-prod-avatar {
+    width: 22px;
+    height: 22px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: transparent;
+    background-size: cover;
+    background-position: center;
+    border: 1px dashed var(--warn);
+    font-size: 9px;
+    color: var(--warn);
+  }
+
+  .folio-prod-avatar[data-ready='true'] {
+    background-color: oklch(0.42 0.055 var(--cast-h, 250));
+    border: 1px solid transparent;
+    color: var(--prod-sheet-ink);
+  }
+
+  .folio-prod-shoot {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 16px;
+    background: var(--accent);
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--solid-ink);
+    white-space: nowrap;
+  }
+
+  .folio-prod-shoot:hover:not([aria-disabled='true']) {
+    opacity: 0.85;
+  }
+
+  .folio-prod-shoot[aria-disabled='true'] {
+    background: var(--s2);
+    color: var(--ink3);
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* ── Columns view (§4) ─────────────────────────────────────────── */
+  .folio-prod-table-card {
+    margin: 12px 16px 18px;
+    background: var(--sunk);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+    overflow: hidden;
+    min-width: 1080px;
+  }
+
+  .folio-prod-caret-btn {
+    width: 22px;
+    height: 22px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--ink3);
+    font-size: 9px;
+    transition: transform 0.14s;
+  }
+
+  .folio-prod-caret-btn[data-open='false'] {
+    transform: rotate(-90deg);
+  }
+
+  .folio-prod-caret-btn:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  .folio-prod-thead {
+    display: grid;
+    align-items: center;
+    background: var(--s1);
+    border-bottom: 1px solid var(--line2);
+    font-size: 11.5px;
+    color: var(--ink3);
+  }
+
+  .folio-prod-thead > span {
+    padding: 9px 12px;
+    border-right: 1px solid var(--line2);
+  }
+
+  .folio-prod-thead > span:first-child {
+    padding: 9px 10px;
+  }
+
+  .folio-prod-thead > span:last-child {
+    border-right: none;
+  }
+
+  .folio-prod-trow {
+    display: grid;
+    align-items: stretch;
+    border-bottom: 1px solid var(--line2);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .folio-prod-trow:hover {
+    background: var(--hover);
+  }
+
+  .folio-prod-trow[data-selected='true'] {
+    background: var(--accent-bg);
+  }
+
+  .folio-prod-trow[data-open='true'] {
+    background: var(--s2);
+  }
+
+  .folio-prod-trow[data-dragging='true'] {
+    opacity: 0.45;
+  }
+
+  .folio-prod-tcell {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px;
+    border-right: 1px solid var(--line2);
+  }
+
+  .folio-prod-tcell:first-child {
+    padding: 12px 10px;
+  }
+
+  .folio-prod-tcell:last-child {
+    border-right: none;
+  }
+
+  .folio-prod-tile {
+    width: 104px;
+    height: 58px;
+    flex: none;
+    border-radius: 6px;
+    background: linear-gradient(160deg, var(--frame-a), var(--frame-b));
+    background-size: cover;
+    background-position: center;
+    border: 1px solid var(--line2);
+    display: grid;
+    place-items: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--frame-ink);
+  }
+
+  .folio-prod-tile[data-drawn='true'] {
+    background-color: var(--sunk);
+  }
+
+  .folio-prod-tile[data-refused='true'] {
+    background: var(--bad-bg);
+    border-color: var(--bad);
+    color: var(--bad);
+  }
+
+  .folio-prod-tdesc {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--read);
+    text-wrap: pretty;
+    margin: -4px -6px;
+    padding: 4px 6px;
+    border-radius: 7px;
+    cursor: text;
+  }
+
+  .folio-prod-tdesc:focus {
+    outline: none;
+    background: var(--s1);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+
+  .folio-prod-cellbtn {
+    display: inline-flex;
+    align-items: center;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--ink2);
+    text-align: left;
+  }
+
+  .folio-prod-cellbtn[data-empty='true'] {
+    color: var(--ink3);
+  }
+
+  .folio-prod-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 14px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--ink3);
+    font-size: 12.5px;
+    text-align: left;
+  }
+
+  .folio-prod-foot:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  /* ── Bulk bar (§5.1) ───────────────────────────────────────────── */
+  .folio-prod-bulk {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    z-index: 25;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 16px 44px var(--prod-shadow);
+    font-family: var(--sans);
+    color: var(--ink);
+  }
+
+  .folio-prod-ghost {
+    height: 28px;
+    padding: 0 11px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  .folio-prod-ghost:hover {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  /* ── Detail drawer (§5.2) ──────────────────────────────────────── */
+  .folio-prod-drawer-glow {
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    background: var(--prod-drawer-veil);
+    animation: folio-drawer-glow 0.28s ease both;
+  }
+
+  .folio-prod-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(420px, 88vw);
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(120% 55% at 100% 0%, var(--glow-cool) 0%, transparent 66%),
+      linear-gradient(200deg, var(--prod-drawer-sheen) 0%, transparent 62%);
+    border-left: 1px solid var(--line);
+    box-shadow: -24px 0 60px var(--prod-drawer-shadow);
+    animation: folio-drawer-in 0.28s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+    overflow: hidden;
+    font-family: var(--sans);
+    color: var(--ink);
+  }
+
+  .folio-prod-drow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+  }
+
+  .folio-prod-drow:hover:not(:disabled) {
+    background: var(--hover);
+  }
+
+  .folio-prod-drow:disabled {
+    cursor: default;
+  }
+
+  .folio-prod-dsection {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line2);
+  }
+
+  .folio-prod-dlabel {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: var(--ink3);
+  }
+
+  .folio-prod-ddesc {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--read);
+    text-wrap: pretty;
+    margin: -4px -6px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    cursor: text;
+  }
+
+  .folio-prod-ddesc:focus {
+    outline: none;
+    background: var(--s1);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+
+  .folio-prod-ref {
+    width: 44px;
+    height: 44px;
+    border-radius: 9px;
+    background: linear-gradient(160deg, var(--frame-a), var(--frame-b));
+    background-size: cover;
+    background-position: center;
+    border: 1px solid var(--line2);
+  }
+
+  .folio-prod-ref-add {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 1px dashed var(--line);
+    border-radius: 9px;
+    cursor: pointer;
+    color: var(--ink3);
+    font-size: 15px;
+  }
+
+  .folio-prod-ref-add:hover:not([aria-disabled='true']) {
+    border-color: var(--ink3);
+    color: var(--ink);
+  }
+
+  .folio-prod-ref-add[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* ── Context menu (§5.3) ───────────────────────────────────────── */
+  .folio-prod-ctx {
+    position: fixed;
+    z-index: 41;
+    min-width: 200px;
+    max-width: 320px;
+    max-height: 320px;
+    display: flex;
+    flex-direction: column;
+    padding: 5px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    box-shadow: 0 18px 50px var(--prod-shadow);
+    overflow-y: auto;
+    font-family: var(--sans);
+    color: var(--ink);
+  }
+
+  .folio-prod-box {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-size: 9px;
+    color: transparent;
+  }
+
+  .folio-prod-box[data-on='true'] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--solid-ink);
+  }
+
+  .folio-prod-textarea {
+    width: 100%;
+    min-height: 74px;
+    resize: vertical;
+    padding: 8px 9px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 8px;
+    outline: none;
+    font-family: inherit;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+
+  .folio-prod-day {
+    height: 26px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink2);
+  }
+
+  .folio-prod-day:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+
+  .folio-prod-day[data-today='true'] {
+    background: var(--s2);
+    color: var(--ink);
+  }
+
+  .folio-prod-day[data-on='true'] {
+    background: var(--accent);
+    color: var(--solid-ink);
+  }
+
+  /* ── Production Settings (§5.4) ────────────────────────────────── */
+  .folio-prod-modal-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    place-items: center;
+    padding: 28px;
+    background: var(--prod-modal-scrim);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    font-family: var(--sans);
+    color: var(--ink);
+  }
+
+  .folio-prod-modal {
+    width: min(1180px, 100%);
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: 0 40px 120px var(--prod-shadow-deep);
+    overflow: hidden;
+  }
+
+  .folio-prod-modal-body {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 352px minmax(0, 1fr);
+    gap: 16px;
+    padding: 18px 28px 20px;
+    overflow-y: hidden;
+  }
+
+  .folio-prod-modal-body[data-narrow='true'] {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .folio-prod-modal-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .folio-prod-modal-body[data-narrow='true'] .folio-prod-modal-pane {
+    min-height: auto;
+    overflow-y: visible;
+  }
+
+  .folio-prod-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 14px;
+  }
+
+  .folio-prod-ratio {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    height: 104px;
+    padding: 10px 6px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    cursor: pointer;
+    color: var(--ink2);
+  }
+
+  .folio-prod-ratio:hover:not(:disabled) {
+    border-color: var(--ink3);
+  }
+
+  .folio-prod-ratio[aria-checked='true'] {
+    background: var(--s2);
+    border-color: var(--accent);
+    color: var(--ink);
+  }
+
+  .folio-prod-ratio-shape {
+    border: 1px solid var(--ink3);
+    border-radius: 3px;
+    background: var(--s2);
+  }
+
+  .folio-prod-ratio[aria-checked='true'] .folio-prod-ratio-shape {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  .folio-prod-option {
+    flex: 1 1 92px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    padding: 11px 12px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--ink2);
+  }
+
+  .folio-prod-option:hover:not(:disabled) {
+    border-color: var(--ink3);
+  }
+
+  .folio-prod-option[aria-checked='true'] {
+    background: var(--s2);
+    border-color: var(--accent);
+    color: var(--ink);
+  }
+
+  .folio-prod-ratio:disabled,
+  .folio-prod-option:disabled,
+  .folio-prod-style:disabled {
+    cursor: not-allowed;
+  }
+
+  .folio-prod-styles {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: max-content;
+    align-content: start;
+    gap: 12px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .folio-prod-styles[data-one-column='true'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .folio-prod-style {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    background: var(--s1);
+    border: 1px solid var(--line2);
+    border-radius: 13px;
+    cursor: pointer;
+    text-align: left;
+    overflow: hidden;
+    color: var(--ink);
+  }
+
+  .folio-prod-style:hover:not(:disabled) {
+    border-color: var(--ink3);
+  }
+
+  .folio-prod-style[aria-checked='true'] {
+    background: var(--s2);
+    border-color: var(--accent);
+  }
+
+  .folio-prod-style-plate {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 158px;
+    flex: none;
+  }
+
+  .folio-prod-style-era {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    padding: 4px 9px;
+    background: var(--prod-era-bg);
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--prod-era-ink);
+  }
+
+  .folio-prod-style-check {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    background: var(--solid);
+    border-radius: 50%;
+    font-size: 11px;
+    color: var(--solid-ink);
+  }
+
+  .folio-prod-style-name {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: flex-end;
+    min-height: 62px;
+    padding: 10px 12px;
+    background: linear-gradient(to top, var(--prod-plate-scrim), transparent);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--prod-plate-ink);
+    text-wrap: pretty;
+  }
+
+  .folio-prod-style-ref {
+    position: absolute;
+    right: 10px;
+    bottom: 9px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: var(--prod-ref-ink);
+  }
+
+  .folio-prod-confirm {
+    flex: none;
+    height: 36px;
+    padding: 0 22px;
+    background: var(--solid);
+    color: var(--solid-ink);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .folio-prod-confirm:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+
+  /* ── The header chip (§2.2) ────────────────────────────────────── */
+  .folio-prod-chip {
+    height: 34px;
+    max-width: 260px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 11px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--ink2);
+  }
+
+  .folio-prod-chip:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+}
+
+@keyframes folio-pulsedot {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes folio-drawer-in {
+  from {
+    transform: translateX(26px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes folio-drawer-glow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-production-root] *,
+  .folio-prod-drawer,
+  .folio-prod-drawer-glow {
+    animation: none !important;
+    transition: none !important;
+  }
+}

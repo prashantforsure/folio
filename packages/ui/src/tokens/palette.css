@@ -484,6 +484,23 @@
  * override after it, the dark island last.
  */
 [data-production-root] {
+  /* The v12 mockup's literal overlays, shadows and hatches, named so the route's CSS reads no colour of its own. */
+  --prod-shadow: rgba(0, 0, 0, 0.45);
+  --prod-shadow-deep: rgba(0, 0, 0, 0.6);
+  --prod-drawer-shadow: rgba(0, 0, 0, 0.4);
+  --prod-hatch: rgba(255, 255, 255, 0.055);
+  --prod-sheet-line: rgba(255, 255, 255, 0.12);
+  --prod-sheet-scrim: rgba(8, 10, 13, 0.72);
+  --prod-sheet-ink: rgba(255, 255, 255, 0.92);
+  --prod-progress-track: rgba(255, 255, 255, 0.18);
+  --prod-drawer-veil: rgba(0, 0, 0, 0.14);
+  --prod-drawer-sheen: rgba(255, 255, 255, 0.05);
+  --prod-modal-scrim: rgba(6, 6, 8, 0.62);
+  --prod-era-bg: rgba(8, 8, 10, 0.62);
+  --prod-era-ink: rgba(255, 255, 255, 0.88);
+  --prod-plate-scrim: rgba(6, 6, 8, 0.86);
+  --prod-plate-ink: #fff;
+  --prod-ref-ink: rgba(255, 255, 255, 0.45);
   --sans: 'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif;
   --mono: 'Geist Mono', ui-monospace, monospace;
   --bg: #0a0a0c;
