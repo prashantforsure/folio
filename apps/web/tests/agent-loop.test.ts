@@ -23,6 +23,8 @@ const spies = vi.hoisted(() => ({ listSceneIndex: vi.fn() }))
 vi.mock('@folio/db', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   listSceneIndex: (...args: readonly unknown[]) => spies.listSceneIndex(...args),
+  listSceneSynopses: () => Promise.resolve(new Map()),
+  listSceneEighths: () => Promise.resolve(new Map()),
 }))
 
 const { MAX_STEPS, REFUSAL_NOTE, runAgentLoop } = await import('../lib/agent/loop')
@@ -74,7 +76,7 @@ const scripted = (steps: readonly Step[] | ((call: number) => Step), options: { 
   return { client, sent }
 }
 
-const SCOPE = {} as ProjectScope
+const SCOPE = {} as ProjectScope<'transaction'>
 const gate = (role: 'reader' | 'writer' | 'owner' = 'reader') => ({
   actor: 'user-1' as UserId,
   scope: SCOPE,

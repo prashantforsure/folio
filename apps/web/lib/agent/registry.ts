@@ -62,7 +62,7 @@ export const ToolsetSchema = z.enum(TOOLSETS)
  */
 export type ToolGate = {
   readonly actor: UserId
-  readonly scope: ProjectScope
+  readonly scope: ProjectScope<'transaction'>
   readonly project: Project
   readonly episode: Episode
   readonly role: MembershipRole

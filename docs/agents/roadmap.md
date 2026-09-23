@@ -306,7 +306,16 @@ new `Export as .fountain` menu item.
   `readProjectList` + `visibleCards`. Tested in `tests/server-reads*.test.ts`. The
   server exports read what is **saved**; the Outline menu exports the editor's
   state, which can be a keystroke ahead. Route E2E walks not run (no credentials).
-- [ ] 2.5 Read tools. Register every Phase 2 tool in docs/agents/tools.md, including read_research, the launcher's list_projects and open_project, and load_toolset. Research is read-only (R3). The panel handles navigate by building URLs only with lib/workspace/hrefs.ts and enterEpisodeRoute, then calling router.push; refresh by calling router.refresh(); and download by saving a Blob, which is how exports reach the user (R2). Each turn loads the core toolset plus the current route's toolset. Test each tool's run function against a seeded project, and test that a tool refuses a caller below its minimum role.
+- [x] 2.5 Read tools. Register every Phase 2 tool in docs/agents/tools.md, including read_research, the launcher's list_projects and open_project, and load_toolset. Research is read-only (R3). The panel handles navigate by building URLs only with lib/workspace/hrefs.ts and enterEpisodeRoute, then calling router.push; refresh by calling router.refresh(); and download by saving a Blob, which is how exports reach the user (R2). Each turn loads the core toolset plus the current route's toolset. Test each tool's run function against a seeded project, and test that a tool refuses a caller below its minimum role.
+
+  **Done 2026-09-23.** All 17 Phase 2 tools are registered (`lib/agent/tools/`), each
+  read or client, checked against this catalogue by `tests/agent-tools.test.ts`, which
+  also runs every tool on a seeded fixture and proves the role refusal. The panel
+  handles `navigate` (`lib/agent/navigate.ts` over `hrefs.ts`, then `router.push`),
+  `refresh` and `download` (a Blob); an open chat now survives a move to another
+  episode of the same project. **Flag:** the per-source Research `readable` toggle
+  AGENTS.md names does not exist, so `read_research` returns no source or clip text
+  until it does - adding it is AGENTS.md's "widen what the AI can read".
 - [ ] 2.6 Context and prompt v2. Publish the editor selection (node ids) from the Script and Outline editors through the ephemeral context, the same way assistantFocus works, and include the route, selection and focus in each request. Rewrite the instructions in lib/assistant/context.ts: the agent can read, search, navigate and export, but cannot change anything yet. It keeps citing scenes as it does today, and states report numbers only as returned by tools. Keep the focus blocks.
 
 Phase 2 is done when every box is ticked, the Playwright specs pass, and a user can ask questions from any page and be navigated to the answers.

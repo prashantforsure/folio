@@ -1,0 +1,68 @@
+import { ProjectIdSchema } from '@folio/contracts'
+import { transactionDatabase } from '@folio/db'
+import { z } from 'zod'
+
+import { readProjectList } from '../../projects/server'
+import { PROJECT_FILTERS, PROJECT_SORTS, kindLine, statsLine } from '../../projects/view'
+import { defineTool } from '../registry'
+import type { Tool } from '../registry'
+
+/**
+ * The launcher's toolset - `docs/agents/tools.md`, *Launcher - outside a
+ * project*, and ADR 0003 **D15**. Minimum role `user`: any signed-in person,
+ * because outside a project there is no membership to have a role in
+ * (`minimumRole: null` here). What either tool reads is the caller's own
+ * memberships and nothing else.
+ *
+ * **No model turn calls these yet** (ruled 2026-09-23): a launcher turn has no
+ * project for `agent_runs` to record it on, and the D3 meter and D14 limits
+ * are per project. The launcher panel reads the same list through
+ * `listRecentProjects`, and a click is its `open_project`. The tools are
+ * registered and tested so that on the day that is ruled, only the turn is new.
+ */
+
+export const listProjects = defineTool({
+  name: 'list_projects',
+  description:
+    "List the writer's projects the way the Projects page does - all of them, only screenplays or filmmaking, those shared with them, or the archived - with each filter's count.",
+  toolset: 'launcher',
+  minimumRole: null,
+  mode: 'read',
+  input: z.object({ filter: z.enum(PROJECT_FILTERS).default('all'), sort: z.enum(PROJECT_SORTS).default('recent') }),
+  label: () => 'Reading your projects',
+  run: async (ctx, input) => {
+    const list = await readProjectList(await transactionDatabase(), ctx.gate.actor, input.filter, input.sort)
+    return {
+      ok: true,
+      content: {
+        counts: list.counts,
+        projects: list.cards.map((card) => ({ id: card.project.id, title: card.project.title, kind: kindLine(card), stats: statsLine(card), archived: card.project.archivedAt !== null })),
+      },
+      summary: `${String(list.cards.length)} ${list.cards.length === 1 ? 'project' : 'projects'}`,
+    }
+  },
+})
+
+export const openProject = defineTool({
+  name: 'open_project',
+  description: "Open one of the writer's projects, by its id from list_projects. The panel takes them there.",
+  toolset: 'launcher',
+  minimumRole: null,
+  mode: 'client',
+  input: z.object({ projectId: ProjectIdSchema }),
+  label: () => 'Opening a project',
+  run: async (ctx, input) => {
+    // Only a project the caller is a member of, live or archived: the list is the membership check.
+    const db = await transactionDatabase()
+    const [live, archived] = await Promise.all([
+      readProjectList(db, ctx.gate.actor, 'all', 'recent'),
+      readProjectList(db, ctx.gate.actor, 'archived', 'recent'),
+    ])
+    const card = [...live.cards, ...archived.cards].find((entry) => entry.project.id === input.projectId)
+    if (card === undefined) return { ok: false, message: 'That project could not be found.' }
+    ctx.emit({ type: 'navigate', target: { kind: 'project', projectId: card.project.id } })
+    return { ok: true, content: { opened: card.project.title }, summary: `Opened ${card.project.title}` }
+  },
+})
+
+export const LAUNCHER_TOOLS: readonly Tool[] = [listProjects, openProject]

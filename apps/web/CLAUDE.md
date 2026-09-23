@@ -100,6 +100,14 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   types and predicates in `lib/<route>/facts.ts` (server-importable), the client cell in
   `facts-cell.ts`. The Characters, Locations, Props and Research loaders take a `Pick` of
   `ProjectContext`, so a tool with only a gate reads through the same cached loader.
+- **The read tools** (roadmap task 2.5): all 17 Phase 2 rows of `docs/agents/tools.md`, in
+  `lib/agent/tools/{core,launcher,script,entities,timeline,research}.ts`; `tests/agent-tools.test.ts`
+  asserts the registry against that file. A tool reads through a server read or calls the existing
+  action (which re-gates). Exports reach the writer as a `download` event, never as tool text;
+  `navigate` resolves shape and episode on the server and the panel builds the URL with
+  `lib/agent/navigate.ts` (`hrefs.ts` only). **`read_research` returns no source or clip text**:
+  the per-source `readable` toggle AGENTS.md names does not exist, so every source counts as
+  unreadable. Within one project an open chat stays open when the page moves to another episode.
 - **The workspace, in one directory:** [lib/workspace/](lib/workspace/). `routes.ts` is the route
   tree and both orders (rail, episode nav); `params.ts` the sub-view params; `hrefs.ts` every
   workspace URL and the film/series shape; `context.ts` the membership gate and the `cache()`d

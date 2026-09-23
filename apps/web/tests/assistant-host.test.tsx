@@ -30,6 +30,7 @@ vi.mock('../lib/assistant/actions', () => ({
 vi.mock('../lib/projects/actions', () => ({
   listRecentProjects: () => spies.listRecentProjects(),
 }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }))
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { readonly href: string; readonly children: ReactNode }) => (
     <a href={href} {...rest}>
@@ -158,6 +159,25 @@ describe('inside a project', () => {
     })
     await waitFor(() => {
       expect(container.querySelector('[data-assistant-launcher]')).toBeNull()
+    })
+    expect(screen.getByText(/The harbourmaster/u)).toBeTruthy()
+    expect(spies.openAssistantChat).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps an open conversation when the page moves to another episode of the same project', async () => {
+    // Roadmap task 2.5: the agent's `navigate` can take the writer to another
+    // episode's scene mid-answer; the answer they were reading stays.
+    useSession.setState({ assistantChats: { [assistantChatKey(PROJECT_A, 'ep_001')]: CHAT } })
+    act(() => {
+      publishAssistantProject(inside(PROJECT_A))
+    })
+    host()
+    await screen.findByText(/The harbourmaster/u)
+    act(() => {
+      publishAssistantProject({ ...inside(PROJECT_A), episode: 'ep_002' as EpisodeSlug })
+    })
+    await waitFor(() => {
+      expect(spies.listAssistantChats).toHaveBeenCalledWith(PROJECT_A, 'ep_002')
     })
     expect(screen.getByText(/The harbourmaster/u)).toBeTruthy()
     expect(spies.openAssistantChat).toHaveBeenCalledTimes(1)

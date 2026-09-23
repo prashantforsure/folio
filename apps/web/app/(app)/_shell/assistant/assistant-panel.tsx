@@ -5,6 +5,7 @@ import { Icon } from '@folio/ui'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 
 import { listAssistantChats, openAssistantChat, startAssistantChat } from '../../../../lib/assistant/actions'
@@ -16,7 +17,9 @@ import type { LocationFacts } from '../../../../lib/locations/facts'
 import { useLocationFacts } from '../../../../lib/locations/facts-cell'
 import type { PropFacts } from '../../../../lib/props/facts'
 import { usePropFacts } from '../../../../lib/props/facts-cell'
+import { hrefOfTarget } from '../../../../lib/agent/navigate'
 import { readAgentStream } from '../../../../lib/agent/stream'
+import { asRoute } from '../../../../lib/routes'
 import { useEphemeral } from '../../../../lib/state/ephemeral'
 import { assistantChatKey, useSession } from '../../../../lib/state/session'
 import type { TimelineFacts } from '../../../../lib/timeline/facts'
@@ -510,6 +513,16 @@ type ToolLine = {
   readonly summary: string | null
 }
 
+/** A download event's file, saved as a Blob through a transient link - how exports reach the writer (ruling R2). */
+const saveFile = (filename: string, mime: string, text: string): void => {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 type Turn =
   | (MessageRow & { readonly tools?: readonly ToolLine[] })
   | { readonly id: 'pending'; readonly role: 'assistant'; readonly body: string; readonly createdAt: ''; readonly tools: readonly ToolLine[] }
@@ -552,6 +565,15 @@ export const AssistantPanel = ({
   const storedChat = useSession((state) => state.assistantChats[chatKey] ?? null)
   /** The chat whose turns are on screen, so the effect below reloads only what changed. */
   const shown = useRef<string | null>(null)
+  /** The project the shown chat belongs to. */
+  const shownProject = useRef<string | null>(null)
+  /**
+   * The episode the open chat belongs to - the one a turn is asked about. It
+   * can differ from `episode` (the page's) once the writer, or the agent's
+   * `navigate`, has moved to another episode with the conversation open.
+   */
+  const [chatEpisode, setChatEpisode] = useState<EpisodeSlug | null>(null)
+  const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(false)
@@ -596,11 +618,20 @@ export const AssistantPanel = ({
   // The episode the panel reads changed (another route, another project), or
   // the tab was reloaded: show the chat the store remembers for it, re-read
   // from the server - which re-checks it - or an empty chat when there is none.
+  //
+  // Within one project an open conversation stays open across episodes
+  // (roadmap task 2.5): moving to another episode's page - the writer's click
+  // or the agent's `navigate` - is no reason to lose the answer being read.
+  // A new project, or no open chat, is what reads the store again.
   useEffect(() => {
+    const sameProject = shownProject.current === projectId
+    shownProject.current = projectId
+    if (sameProject && shown.current !== null) return
     if (storedChat === shown.current) return
     shown.current = storedChat
     if (storedChat === null) {
       setChat(null)
+      setChatEpisode(null)
       setTurns([])
       return
     }
@@ -611,10 +642,12 @@ export const AssistantPanel = ({
         shown.current = null
         setStoredChat(chatKey, null)
         setChat(null)
+        setChatEpisode(null)
         setTurns([])
         return
       }
       setChat(result.chat)
+      setChatEpisode(episode)
       setTurns(result.messages)
     })
     return () => {
@@ -645,6 +678,7 @@ export const AssistantPanel = ({
       shown.current = result.chat.id
       setStoredChat(chatKey, result.chat.id)
       setChat(result.chat)
+      setChatEpisode(episode)
       setTurns(result.messages)
       setNotice(null)
     },
@@ -656,6 +690,7 @@ export const AssistantPanel = ({
     shown.current = null
     setStoredChat(chatKey, null)
     setChat(null)
+    setChatEpisode(null)
     setTurns([])
     setNotice(null)
     composer.current?.focus()
@@ -667,6 +702,8 @@ export const AssistantPanel = ({
     setBusy(true)
     setNotice(null)
     let current = chat
+    // A turn is about the open chat's episode; a new chat is about the page's.
+    let askEpisode = chatEpisode ?? episode
     if (current === null) {
       const started = await startAssistantChat(projectId, episode)
       if (started.status !== 'ok') {
@@ -675,9 +712,11 @@ export const AssistantPanel = ({
         return
       }
       current = started.chat
+      askEpisode = episode
       shown.current = current.id
       setStoredChat(chatKey, current.id)
       setChat(current)
+      setChatEpisode(episode)
       setChats((existing) => [started.chat, ...existing])
     }
     const chatId = current.id
@@ -693,7 +732,7 @@ export const AssistantPanel = ({
     try {
       const request: AskRequest = {
         projectId,
-        episode,
+        episode: askEpisode,
         chatId,
         message,
         scope: wholeProject ? 'project' : 'episode',
@@ -739,6 +778,18 @@ export const AssistantPanel = ({
           case 'error':
             setNotice(event.message)
             return
+          // The client half of the read tools (roadmap task 2.5): a place the
+          // server resolved, built into a URL by `hrefs.ts` alone; a re-read
+          // of the server components; a file the writer could have clicked.
+          case 'navigate':
+            router.push(asRoute(hrefOfTarget(event.target)))
+            return
+          case 'refresh':
+            router.refresh()
+            return
+          case 'download':
+            saveFile(event.filename, event.mime, event.text)
+            return
           default:
             return
         }
@@ -766,7 +817,7 @@ export const AssistantPanel = ({
       abort.current = null
       setBusy(false)
     }
-  }, [busy, chat, chatKey, connected, draft, episode, focus, projectId, route, setDraft, setStoredChat, wholeProject])
+  }, [busy, chat, chatEpisode, chatKey, connected, draft, episode, focus, projectId, route, router, setDraft, setStoredChat, wholeProject])
 
   const empty = turns.length === 0
 
