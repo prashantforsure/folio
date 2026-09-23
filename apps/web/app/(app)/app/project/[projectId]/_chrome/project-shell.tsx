@@ -6,6 +6,7 @@ import { useSelectedLayoutSegments } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect } from 'react'
 
+import { publishAssistantProject } from '../../../../../../lib/assistant/project-cell'
 import type { ShellUser } from '../../../../../../lib/auth/session'
 import { useSession } from '../../../../../../lib/state/session'
 import { useViewport } from '../../../../../../lib/state/viewport'
@@ -18,12 +19,14 @@ import {
   railSectionFromSegments,
   workspaceRouteFromSegments,
 } from '../../../../../../lib/workspace/segments'
-import { AssistantPanel } from './assistant-panel'
 import { Rail } from './rail'
 
 /**
- * The project workspace's frame: ambient glows, the rail, the route below,
- * and the one thing that floats over every route - the assistant panel.
+ * The project workspace's frame: ambient glows, the rail and the route below.
+ * The assistant panel was drawn here until roadmap task 2.2 (2026-09-23)
+ * moved it app-wide (`app/(app)/_shell/assistant/assistant-host.tsx`); the
+ * shell now publishes which project and episode it is showing
+ * (`lib/assistant/project-cell.ts`) and the host draws the panel for it.
  * `docs/ui design/README.md`, "Shell": "Every route is the same three-part
  * shell. Implement it once." (The Characters overlay floated here too until
  * the client re-ruled the rail's icon a plain link, 2026-09-16.)
@@ -40,7 +43,9 @@ import { Rail } from './rail'
  *              route's drawer (`lib/workspace/drawer.ts`) is
  *              open under 1200. Written to `html[data-nav-open]`, which is
  *              what hides the server-rendered sidebar (`globals.css`).
- *   assistant  the session flag, else closed. `⌘J` toggles it anywhere.
+ *   assistant  the session flag, else closed. `⌘J` toggles it anywhere - the
+ *              binding is the host's now; this shell still reads the flag
+ *              for the rule above.
  *
  * The route bodies read `useSession().navOpen` for their own geometry and no
  * longer write the attribute; five of them used to, and the last effect to
@@ -60,7 +65,6 @@ export const ProjectShell = ({
   episodes,
   badges,
   user,
-  assistantConnected,
   children,
 }: {
   readonly projectId: ProjectId
@@ -70,7 +74,6 @@ export const ProjectShell = ({
   readonly episodes: readonly { readonly slug: EpisodeSlug; readonly ordinal: number; readonly title: string }[]
   readonly badges: RailBadges
   readonly user: ShellUser
-  readonly assistantConnected: boolean
   readonly children: ReactNode
 }) => {
   const segments = useSelectedLayoutSegments()
@@ -100,18 +103,19 @@ export const ProjectShell = ({
     }
   }, [navOpen])
 
+  // The app-wide assistant reads which project and episode it is inside from
+  // here. Primitive deps, so it is published when one of them changes and not
+  // on every render; cleared on unmount, so the host falls back to the launcher.
+  const episodeCount = episodes.length
   useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
-        event.preventDefault()
-        session.setAssistantOpen(!assistantOpen)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [assistantOpen, session])
+    publishAssistantProject({ projectId, shape, episode, episodeCount, reading: readingLabel, section: active, route })
+  }, [active, episode, episodeCount, projectId, readingLabel, route, shape])
+  useEffect(
+    () => () => {
+      publishAssistantProject(null)
+    },
+    [],
+  )
 
   const onToggleNav = useCallback(() => {
     session.setNavOpen(!navOpen)
@@ -137,22 +141,6 @@ export const ProjectShell = ({
       />
 
       <div className="relative z-[2] flex min-w-0 flex-1 overflow-hidden">{children}</div>
-
-      {assistantOpen ? (
-        <AssistantPanel
-          episodeCount={episodes.length}
-          projectId={projectId}
-          episode={episode}
-          reading={readingLabel}
-          section={active}
-          route={route}
-          connected={assistantConnected}
-          inFlow={panelInFlow}
-          onClose={() => {
-            session.setAssistantOpen(false)
-          }}
-        />
-      ) : null}
     </div>
   )
 }

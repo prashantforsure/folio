@@ -1,9 +1,10 @@
 'use server'
 
-import { CreateProjectInputSchema, LoglineSchema, ProjectIdSchema, TitleSchema } from '@folio/contracts'
+import { CreateProjectInputSchema, LoglineSchema, ProjectIdSchema, TitleSchema, userId as brandUserId } from '@folio/contracts'
 import type { MembershipRole, ProjectId, UserId } from '@folio/contracts'
 import {
   createProjectFor,
+  listProjectsFor,
   openProjectForRequest,
   readMembershipFor,
   renameProject as renameProjectRow,
@@ -17,11 +18,12 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 import { ROLE, ROLE_REFUSED, meetsRole } from '../auth/roles'
-import { requireUser } from '../auth/session'
+import { currentIdentity, requireUser } from '../auth/session'
 import { importScript } from '../script/actions'
 import { IMPORT_IDLE } from '../script/result'
 import { DONE, failure, IDLE } from './result'
 import type { ProjectActionResult, ProjectField } from './result'
+import { kindLine, statsLine } from './view'
 import { workspaceHref } from './workspace'
 
 /**
@@ -343,4 +345,46 @@ export const purgeProject = async (
     'Deleting forever is not switched on yet. What it removes, and whether a project with ' +
       'billing history can be removed at all, is waiting on a decision. The project stays in the trash.',
   )
+}
+
+/** A row of the assistant launcher's recent list (ADR 0003 **D15**). */
+export type RecentProject = {
+  readonly id: ProjectId
+  readonly title: string
+  readonly kind: string
+  readonly stats: string
+}
+
+export type RecentProjectsResult =
+  | { readonly status: 'ok'; readonly projects: readonly RecentProject[] }
+  | { readonly status: 'refused'; readonly message: string }
+
+/** How many projects the launcher lists. Enough to find this week's work, few enough to read. */
+const RECENT_PROJECTS = 6
+
+/**
+ * The assistant launcher's list: the signed-in person's live, unarchived
+ * screenwriting projects, most recently edited first (roadmap task 2.2).
+ *
+ * A read of the same repository the Projects route reads, cut to a few rows
+ * and to the fields a row prints. Filmmaking projects are left out because
+ * they have no workspace to open (AGENTS.md, open decision 9). Identity only -
+ * there is no project yet to have a role in, and the query reads nothing but
+ * the caller's own memberships. Refuses rather than redirects, because the
+ * caller is a panel, not a page.
+ */
+export const listRecentProjects = async (): Promise<RecentProjectsResult> => {
+  const identity = await currentIdentity()
+  if (identity === null) return { status: 'refused', message: 'Sign in to see your projects.' }
+  const db = await transactionDatabase()
+  const cards = await listProjectsFor(db, brandUserId(identity.id), { kind: 'screenwriting', trashed: false, archived: false })
+  return {
+    status: 'ok',
+    projects: cards.slice(0, RECENT_PROJECTS).map((card) => ({
+      id: card.project.id,
+      title: card.project.title,
+      kind: kindLine(card),
+      stats: statsLine(card),
+    })),
+  }
 }

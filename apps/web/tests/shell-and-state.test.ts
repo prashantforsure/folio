@@ -88,7 +88,16 @@ describe('session state', () => {
     expect(raw).not.toBeNull()
     const stored: unknown = JSON.parse(raw ?? '{}')
     const state = (stored as { state?: Record<string, unknown> }).state ?? {}
-    expect(Object.keys(state).sort()).toEqual(['assistantOpen', 'colourCues', 'navOpen', 'sideOpen', 'sideTab', 'zoom'])
+    expect(Object.keys(state).sort()).toEqual([
+      'assistantChats',
+      'assistantDraft',
+      'assistantOpen',
+      'colourCues',
+      'navOpen',
+      'sideOpen',
+      'sideTab',
+      'zoom',
+    ])
   })
 })
 
@@ -110,15 +119,27 @@ describe('the state boundaries', () => {
     expect(keys).not.toContain('liveRepaginate')
   })
 
-  it('holds only the six session flags and their setters', () => {
+  it('holds only the six session flags, the open chat per episode, the draft, and their setters', () => {
     // `assistantOpen` joined the four with the redesign (2026-09-16): the
     // assistant panel is one panel on every route, so whether it is open is
     // the window's, like the sidebar. `colourCues` joined with the Characters
     // rebuild (2026-09-18): each cue in its record's colour, a way of looking.
+    // `assistantChats` and `assistantDraft` joined with roadmap task 2.2
+    // (2026-09-23): the app-wide panel's open chat per episode and its unsent
+    // draft, which must survive a reload and a trip to another project.
     const values = Object.keys(useSession.getState()).filter(
       (key) => typeof useSession.getState()[key as 'zoom'] !== 'function',
     )
-    expect(values.sort()).toEqual(['assistantOpen', 'colourCues', 'navOpen', 'sideOpen', 'sideTab', 'zoom'])
+    expect(values.sort()).toEqual([
+      'assistantChats',
+      'assistantDraft',
+      'assistantOpen',
+      'colourCues',
+      'navOpen',
+      'sideOpen',
+      'sideTab',
+      'zoom',
+    ])
   })
 
   it('states the pagination default without pretending to store it', () => {

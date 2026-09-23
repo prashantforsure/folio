@@ -5,7 +5,8 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import type { StateStorage } from 'zustand/middleware'
 
 /**
- * Session flags. Five of them, per tab, in sessionStorage.
+ * Session flags, per tab, in sessionStorage - and the assistant's place in its
+ * conversation.
  *
  * AGENTS.md, Tech stack: "Client state | URL first, then React state | **Zustand
  * only for the agent window rect and session flags.**" This is the second half
@@ -24,6 +25,15 @@ import type { StateStorage } from 'zustand/middleware'
  * separate store from `theme.tsx` rather than one convenient object with a
  * mixed persistence policy. A second tab is a second window and is free to
  * differ; the theme is not.
+ *
+ * **The assistant's chat ids and draft** (roadmap task 2.2). The panel is
+ * mounted once, app-wide, and hidden rather than unmounted, so within a page
+ * load its React state already survives. These two survive what that cannot:
+ * a reload, and the move from one project to another and back - the chat you
+ * had open on project A is the one you find there again. Per tab, like the
+ * rest, because a conversation is something you are in the middle of, not a
+ * preference. The chat id is a pointer to an `assistant_chats` row the server
+ * re-checks on every read; nothing here is trusted.
  *
  * Not in: `theme` (per user - localStorage), `pageMode` / `liveRepaginate`
  * (per project - a database row), `paletteOpen` / `aiScope` (ephemeral). See
@@ -66,12 +76,22 @@ type SessionState = {
    * zoom - off by default so the sheet reads as a sheet.
    */
   readonly colourCues: boolean
+  /**
+   * The open chat per project and episode, keyed `<projectId>/<episode slug>`
+   * (`assistantChatKey`). A chat belongs to one episode (`assistant_chats`), so
+   * the key is that pair; absent means a new chat.
+   */
+  readonly assistantChats: Readonly<Record<string, string>>
+  /** What is typed in the composer and not yet sent. One, because there is one composer. */
+  readonly assistantDraft: string
   readonly setZoom: (zoom: Zoom) => void
   readonly setNavOpen: (open: PanelState) => void
   readonly setSideOpen: (open: PanelState) => void
   readonly setSideTab: (tab: SideTab) => void
   readonly setAssistantOpen: (open: PanelState) => void
   readonly setColourCues: (on: boolean) => void
+  readonly setAssistantChat: (key: string, chatId: string | null) => void
+  readonly setAssistantDraft: (draft: string) => void
   readonly toggleNav: () => void
   readonly toggleSide: () => void
 }
@@ -109,6 +129,8 @@ export const useSession = create<SessionState>()(
       sideTab: 'info',
       assistantOpen: null,
       colourCues: false,
+      assistantChats: {},
+      assistantDraft: '',
       setZoom: (zoom) => {
         set({ zoom })
       },
@@ -126,6 +148,17 @@ export const useSession = create<SessionState>()(
       },
       setColourCues: (colourCues) => {
         set({ colourCues })
+      },
+      setAssistantChat: (key, chatId) => {
+        set((state) => {
+          const next = { ...state.assistantChats }
+          if (chatId === null) delete next[key]
+          else next[key] = chatId
+          return { assistantChats: next }
+        })
+      },
+      setAssistantDraft: (assistantDraft) => {
+        set({ assistantDraft })
       },
       toggleNav: () => {
         set((state) => ({ navOpen: flip(state.navOpen) }))
@@ -161,7 +194,12 @@ export const useSession = create<SessionState>()(
         sideTab: state.sideTab,
         assistantOpen: state.assistantOpen,
         colourCues: state.colourCues,
+        assistantChats: state.assistantChats,
+        assistantDraft: state.assistantDraft,
       }),
     },
   ),
 )
+
+/** The `assistantChats` key for one episode of one project. */
+export const assistantChatKey = (projectId: string, episode: string): string => `${projectId}/${episode}`

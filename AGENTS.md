@@ -409,7 +409,9 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 
 - One assistant, reachable everywhere. The orb in every header opens a **400px panel** (the
   README's; in flow at ≥1200px, over the content below), `⌘J` toggles it, and it persists across
-  route changes. It is not a route. Today it is a **read-only chat** over the episode's script
+  route changes. It is not a route. **Updated 2026-09-23** (roadmap task 2.2): it is mounted once in
+  `app/(app)/layout.tsx`, so it also survives a move between projects and is hidden, never unmounted,
+  when closed; outside a project it is a launcher (ADR 0003 D15) that stores no chat. Today it is a **read-only chat** over the episode's script
   (`apps/web/lib/assistant/`, `assistant_chats` / `assistant_messages`, migration `0016`): it
   reads, it answers, it writes nothing. **Updated 2026-09-23** (the copilot pass): it stays
   read-only **until roadmap Phase 3**, and from there it writes — through the proposals above,

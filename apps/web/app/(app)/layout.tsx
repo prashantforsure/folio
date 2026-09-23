@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 
+import { assistantConnected } from '../../lib/assistant/server'
 import { requireUser } from '../../lib/auth/session'
 import { EphemeralProvider } from '../../lib/state/ephemeral'
+import { AssistantHost } from './_shell/assistant/assistant-host'
 
 /**
  * Never prerendered.
@@ -59,6 +61,17 @@ export const dynamic = 'force-dynamic'
  * root layout, because a command palette and an agent scope belong to the
  * signed-in product. The sign-in page has no use for either.
  *
+ * ## The assistant is mounted here, once
+ *
+ * Roadmap task 2.2 (2026-09-23): the assistant panel follows the writer
+ * everywhere signed-in - a chat inside a project, the launcher outside one
+ * (ADR 0003 **D15**) - so it is drawn beside `children` in this frame, which
+ * no navigation re-mounts. `AssistantHost` is the client half; whether the
+ * assistant is connected is an environment fact (`ANTHROPIC_API_KEY`), read
+ * here and handed down as a boolean, as the project layout did before.
+ * `relative` on the frame is what the panel's overlay form (below 1200px)
+ * positions against.
+ *
  * ## `overflow-hidden` on the frame
  *
  * The bundles scroll panels, never the document: `height: 100vh` with
@@ -71,7 +84,10 @@ const AppLayout = async ({ children }: { readonly children: ReactNode }) => {
 
   return (
     <EphemeralProvider>
-      <div className="flex h-screen overflow-hidden bg-desk text-ink">{children}</div>
+      <div className="relative flex h-screen overflow-hidden bg-desk text-ink">
+        {children}
+        <AssistantHost connected={assistantConnected()} />
+      </div>
     </EphemeralProvider>
   )
 }

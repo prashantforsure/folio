@@ -1,7 +1,6 @@
 import { readRailBadges } from '@folio/db'
 import type { ReactNode } from 'react'
 
-import { assistantConnected } from '../../../../../lib/assistant/server'
 import { loadProject, rememberedOrFirstEpisode } from '../../../../../lib/workspace/context'
 import { ProjectShell } from './_chrome/project-shell'
 
@@ -10,8 +9,9 @@ import { ProjectShell } from './_chrome/project-shell'
  *
  * `docs/ui design/README.md`, "Shell": rail, sidebar, header, main surface,
  * and the panels that float over every route. This layout draws the parts
- * that are the same on every route - the rail and the assistant panel,
- * through `ProjectShell` - and the writing layout one
+ * that are the same on every route - the rail, through `ProjectShell`; the
+ * assistant panel is app-wide since roadmap task 2.2 (`app/(app)/layout.tsx`)
+ * and reads this project from the shell - and the writing layout one
  * level down draws the sidebar and header for the four writing routes.
  *
  * ## What is read here, and where it comes from
@@ -25,8 +25,7 @@ import { ProjectShell } from './_chrome/project-shell'
  * The shell needs an episode to link Writing and Production to, and to open
  * the assistant on, when the URL has none (a project route). That is the
  * same "last opened, else first" the index redirect uses, from the same
- * function. Whether the assistant is connected is an environment fact
- * (`ANTHROPIC_API_KEY`), read once here and handed down as a boolean.
+ * function.
  */
 const ProjectLayout = async ({
   children,
@@ -50,7 +49,6 @@ const ProjectLayout = async ({
       episodes={context.episodes.map((episode) => ({ slug: episode.slug, ordinal: episode.ordinal, title: episode.title }))}
       badges={badges}
       user={context.user}
-      assistantConnected={assistantConnected()}
     >
       {children}
     </ProjectShell>

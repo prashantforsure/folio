@@ -7,23 +7,24 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-import { listAssistantChats, openAssistantChat, startAssistantChat } from '../../../../../../lib/assistant/actions'
-import type { ChatRow, MessageRow } from '../../../../../../lib/assistant/result'
-import type { CharacterFacts } from '../../../../../../lib/characters/facts'
-import { useCharacterFacts } from '../../../../../../lib/characters/facts'
-import { citeOf } from '../../../../../../lib/characters/figures'
-import type { LocationFacts } from '../../../../../../lib/locations/facts'
-import { useLocationFacts } from '../../../../../../lib/locations/facts'
-import type { PropFacts } from '../../../../../../lib/props/facts'
-import { usePropFacts } from '../../../../../../lib/props/facts'
-import { useEphemeral } from '../../../../../../lib/state/ephemeral'
-import type { TimelineFacts } from '../../../../../../lib/timeline/facts'
-import { useTimelineFacts } from '../../../../../../lib/timeline/facts'
-import { characterHref } from '../../../../../../lib/workspace/hrefs'
-import type { RailSection, WorkspaceRoute } from '../../../../../../lib/workspace/routes'
-import type { CitationChip } from './citation-chips'
-import { CitationChips } from './citation-chips'
-import { Orb } from './orb'
+import { listAssistantChats, openAssistantChat, startAssistantChat } from '../../../../lib/assistant/actions'
+import type { ChatRow, MessageRow } from '../../../../lib/assistant/result'
+import type { CharacterFacts } from '../../../../lib/characters/facts'
+import { useCharacterFacts } from '../../../../lib/characters/facts'
+import { citeOf } from '../../../../lib/characters/figures'
+import type { LocationFacts } from '../../../../lib/locations/facts'
+import { useLocationFacts } from '../../../../lib/locations/facts'
+import type { PropFacts } from '../../../../lib/props/facts'
+import { usePropFacts } from '../../../../lib/props/facts'
+import { useEphemeral } from '../../../../lib/state/ephemeral'
+import { assistantChatKey, useSession } from '../../../../lib/state/session'
+import type { TimelineFacts } from '../../../../lib/timeline/facts'
+import { useTimelineFacts } from '../../../../lib/timeline/facts'
+import { characterHref } from '../../../../lib/workspace/hrefs'
+import type { RailSection, WorkspaceRoute } from '../../../../lib/workspace/routes'
+import type { CitationChip } from '../../app/project/[projectId]/_chrome/citation-chips'
+import { CitationChips } from '../../app/project/[projectId]/_chrome/citation-chips'
+import { Orb } from '../../app/project/[projectId]/_chrome/orb'
 
 /**
  * The assistant panel. 400px, `--sunk`, one left hairline - `docs/ui
@@ -41,6 +42,16 @@ import { Orb } from './orb'
  * attachment model and no speech path exist - so each is disabled with its
  * title saying so rather than omitted; the composer's `@` mention is a
  * hint the mockup writes and this pass does not parse. All three flagged.
+ *
+ * ## Mounted once, hidden when closed
+ *
+ * Since roadmap task 2.2 the panel is mounted by `app/(app)/_shell/assistant-host.tsx`,
+ * above both shells, and closing it hides it rather than unmounting it: a
+ * conversation survives the close, every route change and a move to another
+ * project and back. What must also survive a reload - the open chat per
+ * project and episode, and the unsent draft - is in the session store
+ * (`lib/state/session.ts`); the chat itself is re-read from the server, which
+ * re-checks it, whenever the episode the panel reads changes.
  *
  * ## Not connected
  *
@@ -501,6 +512,7 @@ export const AssistantPanel = ({
   route,
   connected,
   inFlow,
+  hidden,
   onClose,
 }: {
   readonly projectId: ProjectId
@@ -514,12 +526,20 @@ export const AssistantPanel = ({
   readonly route: WorkspaceRoute | null
   readonly connected: boolean
   readonly inFlow: boolean
+  /** Closed: drawn `hidden`, never unmounted, so the conversation and a running answer survive. */
+  readonly hidden: boolean
   readonly onClose: () => void
 }) => {
   const [chats, setChats] = useState<readonly ChatRow[]>([])
   const [chat, setChat] = useState<ChatRow | null>(null)
   const [turns, setTurns] = useState<readonly Turn[]>([])
-  const [draft, setDraft] = useState('')
+  const draft = useSession((state) => state.assistantDraft)
+  const setDraft = useSession((state) => state.setAssistantDraft)
+  const setStoredChat = useSession((state) => state.setAssistantChat)
+  const chatKey = assistantChatKey(projectId, episode)
+  const storedChat = useSession((state) => state.assistantChats[chatKey] ?? null)
+  /** The chat whose turns are on screen, so the effect below reloads only what changed. */
+  const shown = useRef<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(false)
@@ -561,6 +581,35 @@ export const AssistantPanel = ({
     }
   }, [episode, projectId])
 
+  // The episode the panel reads changed (another route, another project), or
+  // the tab was reloaded: show the chat the store remembers for it, re-read
+  // from the server - which re-checks it - or an empty chat when there is none.
+  useEffect(() => {
+    if (storedChat === shown.current) return
+    shown.current = storedChat
+    if (storedChat === null) {
+      setChat(null)
+      setTurns([])
+      return
+    }
+    let cancelled = false
+    void openAssistantChat(projectId, episode, storedChat).then((result) => {
+      if (cancelled || shown.current !== storedChat) return
+      if (result.status !== 'ok') {
+        shown.current = null
+        setStoredChat(chatKey, null)
+        setChat(null)
+        setTurns([])
+        return
+      }
+      setChat(result.chat)
+      setTurns(result.messages)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [chatKey, episode, projectId, setStoredChat, storedChat])
+
   useEffect(() => {
     const node = scroller.current
     if (node !== null) node.scrollTop = node.scrollHeight
@@ -581,20 +630,24 @@ export const AssistantPanel = ({
         setNotice(result.message)
         return
       }
+      shown.current = result.chat.id
+      setStoredChat(chatKey, result.chat.id)
       setChat(result.chat)
       setTurns(result.messages)
       setNotice(null)
     },
-    [episode, projectId],
+    [chatKey, episode, projectId, setStoredChat],
   )
 
   const fresh = useCallback(() => {
     setListOpen(false)
+    shown.current = null
+    setStoredChat(chatKey, null)
     setChat(null)
     setTurns([])
     setNotice(null)
     composer.current?.focus()
-  }, [])
+  }, [chatKey, setStoredChat])
 
   const send = useCallback(async () => {
     const message = draft.trim()
@@ -610,6 +663,8 @@ export const AssistantPanel = ({
         return
       }
       current = started.chat
+      shown.current = current.id
+      setStoredChat(chatKey, current.id)
       setChat(current)
       setChats((existing) => [started.chat, ...existing])
     }
@@ -674,7 +729,7 @@ export const AssistantPanel = ({
       abort.current = null
       setBusy(false)
     }
-  }, [busy, chat, connected, draft, episode, focus, projectId, wholeProject])
+  }, [busy, chat, chatKey, connected, draft, episode, focus, projectId, route, setDraft, setStoredChat, wholeProject])
 
   const empty = turns.length === 0
 
@@ -685,7 +740,8 @@ export const AssistantPanel = ({
       data-assistant-scope={wholeProject ? 'project' : 'episode'}
       data-assistant-focus={focus === null ? undefined : focus.id}
       aria-label="Assistant"
-      className={`folio-assistant-panel ${inFlow ? 'relative' : 'absolute inset-y-0 right-0'} z-[3] flex flex-none flex-col`}
+      hidden={hidden}
+      className={`folio-assistant-panel ${inFlow ? 'relative' : 'absolute inset-y-0 right-0'} z-[3] ${hidden ? 'hidden' : 'flex'} flex-none flex-col`}
     >
       <div className="flex h-[60px] flex-none items-center gap-[8px] pl-[16px] pr-[12px]">
         <Orb size={20} />

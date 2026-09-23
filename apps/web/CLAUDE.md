@@ -25,7 +25,7 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   **238px account sidebar** for the four account routes (`new`, `projects`, `trash`, `settings`,
   plus three redirects) and reads the two live numbers it prints;
   [app/(app)/app/project/[projectId]/layout.tsx](app/(app)/app/project/[projectId]/layout.tsx)
-  draws the workspace shell through `_chrome/project-shell.tsx` (56px rail, the assistant panel), and `_chrome/writing-layout.tsx` the 236px sidebar, 60px header and
+  draws the workspace shell through `_chrome/project-shell.tsx` (56px rail), and `_chrome/writing-layout.tsx` the 236px sidebar, 60px header and
   main-surface card for the four writing routes. All **ten** workspace routes have bodies
   (`WORKSPACE_ROUTE_COUNT`, `lib/workspace/routes.ts`; root `CLAUDE.md`, Repository map).
 - **The account routes (2026-09-22, the client's `handoff-account-v2/` - supplied with the brief,
@@ -77,6 +77,15 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
 - **The shell owns `html[data-nav-open]`.** Route bodies read `useSession().navOpen` for their own
   geometry and never write the attribute; `useViewport()` (`lib/state/viewport.ts`) is the one
   resize listener. Below 1200px an open assistant panel forces the sidebar closed there.
+- **The assistant panel is app-wide** (roadmap task 2.2, 2026-09-23): `app/(app)/layout.tsx` mounts
+  `_shell/assistant/assistant-host.tsx` once, beside `children`, so no navigation re-mounts it. Inside
+  a project it draws the chat panel (`_shell/assistant/assistant-panel.tsx`) for the project and
+  episode `project-shell.tsx` publishes into `lib/assistant/project-cell.ts`; outside one, the
+  launcher (`_shell/assistant/launcher.tsx`, ADR 0003 D15) - recent projects and a disabled
+  `Start from a story`, **no composer** (ruled 2026-09-23: a launcher turn has no project to be
+  recorded on). Closed, the chat panel is **hidden, never unmounted**; the open chat per episode and
+  the draft are in the session store. The host owns `⌘J`; the project shell keeps the nav-collapse
+  rule and reads `assistantOpen` for it.
 - **The workspace, in one directory:** [lib/workspace/](lib/workspace/). `routes.ts` is the route
   tree and both orders (rail, episode nav); `params.ts` the sub-view params; `hrefs.ts` every
   workspace URL and the film/series shape; `context.ts` the membership gate and the `cache()`d

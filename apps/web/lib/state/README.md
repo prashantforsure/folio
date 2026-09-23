@@ -12,7 +12,7 @@ the differences start costing something.
 | Mechanism | File | Holds | Survives |
 | --- | --- | --- | --- |
 | React Context → **localStorage**, per user | [theme.tsx](theme.tsx) | `theme` | a closed browser? yes. a new device? no |
-| **Zustand + `persist` → sessionStorage**, per tab | [session.ts](session.ts) | `zoom`, `navOpen`, `sideOpen`, `sideTab`, `assistantOpen`, `colourCues` | a route change; not a closed tab |
+| **Zustand + `persist` → sessionStorage**, per tab | [session.ts](session.ts) | `zoom`, `navOpen`, `sideOpen`, `sideTab`, `assistantOpen`, `colourCues`, `assistantChats`, `assistantDraft` | a route change, a reload; not a closed tab |
 | React Context, **ephemeral** | [ephemeral.tsx](ephemeral.tsx) | `paletteOpen`, `aiScope`, `assistantPrompt`, `assistantFocus` | nothing |
 | **A database row, per project** | [project-preferences.ts](project-preferences.ts) → `projects.page_mode` / `projects.live_repaginate` | `pageMode`, `liveRepaginate` | everything — it is shared with collaborators |
 | **A database row, per user + episode** | `view_preferences` | Production's `Cards \| Columns` and its 17 field toggles | everything |
@@ -43,6 +43,11 @@ sessionStorage is exactly that lifetime, and it is the one AGENTS.md names Zusta
 `assistantOpen` is here for the same reason — the panel is the same panel on every route, so which
 route you are on must not decide whether it is open. `PanelState` is `boolean | null`, where `null`
 means "the route decides".
+`assistantChats` (the open chat per `<projectId>/<episode>`) and `assistantDraft` joined on
+2026-09-23 (roadmap task 2.2) because the panel is app-wide now: a conversation has to survive a
+reload and a trip to another project and back, and the panel's own React state - it is hidden,
+never unmounted - covers only the rest. A chat id here is a pointer the server re-checks on every
+read, never a grant.
 
 **`paletteOpen` and `aiScope` are ephemeral.** A command palette that remembers it was open is a
 command palette that opens by itself. Plain React state; nothing to persist and nothing to clean up.
