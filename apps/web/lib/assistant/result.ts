@@ -32,6 +32,30 @@ export const messageRowOf = (message: AssistantMessage): MessageRow => ({
   createdAt: message.createdAt,
 })
 
+/**
+ * A chat's stored turns as the panel prints them (roadmap task 2.3).
+ *
+ * Since the agent loop, one answer can be several stored messages: the
+ * model's text before a tool call, the tool results (a `user` turn with no
+ * body - the API's shape, not the writer's words), the text after. The panel
+ * shows what the writer saw: their questions, and each answer as one turn, its
+ * pieces joined as the stream joined them. A message with no text is not
+ * shown; the transcript the API replays is `lib/agent/replay.ts`'s business.
+ */
+export const visibleMessages = (messages: readonly AssistantMessage[]): readonly MessageRow[] => {
+  const rows: MessageRow[] = []
+  for (const message of messages) {
+    if (message.body.trim().length === 0) continue
+    const last = rows.at(-1)
+    if (message.role === 'assistant' && last?.role === 'assistant') {
+      rows[rows.length - 1] = { ...last, body: `${last.body}\n\n${message.body}` }
+      continue
+    }
+    rows.push(messageRowOf(message))
+  }
+  return rows
+}
+
 export type ChatsResult =
   | { readonly status: 'ok'; readonly chats: readonly ChatRow[] }
   | { readonly status: 'refused'; readonly message: string }

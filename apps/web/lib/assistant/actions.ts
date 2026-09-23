@@ -7,7 +7,7 @@ import { createChat, deleteChat, listChats, listMessages, readChat } from '@foli
 import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisode } from '../script/gate'
 import type { ChatResult, ChatsResult, SimpleAssistantResult } from './result'
-import { chatRowOf, messageRowOf } from './result'
+import { chatRowOf, visibleMessages } from './result'
 
 /**
  * The assistant panel's reads and small writes. The one big write - asking
@@ -46,7 +46,7 @@ export const openAssistantChat = async (
     return { status: 'error', message: 'That chat could not be found.' }
   }
   const messages = await listMessages(gate.scope, chat.id)
-  return { status: 'ok', chat: chatRowOf(chat), messages: messages.map(messageRowOf) }
+  return { status: 'ok', chat: chatRowOf(chat), messages: visibleMessages(messages) }
 }
 
 /**

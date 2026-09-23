@@ -1,7 +1,10 @@
-import type { AskFocus, AssistantChatId, SceneRef } from '@folio/contracts'
+import type { AgentEvent, AgentRunStatus, AgentStopReason, AskFocus, AssistantChatId, SceneRef } from '@folio/contracts'
 import { AskInputSchema } from '@folio/contracts'
 import {
+  addAgentRunTokens,
   appendMessage,
+  createAgentRun,
+  finishAgentRun,
   listBoundCues,
   listBoundSluglines,
   listCharacterRecords,
@@ -14,17 +17,25 @@ import {
   readMentionLabels,
   readProjectScreenplayByEpisode,
   readScreenplayNodes,
+  startAgentRun,
+  tokensTodayFor,
+  transactionDatabase,
 } from '@folio/db'
 import type { CharacterRecordRow, LocationRecordRow, ProjectScope, SceneIndexRow } from '@folio/db'
 import { assistantEnv } from '@folio/db/env'
-import type { ScreenplayNode } from '@folio/script'
+import type { RunId, ScreenplayNode } from '@folio/script'
 import { establishingLines, formatStoryTime, quadrantOf } from '@folio/script'
 import Anthropic from '@anthropic-ai/sdk'
 
 import { formatSceneRef, sceneRefOf } from '../characters/figures'
 import { dayNightShort, quadrantLabel } from '../locations/view'
 import type { EpisodeGate } from '../script/gate'
+import { DAILY_TOKENS_PER_USER } from '../agent/limits'
+import { runAgentLoop } from '../agent/loop'
+import type { ModelClient } from '../agent/loop'
 import { checkRateLimit } from '../agent/rate-limit'
+import { replayOf } from '../agent/replay'
+import '../agent/tools'
 import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisodeWith } from '../script/gate'
 import { loadTimeline } from '../timeline/server'
@@ -41,9 +52,9 @@ import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
  * composer. `assistantClient()` is the one door to the SDK (the Characters
  * drawer's model actions were its second caller until the fourth pass,
  * 2026-09-20); the key itself never leaves here. `ask()` is the streaming path
- * `app/api/assistant/route.ts` exposes: gate, read the script beside the
- * gate, append the writer's turn, stream the answer, append the answer when
- * the stream ends.
+ * `app/api/assistant/route.ts` exposes: gate, limits, read the script beside
+ * the gate, then run the agent loop (`lib/agent/loop.ts`, roadmap task 2.3)
+ * inside a newline-delimited JSON stream of `AgentEvent`s (ADR 0003 **D7**).
  *
  * ## The gate is the Script route's
  *
@@ -61,7 +72,17 @@ import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
  * second, uncached block so the cacheable prefix stays stable between
  * turns. A stale focus id is no block and no error. `places` (Locations)
  * and `timeline` (Timeline) add that route's records to the system block.
- * Text only: no tools, because the assistant may not write.
+ *
+ * ## Tools, and a run per turn
+ *
+ * Since roadmap task 2.3 a turn is a tool-use loop: the model may call the
+ * core toolset and the route's (`lib/agent/registry.ts`), every one a read
+ * until Phase 3 (AGENTS.md ruling **R8**). Each turn is an `agent_runs` row
+ * (`0034`): its tokens are recorded there (D3), and every message of the
+ * exchange - the model's tool calls, the results that answer them - is stored
+ * with its content blocks, so the next turn replays it (`lib/agent/replay.ts`).
+ * Two limits are checked before the stream opens, both as a `429`: the D14
+ * hourly request limit and the D3 daily token cap.
  */
 
 export const assistantConnected = (): boolean => assistantEnv !== null
@@ -243,6 +264,12 @@ const timelineOf = async (
   }
 }
 
+/** Seconds until the next UTC midnight, when the daily token cap turns over. */
+export const secondsToMidnightUtc = (now: Date): number => {
+  const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)
+  return Math.max(1, Math.ceil((next - now.getTime()) / 1000))
+}
+
 export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome> => {
   const anthropic = assistantClient()
   if (anthropic === null) {
@@ -268,6 +295,18 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
   // already happened is a report.
   const limited = await checkRateLimit(scope, gate.actor, 'assistant')
   if (limited !== null) return { ...limited, code: 429 }
+  // D3: the per-user daily token cap, summed across every project the writer
+  // works in. Refused before a token is spent; a turn that crosses it midway
+  // is stopped by the loop.
+  const tokenBudget = DAILY_TOKENS_PER_USER - (await tokensTodayFor(await transactionDatabase(), gate.actor))
+  if (tokenBudget <= 0) {
+    return {
+      status: 'rate-limited',
+      code: 429,
+      message: "You have used today's assistant allowance. It resets at midnight UTC.",
+      retryAfterSeconds: secondsToMidnightUtc(new Date()),
+    }
+  }
   if (extra.chat === null || extra.chat.episodeId !== episode.id) {
     return { status: 'refused', code: 404, message: 'That chat could not be found.' }
   }
@@ -327,7 +366,6 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
   const timelineRead = input.timeline === true && input.scope === 'project' ? await timelineOf(gate, input.focus?.kind === 'scene' ? input.focus.id : null) : null
 
   const history = await listMessages(scope, chatId)
-  await appendMessage(scope, chatId, 'user', input.message)
 
   const focused = placeRead?.focus ?? timelineRead?.focus ?? focus
   const context = buildContext({
@@ -342,62 +380,64 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
     ...(focused === null ? {} : { focus: focused }),
   })
 
-  const messages: Anthropic.MessageParam[] = [
-    ...history.map((turn): Anthropic.MessageParam => ({ role: turn.role, content: turn.body })),
-    { role: 'user', content: input.message },
-  ]
+  const messages: Anthropic.MessageParam[] = [...replayOf(history), { role: 'user', content: input.message }]
   const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: context.system, cache_control: { type: 'ephemeral' } }]
   if (context.focus !== null) system.push({ type: 'text', text: context.focus })
 
   const encoder = new TextEncoder()
-  let answer = ''
+  const client: ModelClient = { stream: (params, options) => anthropic.messages.stream(params, options) }
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      try {
-        const events = anthropic.messages.stream(
-          {
-            model: ASSISTANT_MODEL,
-            max_tokens: MAX_OUTPUT_TOKENS,
-            system,
-            messages,
-          },
-          { signal },
-        )
-        for await (const event of events) {
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-            answer += event.delta.text
-            controller.enqueue(encoder.encode(event.delta.text))
-          }
+      const emit = (event: AgentEvent): void => {
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
+        } catch {
+          // The client has gone; the run still finishes and is still recorded.
         }
-        const final = await events.finalMessage()
-        if (final.stop_reason === 'refusal') {
-          const note = '\n\n[The assistant declined to answer this one.]'
-          answer += note
-          controller.enqueue(encoder.encode(note))
+      }
+      let runId: RunId | null = null
+      let status: FinishedStatus = 'failed'
+      let stopReason: AgentStopReason = 'error'
+      try {
+        // The run first, so the writer's question can carry its id (`0034`).
+        const run = await createAgentRun(scope, { episodeId: episode.id, chatId, mode: 'interactive' })
+        runId = run.id
+        const question = await appendMessage(scope, chatId, 'user', input.message, { runId: run.id })
+        await startAgentRun(scope, run.id, question.id)
+
+        const outcome = await runAgentLoop({
+          client,
+          model: ASSISTANT_MODEL,
+          maxTokens: MAX_OUTPUT_TOKENS,
+          system,
+          messages,
+          route: input.route ?? null,
+          context: { gate: { actor: gate.actor, scope, project, episode, role: gate.role }, runId: run.id, emit },
+          emit,
+          signal,
+          tokenBudget,
+          recordTokens: (used, produced) => addAgentRunTokens(scope, run.id, used, produced),
+          recordMessage: async (role, body, content) => {
+            await appendMessage(scope, chatId, role, body, { content, runId: run.id })
+          },
+        })
+        stopReason = outcome.stopReason
+        status = RUN_STATUS[outcome.stopReason]
+        // Whatever the writer saw that no stored message holds - a step cut
+        // off by an abort, an error's note - is still worth keeping: a half
+        // answer is better than a question with no answer in the log.
+        if (outcome.unsaved.trim().length > 0) {
+          await appendMessage(scope, chatId, 'assistant', outcome.unsaved, { runId: run.id }).catch(() => undefined)
         }
       } catch (cause) {
-        // A closed tab aborts the fetch; the SDK surfaces it as an error.
-        // Whatever was streamed is still worth keeping - a half answer the
-        // writer saw is better than a question with no answer in the log.
-        if (!(cause instanceof Anthropic.APIUserAbortError) && !signal.aborted) {
-          const message = cause instanceof Anthropic.APIError ? `The assistant could not answer (${String(cause.status)}).` : 'The assistant could not answer.'
-          const note = answer.length === 0 ? message : `\n\n[${message}]`
-          answer += note
-          try {
-            controller.enqueue(encoder.encode(note))
-          } catch {
-            // The client has gone; nothing to tell it.
-          }
-        }
+        console.error({ event: 'folio.agent.turn_failed', message: cause instanceof Error ? cause.message : String(cause) })
+        emit({ type: 'error', message: 'The assistant could not answer.' })
       } finally {
-        if (answer.trim().length > 0) {
-          try {
-            await appendMessage(scope, chatId, 'assistant', answer)
-          } catch {
-            // The turn was shown; losing it from the log is the lesser failure.
-          }
+        if (runId !== null) {
+          await finishAgentRun(scope, runId, status, status === 'failed' ? 'The assistant could not answer.' : null).catch(() => undefined)
         }
+        emit({ type: 'done', runId, status, stopReason })
         try {
           controller.close()
         } catch {
@@ -408,4 +448,17 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
   })
 
   return { status: 'streaming', stream }
+}
+
+/** How a turn's end is recorded on its run. A limit reached is still a turn that answered. */
+type FinishedStatus = Exclude<AgentRunStatus, 'queued' | 'running'>
+
+const RUN_STATUS: Readonly<Record<AgentStopReason, FinishedStatus>> = {
+  end_turn: 'succeeded',
+  step_cap: 'succeeded',
+  time_cap: 'succeeded',
+  token_cap: 'succeeded',
+  refusal: 'succeeded',
+  aborted: 'cancelled',
+  error: 'failed',
 }

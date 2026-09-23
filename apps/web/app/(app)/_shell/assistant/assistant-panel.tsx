@@ -16,6 +16,7 @@ import type { LocationFacts } from '../../../../lib/locations/facts'
 import { useLocationFacts } from '../../../../lib/locations/facts'
 import type { PropFacts } from '../../../../lib/props/facts'
 import { usePropFacts } from '../../../../lib/props/facts'
+import { readAgentStream } from '../../../../lib/agent/stream'
 import { useEphemeral } from '../../../../lib/state/ephemeral'
 import { assistantChatKey, useSession } from '../../../../lib/state/session'
 import type { TimelineFacts } from '../../../../lib/timeline/facts'
@@ -501,7 +502,18 @@ const SUBHEAD: Record<RailSection, string> = {
 
 const OUTLINE_SUBHEAD = 'Ask about the outline, or have me expand a beat, a synopsis or an act turn.'
 
-type Turn = MessageRow | { readonly id: 'pending'; readonly role: 'assistant'; readonly body: string; readonly createdAt: '' } | Report
+/** A tool call as the answer shows it: a status line, its summary the tool's own (roadmap task 2.3). */
+type ToolLine = {
+  readonly id: string
+  readonly label: string
+  readonly state: 'running' | 'done' | 'failed'
+  readonly summary: string | null
+}
+
+type Turn =
+  | (MessageRow & { readonly tools?: readonly ToolLine[] })
+  | { readonly id: 'pending'; readonly role: 'assistant'; readonly body: string; readonly createdAt: ''; readonly tools: readonly ToolLine[] }
+  | Report
 
 export const AssistantPanel = ({
   projectId,
@@ -674,7 +686,7 @@ export const AssistantPanel = ({
     setTurns((existing) => [
       ...existing,
       { id: `user:${stamp}`, role: 'user', body: message, createdAt: stamp },
-      { id: 'pending', role: 'assistant', body: '', createdAt: '' },
+      { id: 'pending', role: 'assistant', body: '', createdAt: '', tools: [] },
     ])
     const controller = new AbortController()
     abort.current = controller
@@ -685,6 +697,7 @@ export const AssistantPanel = ({
         chatId,
         message,
         scope: wholeProject ? 'project' : 'episode',
+        ...(route === null ? {} : { route }),
         ...(focus === null ? {} : { focus: { kind: focus.kind, id: focus.id } }),
         ...(route === 'locations' ? { places: true } : {}),
         ...(route === 'timeline' ? { timeline: true } : {}),
@@ -699,22 +712,46 @@ export const AssistantPanel = ({
         const failed = (await response.json().catch(() => null)) as { readonly message?: string } | null
         throw new Error(failed?.message ?? 'The assistant could not answer.')
       }
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
+      // One `AgentEvent` per line (roadmap task 2.3): text is the answer as
+      // before; a tool call is a status line under it, its summary computed
+      // by the tool, never the model's words.
       let answer = ''
-      for (;;) {
-        const { value, done } = await reader.read()
-        if (done) break
-        answer += decoder.decode(value, { stream: true })
-        const shown = answer
-        setTurns((existing) => existing.map((turn) => (turn.id === 'pending' ? { ...turn, body: shown } : turn)))
+      let tools: readonly ToolLine[] = []
+      const show = (): void => {
+        const body = answer
+        const lines = tools
+        setTurns((existing) => existing.map((turn) => (turn.id === 'pending' ? { ...turn, body, tools: lines } : turn)))
       }
-      answer += decoder.decode()
+      await readAgentStream(response.body, (event) => {
+        switch (event.type) {
+          case 'text':
+            answer += event.text
+            show()
+            return
+          case 'tool_started':
+            tools = [...tools, { id: event.id, label: event.label, state: 'running', summary: null }]
+            show()
+            return
+          case 'tool_finished':
+            tools = tools.map((line) => (line.id === event.id ? { ...line, state: event.ok ? 'done' : 'failed', summary: event.summary } : line))
+            show()
+            return
+          case 'error':
+            setNotice(event.message)
+            return
+          default:
+            return
+        }
+      })
       const finished = answer
+      const lines = tools
       setTurns((existing) =>
-        existing.map((turn) =>
-          turn.id === 'pending' ? { id: `assistant:${stamp}`, role: 'assistant', body: finished, createdAt: new Date().toISOString() } : turn,
-        ),
+        existing.flatMap((turn): Turn[] => {
+          if (turn.id !== 'pending') return [turn]
+          // A turn that said nothing and called nothing leaves no row behind.
+          if (finished.length === 0 && lines.length === 0) return []
+          return [{ id: `assistant:${stamp}`, role: 'assistant', body: finished, createdAt: new Date().toISOString(), tools: lines }]
+        }),
       )
       setChats((existing) =>
         existing.map((row) => (row.id === chatId && row.title === null ? { ...row, title: message.split('\n')[0] ?? message } : row)),
@@ -851,6 +888,22 @@ export const AssistantPanel = ({
                     : 'whitespace-pre-wrap text-13-5 leading-[1.65] text-read'
                 }
               >
+                {turn.role === 'assistant' && turn.tools !== undefined && turn.tools.length > 0 ? (
+                  <span data-tool-lines className="mb-[6px] flex flex-col gap-[2px] whitespace-normal">
+                    {turn.tools.map((line) => (
+                      <span key={line.id} data-tool-line={line.state} className="flex items-center gap-[6px] font-mono text-11 leading-[1.5] text-ink3">
+                        <span
+                          aria-hidden="true"
+                          className={`h-[5px] w-[5px] flex-none rounded-full ${line.state === 'failed' ? 'bg-live' : line.state === 'done' ? 'bg-ok' : 'bg-ink3'}`}
+                        />
+                        <span className="min-w-0 truncate">
+                          {line.label}
+                          {line.summary === null ? '…' : ` · ${line.summary}`}
+                        </span>
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
                 {turn.body.length === 0 && turn.id === 'pending' ? (
                   <span className="folio-thinking">Thinking</span>
                 ) : turn.role === 'assistant' ? (

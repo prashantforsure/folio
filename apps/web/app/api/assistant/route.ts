@@ -1,3 +1,5 @@
+import { AGENT_STREAM_MEDIA_TYPE } from '@folio/contracts'
+
 import { ask } from '../../../lib/assistant/server'
 
 /**
@@ -5,14 +7,18 @@ import { ask } from '../../../lib/assistant/server'
  *
  * A route handler rather than a server action because an action returns a
  * value and an answer arrives over seconds; the panel appends text as it
- * lands. The body is `AskRequest` (`@folio/contracts`, `AskInputSchema`; `scope` and `focus` are the Characters route's); the response is
- * `text/plain` chunks of the answer, nothing else, so the client needs no
- * event parser - what it reads is what it shows.
+ * lands. The body is `AskRequest` (`@folio/contracts`, `AskInputSchema`); the
+ * response is `application/x-ndjson` - one `AgentEvent` per line (ADR 0003
+ * **D7**, roadmap task 2.3): the answer's text as it arrives, a status line
+ * per tool call, a navigation, a download, and always a closing `done`. The
+ * panel tells a sentence from a navigation by the line's `type`, never by
+ * parsing prose. It was `text/plain` until the agent loop.
  *
  * The gate is inside `ask()`: identity, membership, the role (`ROLE.assistant`,
  * a reader's) and the chat's episode. The proxy protects `/app`, not `/api`,
  * so nothing here is reachable without the gate refusing first. The rate limit
- * is inside `ask()` too, and comes back as a real `429` with a `Retry-After`.
+ * is inside `ask()` too, and comes back as a real `429` with a `Retry-After` -
+ * as does the D3 daily token cap, with the seconds to midnight UTC.
  */
 export const runtime = 'nodejs'
 
@@ -40,7 +46,7 @@ export const POST = async (request: Request): Promise<Response> => {
   return new Response(outcome.stream, {
     status: 200,
     headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Type': `${AGENT_STREAM_MEDIA_TYPE}; charset=utf-8`,
       'Cache-Control': 'no-store',
       'X-Accel-Buffering': 'no',
     },

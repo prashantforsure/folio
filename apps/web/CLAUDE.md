@@ -86,6 +86,12 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   recorded on). Closed, the chat panel is **hidden, never unmounted**; the open chat per episode and
   the draft are in the session store. The host owns `⌘J`; the project shell keeps the nav-collapse
   rule and reads `assistantOpen` for it.
+- **The assistant is a tool-use loop** (roadmap task 2.3): `POST /api/assistant` streams
+  `application/x-ndjson` `AgentEvent`s (`@folio/contracts` `agent.ts`) from `lib/agent/loop.ts`,
+  capped at 12 steps / 60 s (ADR 0003 D5) and the D3 daily token cap; tools live in
+  `lib/agent/registry.ts` + `lib/agent/tools/`, and **a tool not in `docs/agents/tools.md` does not
+  exist**. Each turn is an `agent_runs` row; every API message is stored with its content blocks and
+  replayed by `lib/agent/replay.ts`. The panel reads the stream with `lib/agent/stream.ts`.
 - **The workspace, in one directory:** [lib/workspace/](lib/workspace/). `routes.ts` is the route
   tree and both orders (rail, episode nav); `params.ts` the sub-view params; `hrefs.ts` every
   workspace URL and the film/series shape; `context.ts` the membership gate and the `cache()`d

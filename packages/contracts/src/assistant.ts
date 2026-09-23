@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { AgentRouteSchema } from './agent'
 import {
   AssistantChatIdSchema,
   AssistantMessageIdSchema,
@@ -139,6 +140,12 @@ export const AskInputSchema = z.object({
   places: z.boolean().optional(),
   /** The Timeline route's turn: every scene's story time and threads go into the system block (the Timeline rebuild, phase 5). Project scope only. */
   timeline: z.boolean().optional(),
+  /**
+   * The workspace route the writer is on (roadmap task 2.3). The agent loop
+   * offers the core toolset and this route's (`apps/web/lib/agent/registry.ts`,
+   * `toolsetForRoute`). Absent: the core toolset alone.
+   */
+  route: AgentRouteSchema.optional(),
 })
 
 export type AskRequest = z.input<typeof AskInputSchema>
