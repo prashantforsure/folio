@@ -24,6 +24,7 @@
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "e2e/**/*.ts",
+    "evals/**/*.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": ["node_modules"]

@@ -557,7 +557,16 @@ Phase 4 is done when every box is ticked, the worker is deployed to staging, and
   `placeOf` + `resolveTarget` (a created record through its result id). `run-history.tsx` draws
   both states, tokens and credits, and Undo run (the proposal card's `undoSentence`). **Follow-ups:**
   twenty runs, no paging; E2E walk added but unrun (no `E2E_*`).
-- [ ] 5.5 Evals. Add an eval harness, for example apps/web/evals with a pnpm eval script that does not run in CI (D19), with 10 fixture stories: thin one-liners, detailed treatments, a series pilot, and one mixing Hindi and English. It runs story_to_script against a scratch project and scores the output with structural checks (the script parses, derive leaves zero unresolved cues, every scene has a heading) and a model-judged rubric built from docs/agents/craft.md. It writes a Markdown report with per-story scores and quoted weak spots for human review.
+- [x] 5.5 Evals. Add an eval harness, for example apps/web/evals with a pnpm eval script that does not run in CI (D19), with 10 fixture stories: thin one-liners, detailed treatments, a series pilot, and one mixing Hindi and English. It runs story_to_script against a scratch project and scores the output with structural checks (the script parses, derive leaves zero unresolved cues, every scene has a heading) and a model-judged rubric built from docs/agents/craft.md. It writes a Markdown report with per-story scores and quoted weak spots for human review.
+
+  **Done 2026-09-24.** `apps/web/evals/`: ten fixtures (four one-liners, three treatments, a series
+  pilot, a Hindi-English story, a five-page short); `harness.ts` makes an `eval · <id> · <time>`
+  project for `EVAL_USER_EMAIL` and drives the real `runStoryJob` in-process (no worker job is
+  queued), applying every proposal and approving each checkpoint; `structural.ts` (Fountain round
+  trip, `unresolvedCues`, headings) and `rubric.ts` (the rules read from `craft.md`, a forced-tool
+  judge, quotes kept only if code finds them) score it; `report.ts` writes
+  `evals/reports/*.md` (git-ignored). `pnpm eval` runs it on its own vitest config, never `pnpm
+  test`. **Not run:** no `ANTHROPIC_API_KEY` or eval account here - it stops with that sentence.
 - [ ] 5.6 Hardening. Add Playwright specs for: the panel persisting across navigation, a cited answer, applying and undoing a character creation, a script edit applied in the open editor, a background run with a checkpoint, and a paid confirmation. Verify the rate limits and caps under load. Write docs/agents/README.md covering env vars, worker deployment, costs and troubleshooting, and confirm AGENTS.md's "What we are building" section still describes the shipped system accurately.
 
 Phase 5 is done when every box is ticked, and a story can go all the way to storyboards and video, with every paid step confirmed.

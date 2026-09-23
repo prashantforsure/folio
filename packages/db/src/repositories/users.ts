@@ -665,3 +665,15 @@ export const createProjectFor = async (
 
     return { project: toProject(projectRow), episode: toEpisode(episodeRow) }
   })
+
+/**
+ * A person's id by their sign-in address, or null - for tooling that runs as
+ * a named account outside a request: the eval harness's scratch projects
+ * (roadmap task 5.5), as the Production seed finds its user. Reads the one
+ * row; never a list.
+ */
+export const readUserIdByEmail = async (db: FolioDatabase, email: string): Promise<UserId | null> => {
+  const rows = await db.select({ id: users.id }).from(users).where(eq(users.email, email.trim())).limit(1)
+  const row = rows[0]
+  return row === undefined ? null : (row.id as UserId)
+}

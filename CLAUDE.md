@@ -157,6 +157,7 @@ pnpm lint        # eslint.config.mjs is AGENTS.md made executable; each ban erro
 pnpm test        # only @folio/script, web and worker have test scripts
 pnpm build       # web (ends with scripts/assert-no-server-secrets.mjs) and the worker's bundle
 pnpm test:e2e    # Playwright, web only
+pnpm eval        # the story-to-script evals (apps/web/evals) - on demand, never CI: a model, money, EVAL_USER_EMAIL
 
 pnpm --filter @folio/script exec vitest run src/paginate.test.ts    # one file
 pnpm --filter @folio/script exec vitest run -t "the first id wins"  # one test

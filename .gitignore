@@ -7,6 +7,7 @@ out/
 *.tsbuildinfo
 coverage/
 test-results/
+apps/web/evals/reports/
 playwright-report/
 blob-report/
 .playwright/

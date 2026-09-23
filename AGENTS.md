@@ -740,6 +740,10 @@ pnpm test
 pnpm build
 ```
 
+`pnpm eval` is **not** validation: the story-to-script evals (`apps/web/evals/`, roadmap task
+5.5) call a model and run on demand only (ADR 0003 D19). Run them after a change to the pipeline's
+prompts or `docs/agents/craft.md`, and read the report they write.
+
 Scoped runs while iterating:
 
 ```bash

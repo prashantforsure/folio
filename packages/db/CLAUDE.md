@@ -229,6 +229,9 @@ authored / derived-cache / measurement. Touching `episodes` needs
   only raise of `credit_budget`, called when a paid proposal is confirmed), `spendRunBudget` (one
   conditional update, refused past the budget) and `returnRunBudget`; `continueBackgroundRun`'s
   approval takes any `RunCheckpoint`.
+- **`readUserIdByEmail`** (`users.ts`, roadmap task 5.5) - a person's id by their exact sign-in
+  address, over a raw `FolioDatabase` like the other per-person reads; the eval harness's scratch
+  projects are made for that account with `createProjectFor`.
 - **The run history's reads** (roadmap task 5.4): `listRunsWithInput` (`agent.ts`, the runs with
   their input, newest first), `listProposalsForRuns` and `listRunActivity` (`agent-proposals.ts` -
   proposals and operations for many runs in two statements; the `agent:%` activity rows by the run
