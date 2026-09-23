@@ -91,6 +91,12 @@ node --env-file=apps/web/.env apps/worker/scripts/run.mjs scripts/<name>.ts [arg
   run's) named - `cancelJob` would leave their rows queued. Without `--confirm`
   it writes nothing. On dev, 2026-09-24, the dry run listed 13 frame jobs from
   2026-09-11 to 09-17, 52 credits reserved.
+- **`check-model.ts`** - asks the Models API whether the model
+  `apps/web/lib/assistant/model.ts` names (`ASSISTANT_MODEL`) exists for this
+  `ANTHROPIC_API_KEY`, read through `@folio/db/env` (`web/model-check`). Exit 0:
+  it exists; 1: it does not (404), or the key was refused or the API was
+  unreachable; 2: no key, nothing asked. Run it before a deploy - a wrong id
+  otherwise surfaces as the first writer's turn failing.
 
 ## Deploy to a container host
 

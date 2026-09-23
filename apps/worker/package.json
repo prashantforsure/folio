@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "cancel-stale-jobs": "node scripts/run.mjs scripts/cancel-stale-jobs.ts"
+    "cancel-stale-jobs": "node scripts/run.mjs scripts/cancel-stale-jobs.ts",
+    "check-model": "node scripts/run.mjs scripts/check-model.ts"
   },
   "dependencies": {
     "@folio/contracts": "workspace:*",

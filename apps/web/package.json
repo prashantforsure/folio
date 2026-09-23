@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "exports": {
-    "./worker": "./lib/worker/index.ts"
+    "./worker": "./lib/worker/index.ts",
+    "./model-check": "./lib/assistant/model-check.ts"
   },
   "scripts": {
     "dev": "next dev",
