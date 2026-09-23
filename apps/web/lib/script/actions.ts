@@ -27,7 +27,8 @@ import { z } from 'zod'
 import { readFdx } from './fdx-adapter'
 import { cachedRows, forgetRows } from './row-cache'
 import { ROLE } from '../auth/roles'
-import { isRefusal, openEpisode, openEpisodeWith } from './gate'
+import { isRefusal, openEpisode, openEpisodeWith, openProject } from './gate'
+import { exportProjectPdfWith, exportScriptPdfWith } from './pdf-export'
 import type { ThreadNodeKind } from './panel'
 import {
   exportScriptFdxWith,
@@ -51,6 +52,7 @@ import {
 import type { SaveScriptInput } from './core'
 import type {
   ExportFountainResult,
+  ExportPdfResult,
   ExportScriptResult,
   ImportScriptResult,
   MentionTargetResult,
@@ -357,6 +359,26 @@ export const exportScriptFountain = async (projectId: string, episode: string): 
   const gate = await openEpisode(projectId, episode, ROLE.export)
   if (isRefusal(gate)) return gate
   return exportScriptFountainWith(gate)
+}
+
+/**
+ * The script as PDF (roadmap task 5.3, `exportScriptPdfWith`): the cover, then
+ * every page as the measurement record lays it out - the stored one when it is
+ * current, one measured now when it is stale - in Courier Prime, with a
+ * fallback face for Devanagari. Comments never enter it. The file comes back as
+ * base64, since an action answers in JSON; the browser saves it.
+ */
+export const exportScriptPdf = async (projectId: string, episode: string): Promise<ExportPdfResult> => {
+  const gate = await openEpisode(projectId, episode, ROLE.export)
+  if (isRefusal(gate)) return gate
+  return exportScriptPdfWith(gate)
+}
+
+/** The project card's `Export PDF`: every episode with a script, in running order, each on its own cover. */
+export const exportProjectPdf = async (projectId: string): Promise<ExportPdfResult> => {
+  const gate = await openProject(projectId, ROLE.export)
+  if (isRefusal(gate)) return gate
+  return exportProjectPdfWith(gate)
 }
 
 // ---------------------------------------------------------------------------

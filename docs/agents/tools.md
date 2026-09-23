@@ -90,7 +90,7 @@ No chat is stored outside a project (**D15**). `matchesFilter` also exists in
 | `reply_thread` | `replyThread` — a **comment** thread, not a story thread | reader | propose | 3 |
 | `resolve_thread` | `resolveThread` | reader | propose | 3 |
 | `get_page_count` | New: server-side pagination, or the stored measurement when its `node_digest` matches | reader | read | 2 |
-| `export_script` | `exportScriptFdx`; Fountain export over `serialiseFountain` (**a pure function in `packages/script`**, needs an action); PDF in Phase 5 | reader | read | 2 · PDF 5 |
+| `export_script` | `exportScriptFdx`; Fountain export over `serialiseFountain` (**a pure function in `packages/script`**, needs an action); PDF over `exportScriptPdfWith` (`lib/script/pdf-export.ts`), handed over as base64 in the `download` event - built, task 5.3 | reader | read | 2 · PDF 5 |
 | `export_outline` | Wrapper over `outlineMarkdown` (**`lib/outline/markdown.ts`**, a pure helper) | reader | read | 2 |
 | `set_format` | `setFormat` | writer | confirm | 3 |
 | `set_pagination` | `setPagination` | writer | confirm | 3 |

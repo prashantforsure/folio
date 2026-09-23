@@ -124,7 +124,8 @@ Facts easy to get wrong (history in git):
   writer accepts; `✦ Suggest placements` is still not built, though its blocker is gone (open
   decision 13 closed by ADR 0003 D3).
 - **Both editors are Tiptap 3**; the document lives in the editor, never React state. Boundary
-  files: `lib/script/pm-model.ts`, `lib/outline/pm-model.ts`. Approved `apps/web` deps:
+  files: `lib/script/pm-model.ts`, `lib/outline/pm-model.ts`. Approved `apps/web` deps (plus
+  `pdf-lib` and `@pdf-lib/fontkit`, ADR 0003 D17, installed with task 5.3):
   `@tiptap/{core,pm,react,suggestion}`, `@floating-ui/dom`, `@anthropic-ai/sdk`,
   `fast-xml-parser`, `aws4fetch` — nothing else without asking. Gemini is called over `fetch`,
   no SDK.

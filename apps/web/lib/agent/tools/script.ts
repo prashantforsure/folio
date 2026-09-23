@@ -4,10 +4,11 @@ import { z } from 'zod'
 import { ROLE } from '../../auth/roles'
 import { outlineExport } from '../../outline/server'
 import { exportScriptFdxWith, exportScriptFountainWith } from '../../script/core'
+import { exportScriptPdfWith } from '../../script/pdf-export'
 import { readPageCount } from '../../script/page-count'
 import { defineTool } from '../registry'
 import type { Tool, ToolContext } from '../registry'
-import { deliver } from './download'
+import { deliver, deliverBinary } from './download'
 
 /**
  * The Script and Outline toolset's reads - `docs/agents/tools.md`, *Script and
@@ -46,15 +47,20 @@ export const getPageCount = defineTool({
 export const exportScript = defineTool({
   name: 'export_script',
   description:
-    "Download an episode's script for the writer, as Final Draft (.fdx) or Fountain (.fountain). Comments never go into an export. PDF is not available yet.",
+    "Download an episode's script for the writer, as Final Draft (.fdx), Fountain (.fountain) or PDF (.pdf) - the PDF laid out page for page as the Script route paginates it, with its title page. Comments never go into an export.",
   toolset: 'script',
   minimumRole: ROLE.export,
   mode: 'read',
-  input: z.object({ format: z.enum(['fdx', 'fountain']), episode: EpisodeNumber.optional() }),
-  label: (input) => `Exporting the script as ${input.format === 'fdx' ? 'Final Draft' : 'Fountain'}`,
+  input: z.object({ format: z.enum(['fdx', 'fountain', 'pdf']), episode: EpisodeNumber.optional() }),
+  label: (input) => `Exporting the script as ${input.format === 'fdx' ? 'Final Draft' : input.format === 'pdf' ? 'PDF' : 'Fountain'}`,
   run: async (ctx, input) => {
     const episode = await episodeFor(ctx, input.episode)
     if (episode === null) return { ok: false, message: `There is no episode ${String(input.episode)}.` }
+    if (input.format === 'pdf') {
+      const result = await exportScriptPdfWith({ ...ctx.gate, episode })
+      if (result.status !== 'exported') return { ok: false, message: result.message }
+      return deliverBinary(ctx, { filename: result.filename, mime: 'application/pdf', base64: result.base64 }, { pages: result.pages, measurement: result.source })
+    }
     if (input.format === 'fdx') {
       const result = await exportScriptFdxWith({ ...ctx.gate, episode })
       if (result.status !== 'exported') return { ok: false, message: result.message }

@@ -204,8 +204,17 @@ export const AgentEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('navigate'), target: NavigateTargetSchema }),
   /** Re-read the server components under the panel (`router.refresh()`). */
   z.object({ type: z.literal('refresh') }),
-  /** A file the writer could have clicked for themselves (ruling R2), saved by the panel as a Blob. */
-  z.object({ type: z.literal('download'), filename: z.string().min(1).max(200), mime: z.string().min(1), text: z.string().max(AGENT_DOWNLOAD_MAX) }),
+  /**
+   * A file the writer could have clicked for themselves (ruling R2), saved by the panel as a Blob.
+   * `encoding` is absent for text; `base64` for a binary file - a PDF (roadmap task 5.3) - whose bytes are `text`.
+   */
+  z.object({
+    type: z.literal('download'),
+    filename: z.string().min(1).max(200),
+    mime: z.string().min(1),
+    text: z.string().max(AGENT_DOWNLOAD_MAX),
+    encoding: z.literal('base64').optional(),
+  }),
   /** Something the writer should read; the turn may still end normally after it. */
   z.object({ type: z.literal('error'), message: z.string() }),
   /** The last line of every stream. `runId` is null only when the run row could not be written. */

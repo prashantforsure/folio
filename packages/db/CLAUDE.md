@@ -18,17 +18,18 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0029` are applied to the dev Supabase project** and are forward-only.
-  **`0030`, `0031` and `0032` are NOT applied** — measured, not assumed, on **2026-09-23** by
-  reading the database: `drizzle.__drizzle_migrations` holds 30 rows (`0000`–`0029`), `props` and
-  `prop_aliases` do not exist, and `scenes.prop` / `reel_shots.prop` are still there, which `0030`
-  drops. The same read found `nodes.order_key` on the **database default collation**
-  (`en_US.UTF-8`) and `shots.order_key` already `C`, which is exactly the split `0032` closes.
-  `0030` matters more than the usual pending migration because **it drops two columns**. The check
-  is three read-only queries and is worth re-running rather than trusting this paragraph:
+- **Migrations `0000`–`0039` are applied to the dev Supabase project** and are forward-only.
+  `0030`–`0039` went in one run on **2026-09-24** through the direct migrator (`db:migrate`'s
+  `strict` prompt on `0030`'s column drop needs a TTY), approved by the user after a read showed
+  `scenes.prop` / `reel_shots.prop` held zero non-null values. The web app had failed on
+  `episodes.idempotency_key` (`0031`) before it. Measured after: 40 journal rows, `props`,
+  `prop_aliases`, `rate_limits`, `agent_runs`, `agent_proposals`, `agent_proposal_ops`,
+  `agent_run_stages` present, `nodes.order_key` and `shots.order_key` both `C`. Where a paragraph
+  below says "not applied", it describes the state before that run. The check is three read-only
+  queries and is worth re-running rather than trusting this paragraph:
 
   ```sql
-  select count(*) from drizzle.__drizzle_migrations;                 -- 30 = 0000..0029
+  select count(*) from drizzle.__drizzle_migrations;                 -- 40 = 0000..0039
   select table_name from information_schema.tables
     where table_schema = 'public' and table_name in ('props', 'prop_aliases');
   select table_name, collation_name from information_schema.columns
@@ -228,6 +229,10 @@ authored / derived-cache / measurement. Touching `episodes` needs
   only raise of `credit_budget`, called when a paid proposal is confirmed), `spendRunBudget` (one
   conditional update, refused past the budget) and `returnRunBudget`; `continueBackgroundRun`'s
   approval takes any `RunCheckpoint`.
+- **`readMeasurementLayout`** (`repositories/measurement.ts`, roadmap task 5.3) reads a stored
+  measurement's pages and every node's runs, two statements in parallel, for the PDF export; the
+  jsonb `runs` and `artefacts` are read back through guards, and what does not read is left out
+  (the printer then refuses the record as a mismatch and the export measures fresh).
 - **`src/seed/production.ts` is the one seed** (`pnpm --filter @folio/db seed:production -- --user <email>`,
   launched by `scripts/seed-production.mjs` through drizzle-kit's own `tsx`): a "Monsoon Line" series
   in every state the v12 mockup draws; a re-run bins the previous one of that title and writes a

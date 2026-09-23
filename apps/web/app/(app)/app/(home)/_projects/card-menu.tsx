@@ -20,10 +20,10 @@ import { isArchived } from '../../../../../lib/projects/view'
  *   Pin to sidebar **drawn disabled.** The same handoff removed the sidebar's
  *                  Pinned section, so there is nowhere to pin to. Flagged
  *                  rather than quietly dropped.
- *   Export PDF     **drawn disabled.** The PDF engine is not built (AGENTS.md,
- *                  Tech stack: `pdf-lib` "on our own layout engine"). Final
- *                  Draft export *is* built and lives on the script's own
- *                  actions menu, which is where a script's exports are.
+ *   Export PDF     `exportProjectPdf` (roadmap task 5.3): every episode with a
+ *                  script, in running order, each on its own cover, laid out
+ *                  from its measurement record on the pdf-lib engine. Real.
+ *                  One episode's PDF is on the script's own actions menu.
  *   Archive        `archiveProjects`, or `Unarchive` when it is archived. Real.
  *   Move to trash  `trashProjects`. Real, and named for what it does - the
  *                  handoff's `Delete` reads as final and this is not; deleting
@@ -34,7 +34,7 @@ import { isArchived } from '../../../../../lib/projects/view'
  * writes stay in one place with one gate.
  */
 
-export type CardAction = 'open' | 'rename' | 'duplicate' | 'archive' | 'trash'
+export type CardAction = 'open' | 'rename' | 'duplicate' | 'pdf' | 'archive' | 'trash'
 
 export const CardMenu = ({
   card,
@@ -83,13 +83,7 @@ export const CardMenu = ({
       >
         Pin to sidebar
       </button>
-      <button
-        type="button"
-        role="menuitem"
-        disabled
-        title="Folio has no PDF engine yet. A script exports to Final Draft from its own ⋯ menu."
-        className="folio-menu-item border-t border-line2 text-12-5"
-      >
+      <button type="button" role="menuitem" data-card-pdf onClick={act('pdf')} className="folio-menu-item border-t border-line2 text-12-5">
         Export PDF
       </button>
       <button type="button" role="menuitem" onClick={act('archive')} className="folio-menu-item text-12-5">

@@ -60,8 +60,9 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   **Settings** (`(home)/settings/`) is `settings-workspace.tsx` over `lib/settings/sections.ts`'s
   seven sections, with `profile-form.tsx` and `security-section.tsx` split out; the writes are
   `lib/settings/actions.ts`. Deviations from the handoff, each drawn rather than dropped:
-  `Duplicate` refuses (open decision 15), `Pin to sidebar` and `Export PDF` are disabled (nothing
-  to pin to; no PDF engine), `Delete` is `Move to trash` (deleting for good is the Trash route's
+  `Duplicate` refuses (open decision 15), `Pin to sidebar` is disabled (nothing to pin to),
+  `Export PDF` is live since roadmap task 5.3 (`exportProjectPdf`: every episode with a script, in
+  running order, each on its cover), `Delete` is `Move to trash` (deleting for good is the Trash route's
   refusal), the card's stage and chips are derived from what exists (no draft numbers, no
   schedule), the plan tiers carry no prices (nothing is wired to Dodo), the editor and
   notification toggles are disabled with the reason on each (no per-person store; no mail
@@ -200,7 +201,9 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   each page canonicalises the URL for the project's type.
 - **The Script route since the redesign:** `_script/script-workspace.tsx` is the body inside the
   surface card - toolbar (title menu, `⋯` actions menu with Import, `Export as .fdx`,
-  `Export as .fountain` and Undo), banners, the scrolling column. Threads
+  `Export as .fountain`, `Export as .pdf` - task 5.3, `exportScriptPdf` over `lib/script/pdf-export.ts`,
+  the pages laid out by `@folio/script`'s `printPages` from the measurement record and drawn by
+  `lib/script/pdf.ts` - and Undo), banners, the scrolling column. Threads
   are widget hosts in the editor DOM that React portals cards into (`_script/comments/`); the
   `+` handle's menu inserts blocks or opens a thread composer; the `⠿` handle node-selects and
   ProseMirror's own drag moves the block (`clipboard.ts` keeps its id on a move). Page breaks

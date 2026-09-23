@@ -27,6 +27,7 @@ import { assistantChatKey, useSession } from '../../../../lib/state/session'
 import type { TimelineFacts } from '../../../../lib/timeline/facts'
 import { useTimelineFacts } from '../../../../lib/timeline/facts-cell'
 import { characterHref } from '../../../../lib/workspace/hrefs'
+import { saveBase64File } from '../../../../lib/workspace/save-file'
 import type { RailSection, WorkspaceRoute } from '../../../../lib/workspace/routes'
 import type { CitationChip } from '../../app/project/[projectId]/_chrome/citation-chips'
 import { CitationChips } from '../../app/project/[projectId]/_chrome/citation-chips'
@@ -902,7 +903,8 @@ export const AssistantPanel = ({
             router.refresh()
             return
           case 'download':
-            saveFile(event.filename, event.mime, event.text)
+            if (event.encoding === 'base64') saveBase64File(event.filename, event.mime, event.text)
+            else saveFile(event.filename, event.mime, event.text)
             return
           default:
             return

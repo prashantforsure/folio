@@ -17,7 +17,8 @@ import type { Editor } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 
-import { createMention, exportScriptFdx, exportScriptFountain, saveScript, setFormat, setPagination } from '../../../../../../lib/script/actions'
+import { createMention, exportScriptFdx, exportScriptFountain, exportScriptPdf, saveScript, setFormat, setPagination } from '../../../../../../lib/script/actions'
+import { saveBase64File } from '../../../../../../lib/workspace/save-file'
 import { registerEditor } from '../../../../../../lib/agent/editor-channel'
 import { applyInScriptEditor } from '../../../../../../lib/script/apply-ops'
 import type { IdentityLog } from '../../../../../../lib/script/identity'
@@ -875,6 +876,34 @@ export const ScriptWorkspace = ({
       })
   }, [draft, episode, exporting, projectId])
 
+  /**
+   * The same flush-then-download, as PDF (roadmap task 5.3): the server lays
+   * the pages out from the measurement record - the stored one when it is
+   * current - so the file breaks where the page dividers on this screen do.
+   */
+  const onExportPdf = useCallback(() => {
+    if (draft === null || exporting) return
+    setExporting(true)
+    setExportNotice(null)
+    const flush = saveTimer.current === null && !inFlight.current ? Promise.resolve() : saveRef.current(false)
+    void flush
+      .then(() => exportScriptPdf(projectId, episode))
+      .then((result) => {
+        if (result.status !== 'exported') {
+          setExportNotice(result.message)
+          return
+        }
+        saveBase64File(result.filename, 'application/pdf', result.base64)
+        setExportNotice(`Exported ${result.filename} · ${String(result.pages)} ${result.pages === 1 ? 'page' : 'pages'}.`)
+      })
+      .catch((cause: unknown) => {
+        setExportNotice(cause instanceof Error ? cause.message : 'The export did not reach the server.')
+      })
+      .finally(() => {
+        setExporting(false)
+      })
+  }, [draft, episode, exporting, projectId])
+
   const onUndo = useCallback(() => {
     editorRef.current?.commands.undo()
   }, [])
@@ -967,6 +996,7 @@ export const ScriptWorkspace = ({
           onImport={onImport}
           onExport={onExport}
           onExportFountain={onExportFountain}
+          onExportPdf={onExportPdf}
           exporting={exporting}
           exportNotice={exportNotice}
           onUndo={onUndo}

@@ -150,6 +150,8 @@ export type ActionsMenuProps = {
   readonly onImport: () => void
   readonly onExport: () => void
   readonly onExportFountain: () => void
+  /** The script as PDF, laid out from the measurement record (roadmap task 5.3). */
+  readonly onExportPdf: () => void
   readonly exporting: boolean
   readonly exportNotice: string | null
   readonly onUndo: () => void
@@ -201,6 +203,7 @@ export const ActionsMenu = memo(
     onImport,
     onExport,
     onExportFountain,
+    onExportPdf,
     exporting,
     exportNotice,
     onUndo,
@@ -260,6 +263,21 @@ export const ActionsMenu = memo(
             >
               <Icon name="export" size={15} strokeWidth={1.4} className="text-ink3" />
               {exporting ? 'Exporting…' : 'Export as .fountain'}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              data-export-pdf
+              disabled={exporting}
+              className="folio-menu-item"
+              onMouseDown={keepCaret}
+              onClick={() => {
+                setOpen(false)
+                onExportPdf()
+              }}
+            >
+              <Icon name="export" size={15} strokeWidth={1.4} className="text-ink3" />
+              {exporting ? 'Exporting…' : 'Export as .pdf'}
             </button>
             <button type="button" role="menuitem" disabled={!canUndo} className="folio-menu-item" onMouseDown={keepCaret} onClick={onUndo}>
               <span className="w-[15px] text-center text-ink3">↩</span>

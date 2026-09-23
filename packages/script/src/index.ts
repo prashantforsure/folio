@@ -379,6 +379,8 @@ export type {
   PlacedRun,
   SceneMeasurement,
 } from './paginate'
+export type { PrintMeasure, PrintMismatch, PrintStyle, PrintedLine, PrintedPage, TitleLine, TitlePageFields } from './print'
+export { printMeasureOf, printPages, printTitlePage, upperKeepingWidth } from './print'
 export {
   BREAK_RULES,
   EIGHTHS_PER_PAGE,

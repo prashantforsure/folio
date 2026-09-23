@@ -536,7 +536,18 @@ Phase 4 is done when every box is ticked, the worker is deployed to staging, and
   **Test change:** the catalogue test counts the new row; the Characters E2E no longer pins the old
   disabled title. **Follow-ups:** no live look drawn (no `GEMINI_API_KEY`/`R2_*` here); signed-in
   E2E unrun (no `E2E_*`).
-- [ ] 5.3 PDF export. Using pdf-lib and @pdf-lib/fontkit (pre-approved by D17; add no other dependency), render the script from its measurement records, computing a fresh measurement on the server when the stored one is stale. Include the title page, an embedded Courier Prime font, and an embedded fallback font for non-Latin scripts such as Devanagari. Add exportScriptPdf, enable the PDF item in _projects/card-menu.tsx:90-93 and in the Script export menu, and extend the export_script tool. Update the "pdf-lib chosen, not installed" note in AGENTS.md's tech stack. If the measurement records don't carry enough position data to lay out pages, stop and report.
+- [x] 5.3 PDF export. Using pdf-lib and @pdf-lib/fontkit (pre-approved by D17; add no other dependency), render the script from its measurement records, computing a fresh measurement on the server when the stored one is stale. Include the title page, an embedded Courier Prime font, and an embedded fallback font for non-Latin scripts such as Devanagari. Add exportScriptPdf, enable the PDF item in _projects/card-menu.tsx:90-93 and in the Script export menu, and extend the export_script tool. Update the "pdf-lib chosen, not installed" note in AGENTS.md's tech stack. If the measurement records don't carry enough position data to lay out pages, stop and report.
+
+  **Done 2026-09-24.** The records do carry enough: each node's `runs` (page, line, count) and each
+  page's `(MORE)` / `(CONT'D)`, so `printPages` (`packages/script/src/print.ts`, pure) re-wraps each
+  node with the engine's own `wrapText` and places its lines - refusing a record that does not
+  measure the list - and `printTitlePage` lays out the cover. `lib/script/pdf.ts` only draws (Courier
+  Prime, Noto Sans Devanagari runs for what Courier lacks); `exportScriptPdfWith` reads the stored
+  record (`readMeasurementLayout`) when its digest matches and measures otherwise. The card (every
+  episode), the Script menu and `export_script` are live; `download` gained an additive
+  `encoding: 'base64'`. **Flags:** fontkit 1.1.1's Indic shaper needs `regeneratorRuntime` - a
+  minimal shim in `pdf-fonts.ts` instead of a package; labels past a lock print as measured (open
+  decision 12); fonts are OFL TTFs in `apps/web/assets/fonts/` (user-approved). E2E unrun.
 - [ ] 5.4 Run history. Add a History tab to the panel listing runs with their proposals, operations, status, tokens and credits, linking to the affected items, with an Undo run button. Read from agent_runs, agent_proposals and activity_log.
 - [ ] 5.5 Evals. Add an eval harness, for example apps/web/evals with a pnpm eval script that does not run in CI (D19), with 10 fixture stories: thin one-liners, detailed treatments, a series pilot, and one mixing Hindi and English. It runs story_to_script against a scratch project and scores the output with structural checks (the script parses, derive leaves zero unresolved cues, every scene has a heading) and a model-judged rubric built from docs/agents/craft.md. It writes a Markdown report with per-story scores and quoted weak spots for human review.
 - [ ] 5.6 Hardening. Add Playwright specs for: the panel persisting across navigation, a cited answer, applying and undoing a character creation, a script edit applied in the open editor, a background run with a checkpoint, and a paid confirmation. Verify the rate limits and caps under load. Write docs/agents/README.md covering env vars, worker deployment, costs and troubleshooting, and confirm AGENTS.md's "What we are building" section still describes the shipped system accurately.

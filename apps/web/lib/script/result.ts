@@ -104,6 +104,24 @@ export type ExportFountainResult =
   | { readonly status: 'error'; readonly message: string }
   | { readonly status: 'refused'; readonly message: string }
 
+/**
+ * A PDF (roadmap task 5.3): the file, as base64 for the wire - a server action
+ * answers in JSON - its page count, and whether it was drawn from the stored
+ * measurement or from one made now because the stored one was stale.
+ */
+export type ExportPdfResult =
+  | {
+      readonly status: 'exported'
+      readonly filename: string
+      readonly base64: string
+      /** Script pages, covers not counted. */
+      readonly pages: number
+      /** `stored`: every section drawn from the measurement the editor wrote. `computed`: at least one measured here, now. */
+      readonly source: 'stored' | 'computed'
+    }
+  | { readonly status: 'error'; readonly message: string }
+  | { readonly status: 'refused'; readonly message: string }
+
 export type SimpleResult =
   | { readonly status: 'done' }
   | { readonly status: 'refused'; readonly message: string }

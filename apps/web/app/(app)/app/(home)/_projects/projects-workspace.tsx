@@ -26,6 +26,8 @@ import {
 } from '../../../../../lib/projects/view'
 import type { ProjectFilter, ProjectLayout, ProjectSort } from '../../../../../lib/projects/view'
 import { workspaceHref } from '../../../../../lib/projects/workspace'
+import { exportProjectPdf } from '../../../../../lib/script/actions'
+import { saveBase64File } from '../../../../../lib/workspace/save-file'
 import { RouteFrame } from '../../../_shell/route-frame'
 import type { CardAction } from './card-menu'
 import { NewProjectDialog } from './new-project-dialog'
@@ -78,6 +80,8 @@ export const ProjectsWorkspace = ({
   const [filter, setFilter] = useState<ProjectFilter>('all')
   const [sort, setSort] = useState<ProjectSort>('recent')
   const [layout, setLayout] = useState<ProjectLayout>('grid')
+  // The card menu's Export PDF (roadmap task 5.3) is a read, not a form post: its refusal is held here beside the posts'.
+  const [pdfNotice, setPdfNotice] = useState<string | null>(null)
   const [sortOpen, setSortOpen] = useState(false)
   const [menu, setMenu] = useState<string | null>(null)
   const [picked, setPicked] = useState<readonly string[]>([])
@@ -134,6 +138,21 @@ export const ProjectsWorkspace = ({
       post(archive, [card.project.id], { archived: isArchived(card) ? '0' : '1' })
       return
     }
+    if (action === 'pdf') {
+      setPdfNotice(null)
+      void exportProjectPdf(card.project.id)
+        .then((result) => {
+          if (result.status !== 'exported') {
+            setPdfNotice(result.message)
+            return
+          }
+          saveBase64File(result.filename, 'application/pdf', result.base64)
+        })
+        .catch(() => {
+          setPdfNotice('The export did not reach the server.')
+        })
+      return
+    }
     post(trash, [card.project.id])
   }
 
@@ -158,7 +177,7 @@ export const ProjectsWorkspace = ({
         ? archiveResult.message
         : trashResult.status === 'error'
           ? trashResult.message
-          : null
+          : pdfNotice
 
   const selectedCards = cards.filter((card) => selected.includes(card.project.id))
   const allSelectedArchived = selectedCards.length > 0 && selectedCards.every(isArchived)

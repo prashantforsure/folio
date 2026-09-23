@@ -15,3 +15,10 @@ export const deliver = (ctx: ToolContext, file: TextExport, detail: Readonly<Rec
   ctx.emit({ type: 'download', filename: file.filename, mime: file.mime, text: file.text })
   return { ok: true, content: { downloaded: file.filename, characters: file.text.length, ...detail }, summary: `Downloaded ${file.filename}` }
 }
+
+/** A binary file - a PDF (roadmap task 5.3) - handed over as base64 in the same event; the model hears its name and size. */
+export const deliverBinary = (ctx: ToolContext, file: { readonly filename: string; readonly mime: string; readonly base64: string }, detail: Readonly<Record<string, unknown>> = {}): ToolResult => {
+  if (file.base64.length > AGENT_DOWNLOAD_MAX) return { ok: false, message: `${file.filename} is too large to hand over from here; export it from the route instead.` }
+  ctx.emit({ type: 'download', filename: file.filename, mime: file.mime, text: file.base64, encoding: 'base64' })
+  return { ok: true, content: { downloaded: file.filename, bytes: Math.floor((file.base64.length * 3) / 4), ...detail }, summary: `Downloaded ${file.filename}` }
+}

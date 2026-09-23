@@ -1,6 +1,6 @@
 import type { EpisodeId, Measurement, MeasurementId, MeasurementScene } from '@folio/contracts'
 import { projectId as brandProjectId } from '@folio/contracts'
-import type { DocumentId, MeasurementRecord, NodeId, PageMode, ScriptFormat } from '@folio/script'
+import type { DocumentId, MeasurementRecord, NodeId, PageArtefact, PageMode, PlacedRun, ScriptFormat } from '@folio/script'
 import { asc, eq, sql } from 'drizzle-orm'
 
 import { measurementNodes, measurementPages, measurementScenes, measurements } from '../schema'
@@ -288,4 +288,48 @@ export const listSceneMeasurements = async (
     lines: row.lines,
     eighths: row.eighths,
   }))
+}
+
+/** What printing reads of a stored measurement (roadmap task 5.3): each page and each node's runs. */
+export type MeasurementLayout = {
+  readonly pages: readonly { readonly ordinal: number; readonly label: string; readonly linesUsed: number; readonly artefacts: readonly PageArtefact[] }[]
+  /** Node id to its `PlacedRun[]`, as `writeMeasurement` stored them. */
+  readonly runs: ReadonlyMap<string, readonly PlacedRun[]>
+}
+
+const isRun = (value: unknown): value is PlacedRun =>
+  typeof value === 'object' && value !== null && 'page' in value && 'startLine' in value && 'lines' in value && typeof value.page === 'number' && typeof value.startLine === 'number' && typeof value.lines === 'number'
+
+const isArtefact = (value: unknown): value is PageArtefact =>
+  typeof value === 'object' &&
+  value !== null &&
+  'kind' in value &&
+  'text' in value &&
+  typeof value.text === 'string' &&
+  ((value.kind === 'more' && 'afterNode' in value && typeof value.afterNode === 'string') || (value.kind === 'cont-d' && 'beforeNode' in value && typeof value.beforeNode === 'string'))
+
+/**
+ * The whole layout of a stored measurement - the pages and every node's runs,
+ * two statements in parallel - for the PDF export, which draws from the record
+ * rather than measuring again when the record is current. The jsonb columns are
+ * read back through guards: a row is data, and a run or an artefact that does
+ * not read is left out, which the printer then reports as a mismatch.
+ */
+export const readMeasurementLayout = async (scope: ProjectScope, measurementId: MeasurementId): Promise<MeasurementLayout> => {
+  const db = dbOf(scope)
+  const [pages, nodes] = await Promise.all([
+    db
+      .select({ ordinal: measurementPages.ordinal, label: measurementPages.label, linesUsed: measurementPages.linesUsed, artefacts: measurementPages.artefacts })
+      .from(measurementPages)
+      .where(scoped(scope, measurementPages, eq(measurementPages.measurementId, measurementId)))
+      .orderBy(asc(measurementPages.ordinal)),
+    db
+      .select({ nodeId: measurementNodes.nodeId, runs: measurementNodes.runs })
+      .from(measurementNodes)
+      .where(scoped(scope, measurementNodes, eq(measurementNodes.measurementId, measurementId))),
+  ])
+  return {
+    pages: pages.map((page) => ({ ordinal: page.ordinal, label: page.label, linesUsed: page.linesUsed, artefacts: Array.isArray(page.artefacts) ? page.artefacts.filter(isArtefact) : [] })),
+    runs: new Map(nodes.map((node) => [node.nodeId, Array.isArray(node.runs) ? node.runs.filter(isRun) : []])),
+  }
 }

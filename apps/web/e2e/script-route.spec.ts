@@ -3,6 +3,8 @@ import type { Page } from '@playwright/test'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { PDFDocument } from 'pdf-lib'
+
 import { featureLengthFdx } from '../../../packages/script/src/testing/fdx-corpus'
 import type { WalkOptions } from '../playwright.config'
 
@@ -194,6 +196,21 @@ test('the rendered page map matches the golden file exactly', async ({ page, acc
   // The dividers on the page are the record's page starts, labelled as printed - page 1 has none.
   await expect(page.locator('[data-sheet] [data-page-break]')).toHaveCount(golden.totals.pages - 1)
   await expect(page.locator('[data-sheet] [data-page-break]').last()).toHaveAttribute('data-page-label', String(golden.totals.pages))
+})
+
+test('the PDF is the page map: a cover, then as many pages as the sheet has (roadmap task 5.3)', async ({ page, account, scriptProjectUrl }) => {
+  await signIn(page, account)
+  projectUrl = projectUrl === '' && scriptProjectUrl !== null ? scriptProjectUrl : projectUrl
+  await page.goto(projectUrl)
+  await expect(page.locator('main[data-route="script"]')).toHaveAttribute('data-script-state', 'draft')
+  const golden = JSON.parse(readFileSync(join(__dirname, '../../../packages/script/src/testing/golden/us-letter.json'), 'utf8')) as { readonly totals: { readonly pages: number } }
+  await page.getByRole('button', { name: 'Document actions' }).click()
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 120_000 }), page.locator('[data-export-pdf]').click()])
+  const file = join(test.info().outputDir, download.suggestedFilename())
+  await download.saveAs(file)
+  expect(download.suggestedFilename()).toMatch(/\.pdf$/u)
+  const pdf = await PDFDocument.load(readFileSync(file))
+  expect(pdf.getPageCount()).toBe(golden.totals.pages + 1)
 })
 
 test('typing, splitting and merging preserve ids across save and reload', async ({ page, account, scriptProjectUrl }) => {

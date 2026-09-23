@@ -292,9 +292,11 @@ dependency decision **and** a product decision.
 
 ## Phase 5 — Export
 
-`Export PDF` on the project card menu (`_projects/card-menu.tsx:89`) and `Export everything` in
-security settings (`settings/security-section.tsx:138`) are both drawn and disabled. There is no PDF
-engine and no archive format.
+**PDF is built** (2026-09-24, roadmap task 5.3): `Export PDF` on the project card, `Export as .pdf`
+on the Script route's menu and the agent's `export_script`, laid out from the measurement record.
+It prints page labels as measured - open decision **12** is still unruled and flagged - and refuses
+the asian format (decision **8**). `Export everything` in security settings
+(`settings/security-section.tsx:138`) is still drawn and disabled: there is no archive format.
 
 Needs the worker (Phase 3) plus decisions **8** and **12** — export must agree with on-screen
 pagination exactly, and both open decisions are pagination rulings. People paying for a
