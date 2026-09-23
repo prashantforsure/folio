@@ -187,6 +187,22 @@ const ModelEnvSchema = z.object({
 export type ModelEnv = z.infer<typeof ModelEnvSchema>
 
 /**
+ * The worker's own settings (`apps/worker`, roadmap task 4.1). Both have a
+ * default, so the web app - which never sets them - parses the same file
+ * without noticing. The worker reads the database through `serverEnv` like
+ * everything else; it needs `DATABASE_URL_SESSION` above all, for its claims
+ * and its `LISTEN`.
+ */
+const WorkerEnvSchema = z.object({
+  /** How many jobs one worker process runs at once. */
+  WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
+  /** The port `GET /health` answers on. */
+  WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
+})
+
+export type WorkerEnv = z.infer<typeof WorkerEnvSchema>
+
+/**
  * What each variable is and where it comes from.
  *
  * Carried here rather than only in `.env.example` so the failure message can
@@ -207,6 +223,8 @@ const PROVENANCE: Readonly<Record<string, string>> = {
   R2_PUBLIC_URL: 'The origin the bucket is served from - its custom domain, or the r2.dev public URL - with no trailing slash.',
   ANTHROPIC_API_KEY: 'Anthropic Console, API keys. Server only. Unset, the assistant panel is drawn disconnected.',
   GEMINI_API_KEY: 'Google AI Studio, Get API key. Server only. Unset, Production draws its generate buttons disconnected.',
+  WORKER_CONCURRENCY: 'Optional, the worker only: how many jobs one process runs at once, 1-32. Default 4. See docs/agents/worker.md.',
+  WORKER_HEALTH_PORT: 'Optional, the worker only: the port GET /health answers on. Default 8080.',
 }
 
 // ---------------------------------------------------------------------------
@@ -325,3 +343,16 @@ export const modelEnv: ModelEnv | null =
   process.env.GEMINI_API_KEY === undefined || process.env.GEMINI_API_KEY === ''
     ? null
     : parseOrThrow(ModelEnvSchema, { GEMINI_API_KEY: process.env.GEMINI_API_KEY }, 'model')
+
+/** An unset or empty variable, as the default rather than as `0`. */
+const orDefault = (value: string | undefined): string | undefined => (value === '' ? undefined : value)
+
+/** Server-only. The worker's settings, each with its default when unset. */
+export const workerEnv: WorkerEnv = parseOrThrow(
+  WorkerEnvSchema,
+  {
+    WORKER_CONCURRENCY: orDefault(process.env.WORKER_CONCURRENCY),
+    WORKER_HEALTH_PORT: orDefault(process.env.WORKER_HEALTH_PORT),
+  },
+  'worker',
+)

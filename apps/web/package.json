@@ -2,6 +2,9 @@
   "name": "web",
   "version": "0.0.0",
   "private": true,
+  "exports": {
+    "./worker": "./lib/worker/index.ts"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build && pnpm run check:secrets",

@@ -11,7 +11,8 @@ import type { ProjectScope } from '../scope'
  * the transaction pooler, with `prepare: false`, because Supabase's transaction
  * mode requires it.
  *
- * `openProjectForWorker` for a BullMQ consumer; it goes through the session
+ * `openProjectForWorker` for a job the worker claimed from the `jobs` table
+ * (`apps/worker`; ADR 0003 D6 - no BullMQ); it goes through the session
  * pooler, so prepared statements, advisory locks and `LISTEN` all work.
  *
  * AGENTS.md, Tech stack: "Session pooler for the worker, transaction pooler for
@@ -84,3 +85,4 @@ export * from './assistant'
 export * from './agent'
 export * from './agent-proposals'
 export * from './research'
+export * from './jobs'

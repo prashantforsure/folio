@@ -430,4 +430,31 @@ card says so).
 
 ## Phase 4: Worker, background runs, story-to-script pipeline
 
+**Phase goal:** long tasks run reliably in a worker, and a writer can hand the copilot a story and get back characters, locations, an outline, scenes and a drafted script, with checkpoints along the way (ADR 0003 D4, D5, D6, D7; AGENTS.md ruling R6).
+
+- [x] 4.1 Worker runtime. The jobs table has no attempts or lease columns and JOB_KINDS is only ['frame_generation'], so start with a migration: add attempts, heartbeat_at and claimed_at columns to jobs, extend job_kind with agent_run and production_generation, and add a NOTIFY trigger for newly queued jobs. Then build apps/worker: claim jobs with FOR UPDATE SKIP LOCKED; wake on LISTEN/NOTIFY over the session pooler with a 5-second polling fallback; configurable concurrency; stale-job recovery (requeue after 2 minutes without a heartbeat, fail after 3 attempts); cancellation through cancel_requested_at; graceful shutdown on SIGTERM; a health endpoint; and a Dockerfile. No Redis and no BullMQ (D6). Env names go through the env module. Replace the "BullMQ consumers" comment in apps/worker/src/index.ts to match D6, and update AGENTS.md ruling R6's status. Document env vars and deploy steps for a generic container host in docs/agents/worker.md.
+
+  **Done 2026-09-23.** Migration `0036` adds `jobs.attempts` / `claimed_at` (the lease token) /
+  `heartbeat_at`, the two kinds, two partial indexes and `NOTIFY folio_jobs` triggers;
+  `repositories/jobs.ts` is the queue (claim, heartbeat that also reads `cancel_requested_at`,
+  finish, requeue, stale sweep, `LISTEN`), exercised against dev in a rolled-back transaction. The
+  runtime (`apps/worker/src/runtime.ts`, 14 tests), `GET /health`, `SIGTERM` drain and a Dockerfile
+  are built; `workerEnv` holds `WORKER_CONCURRENCY` / `WORKER_HEALTH_PORT`; handlers are web's
+  (`apps/web/lib/worker/`, empty until 4.3/4.4), bundled by esbuild (approved 2026-09-23).
+  **Follow-ups:** `0036` is not applied anywhere; the image was not built here (Docker's daemon was
+  not running) - the bundle was, and a smoke run against dev answered `/health` 200 with `LISTEN` up.
+- [ ] 4.2 Actor gates and core functions. Add openProjectAs and openEpisodeAs(actor, projectId, episode, minRole), which perform the same membership, project and role checks without cookies, and make the cookie gates call them. Split every server action that a tool wraps into a core function that takes a gate and input, plus a thin action that runs the cookie gate, calls the core and revalidates. Public action signatures and behaviour stay identical. Switch the tool registry to the cores. Existing tests must pass unchanged.
+- [ ] 4.3 Generations on the worker. In lib/production/generate.ts, replace after(runGeneration) with a production_generation job that the worker runs. Implement Storyboard frame generation: requestFrame calls queueFrameGeneration, and the worker processes frame_generation jobs using the shot_frame model; update the "refuses by design until the worker exists" notes in docs/remainingroadmap.md and AGENTS.md. Add a reaper job every 10 minutes that releases reservations reported by listOrphanedReservations and marks those generations failed with the reason "interrupted". Add an R2 sweeper that logs unreferenced production objects older than 24 hours, and deletes them only when an env flag is set.
+- [ ] 4.4 Background agent runs. Runs in background mode execute in the worker with the same loop and registry, through the actor gates, re-checking membership and role before every step (D4). Each step is persisted before the next starts, so a crashed run resumes from its transcript. When a run needs the user (a confirmation or a checkpoint), it moves to waiting_for_user, and the user's reply enqueues its continuation. Add the start_background_task tool, which the model uses for work beyond the interactive caps. The panel polls live runs every 2 seconds, following _production/polling.tsx, and shows progress, proposals and a Cancel button.
+- [ ] 4.5 Story-to-script pipeline. Add the story_to_script tool. It starts a background run with the stages below; each stage produces Zod-validated output and resumes independently.
+  (A) Expand the story into genre, tone, format, target length, the protagonist's want and need, stakes, setting and stated assumptions. Stop at a checkpoint for approval.
+  (B) One proposal creating characters (origin agent) with their cue spellings and voice notes, and locations with their slugline spellings.
+  (C) An outline proposal, with acts as h1 blocks and beats as beat blocks. Then a checkpoint.
+  (D) A scene list with synopses. Then a checkpoint.
+  (E) Draft scene by scene. Each call gets the rules in docs/agents/craft.md, the scene's beat, the characters' voice notes, the bound cue and slugline spellings, and the end of the previous scene. A critic call then scores the draft against docs/agents/craft.md, followed by one rewrite if any score is below the threshold. Scenes land as script proposals in batches of about five, with agent provenance.
+  (F) Re-derive once, compute page counts, run the continuity check, and propose story days and threads.
+  Reject any drafted cue or slugline that doesn't exactly match a bound spelling, and any mention id that doesn't exist, and repair it before proposing. Test with a mocked model producing fixed outputs, asserting zero unresolved cues after stage F.
+
+Phase 4 is done when every box is ticked, the worker is deployed to staging, and a thin one-line story produces a complete, reviewable draft.
+
 ## Phase 5: Production automation, exports, quality

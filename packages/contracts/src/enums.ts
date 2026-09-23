@@ -331,13 +331,19 @@ export type ShotState = (typeof SHOT_STATES)[number]
 export const ShotStateSchema = z.enum(SHOT_STATES)
 
 /**
- * What a job does. One kind: a frame for a shot (the Storyboard phase).
- * Production's generations are their own table (`production.ts`), so the
- * `reel_render` kind left with the v1 route (2026-09-22). Export and agent
- * runs join it as they are built; the column is an enum so a consumer
- * switching on it is told when they do.
+ * What a job does - the worker's queue (ADR 0003 **D6**, roadmap task 4.1).
+ *
+ *   `frame_generation`       a Storyboard frame for a shot; `{ shotId }`
+ *   `agent_run`              a background agent run; `{ runId }` - the run
+ *                            row is the authority on what it is doing
+ *   `production_generation`  a Production generation; `{ generationId }` -
+ *                            the `generations` row is the authority, and its
+ *                            reservation is keyed on the generation, not this job
+ *
+ * The `reel_render` kind left with the v1 route (2026-09-22). The column is an
+ * enum so a consumer switching on it is told when a kind is added.
  */
-export const JOB_KINDS = ['frame_generation'] as const
+export const JOB_KINDS = ['frame_generation', 'agent_run', 'production_generation'] as const
 
 export type JobKind = (typeof JOB_KINDS)[number]
 

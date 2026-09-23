@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Only what applies to every task lives here. `packages/script`, `packages/db` and `apps/web` each
 have a `CLAUDE.md` that loads when you work there. `docs/` holds the ADRs, `docs/production/`
 (the v12 Production spec), `docs/agents/` (the copilot: `integration-plan.md`, `roadmap.md`,
-`craft.md` and `tools.md`) and `docs/remainingroadmap.md`: the route history
+`craft.md`, `tools.md` and `worker.md`) and `docs/remainingroadmap.md`: the route history
 (`docs/build-decisions.md`) and the first Production doc set were deleted on 2026-09-22. A route's
 spec is now the route as built plus its paragraph in `apps/web/CLAUDE.md`; the reasoning behind an
 older ruling is git history (`git log -S'<phrase>'`, or `git show e733475^:docs/build-decisions.md`
@@ -92,8 +92,11 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   route's `?view=` tabs, drawn in the header's centre. The assistant (`lib/assistant/`) and
   share links (`lib/share/`) are cross-route. `lib/production/pipeline/` is the Gemini spec,
   client and runner.
-- `apps/worker` — deliberately empty (one exported constant). Production's generations run
-  inside `web` (`after()` + 3 s polling) until it exists. Do not create `apps/sync/`.
+- `apps/worker` — the queue's runtime over the `jobs` table (roadmap task 4.1, ADR 0003 D6: no
+  Redis, no BullMQ): claim, `LISTEN`, heartbeat, stale recovery, drain, `GET /health`, a
+  Dockerfile. It owns the loop only; the handlers are web's (`apps/web/lib/worker/`, imported as
+  `web/worker`), bundled into `dist/main.mjs` by esbuild. `docs/agents/worker.md` runs and deploys
+  it. Do not create `apps/sync/`.
 
 Facts easy to get wrong (history in git):
 
@@ -146,7 +149,7 @@ Production walk at a seeded project.
 ```bash
 pnpm typecheck   # 6 packages — also a test suite: @ts-expect-error guarantees live in it
 pnpm lint        # eslint.config.mjs is AGENTS.md made executable; each ban error carries its reason
-pnpm test        # only @folio/script and web have test scripts
+pnpm test        # only @folio/script, web and worker have test scripts
 pnpm build       # web only; ends with scripts/assert-no-server-secrets.mjs
 pnpm test:e2e    # Playwright, web only
 

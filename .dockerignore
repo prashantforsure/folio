@@ -1,0 +1,17 @@
+# Build context for apps/worker/Dockerfile (built from the repository root).
+# Secrets first: no .env of any kind enters an image - the host supplies the
+# environment (docs/agents/worker.md).
+.env
+**/.env
+**/.env.*
+!.env.example
+
+.git
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+AGENT_READINESS_REPORT.md

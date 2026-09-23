@@ -140,6 +140,28 @@ export const sessionDatabase = async (): Promise<FolioDatabase> => {
   return sessionConnection.db
 }
 
+/**
+ * `LISTEN` on the session pooler - the worker's wake-up (roadmap task 4.1, ADR
+ * 0003 D6). postgres.js opens a dedicated connection for it, re-listens after a
+ * reconnect, and calls `onListen` every time it is listening again. Only the
+ * session path can do this: the transaction pooler hands a different backend
+ * to each transaction, so a `LISTEN` there would be heard by nobody.
+ */
+export const listenOnSession = async (
+  channel: string,
+  onNotify: (payload: string) => void,
+  onListen: () => void,
+): Promise<{ readonly unlisten: () => Promise<void> }> => {
+  await sessionDatabase()
+  if (sessionConnection === null) throw new Error('Folio: the session connection did not open.')
+  const meta = await sessionConnection.sql.listen(channel, onNotify, onListen)
+  return {
+    unlisten: async () => {
+      await meta.unlisten()
+    },
+  }
+}
+
 /** The request path. `prepare: false`, because the transaction pooler requires it. */
 export const transactionDatabase = async (): Promise<FolioDatabase> => {
   if (transactionConnection === null) {

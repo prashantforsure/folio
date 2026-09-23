@@ -4,16 +4,23 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node dist/main.mjs",
+    "dev": "node scripts/build.mjs && node dist/main.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@folio/contracts": "workspace:*",
     "@folio/db": "workspace:*",
-    "@folio/script": "workspace:*"
+    "@folio/script": "workspace:*",
+    "web": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",
-    "typescript": "^5.9.3"
+    "esbuild": "0.28.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.0"
   }
 }

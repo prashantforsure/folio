@@ -253,6 +253,13 @@
       "when": 1790154599412,
       "tag": "0035_agent_proposals",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790172746526,
+      "tag": "0036_worker_queue",
+      "breakpoints": true
     }
   ]
 }

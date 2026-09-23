@@ -219,6 +219,12 @@ is simply gone.
 transactional beside it. It is **roadmap Phase 4** of `docs/agents/roadmap.md`. `REDIS_URL` was
 therefore dead and **came out of `.env.example` on 2026-09-23** (roadmap task 1.8).
 
+**✓ BUILT 2026-09-23 — the runtime** (roadmap task 4.1). `apps/worker` is no longer a stub: it
+claims from `jobs` (`SKIP LOCKED`), wakes on `LISTEN`/`NOTIFY` (migration `0036`), heartbeats,
+recovers stale jobs, drains on `SIGTERM`, answers `GET /health` and has a Dockerfile
+(`docs/agents/worker.md`). What it runs arrives with tasks 4.3 (generations, frames) and 4.4
+(agent runs); until 4.3, the three `after()` lines above are still how Production runs.
+
 **Unblocks, in order:** reliable Production runs (fixes 0.6 properly) · the Storyboard frame job
 (0.4 properly) · Characters' `✦ Generate`, disabled with the literal reason
 `'Needs the Production worker'` · the credit advisory lock · export.

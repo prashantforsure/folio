@@ -156,10 +156,33 @@ export const jobs = pgTable(
     error: text('error'),
     /** A moderation refusal, in the writer's terms. Non-null exactly when blocked. */
     blockedReason: text('blocked_reason'),
+    /**
+     * How many times a worker has claimed it (`0036`, roadmap task 4.1). A
+     * claim adds one; a job still silent at its third is failed rather than
+     * requeued, so a job that kills its worker cannot kill every worker.
+     */
+    attempts: integer('attempts').notNull().default(0),
+    /**
+     * When the current claim was taken - also the lease token: a heartbeat
+     * or a finish names it, so a worker whose lease lapsed and was taken
+     * over cannot settle the job the next worker now holds.
+     */
+    claimedAt: timestampColumn('claimed_at'),
+    /** The claimant's last sign of life. Two minutes without one and the job goes back to the queue. */
+    heartbeatAt: timestampColumn('heartbeat_at'),
   },
   (table) => [
     index('jobs_project_status_idx').on(table.projectId, table.status),
+    /** The claim's read: the oldest queued jobs, across projects. Partial, so it holds only the queue. */
+    index('jobs_queued_idx')
+      .on(table.createdAt)
+      .where(sql`status = 'queued'`),
+    /** The stale sweep's read: running jobs by their last heartbeat. */
+    index('jobs_running_heartbeat_idx')
+      .on(table.heartbeatAt)
+      .where(sql`status = 'running'`),
     check('jobs_cost_not_negative', sql`${table.cost} >= 0`),
+    check('jobs_attempts_not_negative', sql`${table.attempts} >= 0`),
     /** "`blocked` means moderation refused a shot, and it must show the refusal reason." */
     check(
       'jobs_blocked_states_reason',

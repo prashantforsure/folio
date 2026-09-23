@@ -135,13 +135,22 @@ importers:
       '@folio/script':
         specifier: workspace:*
         version: link:../../packages/script
+      web:
+        specifier: workspace:*
+        version: link:../web
     devDependencies:
       '@types/node':
         specifier: ^22.20.2
         version: 22.20.2
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.0(@types/node@22.20.2)(@vitest/coverage-v8@5.0.0)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
 
   packages/contracts:
     dependencies:
