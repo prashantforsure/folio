@@ -6,7 +6,7 @@ import type { RunId } from '@folio/script'
 import type { Schedule } from '../script/server'
 
 import { applyProposalWith, summaryOf } from './apply'
-import type { ProposalMade, ProposalSink } from './loop'
+import type { ProposalGroup, ProposalMade, ProposalSink } from './loop'
 import type { ToolGate } from './registry'
 
 /**
@@ -32,6 +32,12 @@ import type { ToolGate } from './registry'
  * `confirm` or `paid` operation never applies without a click, whatever the
  * setting: `applyProposalWith` refuses it without `confirmed`.
  */
+/** A group's credits: the sum of its paid operations' costs, or null when none spends (roadmap task 5.1). */
+export const costOf = (group: ProposalGroup): number | null => {
+  const paid = group.ops.filter((entry) => entry.op.mode === 'paid')
+  return paid.length === 0 ? null : paid.reduce((total, entry) => total + (entry.op.cost ?? 0), 0)
+}
+
 export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy = 'review', schedule?: Schedule): ProposalSink => ({
   create: async (groups) => {
     const made: ProposalMade[] = []
@@ -42,7 +48,7 @@ export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy
       if (replayed !== null) {
         const earlier = await readProposal(gate.scope, replayed.proposalId)
         if (earlier !== null) {
-          made.push({ proposalId: earlier.proposal.id, runId: run, summary: earlier.proposal.summary, needsConfirmation: earlier.proposal.needsConfirmation, auto: false })
+          made.push({ proposalId: earlier.proposal.id, runId: run, summary: earlier.proposal.summary, needsConfirmation: earlier.proposal.needsConfirmation, auto: false, cost: earlier.proposal.creditCost })
           continue
         }
       }
@@ -50,21 +56,22 @@ export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy
       const documents = new Map<string, ProposalDocumentBase>()
       for (const entry of group.ops) if (entry.op.base !== undefined) documents.set(entry.op.base.documentId, entry.op.base)
       const summary = summaryOf(group.ops.map((entry) => entry.op.description).join('; '))
+      const creditCost = costOf(group)
       const created = await createProposal(gate.scope, {
         runId: run,
         episodeId: gate.episode.id,
         summary,
         base: { documents: [...documents.values()] },
         needsConfirmation: asks,
-        creditCost: null,
+        creditCost,
         ops: group.ops.map((entry) => ({ tool: entry.op.tool, args: entry.op.args, mode: entry.op.mode, idempotencyKey: entry.key })),
       })
       if (autonomy === 'auto' && !asks && documents.size === 0) {
         const outcome = await applyProposalWith(gate, created.proposal.id, { confirmed: false, ...(schedule === undefined ? {} : { schedule }) })
-        made.push({ proposalId: created.proposal.id, runId: run, summary, needsConfirmation: false, auto: false, applied: outcome.status === 'applied' })
+        made.push({ proposalId: created.proposal.id, runId: run, summary, needsConfirmation: false, auto: false, applied: outcome.status === 'applied', cost: creditCost })
         continue
       }
-      made.push({ proposalId: created.proposal.id, runId: run, summary, needsConfirmation: asks, auto: autonomy === 'auto' && !asks })
+      made.push({ proposalId: created.proposal.id, runId: run, summary, needsConfirmation: asks, auto: autonomy === 'auto' && !asks, cost: creditCost })
     }
     return made
   },

@@ -1568,7 +1568,8 @@ export type GenerationOutcome =
     }
   | { readonly job: 'scene_image'; readonly asset: AssetId }
   | { readonly job: 'shoot_reel'; readonly video: AssetId; readonly poster: AssetId | null }
-  | { readonly job: 'ai_shotlist' | 'propose_shots' | 'character_look' }
+  /** A look or a plate is stored as the record's portrait or photo by the runner, after the row says it succeeded - nothing here to update. */
+  | { readonly job: 'ai_shotlist' | 'propose_shots' | 'character_look' | 'location_plate' }
 
 /** The ledger row that closes the reservation: `spend` when the work ran, `release` when it did not. Idempotent on the generation. */
 const closeReservation = async (db: Db, scope: ProjectScope, generation: Generation, kind: 'spend' | 'release', reason: string): Promise<void> => {

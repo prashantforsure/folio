@@ -3,6 +3,7 @@ import { needsConfirmation } from '@folio/contracts'
 import {
   claimProposal,
   createProposal,
+  grantRunBudget,
   listRunProposals,
   logAgentActivity,
   markProposalOp,
@@ -52,6 +53,13 @@ import type { ToolGate } from './registry'
  *   5. **The first failure stops it.** The rest are marked `skipped`; the
  *      proposal is `failed` if nothing landed and `partially_applied` if
  *      something did - the applied operations are always a prefix.
+ *
+ * **A paid proposal's confirmation is the run's budget** (ADR 0003 D3,
+ * roadmap task 5.1). Once it is claimed and found current, its `credit_cost`
+ * is granted to the run - the only way a run's budget rises, and never by more
+ * than the confirmation named. Each paid operation then spends from it before
+ * it starts its work (`spendRunBudget`), so a run cannot spend what nobody
+ * confirmed, and cannot carry a grant into work it was not granted for.
  *
  * ## `undoRunWith`
  *
@@ -172,6 +180,9 @@ export const applyProposalWith = async (
     return settled(gate, proposal.id, 'stale', 'The script changed since this was proposed. Ask again and it will be planned against the new version.', null)
   }
   const digests = new Map<DocumentId, string>(proposal.base.documents.map((document) => [document.documentId, document.digest]))
+
+  // D3: the confirmation grants the run what it named - claimed once, so granted once.
+  if (asks && proposal.creditCost !== null && proposal.creditCost > 0) await grantRunBudget(scope, proposal.runId, proposal.creditCost)
 
   // D11: snapshot every document the proposal can touch, before anything runs.
   const touched = new Set<DocumentId>(proposal.base.documents.map((document) => document.documentId))

@@ -85,7 +85,7 @@ export const productionGenerationHandler: JobHandler = {
       row.targetType === 'reel' ? readReelView(scope, row.targetId as ReelId) : Promise.resolve(null),
       row.job === 'ai_shotlist' ? readCastAndPlaces(scope) : Promise.resolve(null),
     ])
-    await runGeneration({ scope, id, spec, reel, names: cast?.names ?? [], signal: onCancel(signal) })
+    await runGeneration({ scope, id, spec, reel, names: cast?.names ?? [], target: { type: row.targetType, id: row.targetId }, signal: onCancel(signal) })
     return outcomeOfGeneration(await readGenerationForRun(scope, id))
   },
 

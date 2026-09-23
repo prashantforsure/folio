@@ -202,6 +202,39 @@ export const shootSpec = (scene: ProductionScene, reel: Reel, settings: EpisodeS
   })
 }
 
+/** What a location plate is drawn from: the location record's own words. */
+export type PlateInput = {
+  readonly id: string
+  readonly name: string
+  readonly description: string | null
+  readonly address: string | null
+}
+
+/**
+ * A location's plate (roadmap task 5.1): the establishing photograph a shoot
+ * uses as the set, drawn from the location's own description when the writer
+ * has no photo to upload (the client's ruling, 2026-09-24). Stored as the
+ * location's photo, it is the plate every later image and clip is given, so it
+ * carries the Art Style prefix like them and nothing of any one scene: no
+ * cast, no action, the place alone.
+ */
+export const locationPlateSpec = (location: PlateInput, settings: EpisodeSettings, artStyle: ArtStyle): GenerationSpec => {
+  const snapshot = snapshotOf(settings, artStyle)
+  const described = location.description === null || location.description.trim() === '' ? 'Draw it as its name suggests.' : location.description.trim()
+  const prompt = [
+    stylePrefix(snapshot, artStyle),
+    `A location plate for ${location.name}: one establishing photograph of the place itself, empty of people, as a production would photograph it on a recce.`,
+    `The place: ${described}${location.address === null || location.address.trim() === '' ? '' : ` Where: ${location.address.trim()}.`}`,
+    `Cinematic photograph, the set as the subject, no people, no text, no watermark.`,
+  ].join('\n')
+  return build('location_plate', prompt, [], snapshot, ASPECT[settings.aspectRatio], null, {
+    location: location.id,
+    name: location.name,
+    description: location.description,
+    address: location.address,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // On the worker (roadmap task 4.3)
 // ---------------------------------------------------------------------------

@@ -76,6 +76,8 @@ export type ProposalMade = {
   readonly auto: boolean
   /** Already applied by the sink under `auto` - a record-only proposal (roadmap task 3.7). */
   readonly applied?: boolean
+  /** Credits a paid proposal would spend, named on its confirmation (roadmap task 5.1); null or absent when it spends none. */
+  readonly cost?: number | null
 }
 
 /**
@@ -229,7 +231,7 @@ const writeProposals = async (
       emit({ type: 'proposal', proposalId: proposal.proposalId, runId: proposal.runId, summary: proposal.summary, needsConfirmation: proposal.needsConfirmation, auto: proposal.auto })
       if (proposal.needsConfirmation) {
         asks = true
-        emit({ type: 'confirm_required', id: proposal.proposalId, name: group.ops[0]?.op.tool ?? 'proposal', summary: proposal.summary, cost: null })
+        emit({ type: 'confirm_required', id: proposal.proposalId, name: group.ops[0]?.op.tool ?? 'proposal', summary: proposal.summary, cost: proposal.cost ?? null })
       }
     }
   } catch (cause) {

@@ -11,6 +11,7 @@ import {
   UserIdSchema,
 } from './ids'
 import { TimestampSchema } from './primitives'
+import { ScriptToProductionInputSchema } from './production-run'
 import { StoryToScriptInputSchema } from './story'
 
 /**
@@ -161,8 +162,8 @@ export const BackgroundTaskInputSchema = z.object({
 
 export type BackgroundTaskInput = z.infer<typeof BackgroundTaskInputSchema>
 
-/** The kinds of background run: a task the model handed itself, and the story pipeline (roadmap task 4.5). */
-export const BackgroundRunInputSchema = z.discriminatedUnion('kind', [BackgroundTaskInputSchema, StoryToScriptInputSchema])
+/** The kinds of background run: a task the model handed itself, the story pipeline (roadmap task 4.5) and the production pipeline (task 5.1). */
+export const BackgroundRunInputSchema = z.discriminatedUnion('kind', [BackgroundTaskInputSchema, StoryToScriptInputSchema, ScriptToProductionInputSchema])
 
 export type BackgroundRunInput = z.infer<typeof BackgroundRunInputSchema>
 

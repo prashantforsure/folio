@@ -836,3 +836,14 @@ export {
   draftSceneSchema,
   sceneListSchema,
 } from './story'
+
+export type { ProductionCheckpoint, ProductionStage, RunCheckpoint, RunStageName, ScriptToProductionInput } from './production-run'
+export {
+  PRODUCTION_CHECKPOINTS,
+  PRODUCTION_STAGES,
+  ProductionStageOutputSchemas,
+  RUN_CHECKPOINTS,
+  RUN_STAGES,
+  ScriptToProductionInputSchema,
+  isRunCheckpoint,
+} from './production-run'

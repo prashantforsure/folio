@@ -1,4 +1,4 @@
-import { AGENT_OP_MODES, AGENT_OP_STATUSES, AGENT_PROPOSAL_STATUSES, AGENT_RUN_MODES, AGENT_RUN_STATUSES, ASSISTANT_ROLES, STORY_STAGES, STORY_STAGE_STATUSES } from '@folio/contracts'
+import { AGENT_OP_MODES, AGENT_OP_STATUSES, AGENT_PROPOSAL_STATUSES, AGENT_RUN_MODES, AGENT_RUN_STATUSES, ASSISTANT_ROLES, RUN_STAGES, STORY_STAGE_STATUSES } from '@folio/contracts'
 import { sql } from 'drizzle-orm'
 import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
@@ -237,13 +237,20 @@ export const agentProposalOps = pgTable(
   ],
 )
 
-export const storyStageEnum = pgEnum('story_stage', STORY_STAGES)
+/**
+ * Every stage either pipeline stores: the story's six (`0038`) and, since
+ * roadmap task 5.1, the production pipeline's five (`0039`). The enum keeps
+ * its first name - renaming a Postgres type is a migration with nothing to
+ * show for it.
+ */
+export const storyStageEnum = pgEnum('story_stage', RUN_STAGES)
 
 export const storyStageStatusEnum = pgEnum('story_stage_status', STORY_STAGE_STATUSES)
 
 /**
  * `agent_run_stages` - what a story-to-script run has made so far, a row per
- * stage (roadmap task 4.5, migration `0038`). WRITTEN BY THE RUN: the
+ * stage (roadmap task 4.5, migration `0038`); a script-to-production run's
+ * too since task 5.1 (`0039`). WRITTEN BY THE RUN: the
  * stage's output, parsed with its contract (`StageOutputSchemas`) before it
  * lands, so a paused or crashed run picks up at the stage it reached rather
  * than asking the model again for what it already has. `status` is where the

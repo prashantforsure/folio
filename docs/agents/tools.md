@@ -169,13 +169,17 @@ and `shots` is the Storyboard's — the two toolsets never cross.
 | `manage_reels` | `addReel`, `patchReel`; `deleteReel` in confirm mode | writer | propose · confirm | 3 |
 | `manage_shots` | `addShot`, `patchShot`, `bulkPatchShots`, `moveShot`, `retimeShot`, `deleteShot` — all **`lib/production/actions.ts`** | writer | propose | 3 |
 | `ai_shotlist` | `aiShotlist` (`lib/production/generate.ts`) — 0 credits, lands as proposed | writer | direct | 3 |
-| `generate_images` | `generateSheet` (40), `generateSceneImage` (40), `generateFrames` (4 each) | writer | paid | 5 |
-| `shoot_reel` | `shootReel` (375) | writer | paid | 5 |
+| `generate_images` | `generateSheet` (40), `generateSceneImage` (40), `generateFrames` (4 each), and a location plate (40, provisional) drawn from a location's description (`generateLocationPlateWith`, added by task 5.1 at the client's ruling). One call names every image and is one confirmation. Built, task 5.1 | writer | paid | 5 |
+| `shoot_reel` | `shootReel` (375 a reel); one call names every reel, one confirmation. Built, task 5.1 | writer | paid | 5 |
 | `cancel_generation` | `cancelGeneration` | writer | direct | 3 |
 
 Costs are `GENERATION_COSTS` in `packages/contracts/src/production.ts` and are
 quoted from the registry at click, held on submit, settled on success, refunded
-or released otherwise. The writer sees tiers — `Draft · Standard · Cinema` —
+or released otherwise. A **paid** tool (task 5.1) prices its call when it is
+made; the proposal carries the price; confirming it grants the run exactly
+that budget (ADR 0003 **D3**, `grantRunBudget`), and each image or shoot spends
+from the grant before it starts (`spendRunBudget`) and gives back what never
+started. The writer sees tiers — `Draft · Standard · Cinema` —
 never a model name. `moveShot` exists in both `lib/production/actions.ts` and
 `lib/storyboard/actions.ts`; this is the Production one.
 
@@ -188,7 +192,7 @@ never a model name. `moveShot` exists in both `lib/production/actions.ts` and
 | `undo_run` | Run-level undo: restore the `before_agent_run` snapshots, replay the inverse operations | writer | confirm | 3 |
 | `start_background_task` | `startBackgroundRun` (`@folio/db`): the run, its chat, its brief and an `agent_run` job, in one transaction; two live per project (D14). Built, task 4.4 | writer | direct | **4** |
 | `story_to_script` | The story pipeline (`lib/agent/story/pipeline.ts`): a background run, stages A-F, checkpoints, chained scene batches. Built, task 4.5 | writer | confirm | **4** |
-| `script_to_production` | The production pipeline, after a total cost estimate | writer | confirm | **5** |
+| `script_to_production` | The production pipeline (`lib/agent/production/pipeline.ts`): a background run - settings and reels, shotlists, a checkpoint to accept shots, plates, then the cost table and a paid proposal for the images and another for the shoots. Built, task 5.1 | writer | confirm | **5** |
 | `generate_character_look` | The `character_look` generation (40) | writer | paid | 5 |
 
 `deleteEpisode` is **not** here — deleting an episode is owner-only under ADR

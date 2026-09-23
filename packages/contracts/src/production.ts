@@ -296,7 +296,8 @@ export const AssetKindSchema = z.enum(ASSET_KINDS)
 export const ASSET_SOURCES = ['generated', 'uploaded'] as const
 export type AssetSource = (typeof ASSET_SOURCES)[number]
 
-export const GENERATION_TARGETS = ['shot', 'reel', 'scene', 'sheet', 'character'] as const
+/** `location` since roadmap task 5.1: a plate drawn from a location's description, stored as its photo. */
+export const GENERATION_TARGETS = ['shot', 'reel', 'scene', 'sheet', 'character', 'location'] as const
 export type GenerationTarget = (typeof GENERATION_TARGETS)[number]
 
 export const GENERATION_JOBS = [
@@ -307,6 +308,7 @@ export const GENERATION_JOBS = [
   'shoot_reel',
   'propose_shots',
   'character_look',
+  'location_plate',
 ] as const
 export type GenerationJob = (typeof GENERATION_JOBS)[number]
 export const GenerationJobSchema = z.enum(GENERATION_JOBS)
@@ -344,6 +346,13 @@ export const GENERATION_COSTS: Readonly<Record<GenerationJob, number>> = {
   shoot_reel: 375,
   propose_shots: 0,
   character_look: 40,
+  /**
+   * **Provisional** (roadmap task 5.1, 2026-09-24): the client asked for a
+   * plate drawn from a location's description and left its price to decide
+   * later. It is one image, priced as the scene image and the character look
+   * are, until that ruling - open decision 14 lists it.
+   */
+  location_plate: 40,
 }
 
 export const TIERS = ['Draft', 'Standard', 'Cinema'] as const
@@ -367,6 +376,7 @@ export const MODEL_REGISTRY: Readonly<
   shoot_reel: { model: 'veo-3.1-generate-preview', tier: 'Standard', kind: 'video' },
   propose_shots: null,
   character_look: { model: 'gemini-3.1-flash-image', tier: 'Standard', kind: 'image' },
+  location_plate: { model: 'gemini-3.1-flash-image', tier: 'Standard', kind: 'image' },
 }
 
 // ---------------------------------------------------------------------------

@@ -23,7 +23,10 @@ import { defineTool } from './registry'
  * asks, and `direct` runs at once through `ctx.proposals.applyNow` - its
  * output already lands as proposed rows, or it only cancels something. A tool
  * whose catalogue mode is `propose · confirm` returns the stronger mode from
- * `prepare` for its destructive action.
+ * `prepare` for its destructive action. `paid` (roadmap task 5.1) is `confirm`
+ * with a price: `prepare` names the credits from `GENERATION_COSTS`, the
+ * proposal carries them, and the writer's confirmation is what grants them to
+ * the run (ADR 0003 D3).
  */
 
 export type Prepared<Args> =
@@ -36,6 +39,8 @@ export type Prepared<Args> =
       readonly mergeKey?: string
       /** Anything worth telling the model beside "proposed": a rename's blast radius. */
       readonly note?: unknown
+      /** A `paid` call's credits, named before anything is spent. Required for `paid`. */
+      readonly cost?: number
     }
   | { readonly ok: false; readonly message: string }
 
@@ -44,7 +49,7 @@ export type WriteToolDefinition<Input, Args> = {
   readonly description: string
   readonly toolset: Toolset
   readonly minimumRole: MembershipRole
-  readonly mode: Exclude<AgentOpMode, 'paid'>
+  readonly mode: AgentOpMode
   readonly input: z.ZodType<Input>
   readonly label: (input: Input) => string
   /** The model's input, checked and turned into what is stored. */
@@ -69,7 +74,8 @@ export const defineWriteTool = <Input, Args>(definition: WriteToolDefinition<Inp
       if (!prepared.ok) return { ok: false, message: prepared.message }
       const mode = prepared.mode ?? definition.mode
       const description = definition.executor.describe(prepared.args)
-      const op = { tool: definition.name, args: prepared.args, mode, description, base: prepared.base, mergeKey: prepared.mergeKey }
+      if (mode === 'paid' && prepared.cost === undefined) return { ok: false, message: `${definition.name} could not name its cost.` }
+      const op = { tool: definition.name, args: prepared.args, mode, description, base: prepared.base, mergeKey: prepared.mergeKey, cost: prepared.cost }
       if (mode === 'direct') {
         const done = await ctx.proposals.applyNow(op)
         if (!done.ok) return { ok: false, message: done.message }
@@ -81,7 +87,13 @@ export const defineWriteTool = <Input, Args>(definition: WriteToolDefinition<Inp
         content: {
           proposed: description,
           ...(prepared.note === undefined ? {} : { note: prepared.note }),
-          status: mode === 'confirm' ? 'The writer must confirm this before it runs.' : 'The writer will review this proposal; nothing has changed yet.',
+          ...(prepared.cost === undefined ? {} : { credits: prepared.cost }),
+          status:
+            mode === 'paid'
+              ? 'The writer must confirm this and its cost before anything is spent.'
+              : mode === 'confirm'
+                ? 'The writer must confirm this before it runs.'
+                : 'The writer will review this proposal; nothing has changed yet.',
         },
         summary: `Proposed: ${description}`,
       }

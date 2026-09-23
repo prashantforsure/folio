@@ -1,5 +1,5 @@
-import type { AgentProposal, AgentRun, AgentRunStatus, StoryCheckpoint } from '@folio/contracts'
-import { BackgroundRunInputSchema, RunIdSchema, STORY_CHECKPOINTS } from '@folio/contracts'
+import type { AgentProposal, AgentRun, AgentRunStatus, RunCheckpoint } from '@folio/contracts'
+import { BackgroundRunInputSchema, PRODUCTION_CHECKPOINTS, RunIdSchema, STORY_CHECKPOINTS } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
 import { cancelBackgroundRun, continueBackgroundRun, countRunSteps, listRunProposals, readBackgroundRun, readRunStages } from '@folio/db'
 import type { RunId } from '@folio/script'
@@ -41,11 +41,12 @@ export type RunView = {
   }
   readonly mine: boolean
   /**
-   * The story checkpoint the run waits at (A, C or D of `story_to_script`), or
-   * null. Only the card's **Approve** moves a checkpoint on: a reply with words
-   * asks the stage again, and an empty one does nothing.
+   * The checkpoint the run waits at (A, C or D of `story_to_script`; the shots
+   * or the plates of `script_to_production`, task 5.1), or null. Only the
+   * card's **Approve** moves a checkpoint on: a reply with words asks the stage
+   * again, and an empty one does nothing.
    */
-  readonly checkpoint: StoryCheckpoint | null
+  readonly checkpoint: RunCheckpoint | null
   readonly startedAt: string | null
   readonly finishedAt: string | null
 }
@@ -69,7 +70,7 @@ export const runViewOf = (
   proposals: readonly ProposalFacts[],
   steps: number,
   viewer: ProjectGate['actor'],
-  checkpoint: StoryCheckpoint | null = null,
+  checkpoint: RunCheckpoint | null = null,
 ): RunView => ({
   id: run.id,
   chatId: run.chatId,
@@ -88,13 +89,18 @@ export const runViewOf = (
   finishedAt: run.finishedAt,
 })
 
-/** The story checkpoint a waiting `story_to_script` run stopped at - the one of A, C, D whose stage is `waiting` - or null. */
-export const storyCheckpointOf = async (scope: ProjectScope, run: Pick<AgentRun, 'id' | 'status'>, input: unknown): Promise<StoryCheckpoint | null> => {
+/**
+ * The checkpoint a waiting pipeline run stopped at - the one of its kind's
+ * checkpoints whose stage is `waiting` - or null: A, C or D for
+ * `story_to_script`, the shots or the plates for `script_to_production`.
+ */
+export const checkpointOf = async (scope: ProjectScope, run: Pick<AgentRun, 'id' | 'status'>, input: unknown): Promise<RunCheckpoint | null> => {
   if (run.status !== 'waiting_for_user') return null
   const parsed = BackgroundRunInputSchema.safeParse(input)
-  if (!parsed.success || parsed.data.kind !== 'story_to_script') return null
+  if (!parsed.success || parsed.data.kind === 'task') return null
+  const checkpoints: readonly RunCheckpoint[] = parsed.data.kind === 'story_to_script' ? STORY_CHECKPOINTS : PRODUCTION_CHECKPOINTS
   const stages = await readRunStages(scope, run.id as RunId)
-  return STORY_CHECKPOINTS.find((stage) => stages.get(stage)?.status === 'waiting') ?? null
+  return checkpoints.find((stage) => stages.get(stage)?.status === 'waiting') ?? null
 }
 
 const readRun = async (gate: ProjectGate, rawRun: unknown): Promise<{ readonly id: RunId; readonly view: RunView } | null> => {
@@ -105,7 +111,7 @@ const readRun = async (gate: ProjectGate, rawRun: unknown): Promise<{ readonly i
   const [proposals, steps, checkpoint] = await Promise.all([
     listRunProposals(gate.scope, id.data),
     countRunSteps(gate.scope, id.data),
-    storyCheckpointOf(gate.scope, row.run, row.input),
+    checkpointOf(gate.scope, row.run, row.input),
   ])
   return { id: id.data, view: runViewOf(row.run, row.input, proposals, steps, gate.actor, checkpoint) }
 }
@@ -173,7 +179,7 @@ export const continueRunWith = async (gate: ProjectGate, rawRun: unknown, rawRep
 }
 
 /**
- * Approve the story checkpoint a run waits at, and carry on. The starter's
+ * Approve the checkpoint a run waits at, and carry on. The starter's
  * alone, as a reply is. The stage is marked `approved` in the transaction that
  * queues the next job (`continueBackgroundRun`), so the pipeline reads the
  * approval from the stage and never from the words in the chat.

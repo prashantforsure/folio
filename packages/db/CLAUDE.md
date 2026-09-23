@@ -220,6 +220,14 @@ authored / derived-cache / measurement. Touching `episodes` needs
   transaction (`unsafe use of new value`) - `0036` never uses its two as literals, and neither may a
   later migration applied in the same `db:migrate` run (drizzle runs the batch as one transaction);
   and `credit_ledger`'s append-only trigger refuses an `UPDATE` even inside a scratch transaction.
+- **`0039`** (the production pipeline, roadmap task 5.1) adds values only: `location_plate` to
+  `generation_job`, `location` to `generation_target`, and five `production_*` stages to
+  `story_stage` (the enum keeps its first name; `RUN_STAGES` in `@folio/contracts` is its list now).
+  None is used as a literal in the migration - 0038's `ADD VALUE` trap. Generated, renamed,
+  `db:check` clean; **not applied**. Beside it in `repositories/agent.ts`: `grantRunBudget` (the
+  only raise of `credit_budget`, called when a paid proposal is confirmed), `spendRunBudget` (one
+  conditional update, refused past the budget) and `returnRunBudget`; `continueBackgroundRun`'s
+  approval takes any `RunCheckpoint`.
 - **`src/seed/production.ts` is the one seed** (`pnpm --filter @folio/db seed:production -- --user <email>`,
   launched by `scripts/seed-production.mjs` through drizzle-kit's own `tsx`): a "Monsoon Line" series
   in every state the v12 mockup draws; a re-run bins the previous one of that title and writes a

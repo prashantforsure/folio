@@ -148,6 +148,25 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `canonicalScreenplay` (the stored-copy form), so applied in order each finds its base; one that goes
   stale is planned again on the next reply. Proposal keys are deterministic, so a replayed job finds
   what it made. The confirm card draws the run's card under it once applied (`card.ts` `run`).
+- **Paid tools and the production pipeline** (roadmap task 5.1): `generate_images` and `shoot_reel`
+  (`tools/writes-paid.ts`, **paid**) price a call from `GENERATION_COSTS` in `prepare`
+  (`priceImages`, `priceShoot`); the proposal carries the sum as `credit_cost`; confirming it grants
+  the run exactly that (`grantRunBudget` in `apply.ts`, after the claim, so once); each image or
+  shoot spends from the grant before it starts (`spendRunBudget`) and gives back what never started.
+  One call names every image, so it is one confirmation. `script_to_production` (`writes-runs.ts`,
+  confirm) starts a background run of kind `script_to_production` that `background.ts` hands to
+  `lib/agent/production/pipeline.ts` - no model and no `ANTHROPIC_API_KEY`, only Production's jobs:
+  setup (unsaved settings + a reel per scene) → shotlists (`ai_shotlist`, direct) and the **shots**
+  checkpoint → the **plates** checkpoint when a location has no photo → the cost table and one paid
+  images proposal → one paid shoot proposal. Its stages are `production_*` rows of
+  `agent_run_stages` (`0039`); `PRODUCTION_CHECKPOINTS` move on only through Approve, as the story's
+  do (`checkpointOf` in `runs.ts`). It waits on generations by polling their rows inside the job
+  (`settleOn`, 5 s) and plans again from what is still missing (`lib/agent/production/plan.ts`,
+  pure). Its dependencies are injected (`ProductionPorts`), which is how
+  `tests/production-pipeline.test.ts` walks it. A **location plate** (`location_plate`, target
+  `location`, **40 credits, provisional** - the client left the price to decide) is drawn from the
+  location's description and stored as its photo by the runner; a location that has a photo is
+  refused, and a photo uploaded while it drew is kept.
 - **What a workspace computes, the server can read** (roadmap task 2.4): `readContinuity`
   (`lib/timeline/server.ts`, over `continuityOf` in `view.ts`), `readPageCount` (`lib/script/page-count.ts`
   - the stored measurement when its digest matches, else `measure()`; asian refuses), `readProjectList`

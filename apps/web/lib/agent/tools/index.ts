@@ -9,6 +9,7 @@ import { SCRIPT_TOOLS } from './script'
 import { TIMELINE_TOOLS } from './timeline'
 import { ENTITY_WRITE_TOOLS } from './writes-entities'
 import { EPISODE_WRITE_TOOLS } from './writes-episodes'
+import { PAID_WRITE_TOOLS } from './writes-paid'
 import { PRODUCTION_WRITE_TOOLS } from './writes-production'
 import { RUN_WRITE_TOOLS } from './writes-runs'
 import { DOCUMENT_TOOLS, SCRIPT_WRITE_TOOLS } from './writes-script'
@@ -19,7 +20,7 @@ import { executorsOf, toolsOf } from '../write-tool'
 /**
  * Every tool, registered once - the rows of `docs/agents/tools.md`: Phase 2's
  * reads and client tools, Phase 3's writes, which propose rather than write
- * (AGENTS.md ruling R8), and Phase 4's background run. Importing this
+ * (AGENTS.md ruling R8), Phase 4's background run, and Phase 5's paid tools. Importing this
  * module is how a caller gets a populated registry; the guard makes a second
  * import (a test's, a hot reload's) a no-op rather than a "registered twice"
  * error. `tests/agent-tools.test.ts` checks the list against `tools.md`.
@@ -42,6 +43,8 @@ if (registeredTools().length === 0) {
     ...toolsOf(EPISODE_WRITE_TOOLS),
     // Phase 4: handing a task to a background run.
     ...toolsOf(RUN_WRITE_TOOLS),
+    // Phase 5: the tools that spend credits, each confirmed with its price.
+    ...toolsOf(PAID_WRITE_TOOLS),
   ])
 }
 // What applying each write means (roadmap Phase 3) - idempotent, so a second import is harmless.
@@ -54,6 +57,7 @@ registerExecutors([
   ...executorsOf(PRODUCTION_WRITE_TOOLS),
   ...executorsOf(EPISODE_WRITE_TOOLS),
   ...executorsOf(RUN_WRITE_TOOLS),
+  ...executorsOf(PAID_WRITE_TOOLS),
 ])
 
 export { registeredTools }

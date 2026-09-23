@@ -1,13 +1,13 @@
-import type { Asset, CameraMotion, ProductionGenerationId, Reel, ShotType } from '@folio/contracts'
+import type { Asset, CameraMotion, GenerationTarget, ProductionGenerationId, Reel, ShotType } from '@folio/contracts'
 import { CAMERA_MOTIONS, SHOT_TYPES } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
-import { failGeneration, insertAsset, insertReelShots, progressGeneration, refuseGeneration, resumeGeneration, succeedGeneration } from '@folio/db'
-import type { CharacterId } from '@folio/script'
+import { failGeneration, insertAsset, insertReelShots, progressGeneration, refuseGeneration, resumeGeneration, setLocationPhotoKey, succeedGeneration } from '@folio/db'
+import type { CharacterId, LocationId } from '@folio/script'
 import { parseDescription } from '@folio/script'
 
 import { sheetCameraNote, sheetHeading } from '../camera'
 import { shotClocks } from '../derive'
-import { putObject } from '../../storage/r2'
+import { deleteObject, putObject } from '../../storage/r2'
 import { generateImage, generateText, generateVideo } from './gemini'
 import type { ModelOutcome } from './gemini'
 import { parseShotlist } from './shotlist'
@@ -64,6 +64,8 @@ export type RunInput = {
   readonly reel: Reel | null
   /** The cast's names, for reading a shotlist's descriptions into parts. */
   readonly names: readonly { readonly id: CharacterId; readonly name: string }[]
+  /** What the generation is for, as its row names it - the record a plate or a look is stored on. */
+  readonly target?: { readonly type: GenerationTarget; readonly id: string }
   /** Aborted when the writer cancels: the provider call stops. */
   readonly signal?: AbortSignal
 }
@@ -145,6 +147,30 @@ export const runGeneration = async (input: RunInput): Promise<void> => {
           })),
         )
         await succeedGeneration(scope, id, { job: 'ai_shotlist' })
+        return
+      }
+      case 'location_plate': {
+        // The plate is the location's photo (roadmap task 5.1): stored under the location, as an upload is, and pointed at once the row says it succeeded.
+        if (input.target?.type !== 'location') return void (await failGeneration(scope, id, 'The location is gone.'))
+        const out = await generateImage(model, spec, signal)
+        if (!(await settle(scope, id, out)) || !out.ok) return
+        const key = `projects/${scope.projectId}/locations/${input.target.id}/photo-${crypto.randomUUID()}.${EXTENSION[out.value.mime] ?? 'bin'}`
+        const put = await putObject(key, out.value.bytes, out.value.mime)
+        if (!put.ok) return void (await failGeneration(scope, id, put.message))
+        if ((await succeedGeneration(scope, id, { job: 'location_plate' })) === null) {
+          // Cancelled while it drew: nothing points at the object.
+          await deleteObject(key)
+          return
+        }
+        const location = input.target.id as LocationId
+        const pointed = await setLocationPhotoKey(scope, location, key)
+        if (!pointed.found) {
+          await deleteObject(key)
+        } else if (pointed.previous !== null && pointed.previous !== key) {
+          // A photo the writer uploaded while it drew: theirs is kept, the plate goes. A plate never draws over a photo.
+          await setLocationPhotoKey(scope, location, pointed.previous)
+          await deleteObject(key)
+        }
         return
       }
       default:

@@ -163,4 +163,55 @@ ${args.story}`,
   },
 })
 
-export const RUN_WRITE_TOOLS: readonly WriteTool[] = [startBackgroundTaskTool, storyToScriptTool]
+/**
+ * `script_to_production` - the production pipeline (roadmap task 5.1): a
+ * background run that carries the episode's script into Production - the
+ * settings and a reel per scene, a shotlist per reel, then the images and the
+ * shoots, each paid step priced from `GENERATION_COSTS` and confirmed by the
+ * writer on its own card (`lib/agent/production/pipeline.ts`). **Confirm**
+ * mode (`tools.md`): the writer says yes before it starts, and starting it
+ * spends nothing - every credit it will spend is confirmed later, where the
+ * price is shown. It runs in the episode the turn is on and counts against
+ * D14's two.
+ */
+export const scriptToProductionTool = defineWriteTool({
+  name: 'script_to_production',
+  description:
+    "Carry the episode's script into Production and on to video, in the background: propose the episode settings and a reel per scene, draft a shotlist per reel, stop for the writer to accept the shots, then show the cost of the images and the shoots and ask the writer to confirm each - images once, shoots separately - before anything is spent. The writer confirms before it starts.",
+  toolset: 'production',
+  minimumRole: ROLE.paidGeneration,
+  mode: 'confirm',
+  input: z.object({ title: z.string().trim().min(1).max(120).optional().describe('A short name for the run. Omit for "<episode> to production".') }),
+  label: () => 'Proposing to take the script to production',
+  prepare: (ctx, input) => Promise.resolve({ ok: true as const, args: { title: input.title ?? `${ctx.gate.episode.title} to production` } }),
+  executor: {
+    args: z.object({ title: z.string() }),
+    describe: (args) => `Take the script to production: ${args.title}, in the background, asking you before every credit is spent`,
+    target: () => ({ type: 'agent_run', id: null }),
+    capture: () => Promise.resolve(null),
+    run: async (ctx, args) => {
+      const started = await startBackgroundRun(ctx.gate.scope, {
+        episodeId: ctx.gate.episode.id,
+        title: args.title,
+        brief: `Take this episode's script to production: ${args.title}.`,
+        input: { kind: 'script_to_production', title: args.title },
+        limit: CONCURRENT_RUNS_PER_PROJECT,
+      })
+      if (started.status === 'busy') {
+        return { ok: false, message: `This project already has ${String(started.live)} background runs working, which is the limit. Wait for one to finish, or cancel one.` }
+      }
+      return { ok: true, result: { runId: started.runId, chatId: started.chatId, title: args.title }, undo: { runId: started.runId } }
+    },
+    invert: async (ctx, _args, undo) => {
+      const prior = z.object({ runId: RunIdSchema }).safeParse(undo)
+      if (!prior.success) return { kind: 'skipped', reason: 'There is no run to stop.' }
+      const cancelled = await cancelBackgroundRun(ctx.gate.scope, prior.data.runId as RunId)
+      return cancelled.status === 'cancelled'
+        ? { kind: 'undone', note: 'The production run was cancelled.' }
+        : { kind: 'skipped', reason: 'The production run had already finished. Undo its own run to take back what it proposed.' }
+    },
+    preview: (_ctx, args) => Promise.resolve({ changes: [{ field: 'Take to production', before: null, after: args.title }], open: { route: 'production' } }),
+  },
+})
+
+export const RUN_WRITE_TOOLS: readonly WriteTool[] = [startBackgroundTaskTool, storyToScriptTool, scriptToProductionTool]

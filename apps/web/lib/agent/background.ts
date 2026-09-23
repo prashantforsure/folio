@@ -32,6 +32,7 @@ import { runAgentLoop } from './loop'
 import { proposalSink } from './proposer'
 import type { Tool } from './registry'
 import { resumeOf } from './replay'
+import { runProductionJob } from './production/pipeline'
 import { runStoryJob } from './story/pipeline'
 import './tools'
 
@@ -91,8 +92,8 @@ export const INTERRUPTED = 'Interrupted: the run stopped three times without fin
 
 const PayloadSchema = z.object({ runId: RunIdSchema })
 
-/** The tools a run with no panel has no use for: the client tools, and starting another background run (or the story pipeline) from inside one. */
-export const offeredInBackground = (tool: Tool): boolean => tool.mode !== 'client' && tool.name !== 'start_background_task' && tool.name !== 'story_to_script'
+/** The tools a run with no panel has no use for: the client tools, and starting another background run (or either pipeline) from inside one. */
+export const offeredInBackground = (tool: Tool): boolean => tool.mode !== 'client' && tool.name !== 'start_background_task' && tool.name !== 'story_to_script' && tool.name !== 'script_to_production'
 
 /** Why the run waits for the writer, as the run card says it. */
 const WAITING: Readonly<Partial<Record<AgentStopReason, string>>> = {
@@ -134,14 +135,20 @@ export const runBackgroundJob = async (job: ClaimedJob, signal: AbortSignal, dep
   const open = () => openEpisodeAs(run.createdBy, job.projectId, episode.slug, ROLE.assistant, 'session')
   const first = await open()
   if (isRefusal(first)) return settle('failed', first.message)
+  const say = async (body: string): Promise<void> => {
+    await appendMessage(scope, chatId, 'assistant', body, { runId })
+  }
+
+  // The production pipeline (roadmap task 5.1) calls no model of its own - Production's jobs draw - so it needs no key and no tokens.
+  if (input.data.kind === 'script_to_production') {
+    const autonomy = await readAgentAutonomy(await sessionDatabase(), run.createdBy)
+    return runProductionJob({ scope, runId, chatId, episode, open, signal, autonomy, say, settle })
+  }
   if (deps.client === null) return settle('failed', NOT_CONNECTED)
 
   const accountDb = await sessionDatabase()
   const [used, autonomy] = await Promise.all([tokensTodayFor(accountDb, run.createdBy), readAgentAutonomy(accountDb, run.createdBy)])
   const tokenBudget = DAILY_TOKENS_PER_USER - used
-  const say = async (body: string): Promise<void> => {
-    await appendMessage(scope, chatId, 'assistant', body, { runId })
-  }
   if (tokenBudget <= 0) return settle('waiting_for_user', WAITING.token_cap ?? null)
 
   // The story pipeline (roadmap task 4.5) runs its stages; a task runs the loop.

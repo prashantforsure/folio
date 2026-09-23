@@ -88,6 +88,12 @@ export type ProposedOp = {
    * edits to one script become one operation, so its undo is one snapshot.
    */
   readonly mergeKey?: string | undefined
+  /**
+   * A `paid` operation's credits, from `GENERATION_COSTS` (roadmap task 5.1).
+   * The proposal carries the sum as `credit_cost`; confirming it grants the
+   * run exactly that budget (ADR 0003 D3).
+   */
+  readonly cost?: number | undefined
 }
 
 /** What a `direct` tool gets back: it ran at once, as a one-operation proposal already applied. */

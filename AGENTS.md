@@ -192,7 +192,7 @@ Stop and ask before you:
 | 11 | The revision colour sequence past green (`nextRevisionColour` refuses at green) | Issuing a sixth revision |
 | 12 | Locked-page numbering past the last lock — a judgement call is implemented (the sequence continues unprotected), not ruled | Export, revision compare |
 | 13 | ~~Whether an assistant message costs credits, and how much~~ **Ruled 2026-09-23: ADR 0003 D3** (the copilot pass) — an agent that calls a model many times per task made this urgent. The panel wrote no ledger row from 2026-09-16 until this ruling | — |
-| 14 | The Production feature set's escalations — the credit unit and margin, refund on cancel-while-running, the costs the v12 spec does not price (shot frame 4, scene image 40, AI shotlist 0, propose 0 are provisional), the stale rules. The D-1 … D-21 list went with the first doc set (deleted with `docs/build-decisions.md`, 2026-09-22); the v12 pass took provisional answers, each listed under "Implementation" in `docs/production/README.md` | Changing a cost, a refund rule or a stale rule in `apps/web/lib/production/` or `packages/contracts/src/production.ts` |
+| 14 | The Production feature set's escalations — the credit unit and margin, refund on cancel-while-running, the costs the v12 spec does not price (shot frame 4, scene image 40, AI shotlist 0, propose 0 are provisional; so is the location plate at 40, added 2026-09-24 by roadmap task 5.1 at the client's request, its price left by them to decide), the stale rules. The D-1 … D-21 list went with the first doc set (deleted with `docs/build-decisions.md`, 2026-09-22); the v12 pass took provisional answers, each listed under "Implementation" in `docs/production/README.md` | Changing a cost, a refund rule or a stale rule in `apps/web/lib/production/` or `packages/contracts/src/production.ts` |
 
 ---
 
@@ -452,7 +452,15 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   is stored (`agent_run_stages`, `0038`) so the run resumes stage by stage. The model never writes
   a cue or a heading: it names a bound character or a bible location, code writes the bound
   spelling, and `checkDraft` (`packages/script`) repairs or refuses the rest
-  (`lib/agent/story/`).
+  (`lib/agent/story/`). **Shipped 2026-09-24** (roadmap task 5.1): **it spends, and only when
+  asked**. The paid tools `generate_images` (plates, scene images, sheets, frames) and `shoot_reel`
+  price each call from `GENERATION_COSTS`; the card shows the price and the balance; confirming
+  grants the run exactly that budget (ADR 0003 D3 - it starts at 0 and nothing else raises it) and
+  each image or shoot spends from the grant before it starts. `script_to_production` (confirm) starts
+  a background run that proposes the settings and a reel per scene, drafts a shotlist per reel,
+  stops for the writer to accept the shots, asks about locations with no photo (upload one, or have a
+  plate drawn from its description), shows the cost table with the balance, and asks **once for the
+  images and separately for the shoots** (`lib/agent/production/`).
 - Lifecycle: **Brief → Plan → Run → Review → Commit.** One run produces one revision entry.
 - **Every write returns a proposal, never a mutation.** Proposals are anchored to node ids and
   rendered as hunks against current node state. **Narrowed 2026-09-23** (the copilot pass): this

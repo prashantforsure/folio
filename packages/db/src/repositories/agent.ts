@@ -1,4 +1,4 @@
-import type { AgentRun, AgentRunMode, AgentRunStatus, AssistantChatId, AssistantMessageId, BackgroundRunInput, EpisodeId, StoryCheckpoint, UserId } from '@folio/contracts'
+import type { AgentRun, AgentRunMode, AgentRunStatus, AssistantChatId, AssistantMessageId, BackgroundRunInput, EpisodeId, RunCheckpoint, UserId } from '@folio/contracts'
 import { assistantChatId, assistantMessageId, episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
 import type { RunId } from '@folio/script'
 import { runId as brandRunId } from '@folio/script'
@@ -87,6 +87,50 @@ export const addAgentRunTokens = async (scope: ProjectScope, id: RunId, input: n
       outputTokens: sql`${agentRuns.outputTokens} + ${Math.max(0, Math.round(output))}`,
       updatedAt: new Date(),
     })
+    .where(scoped(scope, agentRuns, eq(agentRuns.id, id)))
+}
+
+// ---------------------------------------------------------------------------
+// The credit budget (ADR 0003 D3, roadmap task 5.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Grant a run credits - the one way its budget rises, and only from a
+ * confirmation a person gave (`apps/web/lib/agent/apply.ts`, when a paid
+ * proposal is confirmed): the budget starts at 0 and rises by exactly what the
+ * confirmation named. An increment, so two confirmations in one run add up
+ * rather than overwrite.
+ */
+export const grantRunBudget = async (scope: ProjectScope, id: RunId, credits: number): Promise<void> => {
+  if (credits <= 0) return
+  await dbOf(scope)
+    .update(agentRuns)
+    .set({ creditBudget: sql`${agentRuns.creditBudget} + ${Math.round(credits)}`, updatedAt: new Date() })
+    .where(scoped(scope, agentRuns, eq(agentRuns.id, id)))
+}
+
+/**
+ * Spend from what the run was granted, in one conditional statement: refused
+ * (false) when it would take `credits_spent` past `credit_budget` - the same
+ * bound `agent_runs_budget` checks, asked first so a refusal is an answer and
+ * not a constraint error. A paid operation spends before it starts its work.
+ */
+export const spendRunBudget = async (scope: ProjectScope, id: RunId, credits: number): Promise<boolean> => {
+  if (credits <= 0) return true
+  const rows = await dbOf(scope)
+    .update(agentRuns)
+    .set({ creditsSpent: sql`${agentRuns.creditsSpent} + ${Math.round(credits)}`, updatedAt: new Date() })
+    .where(scoped(scope, agentRuns, eq(agentRuns.id, id), sql`${agentRuns.creditsSpent} + ${Math.round(credits)} <= ${agentRuns.creditBudget}`))
+    .returning({ id: agentRuns.id })
+  return rows.length > 0
+}
+
+/** Give back a spend whose work never started - refused by the ledger, a limit, or a missing target. Never below zero. */
+export const returnRunBudget = async (scope: ProjectScope, id: RunId, credits: number): Promise<void> => {
+  if (credits <= 0) return
+  await dbOf(scope)
+    .update(agentRuns)
+    .set({ creditsSpent: sql`greatest(0, ${agentRuns.creditsSpent} - ${Math.round(credits)})`, updatedAt: new Date() })
     .where(scoped(scope, agentRuns, eq(agentRuns.id, id)))
 }
 
@@ -260,8 +304,8 @@ export const continueBackgroundRun = async (
   id: RunId,
   reply: string,
   limit: number,
-  /** A story checkpoint the writer approved: moved from `waiting` to `approved` in this transaction, or nothing is written. */
-  approve: StoryCheckpoint | null = null,
+  /** A checkpoint the writer approved - a story's or a production run's: moved from `waiting` to `approved` in this transaction, or nothing is written. */
+  approve: RunCheckpoint | null = null,
 ): Promise<ContinueBackgroundRunResult> =>
   dbOf(scope).transaction(async (tx) => {
     const rows = await tx

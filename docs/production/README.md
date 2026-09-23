@@ -70,7 +70,10 @@ Deviations from the spec, each with its reason:
   (`apps/web/CLAUDE.md`). Both columns held zero rows, so nothing was migrated.
 - **Credits** reuse the append-only `credit_ledger` (the generation id in `job_id`); the balance is
   computed, so no `balance_after`. Costs the spec does not price: shot frame 4, scene image 40,
-  AI shotlist 0, propose 0 (sheet 40 and shoot 375 as specified).
+  AI shotlist 0, propose 0 (sheet 40 and shoot 375 as specified), and - added 2026-09-24 with the
+  copilot's production pipeline (roadmap task 5.1) - a **location plate at 40, provisional**: the
+  client asked for a plate drawn from a location's description when there is no photo, and left its
+  price to decide (open decision 14). It is stored as the location's photo, which is the plate.
 - **`generations` carries `route` and `source_hash`** (AGENTS.md's pipeline rule) and an `error`
   column; the writer never sees a model id. `MODEL_REGISTRY` names Gemini models (client ruling).
 - **Generations run on the worker**, not in the request (roadmap task 4.3; the first build used

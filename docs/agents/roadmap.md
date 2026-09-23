@@ -506,3 +506,28 @@ card says so).
 Phase 4 is done when every box is ticked, the worker is deployed to staging, and a thin one-line story produces a complete, reviewable draft.
 
 ## Phase 5: Production automation, exports, quality
+
+**Phase goal:** the copilot carries a finished script through shot lists, storyboards and video with cost control, exports a real PDF, and its writing quality is measured.
+
+- [x] 5.1 Script-to-production pipeline. Register the paid tools (generate_images, shoot_reel) and add the script_to_production tool. It proposes episode settings (warning that they lock at the first shoot), one reel per scene, and ai_shotlist per reel, then stops at a checkpoint for the writer to accept shots. Next it shows a cost table from GENERATION_COSTS (sheets, frames, shoots) with the current balance, and requires confirmation for images and a separate confirmation for shooting reels. Enforce the run's credit budget (D3). Progress uses the existing generations polling.
+
+  **Done 2026-09-24.** `paid` is a real mode: a call is priced from `GENERATION_COSTS`, the proposal
+  carries `credit_cost`, confirming it grants the run exactly that (`grantRunBudget`, after the
+  claim) and each image or shoot spends from the grant first (`spendRunBudget`, `returnRunBudget`).
+  `generate_images` / `shoot_reel` (`tools/writes-paid.ts`) name everything in one call, one
+  confirmation. `script_to_production` runs `lib/agent/production/pipeline.ts` on the worker (no model):
+  setup → shotlists → **shots** checkpoint → **plates** checkpoint → cost table + paid images → paid
+  shoots, waiting on the generation rows between (`0039` adds the `production_*` stages). **Client
+  ruling:** a shoot needs a location photo, so a `location_plate` job draws one from the description
+  (**40 credits, provisional** - price undecided, open decision 14). **Test change:** the catalogue
+  test counts the built Phase 5 rows and "no paid tool" became "only the catalogue's paid rows".
+  **Follow-ups:** `0039` not applied; no live generation run (no `GEMINI_API_KEY`/`R2_*` here); the
+  D14 limit (30 generations an hour) can stop a large images round part-way - the next round
+  re-proposes what is missing.
+- [ ] 5.2 Character look. Implement character_look following the generate.ts pattern (target_type character, cost from GENERATION_COSTS), with a spec builder in pipeline/spec.ts using the character's appearance, age, gender and the episode's art style. Store the result as the portrait via setPortraitKey. Enable the Generate button in _characters/canvas/character-node.tsx, and register the paid generate_character_look tool.
+- [ ] 5.3 PDF export. Using pdf-lib and @pdf-lib/fontkit (pre-approved by D17; add no other dependency), render the script from its measurement records, computing a fresh measurement on the server when the stored one is stale. Include the title page, an embedded Courier Prime font, and an embedded fallback font for non-Latin scripts such as Devanagari. Add exportScriptPdf, enable the PDF item in _projects/card-menu.tsx:90-93 and in the Script export menu, and extend the export_script tool. Update the "pdf-lib chosen, not installed" note in AGENTS.md's tech stack. If the measurement records don't carry enough position data to lay out pages, stop and report.
+- [ ] 5.4 Run history. Add a History tab to the panel listing runs with their proposals, operations, status, tokens and credits, linking to the affected items, with an Undo run button. Read from agent_runs, agent_proposals and activity_log.
+- [ ] 5.5 Evals. Add an eval harness, for example apps/web/evals with a pnpm eval script that does not run in CI (D19), with 10 fixture stories: thin one-liners, detailed treatments, a series pilot, and one mixing Hindi and English. It runs story_to_script against a scratch project and scores the output with structural checks (the script parses, derive leaves zero unresolved cues, every scene has a heading) and a model-judged rubric built from docs/agents/craft.md. It writes a Markdown report with per-story scores and quoted weak spots for human review.
+- [ ] 5.6 Hardening. Add Playwright specs for: the panel persisting across navigation, a cited answer, applying and undoing a character creation, a script edit applied in the open editor, a background run with a checkpoint, and a paid confirmation. Verify the rate limits and caps under load. Write docs/agents/README.md covering env vars, worker deployment, costs and troubleshooting, and confirm AGENTS.md's "What we are building" section still describes the shipped system accurately.
+
+Phase 5 is done when every box is ticked, and a story can go all the way to storyboards and video, with every paid step confirmed.

@@ -1,9 +1,10 @@
 import type { ArtStyle, EpisodeSettings, GenerationTarget, ProductionScene, Reel } from '@folio/contracts'
-import { GENERATION_COSTS, NodeIdSchema, ProductionGenerationIdSchema, ReelIdSchema, ReelShotIdSchema } from '@folio/contracts'
+import { GENERATION_COSTS, LocationIdSchema, NodeIdSchema, ProductionGenerationIdSchema, ReelIdSchema, ReelShotIdSchema } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
 import {
   cancelGeneration as cancelGenerationRow,
   createGeneration,
+  listLocationRecords,
   readDocumentByKind,
   readLiveGenerationFor,
   readProductionEpisode,
@@ -21,7 +22,7 @@ import { cutScene } from '../storyboard/scene-cut'
 import { proposeShotsWith } from './core'
 import { readinessOf } from './derive'
 import { connected } from './pipeline/connection'
-import { frameSpec, sceneImageSpec, sheetSpec, shootSpec, shotlistSpec } from './pipeline/spec'
+import { frameSpec, locationPlateSpec, sceneImageSpec, sheetSpec, shootSpec, shotlistSpec } from './pipeline/spec'
 import type { GenerationSpec } from './pipeline/spec'
 import type { CancelResult, Failure, GenerationResult, ShootResult } from './result'
 import { composeScenes, readCastAndPlaces } from './compose'
@@ -44,6 +45,7 @@ import { composeScenes, readCastAndPlaces } from './compose'
 
 const NOT_A_REEL = 'That reel is not in this episode. Reload the page.'
 const NOT_A_SCENE = 'That scene is not in this episode. Reload the page.'
+const NOT_A_LOCATION = 'That location is not in this project.'
 
 const error = (message: string): Failure => ({ status: 'error', message })
 
@@ -51,7 +53,8 @@ const error = (message: string): Failure => ({ status: 'error', message })
 const proseOf = (content: InlineContent, names: ReadonlyMap<string, string>): string =>
   content.map((run) => (run.kind === 'text' ? run.text : (names.get(run.target.id as string) ?? ''))).join('')
 
-type Ground = {
+/** Everything a generation is assembled from - also what the production pipeline plans with (roadmap task 5.1). */
+export type Ground = {
   readonly gate: EpisodeGate
   readonly scenes: readonly ProductionScene[]
   readonly settings: EpisodeSettings
@@ -60,7 +63,7 @@ type Ground = {
 }
 
 /** Everything a generation is assembled from, read once. Settings default to the mockup's when none are saved. */
-const ground = async (gate: EpisodeGate): Promise<Ground | Failure> => {
+export const ground = async (gate: EpisodeGate): Promise<Ground | Failure> => {
   const [record, { cast, locations, names }] = await Promise.all([readProductionEpisode(gate.scope, gate.episode.id), readCastAndPlaces(gate.scope)])
   const scenes = composeScenes(record, cast, locations)
   const preset = record.artStyles.find((style) => style.key === 'netflix-prestige-drama') ?? record.artStyles[0]
@@ -79,7 +82,7 @@ const ground = async (gate: EpisodeGate): Promise<Ground | Failure> => {
   return { gate, scenes, settings, artStyle, names }
 }
 
-const isFailure = (value: Ground | Failure): value is Failure => 'status' in value
+export const isFailure = (value: Ground | Failure): value is Failure => 'status' in value
 
 const findReel = (scenes: readonly ProductionScene[], reelId: string): { readonly scene: ProductionScene; readonly reel: Reel } | null => {
   for (const scene of scenes) for (const reel of scene.reels) if (reel.id === reelId) return { scene, reel }
@@ -158,6 +161,27 @@ export const framesProblem = (raw: unknown): Failure | null => (FrameIdsSchema.s
 
 /** The bulk bar's `✦ Generate n frames` - 4 cr each, one generation per shot; the first short balance stops the rest. */
 export const generateFramesWith = async (gate: EpisodeGate, raw: unknown): Promise<GenerationResult> => {
+  const each = await generateFramesEachWith(gate, raw)
+  if (!isLaunches(each)) return each
+  const short = each.find((entry) => entry.result.status === 'insufficient')
+  if (short !== undefined) return short.result
+  return each.at(-1)?.result ?? error('None of the picked shots has a description to draw from.')
+}
+
+export const isLaunches = (value: readonly FrameLaunch[] | GenerationResult): value is readonly FrameLaunch[] => Array.isArray(value)
+
+/** One shot's frame, as `generateFramesEachWith` answers it. */
+export type FrameLaunch = { readonly shotId: string; readonly result: GenerationResult }
+
+/**
+ * The frames one at a time, each shot's answer kept - what a paid agent
+ * operation needs to spend its run's budget on exactly the frames that started
+ * (roadmap task 5.1). One gate, one rate-limit count and one read for the
+ * batch, as `generateFramesWith` (which is this, answered with the last). A
+ * shot with no description or a frame already drawing is left out; the first
+ * short balance stops the rest.
+ */
+export const generateFramesEachWith = async (gate: EpisodeGate, raw: unknown): Promise<readonly FrameLaunch[] | GenerationResult> => {
   const ids = FrameIdsSchema.safeParse(raw)
   if (!ids.success) return error('Pick at least one shot.')
   const off = connected('shot_frame')
@@ -166,7 +190,7 @@ export const generateFramesWith = async (gate: EpisodeGate, raw: unknown): Promi
   if (stop !== null) return stop
   const g = await ground(gate)
   if (isFailure(g)) return g
-  let last: GenerationResult | null = null
+  const launched: FrameLaunch[] = []
   for (const shotId of ids.data) {
     const found = g.scenes.flatMap((scene) => scene.reels.map((reel) => ({ scene, reel }))).find(({ reel }) => reel.shots.some((shot) => shot.id === shotId))
     if (found === undefined) continue
@@ -174,10 +198,36 @@ export const generateFramesWith = async (gate: EpisodeGate, raw: unknown): Promi
     if (shot === undefined || shot.description.trim().length === 0) continue
     if ((await readLiveGenerationFor(gate.scope, 'shot', shot.id)) !== null) continue
     const result = await launch(g, 'shot', shot.id, frameSpec(found.scene, found.reel, shot, g.settings, g.artStyle))
-    if (result.status === 'insufficient') return result
-    last = result
+    launched.push({ shotId: shot.id, result })
+    if (result.status === 'insufficient') break
   }
-  return last ?? error('None of the picked shots has a description to draw from.')
+  return launched
+}
+
+export const locationProblem = (rawLocationId: unknown): Failure | null => (LocationIdSchema.safeParse(rawLocationId).success ? null : error(NOT_A_LOCATION))
+
+/**
+ * A location's plate, drawn from its description (roadmap task 5.1, the
+ * client's ruling 2026-09-24) - `GENERATION_COSTS.location_plate`, provisional.
+ * Only for a location with no photo: a shoot's plate is the location's photo,
+ * and a photo the writer chose is never drawn over. The episode's art style
+ * is the one it is drawn in; the result is stored as the photo
+ * (`runner.ts`), so every later generation takes it as the plate.
+ */
+export const generateLocationPlateWith = async (gate: EpisodeGate, rawLocationId: unknown): Promise<GenerationResult> => {
+  const locationId = LocationIdSchema.safeParse(rawLocationId)
+  if (!locationId.success) return error(NOT_A_LOCATION)
+  const off = connected('location_plate')
+  if (off !== null) return off
+  const stop = await mayStart(gate)
+  if (stop !== null) return stop
+  const g = await ground(gate)
+  if (isFailure(g)) return g
+  const location = (await listLocationRecords(gate.scope)).find((record) => record.id === locationId.data)
+  if (location === undefined) return error(NOT_A_LOCATION)
+  if (location.photoKey !== null) return error('This location already has a photo - that is its plate.')
+  if ((await readLiveGenerationFor(gate.scope, 'location', location.id)) !== null) return error('This location’s plate is already being drawn.')
+  return launch(g, 'location', location.id, locationPlateSpec({ id: location.id, name: location.name, description: location.description, address: location.address }, g.settings, g.artStyle))
 }
 
 /**

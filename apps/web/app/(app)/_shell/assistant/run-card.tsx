@@ -15,7 +15,7 @@ import { useLivePoll } from './use-live-poll'
  * `queued` or `running` (`useLivePoll`) - never pushed, as D7 rules - and
  * stops polling the moment it is not. It shows where the run is, how many
  * steps it has taken, what it has proposed and what waits on the writer; its
- * buttons are **Approve** (at a story checkpoint, the starter's - the only way
+ * buttons are **Approve** (at a checkpoint - a story's or a production run's - the starter's; the only way
  * one moves on; an empty reply does nothing), **Open** (the run's chat, where
  * its work and its proposals are) and **Cancel**, the starter's or an owner's.
  *

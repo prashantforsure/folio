@@ -240,13 +240,20 @@ describe('the registry against docs/agents/tools.md', () => {
     phase: (match[4] ?? '').trim(),
   }))
   const phaseTwo = rows.filter((row) => row.phase.startsWith('2'))
-  // Phase 4's rows land one task at a time (roadmap tasks 4.4 and 4.5).
+  // Phase 4's rows land one task at a time (roadmap tasks 4.4 and 4.5), and Phase 5's (5.1 onwards).
   const PHASE_FOUR_BUILT = ['start_background_task', 'story_to_script']
-  const built = rows.filter((row) => row.phase.startsWith('2') || row.phase.startsWith('3') || (row.phase === '**4**' && PHASE_FOUR_BUILT.includes(row.name)))
+  const PHASE_FIVE_BUILT = ['generate_images', 'shoot_reel', 'script_to_production']
+  const built = rows.filter(
+    (row) =>
+      row.phase.startsWith('2') ||
+      row.phase.startsWith('3') ||
+      (row.phase === '**4**' && PHASE_FOUR_BUILT.includes(row.name)) ||
+      ((row.phase === '5' || row.phase === '**5**') && PHASE_FIVE_BUILT.includes(row.name)),
+  )
 
-  it('registers every Phase 2 and Phase 3 tool the catalogue lists, the Phase 4 ones built so far, and nothing it does not', () => {
+  it('registers every Phase 2 and Phase 3 tool the catalogue lists, the Phase 4 and 5 ones built so far, and nothing it does not', () => {
     expect(phaseTwo.length).toBe(17)
-    expect(built.length).toBe(58)
+    expect(built.length).toBe(61)
     expect(registeredTools().map((tool) => tool.name).sort()).toEqual(built.map((row) => row.name).sort())
   })
 
@@ -259,8 +266,10 @@ describe('the registry against docs/agents/tools.md', () => {
     }
   })
 
-  it('registers no paid tool before Phase 5, and no Research write at all (ruling R3)', () => {
-    expect(registeredTools().filter((tool) => tool.mode === 'paid')).toEqual([])
+  it('registers only the catalogue`s paid tools as paid - Phase 5 ones built so far - and no Research write at all (ruling R3)', () => {
+    const paid = built.filter((row) => row.mode === 'paid').map((row) => row.name)
+    expect(paid.sort()).toEqual(['generate_images', 'shoot_reel'])
+    expect(registeredTools().filter((tool) => tool.mode === 'paid').map((tool) => tool.name).sort()).toEqual(paid)
     expect(registeredTools().filter((tool) => tool.toolset === 'research' && tool.mode !== 'read')).toEqual([])
   })
 
