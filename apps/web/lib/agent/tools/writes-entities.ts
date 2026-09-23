@@ -85,6 +85,7 @@ const FIELD_LABEL: Readonly<Record<string, string>> = {
   role: 'Role',
   bio: 'Bio',
   appearance: 'Appearance',
+  voice: 'Voice',
   description: 'Description',
   address: 'Address',
   status: 'Status',
@@ -134,12 +135,14 @@ const IdResult = z.object({ id: z.uuid() })
 // Create
 // ---------------------------------------------------------------------------
 
-const CreateCharacterArgs = NewCharacterSchema
+const CreateCharacterArgs = NewCharacterSchema.extend({
+  voice: z.string().trim().max(600).optional().describe('How they talk: rhythm, vocabulary, what they avoid saying. Kept in the record notes, not the bio.'),
+})
 
 export const createCharacterTool = defineWriteTool({
   name: 'create_character',
   description:
-    'Propose a new character record: a name (their cue spelling, e.g. "MEERA"), and optionally a role, bio, age, gender or appearance. ' +
+    'Propose a new character record: a name (their cue spelling, e.g. "MEERA"), and optionally a role, bio, age, gender, appearance or voice note. ' +
     'Create a character before writing their cues or mentioning them in the script. Check search_project first that they do not already exist.',
   toolset: 'entities',
   minimumRole: ROLE.entityOperation,

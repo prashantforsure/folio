@@ -118,7 +118,7 @@ describe('every create passes the key through to its repository', () => {
   it('createCharacter', async () => {
     const { createCharacter } = await import('../lib/characters/actions')
     await createCharacter(PROJECT, { name: 'RUKMINI' }, KEY)
-    expect(spies.createCharacterRecord).toHaveBeenCalledWith({}, 'RUKMINI', {}, 'hand', KEY)
+    expect(spies.createCharacterRecord).toHaveBeenCalledWith({}, 'RUKMINI', {}, 'hand', KEY, {})
   })
 
   it('createLocation', async () => {
@@ -153,13 +153,28 @@ describe('every create passes the key through to its repository', () => {
   })
 })
 
+describe('a voice note', () => {
+  it('goes into the record notes, never the profile or the bio', async () => {
+    // The story pipeline's stage B, through `create_character` (pre-deploy fixes, 2026-09-24).
+    const { createCharacterIn } = await import('../lib/characters/create')
+    await createCharacterIn(gate.scope as never, { name: 'MEERA', bio: 'Thirties.', voice: '  Short, exact.  ' }, KEY, 'agent')
+    expect(spies.createCharacterRecord).toHaveBeenCalledWith({}, 'MEERA', { bio: 'Thirties.' }, 'agent', KEY, { voice: 'Short, exact.' })
+  })
+
+  it('leaves the notes empty when there is none', async () => {
+    const { createCharacterIn } = await import('../lib/characters/create')
+    await createCharacterIn(gate.scope as never, { name: 'RAVI', voice: '   ' }, null, 'agent')
+    expect(spies.createCharacterRecord).toHaveBeenCalledWith({}, 'RAVI', {}, 'agent', null, {})
+  })
+})
+
 describe('a create with no key is unchanged', () => {
   it('passes null, never an empty string', async () => {
     // An empty string is a *value*: with the index in place, every UI create
     // in a project would collide with every other one.
     const { createCharacter } = await import('../lib/characters/actions')
     await createCharacter(PROJECT, { name: 'RUKMINI' })
-    expect(spies.createCharacterRecord).toHaveBeenCalledWith({}, 'RUKMINI', {}, 'hand', null)
+    expect(spies.createCharacterRecord).toHaveBeenCalledWith({}, 'RUKMINI', {}, 'hand', null, {})
   })
 })
 

@@ -99,7 +99,7 @@ No chat is stored outside a project (**D15**). `matchesFilter` also exists in
 
 | Tool | Wraps | Role | Mode | Phase |
 | --- | --- | --- | --- | --- |
-| `create_character` | `createCharacter`, with the `tool_use` id as idempotency key | writer | propose | 3 |
+| `create_character` | `createCharacter`, with the `tool_use` id as idempotency key; an optional `voice` note is stored in `characters.notes.voice`, never the bio | writer | propose | 3 |
 | `create_location` | `createLocation`, same | writer | propose | 3 |
 | `create_prop` | `createProp`, same | writer | propose | 3 |
 | `update_character` | `saveProfile` | writer | propose | 3 |

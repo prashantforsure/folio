@@ -538,6 +538,24 @@ export const deleteRelationship = async (scope: ProjectScope, aId: CharacterId, 
 // Writes - the record
 // ---------------------------------------------------------------------------
 
+/** A record's voice note - `notes.voice`, how they talk - or null when it has none. */
+export type CharacterVoiceRow = { readonly id: CharacterId; readonly name: string; readonly voice: string | null }
+
+/**
+ * Every unmerged record's voice note, read from `characters.notes.voice`.
+ *
+ * The story pipeline writes it there at stage B and reads it back here at
+ * stage E, so a note the writer edited in between is the one the draft gets.
+ */
+export const listCharacterVoices = async (scope: ProjectScope): Promise<readonly CharacterVoiceRow[]> => {
+  const rows = await dbOf(scope)
+    .select({ id: characters.id, name: characters.name, voice: sql<string | null>`${characters.notes} ->> 'voice'` })
+    .from(characters)
+    .where(scoped(scope, characters, sql`${characters.mergedInto} IS NULL`))
+    .orderBy(asc(characters.createdAt), asc(characters.id))
+  return rows.map((row) => ({ id: brandCharacterId(row.id), name: row.name, voice: row.voice === null || row.voice.trim() === '' ? null : row.voice }))
+}
+
 /**
  * Put a card where the canvas dropped it, or back to the auto layout with
  * `null` (`shots.canvas_x`'s pattern, `0020`). Cosmetic: nothing derived
@@ -552,17 +570,21 @@ export const placeCharacter = async (scope: ProjectScope, id: CharacterId, posit
   return rows.length > 0
 }
 
-/** Insert a record by hand, with whatever profile the drawer filled in. `origin` is `hand` unless the assistant made it. */
+/**
+ * Insert a record by hand, with whatever profile the drawer filled in. `origin` is `hand` unless the assistant made it.
+ * `notes` is the record's opaque `notes` blob as it starts - `{ voice }` when the story pipeline made it (stage B).
+ */
 export const createCharacterRecord = async (
   scope: ProjectScope,
   name: string,
   edit: CharacterProfileEdit,
   origin: Extract<CharacterOrigin, 'hand' | 'agent'> = 'hand',
   idempotencyKey: string | null = null,
+  notes: Readonly<Record<string, unknown>> = {},
 ): Promise<CharacterId> => {
   const rows = await dbOf(scope)
     .insert(characters)
-    .values({ ...tenant(scope), name, origin, idempotencyKey, ...profileColumns(edit) })
+    .values({ ...tenant(scope), name, origin, idempotencyKey, notes, ...profileColumns(edit) })
     .onConflictDoNothing(onIdempotencyKeyConflict(characters))
     .returning({ id: characters.id })
   const row = await insertedOrExisting(

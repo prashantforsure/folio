@@ -23,10 +23,20 @@ import { requestRederive } from '../script/derive-batch'
  * a pass. The name's spelling binds to the new record, so a cue typed later
  * resolves to it rather than proposing; a spelling somebody else already
  * holds is left with them.
+ *
+ * `voice` - how they talk - is written to `characters.notes.voice`, never to
+ * the bio: the agent's `create_character` takes it, and the story pipeline's
+ * stage E reads it back from there (pre-deploy fixes, 2026-09-24).
  */
-export const createCharacterIn = async (scope: ProjectScope, input: NewCharacter, key: string | null, origin: 'hand' | 'agent'): Promise<CharacterId> => {
-  const { name, ...profile } = input
-  const id = await createCharacterRecord(scope, name, profile, origin, key)
+export const createCharacterIn = async (
+  scope: ProjectScope,
+  input: NewCharacter & { readonly voice?: string | undefined },
+  key: string | null,
+  origin: 'hand' | 'agent',
+): Promise<CharacterId> => {
+  // A voice note is not a profile field: it lives in the record's `notes` blob, where the story pipeline reads it back.
+  const { name, voice, ...profile } = input
+  const id = await createCharacterRecord(scope, name, profile, origin, key, voice === undefined || voice.trim() === '' ? {} : { voice: voice.trim() })
   await bindCue(scope, id, cueSpelling(name))
   await requestRederive(scope)
   return id

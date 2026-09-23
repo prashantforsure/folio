@@ -31,7 +31,7 @@ const EPISODE = { id: episodeId('1d2c3b4a-5f6e-4d7c-8b9a-0f1e2d3c4b5a'), project
 type Proposal = { status: AgentProposalStatus; ops: { tool: string; args: unknown; idempotencyKey: string }[]; digest: string | null }
 
 const world = vi.hoisted(() => ({
-  characters: [] as { id: string; name: string; cue: string }[],
+  characters: [] as { id: string; name: string; cue: string; bio?: string | null; notes?: Record<string, unknown> }[],
   locations: [] as { id: string; name: string; set: string }[],
   docs: new Map<string, { kind: 'screenplay' | 'outline'; nodes: unknown[] }>(),
   proposals: new Map<string, { status: string; ops: { tool: string; args: unknown; idempotencyKey: string }[]; digest: string | null }>(),
@@ -69,6 +69,7 @@ vi.mock('@folio/db', async (actual) => {
       Promise.resolve(world.messages.map((message, index) => ({ id: `m${String(index)}`, projectId: PROJECT, chatId: 'c', role: message.role, body: message.body, content: null, runId: RUN, createdAt: '' }))),
     readAgentRun: () => Promise.resolve({ id: RUN, status: world.runStatus }),
     listCharacterRecords: () => Promise.resolve(world.characters.map((record) => ({ id: record.id, name: record.name }))),
+    listCharacterVoices: () => Promise.resolve(world.characters.map((record) => ({ id: record.id, name: record.name, voice: typeof record.notes?.['voice'] === 'string' ? record.notes['voice'] : null }))),
     listLocationRecords: () => Promise.resolve(world.locations.map((record) => ({ id: record.id, name: record.name }))),
     listBoundCues: () => Promise.resolve(world.characters.map((record) => ({ characterId: record.id, cue: record.cue }))),
     listBoundSluglines: () => Promise.resolve(world.locations.map((record) => ({ locationId: record.id, slugline: record.set }))),
@@ -290,7 +291,14 @@ const apply = (id: string): void => {
     const args = op.args as Record<string, unknown>
     switch (op.tool) {
       case 'create_character':
-        world.characters.push({ id: uuid(), name: String(args['name']), cue: cueSpelling(String(args['name'])) })
+        // As `createCharacterIn` stores it: the voice note in `notes.voice`, the bio as given.
+        world.characters.push({
+          id: uuid(),
+          name: String(args['name']),
+          cue: cueSpelling(String(args['name'])),
+          bio: typeof args['bio'] === 'string' ? args['bio'] : null,
+          notes: typeof args['voice'] === 'string' ? { voice: args['voice'] } : {},
+        })
         break
       case 'create_location':
         world.locations.push({ id: uuid(), name: String(args['name']), set: setSpelling(String(args['name'])) })
@@ -445,6 +453,36 @@ describe('story_to_script, a line to a draft', () => {
     expect(again).toHaveLength(2)
     expect(again[1]?.prompt).toContain('Make it a comedy.')
     expect(stageStatus('bible')).toBeUndefined()
+  })
+
+  it('proposes each character with their voice note apart from the bio, and drafts from the note the record holds', async () => {
+    await job()
+    reply()
+    await job()
+    const [bible] = pendingOf('create_character')
+    const meera = world.proposals.get(bible ?? '')?.ops.find((op) => op.tool === 'create_character' && (op.args as Record<string, unknown>)['name'] === 'MEERA')
+    // Stage B: the voice is its own argument - `notes.voice` once applied - and the bio is the description alone.
+    expect(meera?.args).toMatchObject({ name: 'MEERA', bio: 'Thirties; keeps a pencil behind one ear.', voice: 'Short, exact, never says please.' })
+    expect(String((meera?.args as Record<string, unknown>)['bio'])).not.toContain('Voice')
+    apply(bible ?? '')
+    apply(pendingOf('propose_outline_edit')[0] ?? '')
+    expect(world.characters.find((record) => record.name === 'MEERA')?.notes).toEqual({ voice: 'Short, exact, never says please.' })
+
+    // The writer rewrites Meera's voice note and clears Ravi's before the draft.
+    const record = world.characters.find((entry) => entry.name === 'MEERA')
+    if (record !== undefined) record.notes = { voice: 'Clipped; counts under her breath.' }
+    const ravi = world.characters.find((entry) => entry.name === 'RAVI')
+    if (ravi !== undefined) ravi.notes = {}
+    reply()
+    await job()
+    reply()
+    await job()
+
+    // Stage E: the note as the record holds it, not as stage B wrote it.
+    const [first] = calls.filter((call) => call.name === 'submit_scene')
+    expect(first?.prompt).toContain('MEERA - Clipped; counts under her breath.')
+    expect(first?.prompt).not.toContain('Short, exact, never says please.')
+    expect(first?.prompt).not.toContain('Talks around things')
   })
 
   it('waits for the characters and locations before drafting a word', async () => {

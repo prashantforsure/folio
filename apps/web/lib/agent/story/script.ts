@@ -121,9 +121,10 @@ const cut = (value: string, max: number): string => (value.length <= max ? value
 
 /**
  * The bible's records as the create tools' stored arguments, those that exist
- * already (by name) left out. A character's voice note goes into their bio,
- * the one authored field that holds prose - the record has no voice column
- * (`0021`'s voice columns are the derivation's counts).
+ * already (by name) left out. A character's voice note is `create_character`'s
+ * `voice`, which lands in the record's `notes.voice` - never the bio, which is
+ * the description alone. Stage E reads it back from the record (pre-deploy
+ * fixes, 2026-09-24; `0021`'s voice columns are the derivation's counts).
  */
 export const bibleOps = (bible: StoryBible, existing: { readonly characters: readonly string[]; readonly locations: readonly string[] }) => {
   const taken = (names: readonly string[]) => new Set(names.map((name) => name.trim().toUpperCase()))
@@ -132,7 +133,7 @@ export const bibleOps = (bible: StoryBible, existing: { readonly characters: rea
   return {
     characters: bible.characters
       .filter((person) => !people.has(person.name.trim().toUpperCase()))
-      .map((person) => ({ name: person.name.trim(), role: cut(person.role, 200), bio: cut(`${person.description}\n\nVoice: ${person.voice}`, 20_000) })),
+      .map((person) => ({ name: person.name.trim(), role: cut(person.role, 200), bio: cut(person.description, 20_000), voice: cut(person.voice, 600) })),
     locations: bible.locations.filter((place) => !places.has(place.name.trim().toUpperCase())).map((place) => ({ name: place.name.trim(), parent: null })),
   }
 }

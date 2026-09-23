@@ -109,8 +109,8 @@ export type SceneBrief = {
   readonly set: string
   /** The beat it plays, as the outline wrote it. */
   readonly beat: string
-  /** The cues the scene may use - bound spellings - with each character's voice note. */
-  readonly voices: readonly { readonly cue: string; readonly voice: string }[]
+  /** The cues the scene may use - bound spellings - with each character's voice note, from their record; null when it has none. */
+  readonly voices: readonly { readonly cue: string; readonly voice: string | null }[]
   /** The last lines of the scene before, if there is one. */
   readonly previous: readonly DraftLine[]
   readonly brief: StoryBrief
@@ -124,7 +124,7 @@ Heading: ${scene.scene.place}. ${scene.set} - ${scene.scene.time.trim().toUpperC
 The beat it plays: ${scene.beat}
 Synopsis: ${scene.scene.synopsis}
 Characters and their voices:
-${list(scene.voices.map((voice) => `${voice.cue} - ${voice.voice}`))}
+${list(scene.voices.map((voice) => (voice.voice === null ? voice.cue : `${voice.cue} - ${voice.voice}`)))}
 ${scene.previous.length === 0 ? 'It is the first scene.' : `The end of the scene before:\n${linesText(scene.previous)}`}
 
 Write it as lines: action, dialogue and, rarely, a transition. Folio writes the heading and every cue from the project's bound spellings, so give a speaker only by their cue as listed, and never write a heading, a cue or a camera direction yourself. Enter late, leave early; end on the turn.`

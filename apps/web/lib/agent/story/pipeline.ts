@@ -32,6 +32,7 @@ import {
   listBoundCues,
   listBoundSluglines,
   listCharacterRecords,
+  listCharacterVoices,
   listEpisodes,
   listLocationRecords,
   listMessages,
@@ -501,9 +502,10 @@ export const runStoryJob = async (job: StoryJob, input: StoryToScriptInput): Pro
   ): Promise<readonly DraftLine[]> {
     const scene = list.scenes[at]
     if (scene === undefined) return []
+    // The voice note as the record holds it (`characters.notes.voice`), not as stage B wrote it: the writer may have edited it since.
     const voices = bible.characters.flatMap((person) => {
       const cue = spellings.cueOf(person.name)
-      return cue === null ? [] : [{ cue, voice: person.voice }]
+      return cue === null ? [] : [{ cue, voice: spellings.voiceOf(person.name) }]
     })
     const cues = nonEmpty(voices.length === 0 ? spellings.bound.cues : voices.map((voice) => voice.cue))
     // The beat as the outline wrote it - its title and what happens in it.
@@ -621,7 +623,13 @@ export const runStoryJob = async (job: StoryJob, input: StoryToScriptInput): Pro
 
   /** The bound spellings the draft is held to, and the cue or set a bible name is written as. */
   async function readSpellings(): Promise<Spellings> {
-    const [cues, sluglines, labels, records] = await Promise.all([listBoundCues(scope), listBoundSluglines(scope), readMentionLabels(scope), listLocationRecords(scope)])
+    const [cues, sluglines, labels, records, voices] = await Promise.all([
+      listBoundCues(scope),
+      listBoundSluglines(scope),
+      readMentionLabels(scope),
+      listLocationRecords(scope),
+      listCharacterVoices(scope),
+    ])
     const bound: BoundSpellings = {
       cues: cues.map((entry) => entry.cue),
       sets: sluglines.map((entry) => entry.slugline),
@@ -630,6 +638,7 @@ export const runStoryJob = async (job: StoryJob, input: StoryToScriptInput): Pro
     return {
       bound,
       cueOf: (name) => boundSpellingFor(cueSpelling(name), bound.cues),
+      voiceOf: (name) => voices.find((entry) => entry.name.trim().toUpperCase() === name.trim().toUpperCase())?.voice ?? null,
       setOf: (name) => {
         // The location's own bound set, else the nearest bound spelling, else its name as a heading spells it.
         const record = records.find((entry) => entry.name.trim().toUpperCase() === name.trim().toUpperCase())
@@ -645,6 +654,8 @@ type Spellings = {
   readonly bound: BoundSpellings
   /** The bound cue a bible name is written as, or null when it has none. */
   readonly cueOf: (name: string) => string | null
+  /** A bible character's voice note, read from their record's `notes.voice`; null when the record has none. */
+  readonly voiceOf: (name: string) => string | null
   /** The set a bible location is written as in a heading. */
   readonly setOf: (name: string) => string
 }
