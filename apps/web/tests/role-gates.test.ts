@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { MembershipRole } from '@folio/contracts'
+
 import { ROLE, ROLE_ORDER, ROLE_REFUSED, meetsRole } from '../lib/auth/roles'
 
 /**
@@ -157,6 +159,39 @@ describe('the role order', () => {
     expect(meetsRole('reader', 'writer')).toBe(false)
     expect(meetsRole('reader', 'owner')).toBe(false)
     expect(meetsRole('writer', 'owner')).toBe(false)
+  })
+
+  // Every known role against every minimum: the whole matrix, not a sample of it.
+  const MATRIX: readonly (readonly [MembershipRole, MembershipRole, boolean])[] = [
+    ['reader', 'reader', true],
+    ['reader', 'writer', false],
+    ['reader', 'owner', false],
+    ['writer', 'reader', true],
+    ['writer', 'writer', true],
+    ['writer', 'owner', false],
+    ['owner', 'reader', true],
+    ['owner', 'writer', true],
+    ['owner', 'owner', true],
+  ]
+  it.each(MATRIX)('a %s against a %s minimum: %s', (held, minimum, meets) => {
+    expect(meetsRole(held, minimum)).toBe(meets)
+  })
+
+  // Fails closed: a role this table does not know meets nothing - it used to outrank an owner.
+  const UNKNOWN: readonly (readonly [string, MembershipRole | null | undefined])[] = [
+    ['an unknown role', 'admin' as MembershipRole],
+    ['an empty role', '' as MembershipRole],
+    ['a null role', null],
+    ['a missing role', undefined],
+  ]
+  describe.each(UNKNOWN)('%s', (_label, held) => {
+    it.each(ROLE_ORDER.map((minimum) => [minimum] as const))('meets no %s minimum', (minimum) => {
+      expect(meetsRole(held, minimum)).toBe(false)
+    })
+  })
+
+  it('lets nobody meet a minimum the table does not know', () => {
+    for (const held of ROLE_ORDER) expect(meetsRole(held, 'admin' as MembershipRole)).toBe(false)
   })
 
   it('puts every capability D2 names at the role D2 gives it', () => {

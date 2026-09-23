@@ -37,16 +37,27 @@ import type { MembershipRole } from '@folio/contracts'
 /** Ordered: `reader` < `writer` < `owner`. The index is the rank. */
 export const ROLE_ORDER: readonly MembershipRole[] = ['reader', 'writer', 'owner']
 
-const rankOf = (role: MembershipRole): number => {
+/** A role's rank, or null for anything that is not one of the three - a missing role, or one this table has no row for. */
+const rankOf = (role: MembershipRole | null | undefined): number | null => {
+  if (role === null || role === undefined) return null
   const rank = ROLE_ORDER.indexOf(role)
-  // Unreachable while `MembershipRole` is the three above; a fourth role added
-  // to the enum without a rank here must refuse rather than outrank an owner.
-  return rank === -1 ? Number.POSITIVE_INFINITY : rank
+  return rank === -1 ? null : rank
 }
 
-/** Whether the role somebody holds reaches the minimum an action asks for. */
-export const meetsRole = (held: MembershipRole, minimum: MembershipRole): boolean =>
-  rankOf(held) >= rankOf(minimum)
+/**
+ * Whether the role somebody holds reaches the minimum an action asks for.
+ *
+ * **Fails closed.** A held role that is missing or unknown - a row read before
+ * a migration, a fourth role added to the enum without a rank here, a value a
+ * cast let through - meets no minimum at all, and an unknown minimum is met by
+ * nobody. Until the 2026-09-24 pre-deploy fixes an unknown held role ranked
+ * above owner.
+ */
+export const meetsRole = (held: MembershipRole | null | undefined, minimum: MembershipRole): boolean => {
+  const have = rankOf(held)
+  const need = rankOf(minimum)
+  return have !== null && need !== null && have >= need
+}
 
 /**
  * What a gate says when the membership is real and the role is not enough.
