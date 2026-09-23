@@ -1,11 +1,14 @@
 import type {
   AssistantChat,
   AssistantChatId,
+  AssistantContent,
   AssistantMessage,
   AssistantRole,
   EpisodeId,
   UserId,
 } from '@folio/contracts'
+import type { RunId } from '@folio/script'
+import { runId as brandRunId } from '@folio/script'
 import { assistantChatId, assistantMessageId, episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
 import { asc, desc, eq } from 'drizzle-orm'
 
@@ -41,6 +44,8 @@ const toMessage = (row: typeof assistantMessages.$inferSelect): AssistantMessage
   chatId: assistantChatId(row.chatId),
   role: row.role,
   body: row.body,
+  content: row.content === null ? null : [...row.content],
+  runId: row.runId === null ? null : brandRunId(row.runId),
   createdAt: stamp(row.createdAt),
 })
 
@@ -96,19 +101,30 @@ export const listMessages = async (
 }
 
 /**
+ * What a turn may carry beside its text (roadmap task 2.1): the API's content
+ * blocks, replayed on the next turn, and the run that wrote it.
+ */
+export type MessageExtras = {
+  readonly content?: AssistantContent | null
+  readonly runId?: RunId | null
+}
+
+/**
  * Append a turn. Bumps the chat's `updated_at` so the list orders by
- * activity, and titles an untitled chat from its first user message.
+ * activity, and titles an untitled chat from its first user message - a
+ * writer's words, never a tool result, which is a `user` turn with no body.
  */
 export const appendMessage = async (
   scope: ProjectScope,
   chatId: AssistantChatId,
   role: AssistantRole,
   body: string,
+  extras: MessageExtras = {},
 ): Promise<AssistantMessage> => {
   return dbOf(scope).transaction(async (tx) => {
     const inserted = await tx
       .insert(assistantMessages)
-      .values({ ...tenant(scope), chatId, role, body })
+      .values({ ...tenant(scope), chatId, role, body, content: extras.content ?? null, runId: extras.runId ?? null })
       .returning()
     const row = inserted[0]
     if (row === undefined) throw new Error('Folio: inserting a message returned no row.')
@@ -120,7 +136,7 @@ export const appendMessage = async (
     const title = current[0]?.title ?? null
     await tx
       .update(assistantChats)
-      .set(role === 'user' && title === null ? { updatedAt: new Date(), title: titleFrom(body) } : { updatedAt: new Date() })
+      .set(role === 'user' && title === null && body.trim().length > 0 ? { updatedAt: new Date(), title: titleFrom(body) } : { updatedAt: new Date() })
       .where(scoped(scope, assistantChats, eq(assistantChats.id, chatId)))
     return toMessage(row)
   })

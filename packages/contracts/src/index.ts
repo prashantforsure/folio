@@ -670,7 +670,7 @@ export {
 export type { ShareLink, ShareLinkRole } from './share'
 export { SHARE_LINK_ROLES, ShareLinkRoleSchema, ShareLinkSchema, ShareTokenSchema } from './share'
 
-export type { AskFocus, AskRequest, AskScope, AssistantChat, AssistantMessage, AssistantRole } from './assistant'
+export type { AskFocus, AskRequest, AskScope, AssistantChat, AssistantContent, AssistantMessage, AssistantRole } from './assistant'
 export {
   ASK_SCOPES,
   ASSISTANT_MESSAGE_MAX,
@@ -679,9 +679,31 @@ export {
   AskInputSchema,
   AskScopeSchema,
   AssistantChatSchema,
+  AssistantContentSchema,
   AssistantMessageSchema,
   AssistantRoleSchema,
 } from './assistant'
+
+export type { AgentEvent, AgentEventType, AgentRoute, AgentRun, AgentRunMode, AgentRunStatus, AgentStopReason, NavigateTarget } from './agent'
+export {
+  AGENT_DOWNLOAD_MAX,
+  AGENT_EPISODE_ROUTES,
+  AGENT_PROJECT_ROUTES,
+  AGENT_RUN_MODES,
+  AGENT_RUN_STATUSES,
+  AGENT_STOP_REASONS,
+  AGENT_STREAM_MEDIA_TYPE,
+  AgentEpisodeRouteSchema,
+  AgentEventSchema,
+  AgentProjectRouteSchema,
+  AgentRouteSchema,
+  AgentRunModeSchema,
+  AgentRunSchema,
+  AgentRunStatusSchema,
+  AgentStopReasonSchema,
+  NavigateTargetSchema,
+  isTerminalRunStatus,
+} from './agent'
 
 export type {
   ResearchClipEdit,

@@ -153,6 +153,17 @@ authored / derived-cache / measurement. Touching `episodes` needs
   clocks agree on the window. D14's third limit - two concurrent agent runs -
   is not here: it counts live `agent_runs` rows, not a window. RLS block
   hand-written on the `0022` pattern; **not applied to dev**.
+  `0034` (the copilot's agent loop, roadmap task 2.1) adds `agent_run_status`, `agent_run_mode` and
+  `agent_runs` - one row per agent task, AUTHORED by the request that runs it: chat, triggering
+  message, actor, status, mode, input / output tokens, credit budget (default **0**, ADR 0003 D3)
+  and spend. Its chat, message and episode links are **`set null`**, not cascade: the row is also
+  the D3 token meter, and deleting a chat must not reset a writer's daily allowance. It adds
+  `assistant_messages.content` (jsonb, the API's `tool_use` / `tool_result` blocks, replayed next
+  turn) and `run_id`, and swaps the body check for **body or content** - a turn that is only a tool
+  call has no text. `tokensTodayFor` (`repositories/agent.ts`) is the one function there that takes
+  a raw database, on `readCreditsFor`'s reasoning: the cap is per user across projects. Generated
+  by `db:generate` (no prompt - nothing renamed), RLS block hand-written on the `0033` pattern,
+  `db:check` clean; **not applied to dev**.
 - **`src/seed/production.ts` is the one seed** (`pnpm --filter @folio/db seed:production -- --user <email>`,
   launched by `scripts/seed-production.mjs` through drizzle-kit's own `tsx`): a "Monsoon Line" series
   in every state the v12 mockup draws; a re-run bins the previous one of that title and writes a

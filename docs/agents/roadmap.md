@@ -254,6 +254,30 @@ new `Export as .fountain` menu item.
 
 ## Phase 2: Agent loop, app-wide panel, read tools
 
+**Phase goal:** the copilot lives in an app-wide side panel, runs a tool-use loop, and can read, search, navigate and export across the whole app. It cannot change anything yet (AGENTS.md ruling R8).
+
+- [x] 2.1 Contracts and storage. In @folio/contracts, add agent.ts containing: the AgentEvent union (text, tool_started, tool_finished, proposal, confirm_required, navigate, refresh, download, error, done, each with the fields it needs), run statuses (queued, running, waiting_for_user, succeeded, failed, cancelled), and run modes (interactive, background). A migration adds an agent_runs table (project_id, episode_id, chat_id, the triggering message id, created_by, status, mode, input_tokens, output_tokens, credit_budget, credits_spent, error, timestamps), plus nullable content jsonb and run_id columns on assistant_messages to store the API's tool_use and tool_result blocks. Add packages/db/src/repositories/agent.ts, taking ProjectScope.
+
+  **Done 2026-09-23.** `@folio/contracts` `agent.ts` holds the ten-kind `AgentEvent`
+  union, run statuses, modes, stop reasons, `AgentRun` and `NavigateTarget` (the
+  route names are checked against `lib/workspace/routes.ts` in
+  `tests/agent-contracts.test.ts`). Migration `0034` adds `agent_runs` (links to
+  chat, message and episode are `set null` so a deleted chat cannot reset the D3
+  meter), `assistant_messages.content` / `run_id`, and swaps the body check for
+  *body or content*. `repositories/agent.ts` takes `ProjectScope`, except
+  `tokensTodayFor`, which sums across a user's projects on `readCreditsFor`'s
+  pattern. `agent_runs` lives in `schema/assistant.ts`, not a new file: the two
+  tables reference each other. **`0034` must be applied to staging before
+  production**, after `0030`–`0033`.
+- [ ] 2.2 App-wide panel. Move the assistant panel's mount from _chrome/project-shell.tsx:141-155 into apps/web/app/(app)/layout.tsx through a client host component. Keep PANEL_WIDTH, the ⌘J binding and the breakpoint rule; project-shell keeps reading "panel open" from the session store so its nav-collapse rule still works. Hide the panel with CSS instead of unmounting it, and keep the chat id and draft in the Zustand session store. Outside a project, render the launcher from ADR 0003 D15: no stored chat; for now it shows recent projects and a disabled "Start from a story" button. The existing assistant must work exactly as before. Add a Playwright spec proving the panel and its conversation survive navigation between routes and between projects.
+- [ ] 2.3 Agent loop. Refactor ask() in apps/web/lib/assistant/server.ts into a tool-use loop, and switch POST /api/assistant to an application/x-ndjson stream of AgentEvent. Create apps/web/lib/agent/registry.ts. A tool has a name, description, toolset, minimum role (from apps/web/lib/auth/roles.ts), mode, Zod input schema and a run(ctx, input) function. ctx carries the gate (actor, scope, project, episode, role), the run id, the idempotency key (the tool_use id) and an emit function. Enforce the ADR 0003 D5 caps; when a cap is hit, ask the model for a final summary and stop. Record tokens on agent_runs, enforce the D3 daily token cap, and store full content blocks on assistant_messages. Keep prompt caching on the system block and add it to the last tool definition. Keep today's refusal and abort handling. Register only one test tool for now. Test the loop with a mocked Anthropic client, covering a tool error, the step cap and the token cap. Update the panel to consume the new stream: text renders as before, and tool events render as small status lines.
+- [ ] 2.4 Server-side reads. Move the client-only logic listed in AGENT_READINESS_REPORT.md section 6.2 into server-callable functions, keeping the pure parts shared so the UI behaves identically. Per ruling R4, every number comes from code, never from a model. (a) The continuity check, chronology and placement proposals: promote the path at lib/assistant/server.ts:188-236 into lib/timeline/server.ts. (b) Page counts: return the stored measurement when its node_digest matches; otherwise run packages/script's paginate on the server. Refuse clearly for the asian format. (c) The four facts cells: move their predicates into lib/<route>/facts.ts, used by both the client effects and the server. (d) Exports: server actions wrapping outlineMarkdown, chronologyMarkdown, both csvOf functions and breakdownCsvOf. (e) Project list filtering and counting. Test each server function against the client result on a fixture.
+- [ ] 2.5 Read tools. Register every Phase 2 tool in docs/agents/tools.md, including read_research, the launcher's list_projects and open_project, and load_toolset. Research is read-only (R3). The panel handles navigate by building URLs only with lib/workspace/hrefs.ts and enterEpisodeRoute, then calling router.push; refresh by calling router.refresh(); and download by saving a Blob, which is how exports reach the user (R2). Each turn loads the core toolset plus the current route's toolset. Test each tool's run function against a seeded project, and test that a tool refuses a caller below its minimum role.
+- [ ] 2.6 Context and prompt v2. Publish the editor selection (node ids) from the Script and Outline editors through the ephemeral context, the same way assistantFocus works, and include the route, selection and focus in each request. Rewrite the instructions in lib/assistant/context.ts: the agent can read, search, navigate and export, but cannot change anything yet. It keeps citing scenes as it does today, and states report numbers only as returned by tools. Keep the focus blocks.
+
+Phase 2 is done when every box is ticked, the Playwright specs pass, and a user can ask questions from any page and be navigated to the answers.
+
+
 ## Phase 3: Proposals and write tools
 
 ## Phase 4: Worker, background runs, story-to-script pipeline

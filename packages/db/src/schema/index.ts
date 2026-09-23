@@ -64,7 +64,9 @@
  *   activity_log                 one row per Production mutation; no reader yet
  *   share_links                  the in-app invite: a token, a role, revocable (0016)
  *   assistant_chats              one conversation with the assistant about one episode's script (0016)
- *   assistant_messages           its turns, a person's and the model's
+ *   assistant_messages           its turns, a person's and the model's; since 0034 the API's content blocks and the run
+ *   agent_runs                   one row per agent task: status, mode, tokens, credit budget and spend (0034, ADR 0003
+ *                                D3); written by the request that runs it; the daily token cap reads it
  *   research_collections         a named, coloured folder of sources; dropped by the repository when its last source leaves (0019)
  *   research_sources             an article, document, image set, interview or recording brought in from outside the script, with its text
  *   research_clips               a highlighted line of a source

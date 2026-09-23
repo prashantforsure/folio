@@ -378,7 +378,7 @@ export const isTerminalJobStatus = (status: JobStatus): boolean =>
  *
  * The third limit D14 names - two concurrent agent runs per project - is not
  * here, because it is not a window. It is a count of live rows in `agent_runs`
- * and it arrives with that table.
+ * (`0034`), enforced when background runs make a second live one possible.
  */
 export const RATE_LIMIT_BUCKETS = ['assistant', 'generate'] as const
 

@@ -23,15 +23,16 @@ export const RATE_LIMITS: Readonly<Record<RateLimitBucket, number>> = {
 /**
  * **D14's third limit**, recorded here and not yet enforced: two concurrent
  * agent runs per project. It is a count of live `agent_runs` rows rather than
- * a window, so it lands with that table (roadmap Phase 4) rather than with the
- * counters. Per project rather than per user because it protects the document,
+ * a window; the table exists since `0034` (roadmap task 2.1), and the count
+ * lands with background runs (roadmap Phase 4), when a second live run on one
+ * project becomes possible. Per project rather than per user because it protects the document,
  * not the bill.
  */
 export const CONCURRENT_RUNS_PER_PROJECT = 2
 
 /**
  * **D3.** A per-user daily token cap, so a run cannot cost unbounded model
- * time. Recorded with the others; the meter that reads it is `agent_runs`,
- * which does not exist yet.
+ * time. The meter is `agent_runs` (`0034`), summed across every project the
+ * person works in by `tokensTodayFor` (`@folio/db`).
  */
 export const DAILY_TOKENS_PER_USER = 2_000_000

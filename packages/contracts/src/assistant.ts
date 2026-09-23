@@ -8,6 +8,7 @@ import {
   LocationIdSchema,
   NodeIdSchema,
   ProjectIdSchema,
+  RunIdSchema,
   UserIdSchema,
 } from './ids'
 import { TimestampSchema } from './primitives'
@@ -58,14 +59,38 @@ export const AssistantChatSchema = z.object({
 
 export type AssistantChat = z.infer<typeof AssistantChatSchema>
 
-export const AssistantMessageSchema = z.object({
-  id: AssistantMessageIdSchema,
-  projectId: ProjectIdSchema,
-  chatId: AssistantChatIdSchema,
-  role: AssistantRoleSchema,
-  body: z.string().min(1).max(ASSISTANT_MESSAGE_MAX),
-  createdAt: TimestampSchema,
-})
+/**
+ * The API's content blocks for one message, stored as they were sent or
+ * received (roadmap task 2.1): `text`, `tool_use` and `tool_result`. The next
+ * turn replays them, because the API refuses a conversation whose tool call
+ * has lost its result. Opaque here on purpose - the shape is the SDK's, and
+ * `apps/web/lib/agent/replay.ts` is the one reader that interprets it.
+ */
+export const AssistantContentSchema = z.array(z.record(z.string(), z.unknown()))
+
+export type AssistantContent = z.infer<typeof AssistantContentSchema>
+
+/**
+ * A turn. `body` is what the panel prints; `content` is what the API is
+ * replayed. A message that is only a tool call or only a tool result has an
+ * empty body and a content list - never neither (migration `0034`'s check).
+ * `runId` is the agent run that wrote it; a writer's question carries it too,
+ * because the run is started by it.
+ */
+export const AssistantMessageSchema = z
+  .object({
+    id: AssistantMessageIdSchema,
+    projectId: ProjectIdSchema,
+    chatId: AssistantChatIdSchema,
+    role: AssistantRoleSchema,
+    body: z.string().max(ASSISTANT_MESSAGE_MAX),
+    content: AssistantContentSchema.nullable(),
+    runId: RunIdSchema.nullable(),
+    createdAt: TimestampSchema,
+  })
+  .refine((message) => message.body.trim().length > 0 || message.content !== null, {
+    message: 'A message has a body, a content list, or both.',
+  })
 
 export type AssistantMessage = z.infer<typeof AssistantMessageSchema>
 
