@@ -7,6 +7,7 @@ import {
   NodeIdSchema,
   ProjectIdSchema,
   RevisionIdSchema,
+  RunIdSchema,
   UserIdSchema,
   VersionIdSchema,
 } from './ids'
@@ -83,6 +84,12 @@ export const VersionSchema = z.object({
   reason: VersionReasonSchema,
   nodeCount: z.int().min(0),
   createdBy: UserIdSchema.nullable(),
+  /**
+   * The agent run a `before_agent_run` snapshot was taken for (`0035`, ADR
+   * 0003 D11) - what "undo this run" finds its snapshots by. Null on every
+   * other reason.
+   */
+  runId: RunIdSchema.nullable(),
   createdAt: TimestampSchema,
 })
 

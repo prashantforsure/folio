@@ -62,6 +62,8 @@ export type { Equals, Extends } from './equality'
 export { assertExact } from './equality'
 
 export type {
+  AgentProposalId,
+  AgentProposalOpId,
   AssistantChatId,
   AssistantMessageId,
   EpisodeId,
@@ -95,6 +97,8 @@ export type {
   VersionId,
 } from './ids'
 export {
+  AgentProposalIdSchema,
+  AgentProposalOpIdSchema,
   ArtStyleIdSchema,
   AssetIdSchema,
   AssistantChatIdSchema,
@@ -133,6 +137,8 @@ export {
   ThreadIdSchema,
   UserIdSchema,
   VersionIdSchema,
+  agentProposalId,
+  agentProposalOpId,
   artStyleId,
   assetId,
   assistantChatId,
@@ -706,6 +712,35 @@ export {
   NavigateTargetSchema,
   isTerminalRunStatus,
 } from './agent'
+
+export type {
+  AgentAutonomy,
+  AgentOpMode,
+  AgentOpStatus,
+  AgentProposal,
+  AgentProposalOp,
+  AgentProposalStatus,
+  AgentProposalWithOps,
+  ProposalBase,
+  ProposalDocumentBase,
+} from './proposals'
+export {
+  AGENT_AUTONOMIES,
+  AGENT_OP_MODES,
+  AGENT_OP_STATUSES,
+  AGENT_PROPOSAL_STATUSES,
+  AgentAutonomySchema,
+  AgentOpModeSchema,
+  AgentOpStatusSchema,
+  AgentProposalOpSchema,
+  AgentProposalSchema,
+  AgentProposalStatusSchema,
+  EMPTY_PROPOSAL_BASE,
+  ProposalBaseSchema,
+  ProposalDocumentBaseSchema,
+  isOpenProposal,
+  needsConfirmation,
+} from './proposals'
 
 export type {
   ResearchClipEdit,

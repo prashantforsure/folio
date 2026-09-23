@@ -61,12 +61,16 @@
  *   generations                  every Production AI job: reserve, run, settle - the row is the status
  *   notes                        the notes popover's rows; the latest is the field
  *   view_preferences             View options and Filter & sort, per user per episode
- *   activity_log                 one row per Production mutation; no reader yet
+ *   activity_log                 one row per Production mutation, and since 0035 one per applied agent operation
+ *                                (verb `agent:<tool>`, ADR 0003 D11); no reader yet
  *   share_links                  the in-app invite: a token, a role, revocable (0016)
  *   assistant_chats              one conversation with the assistant about one episode's script (0016)
  *   assistant_messages           its turns, a person's and the model's; since 0034 the API's content blocks and the run
  *   agent_runs                   one row per agent task: status, mode, tokens, credit budget and spend (0034, ADR 0003
  *                                D3); written by the request that runs it; the daily token cap reads it
+ *   agent_proposals              a reviewable group of agent changes: status, summary, the base it was planned
+ *                                against (0035, ADR 0003 D1); a pending intention, never read as the script
+ *   agent_proposal_ops           one tool call of a proposal, in order: args, mode, idempotency key, result, undo (0035)
  *   research_collections         a named, coloured folder of sources; dropped by the repository when its last source leaves (0019)
  *   research_sources             an article, document, image set, interview or recording brought in from outside the script, with its text
  *   research_clips               a highlighted line of a source

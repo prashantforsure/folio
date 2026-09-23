@@ -1,4 +1,5 @@
 import type {
+  AgentAutonomy,
   CreateProjectInput,
   CreditBalance,
   Episode,
@@ -78,6 +79,22 @@ export const readUser = async (db: FolioDatabase, id: UserId): Promise<User | nu
   const rows = await db.select().from(users).where(eq(users.id, id)).limit(1)
   const row = rows[0]
   return row === undefined ? null : toUser(row)
+}
+
+/**
+ * The person's copilot autonomy - `review` or `auto` (ADR 0003 **D1**,
+ * migration `0035`). A raw database rather than a scope: `users` has no
+ * `project_id`, and autonomy is the person's, not a project's. `review` when
+ * there is no row, which is the default a new account has anyway.
+ */
+export const readAgentAutonomy = async (db: FolioDatabase, id: UserId): Promise<AgentAutonomy> => {
+  const rows = await db.select({ autonomy: users.agentAutonomy }).from(users).where(eq(users.id, id)).limit(1)
+  return rows[0]?.autonomy ?? 'review'
+}
+
+/** Set it. Only the person's own row - the caller passes the signed-in id and nothing else. */
+export const setAgentAutonomy = async (db: FolioDatabase, id: UserId, autonomy: AgentAutonomy): Promise<void> => {
+  await db.update(users).set({ agentAutonomy: autonomy, updatedAt: new Date() }).where(eq(users.id, id))
 }
 
 /**

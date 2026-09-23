@@ -14,6 +14,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
+import { agentRuns } from './assistant'
 import { createdAtColumn, idColumn, projectIdColumn } from './columns'
 import { documents, nodes } from './documents'
 import { episodes, projects, revisionColourEnum, users } from './tenancy'
@@ -91,12 +92,20 @@ export const versions = pgTable(
     snapshot: jsonb('snapshot').notNull(),
     nodeCount: integer('node_count').notNull(),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    /**
+     * The agent run a `before_agent_run` snapshot was taken for (`0035`, ADR
+     * 0003 D11). What "undo this run" finds its snapshots by; null on every
+     * other reason. `set null`: a run goes only with its project, and so does
+     * this row.
+     */
+    runId: uuid('run_id').references(() => agentRuns.id, { onDelete: 'set null' }),
     createdAt: createdAtColumn(),
   },
   (table) => [
     uniqueIndex('versions_document_ordinal_key').on(table.documentId, table.ordinal),
     index('versions_project_idx').on(table.projectId),
     index('versions_document_created_idx').on(table.documentId, table.createdAt),
+    index('versions_run_idx').on(table.runId),
     check('versions_ordinal_positive', sql`${table.ordinal} >= 1`),
     check('versions_node_count_not_negative', sql`${table.nodeCount} >= 0`),
   ],

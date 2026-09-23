@@ -108,6 +108,10 @@ export type ShareLinkId = Branded<'ShareLinkId'>
 /** An assistant chat, per episode. See `assistant.ts`. */
 export type AssistantChatId = Branded<'AssistantChatId'>
 export type AssistantMessageId = Branded<'AssistantMessageId'>
+/** A proposal: a reviewable group of agent changes (ADR 0003 D1). See `proposals.ts`. */
+export type AgentProposalId = Branded<'AgentProposalId'>
+/** One operation of a proposal: one tool call, in order. See `proposals.ts`. */
+export type AgentProposalOpId = Branded<'AgentProposalOpId'>
 /** A research collection: a named, coloured group of sources. See `research.ts`. */
 export type ResearchCollectionId = Branded<'ResearchCollectionId'>
 /** A research source: an article, document, image set, interview or recording. See `research.ts`. */
@@ -142,6 +146,8 @@ export const artStyleId = (raw: string): ArtStyleId => raw as ArtStyleId
 export const shareLinkId = (raw: string): ShareLinkId => raw as ShareLinkId
 export const assistantChatId = (raw: string): AssistantChatId => raw as AssistantChatId
 export const assistantMessageId = (raw: string): AssistantMessageId => raw as AssistantMessageId
+export const agentProposalId = (raw: string): AgentProposalId => raw as AgentProposalId
+export const agentProposalOpId = (raw: string): AgentProposalOpId => raw as AgentProposalOpId
 export const researchCollectionId = (raw: string): ResearchCollectionId => raw as ResearchCollectionId
 export const researchSourceId = (raw: string): ResearchSourceId => raw as ResearchSourceId
 export const researchClipId = (raw: string): ResearchClipId => raw as ResearchClipId
@@ -194,6 +200,8 @@ export const ArtStyleIdSchema = brandedUuid(artStyleId)
 export const ShareLinkIdSchema = brandedUuid(shareLinkId)
 export const AssistantChatIdSchema = brandedUuid(assistantChatId)
 export const AssistantMessageIdSchema = brandedUuid(assistantMessageId)
+export const AgentProposalIdSchema = brandedUuid(agentProposalId)
+export const AgentProposalOpIdSchema = brandedUuid(agentProposalOpId)
 export const ResearchCollectionIdSchema = brandedUuid(researchCollectionId)
 export const ResearchSourceIdSchema = brandedUuid(researchSourceId)
 export const ResearchClipIdSchema = brandedUuid(researchClipId)

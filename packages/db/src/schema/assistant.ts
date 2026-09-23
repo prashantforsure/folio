@@ -1,6 +1,6 @@
-import { AGENT_RUN_MODES, AGENT_RUN_STATUSES, ASSISTANT_ROLES } from '@folio/contracts'
+import { AGENT_OP_MODES, AGENT_OP_STATUSES, AGENT_PROPOSAL_STATUSES, AGENT_RUN_MODES, AGENT_RUN_STATUSES, ASSISTANT_ROLES } from '@folio/contracts'
 import { sql } from 'drizzle-orm'
-import { check, index, integer, jsonb, pgEnum, pgTable, text, uuid } from 'drizzle-orm/pg-core'
+import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
 import { createdAtColumn, idColumn, projectIdColumn, timestampColumn, updatedAtColumn } from './columns'
@@ -141,5 +141,91 @@ export const agentRuns = pgTable(
     index('agent_runs_chat_idx').on(table.chatId),
     check('agent_runs_tokens_nonnegative', sql`${table.inputTokens} >= 0 and ${table.outputTokens} >= 0`),
     check('agent_runs_budget', sql`${table.creditBudget} >= 0 and ${table.creditsSpent} >= 0 and ${table.creditsSpent} <= ${table.creditBudget}`),
+  ],
+)
+
+/**
+ * `agent_proposals` - a reviewable group of agent changes. AUTHORED by the
+ * agent's run, decided by a person (roadmap task 3.1, migration `0035`, ADR
+ * 0003 **D1**).
+ *
+ * `base` is what the proposal was planned against - each document's id and
+ * the digest of its stored node list - so a server-side apply can refuse with
+ * `stale` rather than write over what the writer typed since (D10).
+ * `needs_confirmation` is fixed when the proposal is written: true when any of
+ * its operations is `confirm` or `paid`, which no autonomy setting skips.
+ *
+ * **A proposal is a pending intention, readable only as itself.** Nothing may
+ * read one to answer what the script says (ADR 0003, *Does this keep the
+ * script authoritative?*); the node list is what the script says.
+ */
+export const agentProposalStatusEnum = pgEnum('agent_proposal_status', AGENT_PROPOSAL_STATUSES)
+
+export const agentOpStatusEnum = pgEnum('agent_op_status', AGENT_OP_STATUSES)
+
+export const agentOpModeEnum = pgEnum('agent_op_mode', AGENT_OP_MODES)
+
+export const agentProposals = pgTable(
+  'agent_proposals',
+  {
+    id: idColumn(),
+    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
+    /** The run that planned it - the `provenance_run_id` its nodes carry (D11). */
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => agentRuns.id, { onDelete: 'cascade' }),
+    episodeId: uuid('episode_id').references(() => episodes.id, { onDelete: 'set null' }),
+    status: agentProposalStatusEnum('status').notNull().default('pending'),
+    summary: text('summary').notNull(),
+    base: jsonb('base').notNull(),
+    needsConfirmation: boolean('needs_confirmation').notNull().default(false),
+    creditCost: integer('credit_cost'),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: timestampColumn('decided_at'),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [
+    index('agent_proposals_project_idx').on(table.projectId, table.createdAt),
+    index('agent_proposals_run_idx').on(table.runId),
+    check('agent_proposals_summary_not_empty', sql`length(btrim(${table.summary})) > 0`),
+    check('agent_proposals_cost_nonnegative', sql`${table.creditCost} is null or ${table.creditCost} >= 0`),
+  ],
+)
+
+/**
+ * `agent_proposal_ops` - one tool call of a proposal, in order. AUTHORED
+ * (`0035`).
+ *
+ * `idempotency_key` is the API's `tool_use` id (D13), unique per project: a
+ * replayed tool call finds the operation it already made rather than
+ * proposing it twice. `undo` is written just before the operation runs - the
+ * prior values, a rename's restore payload, the placements that landed - and
+ * is null when the operation cannot be undone.
+ */
+export const agentProposalOps = pgTable(
+  'agent_proposal_ops',
+  {
+    id: idColumn(),
+    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
+    proposalId: uuid('proposal_id')
+      .notNull()
+      .references(() => agentProposals.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    tool: text('tool').notNull(),
+    args: jsonb('args').notNull(),
+    mode: agentOpModeEnum('mode').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    status: agentOpStatusEnum('status').notNull().default('pending'),
+    result: jsonb('result'),
+    undo: jsonb('undo'),
+    appliedAt: timestampColumn('applied_at'),
+    createdAt: createdAtColumn(),
+  },
+  (table) => [
+    uniqueIndex('agent_proposal_ops_proposal_seq_key').on(table.proposalId, table.seq),
+    uniqueIndex('agent_proposal_ops_project_key').on(table.projectId, table.idempotencyKey),
+    index('agent_proposal_ops_project_idx').on(table.projectId),
+    check('agent_proposal_ops_seq_nonnegative', sql`${table.seq} >= 0`),
   ],
 )

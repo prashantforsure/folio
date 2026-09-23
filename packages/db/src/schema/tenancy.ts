@@ -1,4 +1,5 @@
 import {
+  AGENT_AUTONOMIES,
   LEDGER_ENTRY_KINDS,
   MEMBERSHIP_ROLES,
   PROJECT_KINDS,
@@ -74,6 +75,7 @@ export const membershipRoleEnum = pgEnum('membership_role', MEMBERSHIP_ROLES)
 export const invitedViaEnum = pgEnum('invited_via', ['created', 'share_link'])
 export const revisionColourEnum = pgEnum('revision_colour', REVISION_COLOURS)
 export const ledgerEntryKindEnum = pgEnum('ledger_entry_kind', LEDGER_ENTRY_KINDS)
+export const agentAutonomyEnum = pgEnum('agent_autonomy', AGENT_AUTONOMIES)
 
 // ---------------------------------------------------------------------------
 // users - the one table with no project_id
@@ -101,6 +103,13 @@ export const users = pgTable('users', {
   email: text('email').notNull(),
   displayName: text('display_name').notNull(),
   avatarUrl: text('avatar_url'),
+  /**
+   * The copilot's autonomy for this person (`0035`, ADR 0003 **D1**): `review`
+   * shows every proposal, `auto` applies one as soon as it is planned. Per
+   * person, not per project - it is how much they trust the assistant, not a
+   * property of any one script. `confirm` and `paid` operations ask either way.
+   */
+  agentAutonomy: agentAutonomyEnum('agent_autonomy').notNull().default('review'),
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
 })

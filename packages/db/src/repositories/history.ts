@@ -8,8 +8,8 @@ import type {
   VersionId,
 } from '@folio/contracts'
 import { projectId as brandProjectId } from '@folio/contracts'
-import { isErr, nextRevisionColour } from '@folio/script'
-import type { DocumentId, NodeId, RevisionColour } from '@folio/script'
+import { isErr, nextRevisionColour, runId as brandRunId } from '@folio/script'
+import type { DocumentId, NodeId, RevisionColour, RunId } from '@folio/script'
 import { asc, desc, eq, inArray } from 'drizzle-orm'
 
 import { episodes, lockedPages, nodeTombstones, revisions, versions } from '../schema'
@@ -56,6 +56,7 @@ const toVersion = (row: VersionHeaderRow): Version => ({
   reason: row.reason,
   nodeCount: row.nodeCount,
   createdBy: row.createdBy === null ? null : (row.createdBy as UserId),
+  runId: row.runId === null ? null : brandRunId(row.runId),
   createdAt: stamp(row.createdAt),
 })
 
@@ -95,6 +96,8 @@ export const snapshotVersion = async (
   reason: Version['reason'],
   snapshot: unknown,
   nodeCount: number,
+  /** The agent run a `before_agent_run` snapshot belongs to (ADR 0003 D11); omitted for every other reason. */
+  runId: RunId | null = null,
 ): Promise<Version> => {
   return dbOf(scope).transaction(async (tx) => {
     const latest = await tx
@@ -114,6 +117,7 @@ export const snapshotVersion = async (
         snapshot,
         nodeCount,
         createdBy: scope.actor,
+        runId,
       })
       .returning()
     const row = inserted[0]
@@ -139,6 +143,7 @@ export const listVersions = async (
       reason: versions.reason,
       nodeCount: versions.nodeCount,
       createdBy: versions.createdBy,
+      runId: versions.runId,
       createdAt: versions.createdAt,
     })
     .from(versions)
@@ -162,6 +167,7 @@ export const readVersion = async (
       reason: versions.reason,
       nodeCount: versions.nodeCount,
       createdBy: versions.createdBy,
+      runId: versions.runId,
       createdAt: versions.createdAt,
     })
     .from(versions)
@@ -182,6 +188,23 @@ export const readVersionSnapshot = async (
     .where(scoped(scope, versions, eq(versions.id, versionId)))
     .limit(1)
   return rows[0]?.snapshot ?? null
+}
+
+/**
+ * The `before_agent_run` snapshots one run took, with their payloads, oldest
+ * first - one per document the run's proposals touched (ADR 0003 D11). What
+ * "undo this run" restores a document from.
+ */
+export const listRunSnapshots = async (
+  scope: ProjectScope,
+  run: RunId,
+): Promise<readonly { readonly version: Version; readonly snapshot: unknown }[]> => {
+  const rows = await dbOf(scope)
+    .select()
+    .from(versions)
+    .where(scoped(scope, versions, eq(versions.runId, run), eq(versions.reason, 'before_agent_run')))
+    .orderBy(asc(versions.createdAt), asc(versions.ordinal))
+  return rows.map(({ snapshot, ...header }) => ({ version: toVersion(header), snapshot }))
 }
 
 /**
