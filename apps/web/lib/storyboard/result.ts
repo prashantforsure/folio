@@ -1,3 +1,4 @@
+import type { RateLimited } from '../agent/rate-limit'
 import type { FrameState, ShotRow } from '@folio/contracts'
 
 /**
@@ -27,6 +28,8 @@ export type ShotResult = { readonly status: 'saved'; readonly shot: ShotRow } | 
 export type FrameResult =
   | { readonly status: 'queued'; readonly frame: FrameState; readonly available: number }
   | { readonly status: 'insufficient'; readonly available: number; readonly cost: number }
+  /** ADR 0003 D14's generate limit, since the frame is drawn for real (roadmap task 4.3). */
+  | RateLimited
   | Refusal
   | Failure
 

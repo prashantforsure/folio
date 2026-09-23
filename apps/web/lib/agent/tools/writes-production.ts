@@ -362,7 +362,7 @@ export const aiShotlistTool = defineWriteTool({
     target: (args) => ({ type: 'reel', id: args.reelId }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await inEpisode(ctx.gate, args.episode, (gate) => aiShotlistWith(gate, args.reelId, ctx.schedule))
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => aiShotlistWith(gate, args.reelId))
       // Without a model key the rule-based proposal lands instead - still proposed shots, still no credits.
       if (result.status === 'queued') return { ok: true, result: { queued: true, generationId: result.generation.id } }
       if (result.status === 'disconnected') return { ok: true, result: { proposed: 'rule-based', note: result.message } }

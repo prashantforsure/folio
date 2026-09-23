@@ -46,6 +46,7 @@ import {
   documents,
   episodeSettings,
   generations,
+  jobs,
   nodes,
   notes,
   reelShots,
@@ -1345,7 +1346,17 @@ export type CreateGenerationResult =
   | { readonly status: 'created'; readonly generation: Generation }
   | { readonly status: 'insufficient'; readonly available: number; readonly cost: number }
 
-/** Reserve then create, in one statement - see the header. Then the target is marked queued. */
+/**
+ * Reserve then create, in one statement - see the header. Then the target is
+ * marked queued.
+ *
+ * The same statement queues the generation's `production_generation` job for
+ * the worker (roadmap task 4.3, ADR 0003 D5): a generation cannot exist
+ * without the job that runs it, and `0036`'s trigger wakes a worker when the
+ * statement commits. The job carries no cost - the reservation is keyed on
+ * the generation, as it always was - and its payload is only the generation's
+ * id: the row is the authority on what to run.
+ */
 export const createGeneration = async (scope: ProjectScope, seed: GenerationSeed): Promise<CreateGenerationResult> => {
   const project = scope.projectId as string
   const actor = scope.actor as string | null
@@ -1379,6 +1390,12 @@ export const createGeneration = async (scope: ProjectScope, seed: GenerationSeed
       select ${project}, 'reserve', ${-seed.cost}, created.id, 'reserve:job:' || created.id::text, ${`Reserved for ${seed.job}`}, ${actor}::uuid
       from created where ${seed.cost} > 0
       on conflict (project_id, idempotency_key) do nothing
+      returning id
+    ),
+    queued as (
+      insert into ${jobs} (project_id, kind, status, cost, payload, created_by)
+      select ${project}, 'production_generation', 'queued', 0, jsonb_build_object('generationId', created.id), ${actor}::uuid
+      from created
       returning id
     )
     select (select id from created) as id, (select available from balance) as available
@@ -1456,6 +1473,39 @@ const markTarget = async (db: Db, scope: ProjectScope, generation: Generation, p
   }
 }
 
+/**
+ * What the worker needs to run a generation that its row does not hand the
+ * contract type: the stored prompt (text, references, aspect, duration), the
+ * settings snapshot and the source hash - the spec, as `createGeneration`
+ * wrote it (roadmap task 4.3).
+ */
+export type GenerationRun = Generation & {
+  readonly prompt: unknown
+  readonly settingsSnapshot: unknown
+  readonly sourceHash: string | null
+  readonly createdBy: UserId | null
+  /** A failure, in the writer's terms - what the worker reports as the job's own error. */
+  readonly error: string | null
+}
+
+export const readGenerationForRun = async (scope: ProjectScope, id: ProductionGenerationId): Promise<GenerationRun | null> => {
+  const rows = await dbOf(scope)
+    .select()
+    .from(generations)
+    .where(scoped(scope, generations, eq(generations.id, id)))
+    .limit(1)
+  const row = rows[0]
+  if (row === undefined) return null
+  return {
+    ...generationFromRow(row),
+    prompt: row.prompt,
+    settingsSnapshot: row.settingsSnapshot,
+    sourceHash: row.sourceHash,
+    createdBy: row.createdBy === null ? null : (row.createdBy as UserId),
+    error: row.error,
+  }
+}
+
 export const startGeneration = async (scope: ProjectScope, id: ProductionGenerationId): Promise<Generation | null> => {
   return dbOf(scope).transaction(async (tx) => {
     const rows = await tx
@@ -1469,6 +1519,24 @@ export const startGeneration = async (scope: ProjectScope, id: ProductionGenerat
     await markTarget(tx, scope, generation, 'running')
     return generation
   })
+}
+
+/**
+ * Pick a generation back up after its worker died mid-run (a retried job,
+ * roadmap task 4.3): a `running` row is taken as it is, progress reset; a
+ * `queued` one is started as `startGeneration` starts it. A row that is over -
+ * cancelled while its job waited, say - answers `null` and nothing runs.
+ */
+export const resumeGeneration = async (scope: ProjectScope, id: ProductionGenerationId): Promise<Generation | null> => {
+  const started = await startGeneration(scope, id)
+  if (started !== null) return started
+  const rows = await dbOf(scope)
+    .update(generations)
+    .set({ progress: 0 })
+    .where(scoped(scope, generations, eq(generations.id, id), eq(generations.state, 'running')))
+    .returning()
+  const row = rows[0]
+  return row === undefined ? null : generationFromRow(row)
 }
 
 export const progressGeneration = async (scope: ProjectScope, id: ProductionGenerationId, progress: number): Promise<void> => {
@@ -1707,6 +1775,17 @@ export const cancelGeneration = async (scope: ProjectScope, id: ProductionGenera
     if (before === null) return { status: 'no-generation' }
     const generation = await finishGeneration(tx, scope, id, { state: 'cancelled' })
     if (generation === null) return { status: 'already-over' }
+    // The queue's half (roadmap task 4.3): a job still queued is cancelled
+    // outright; one running is asked to stop, which its worker hears on the
+    // next heartbeat and aborts the provider call.
+    await tx.execute(sql`
+      update ${jobs}
+      set cancel_requested_at = coalesce(${jobs.cancelRequestedAt}, now()),
+          status = case when ${jobs.status} = 'queued' then 'cancelled'::job_status else ${jobs.status} end,
+          finished_at = case when ${jobs.status} = 'queued' then now() else ${jobs.finishedAt} end
+      where ${jobs.projectId} = ${scope.projectId as string} and ${jobs.kind} = 'production_generation'
+        and ${jobs.payload} ->> 'generationId' = ${id as string} and ${jobs.status} in ('queued', 'running')
+    `)
     await closeReservation(tx, scope, generation, 'release', `Released: ${generation.job} cancelled`)
     await unmarkTarget(tx, scope, generation, 'cancelled', null)
     await logActivity(tx, scope, 'generation.cancelled', generation.targetType, generation.targetId, { job: generation.job })
@@ -1733,4 +1812,61 @@ export const setShotStatus = async (scope: ProjectScope, shotId: ReelShotId, sta
 /** A reel status written straight, for a seed. The app moves status through the generation lifecycle. */
 export const setReelStatus = async (scope: ProjectScope, reelId: ReelId, status: ReelStatus): Promise<void> => {
   await dbOf(scope).update(reels).set({ status, updatedAt: new Date() }).where(scoped(scope, reels, eq(reels.id, reelId)))
+}
+
+// ---------------------------------------------------------------------------
+// The sweeper's reads (roadmap task 4.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Of these storage keys - objects the bucket holds under this project's
+ * `production/` prefix - the ones nothing points at: no `assets` row names the
+ * key, or one does and no reel shot (frame or reference), storyboard sheet or
+ * frame, clip (poster or video) or scene still points at that asset. Production
+ * never deletes an old asset when a redraw or a retake replaces it, and a run
+ * cancelled after its upload leaves one; the worker's sweeper logs these, and
+ * deletes them only when told to. One statement for the whole list.
+ */
+export const listUnreferencedAssetKeys = async (
+  scope: ProjectScope,
+  keys: readonly string[],
+): Promise<readonly { readonly key: string; readonly assetId: AssetId | null }[]> => {
+  if (keys.length === 0) return []
+  const project = scope.projectId as string
+  const rows = await dbOf(scope).execute<{ readonly key: string; readonly asset_id: string | null }>(sql`
+    select k.key, a.id as asset_id
+    from unnest(${sql.param([...keys])}::text[]) as k(key)
+    left join ${assets} as a on a.storage_key = k.key and a.project_id = ${project}
+    where a.id is null
+       or not (
+         exists (select 1 from ${reelShots} as s where s.project_id = ${project} and (s.frame_asset_id = a.id or a.id = any(s.reference_asset_ids)))
+         or exists (select 1 from ${storyboardSheets} as sh where sh.project_id = ${project} and sh.asset_id = a.id)
+         or exists (select 1 from ${storyboardFrames} as f where f.project_id = ${project} and f.asset_id = a.id)
+         or exists (select 1 from ${clips} as c where c.project_id = ${project} and (c.poster_asset_id = a.id or c.video_asset_id = a.id))
+         or exists (select 1 from ${scenes} as sc where sc.project_id = ${project} and sc.still_asset_id = a.id)
+       )
+  `)
+  return rows.map((row) => ({ key: row.key, assetId: row.asset_id === null ? null : (row.asset_id as AssetId) }))
+}
+
+/**
+ * Delete asset rows the sweeper found unreferenced, before their objects are
+ * gone. The same reference check runs again inside the delete, so an asset a
+ * redraw pointed at between the sweep's read and this write is kept. Answers
+ * the ids it deleted, so the caller removes only those rows' objects.
+ */
+export const deleteUnreferencedAssets = async (scope: ProjectScope, ids: readonly AssetId[]): Promise<readonly AssetId[]> => {
+  if (ids.length === 0) return []
+  const project = scope.projectId as string
+  const rows = await dbOf(scope).execute<{ readonly id: string }>(sql`
+    delete from ${assets} as a
+    where a.project_id = ${project} and a.id = any(${sql.param([...ids])}::uuid[])
+      and not exists (select 1 from ${reelShots} as s where s.project_id = ${project} and (s.frame_asset_id = a.id or a.id = any(s.reference_asset_ids)))
+      and not exists (select 1 from ${storyboardSheets} as sh where sh.project_id = ${project} and sh.asset_id = a.id)
+      and not exists (select 1 from ${storyboardFrames} as f where f.project_id = ${project} and f.asset_id = a.id)
+      and not exists (select 1 from ${clips} as c where c.project_id = ${project} and (c.poster_asset_id = a.id or c.video_asset_id = a.id))
+      and not exists (select 1 from ${scenes} as sc where sc.project_id = ${project} and sc.still_asset_id = a.id)
+    returning a.id
+  `)
+  return rows.map((row) => row.id as AssetId)
 }

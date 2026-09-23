@@ -5,6 +5,7 @@ import type { MentionLabel } from '@folio/script'
 import { cache } from 'react'
 
 import { storageAvailable } from '../storage/r2'
+import { frameDrawingOff } from './core'
 import { loadEpisode } from '../workspace/context'
 import type { EpisodeContext } from '../workspace/context'
 
@@ -23,6 +24,8 @@ import type { EpisodeContext } from '../workspace/context'
  *                prints the cost beside it: "cost is named before it is spent".
  *   `cost`       `FRAME_GENERATION_COST`, the one constant the button, the
  *                reservation and the job row all take from.
+ *   `drawOff`    why a frame cannot be drawn on this server (no model key,
+ *                no storage), or null - the draw button prints it disabled.
  *
  * Three states the body tells apart, as the Scenes route does: no script at
  * all; a script with no scene derivation accepted; a board. There is no
@@ -44,6 +47,8 @@ export type StoryboardLoad =
       readonly cost: number
       /** Whether the `R2_*` block is set: the canvas offers `Upload image` only then. */
       readonly storage: boolean
+      /** Why `Draw frame` is off here, or null: `frameDrawingOff`, the reason `requestFrame` would refuse with. */
+      readonly drawOff: string | null
     }
 
 export const loadStoryboard = cache(async (context: EpisodeContext): Promise<StoryboardLoad> => {
@@ -54,7 +59,7 @@ export const loadStoryboard = cache(async (context: EpisodeContext): Promise<Sto
   ])
   if (document === null) return { state: 'empty', balance }
   const [scenes, labels] = await Promise.all([listStoryboard(scope, episode.id), readMentionLabels(scope)])
-  return { state: 'script', document, scenes, labels, balance, cost: FRAME_GENERATION_COST, storage: storageAvailable() }
+  return { state: 'script', document, scenes, labels, balance, cost: FRAME_GENERATION_COST, storage: storageAvailable(), drawOff: frameDrawingOff() }
 })
 
 /** The route's context and its load, for a page or a header that has only raw params. */

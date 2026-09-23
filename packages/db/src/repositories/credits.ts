@@ -1,8 +1,9 @@
-import type { CreditBalance, JobId, LedgerEntry, LedgerEntryId, UserId } from '@folio/contracts'
+import type { CreditBalance, GenerationState, JobId, JobStatus, LedgerEntry, LedgerEntryId, ProjectId, UserId } from '@folio/contracts'
 import { projectId as brandProjectId, toTimestamp } from '@folio/contracts'
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 
-import { creditLedger } from '../schema'
+import type { FolioDatabase } from '../client'
+import { creditLedger, generations, jobs } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { stamp } from './mapping'
@@ -176,19 +177,100 @@ export const listJobEntries = async (
 }
 
 /**
- * Reservations with no job attached.
+ * A reservation still held that nothing live will ever close, and what it was
+ * taken for (`listOrphanedReservations`).
  *
- * Not a normal query - a diagnostic. Every reservation should carry the job it
- * was taken for, and one that does not is counted as held forever by
- * `readBalance`, which will quietly shrink a project's available credits until
- * somebody looks.
+ *   `none`        no job id, or one that names neither a generation nor a job
+ *   `generation`  a Production generation that is over, or that still says
+ *                 `queued`/`running` with no live job to run it - interrupted
+ *   `job`         a Storyboard frame job that is over
  */
-export const listOrphanedReservations = async (
-  scope: ProjectScope,
-): Promise<readonly LedgerEntry[]> => {
-  const rows = await dbOf(scope)
-    .select()
-    .from(creditLedger)
-    .where(scoped(scope, creditLedger, and(eq(creditLedger.kind, 'reserve'), isNull(creditLedger.jobId))))
-  return rows.map(toEntry)
+export type OrphanedReservation = {
+  readonly entry: LedgerEntry
+  readonly owner:
+    | { readonly kind: 'none' }
+    | { readonly kind: 'generation'; readonly id: string; readonly state: GenerationState }
+    | { readonly kind: 'job'; readonly id: JobId; readonly status: JobStatus }
+}
+
+/**
+ * How long a live generation may go without a live job before the reaper calls
+ * it interrupted. Longer than the video model's own ten-minute deadline, so a
+ * generation a web process started before the worker existed - no job row, an
+ * `after()` still running - is not reaped mid-render.
+ */
+export const INTERRUPTED_AFTER_MINUTES = 15
+
+/**
+ * Reservations still held that nothing will close - widened for the worker's
+ * reaper (roadmap task 4.3; ruled 2026-09-23). It began as "reservations with
+ * no job attached", which nothing writes, so a reaper built on it found
+ * nothing: a reservation outlives what it was for when the process running a
+ * generation dies, and that is what is reported now.
+ *
+ * Held means no `release` and no `spend` names the same `job_id` - the rule
+ * `readBalance` counts by. One statement: the held reserves, each joined to the
+ * generation and the job its `job_id` could name.
+ */
+export const listOrphanedReservations = async (scope: ProjectScope): Promise<readonly OrphanedReservation[]> => {
+  const rows = await dbOf(scope).execute<
+    typeof creditLedger.$inferSelect & {
+      readonly generation_id: string | null
+      readonly generation_state: GenerationState | null
+      readonly found_job_id: string | null
+      readonly found_job_status: JobStatus | null
+    }
+  >(sql`
+    with held as (
+      select l.* from ${creditLedger} as l
+      where l.project_id = ${scope.projectId as string} and l.kind = 'reserve'
+        and not exists (
+          select 1 from ${creditLedger} as c
+          where c.project_id = l.project_id and c.job_id is not distinct from l.job_id and c.kind in ('release', 'spend')
+        )
+    )
+    select held.id, held.project_id as "projectId", held.kind, held.delta, held.job_id as "jobId", held.external_ref as "externalRef",
+           held.idempotency_key as "idempotencyKey", held.reason, held.created_by as "createdBy", held.occurred_at as "occurredAt",
+           g.id as generation_id, g.state as generation_state, j.id as found_job_id, j.status as found_job_status
+    from held
+    left join ${generations} as g on g.id = held.job_id and g.project_id = held.project_id
+    left join ${jobs} as j on j.id = held.job_id and j.project_id = held.project_id
+    where held.job_id is null
+       or (g.id is null and j.id is null)
+       or (g.id is not null and g.state not in ('queued', 'running'))
+       or (g.id is not null
+           and held.occurred_at < now() - make_interval(mins => ${INTERRUPTED_AFTER_MINUTES})
+           and not exists (
+             select 1 from ${jobs} as live
+             where live.project_id = held.project_id and live.kind = 'production_generation'
+               and live.payload ->> 'generationId' = g.id::text and live.status in ('queued', 'running')
+           ))
+       or (j.id is not null and j.status not in ('queued', 'running'))
+  `)
+  return rows.map((row) => ({
+    entry: toEntry({ ...row, occurredAt: new Date(row.occurredAt) }),
+    owner:
+      row.generation_id !== null && row.generation_state !== null
+        ? { kind: 'generation', id: row.generation_id, state: row.generation_state }
+        : row.found_job_id !== null && row.found_job_status !== null
+          ? { kind: 'job', id: row.found_job_id as JobId, status: row.found_job_status }
+          : { kind: 'none' },
+  }))
+}
+
+/**
+ * Every project holding a reservation nothing has closed - the reaper's walk
+ * (roadmap task 4.3). Across projects by nature, so it takes the raw database
+ * as `tokensTodayFor` does; the reaper then opens each project's own scope.
+ */
+export const listProjectsHoldingReservations = async (db: FolioDatabase): Promise<readonly ProjectId[]> => {
+  const rows = await db.execute<{ readonly project_id: string }>(sql`
+    select distinct l.project_id from ${creditLedger} as l
+    where l.kind = 'reserve'
+      and not exists (
+        select 1 from ${creditLedger} as c
+        where c.project_id = l.project_id and c.job_id is not distinct from l.job_id and c.kind in ('release', 'spend')
+      )
+  `)
+  return rows.map((row) => brandProjectId(row.project_id))
 }

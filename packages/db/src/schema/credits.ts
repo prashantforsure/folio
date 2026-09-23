@@ -72,7 +72,7 @@ export const creditLedger = pgTable(
     kind: ledgerEntryKindEnum('kind').notNull(),
     /** Signed. Negative for reserve, spend and expire. Never zero. */
     delta: integer('delta').notNull(),
-    /** The BullMQ job this belongs to. No FK: jobs are not a table yet. */
+    /** What it was taken for: a `jobs` row (a Storyboard frame) or a `generations` row (Production). No FK, since it names either. */
     jobId: uuid('job_id'),
     /** Dodo's reference on a purchase or a refund. Null otherwise. */
     externalRef: text('external_ref'),

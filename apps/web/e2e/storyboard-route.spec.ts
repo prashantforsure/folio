@@ -32,12 +32,13 @@ import type { WalkOptions } from '../playwright.config'
  *      reads it back in its overlay; drag to reorder on the board, add by
  *      hand at the column's foot, remove from the node's `⋯`; the filter
  *      hides what has no frame.
- *   4. **The frame names its cost but cannot be drawn yet.** The node's
- *      `Generate` says the cost; with no runner behind the queue
- *      (`apps/worker` is empty and nothing stands in for it the way
- *      Production's `after()` runner does) the button is disabled and its
- *      title gives the reason, so nothing reserves credits it can never
- *      spend (defect 0.4).
+ *   4. **The frame names its cost, and says why when it cannot be drawn.**
+ *      The node's `Generate` says the cost. The worker draws frames since
+ *      roadmap task 4.3, so the button is enabled on a server with a model
+ *      key and storage, and disabled with the reason as its title on one
+ *      without (`frameDrawingOff`). The walk does not click it: that would
+ *      reserve credits and, with a worker running, spend a model call.
+ *      Queuing, refusing and settling are `storyboard-frames.test.ts`'s.
  *   5. **Canvas and list draw the same rows.** The node's `⋯` moves it in
  *      the sequence; the zoom pill scales the world; a card dragged by its
  *      grip keeps its position across a reload while its number does not
@@ -345,7 +346,7 @@ test('a card opens its canvas; a shot is authored: edit with an @mention, drag t
   await expect(shots).toHaveCount(4)
 })
 
-test('the frame names its cost but Draw frame is disabled - no runner exists yet (defect 0.4)', async ({ page, account }) => {
+test('the frame names its cost, and Draw frame is enabled or says why not', async ({ page, account }) => {
   await signIn(page, account)
   await page.goto(storyboardUrl)
   await waitMounted(page)
@@ -357,10 +358,13 @@ test('the frame names its cost but Draw frame is disabled - no runner exists yet
   cost = Number((await generate(0).getAttribute('data-cost')) ?? '0')
   expect(cost).toBeGreaterThan(0)
   await expect(generate(0)).toContainText(`Generate · ${String(cost)} cr`)
-  // `apps/worker` is empty and, unlike Production, nothing stands in for it -
-  // a queued job would never be drawn, so the button reserves nothing.
-  await expect(generate(0)).toBeDisabled()
-  await expect(generate(0)).toHaveAttribute('title', 'Needs a frame-drawing worker - not built yet')
+  // Off only where this server cannot draw - no model key, or no storage - and then it says which.
+  const reason = await generate(0).getAttribute('title')
+  if (reason === null) await expect(generate(0)).toBeEnabled()
+  else {
+    await expect(generate(0)).toBeDisabled()
+    expect(reason).toMatch(/\S/)
+  }
   await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
 })
 
@@ -374,8 +378,7 @@ test('canvas and list draw the same rows', async ({ page, account }) => {
   await expect(page.locator('[data-shot-count]')).toHaveText('Scene 01 · 4 shots')
   const nodes = page.locator('[data-shot-node]')
   await expect(nodes).toHaveCount(4)
-  // No runner exists to draw a frame (defect 0.4, `Draw frame` disabled), so
-  // every shot is still without one.
+  // The walk never draws a frame (a model call), so every shot is still without one.
   await expect(nodes.nth(0).locator('[data-frame]')).toHaveAttribute('data-frame', 'no frame')
   await expect(nodes.nth(0).locator('[data-node-state]')).toHaveText('no frame')
   await expect(nodes.nth(2).locator('[data-generate-frame]')).toContainText(`Generate · ${String(cost)} cr`)

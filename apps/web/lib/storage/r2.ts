@@ -1,11 +1,12 @@
 import { storageEnv } from '@folio/db/env'
 import { AwsClient } from 'aws4fetch'
+import { XMLParser } from 'fast-xml-parser'
 
 /**
  * Object storage: Cloudflare R2 over its S3 API. Server only.
  *
- * The one place the app talks to a bucket. Three operations - put, delete,
- * and the public URL of a key - and a flag for whether storage is
+ * The one place the app talks to a bucket. Put, delete, list (the worker's
+ * sweeper, roadmap task 4.3) and the public URL of a key - and a flag for whether storage is
  * configured at all, which every caller reads first: with no `R2_*` in the
  * environment the Characters route draws Upload disabled and says why,
  * rather than failing on the first click.
@@ -109,4 +110,54 @@ export const deleteObject = async (key: string): Promise<StorageOutcome> => {
     return { ok: false, message: `Storage refused the delete (${String(response.status)}).` }
   }
   return { ok: true }
+}
+
+/** One object as a listing names it. */
+export type StoredObject = { readonly key: string; readonly size: number; readonly lastModified: Date }
+
+export type ListOutcome = { readonly ok: true; readonly objects: readonly StoredObject[]; readonly truncated: boolean } | { readonly ok: false; readonly message: string }
+
+const LIST_PAGE = 1000
+
+/**
+ * Every object under a prefix - S3's `ListObjectsV2`, a page of a thousand at
+ * a time, parsed with `fast-xml-parser` (already approved, for FDX). For the
+ * worker's sweeper (roadmap task 4.3), which compares what the bucket holds
+ * with what the `assets` table points at. `maxObjects` bounds one sweep; a
+ * listing cut short says `truncated`, and the next sweep carries on from its
+ * last key (`startAfter`, S3's `start-after`).
+ */
+export const listObjects = async (
+  prefix: string,
+  options: { readonly maxObjects?: number; readonly startAfter?: string | null } = {},
+): Promise<ListOutcome> => {
+  const maxObjects = options.maxObjects ?? 10_000
+  const r2 = client()
+  if (r2 === null) return { ok: false, message: 'Storage is not configured.' }
+  const parser = new XMLParser({ ignoreAttributes: true, parseTagValue: false, isArray: (name) => name === 'Contents' })
+  const objects: StoredObject[] = []
+  let token: string | null = null
+  for (;;) {
+    const query = new URLSearchParams({ 'list-type': '2', prefix, 'max-keys': String(LIST_PAGE) })
+    if (token !== null) query.set('continuation-token', token)
+    else if (options.startAfter !== undefined && options.startAfter !== null) query.set('start-after', options.startAfter)
+    const response = await r2.aws.fetch(`${r2.base}?${query.toString()}`, { method: 'GET' })
+    if (!response.ok) return { ok: false, message: `Storage refused the listing (${String(response.status)}).` }
+    const parsed = parser.parse(await response.text()) as {
+      readonly ListBucketResult?: {
+        readonly Contents?: readonly { readonly Key?: string; readonly Size?: string; readonly LastModified?: string }[]
+        readonly IsTruncated?: string
+        readonly NextContinuationToken?: string
+      }
+    }
+    const page = parsed.ListBucketResult
+    for (const entry of page?.Contents ?? []) {
+      if (entry.Key === undefined || entry.LastModified === undefined) continue
+      objects.push({ key: entry.Key, size: Number(entry.Size ?? 0), lastModified: new Date(entry.LastModified) })
+    }
+    const more = page?.IsTruncated === 'true' && page.NextContinuationToken !== undefined
+    if (!more) return { ok: true, objects, truncated: false }
+    if (objects.length >= maxObjects) return { ok: true, objects, truncated: true }
+    token = page.NextContinuationToken ?? null
+  }
 }

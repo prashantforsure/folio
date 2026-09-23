@@ -97,6 +97,16 @@ the worker exists**: `lib/storyboard/actions.ts:433-439` returns
 reason (`DRAW_FRAME_DISABLED`). No credits move. `queueFrameGeneration` in `@folio/db` is what
 resumes this once the Phase 3 worker exists.
 
+**✓ CLOSED PROPERLY 2026-09-23** (roadmap task 4.3) — the first way, now that there is a worker.
+`requestFrameWith` (`lib/storyboard/core.ts`) reserves and queues through `queueFrameGeneration`,
+and the worker draws it (`lib/worker/frame-generation.ts`) with the `shot_frame` model from the
+scene heading, the camera, the description and the mentioned characters' portraits, then settles:
+drawn is a spend, failed a spend and a refund, refused or cancelled a release. The refusal and
+`DRAW_FRAME_DISABLED` are gone; the button is disabled only where this server cannot draw (no
+`GEMINI_API_KEY` or no `R2_*`), with that reason (`frameDrawingOff`), and the page polls while a
+frame is in flight. Dev still holds 13 frame jobs queued since 2026-09-11; the first worker to run
+against it will claim them, and those whose shot is gone fail and refund.
+
 ### 0.5 Share links escalate to write access
 
 `apps/web/app/share/[token]/page.tsx:30-56` writes a membership with `link.role`, and roles are
@@ -113,6 +123,15 @@ between `startGeneration` and `succeedGeneration` — an ordinary serverless tim
 `running`, the reservation stays held, and `_production/polling.tsx:16-18` polls every 3 s forever
 with no terminal condition. The diagnostic that would surface it,
 `listOrphanedReservations` (`packages/db/src/repositories/credits.ts:186`), has **no caller**.
+
+**✓ FIXED PROPERLY 2026-09-23** (roadmap task 4.3). Generations run on the worker as
+`production_generation` jobs, queued in the statement that reserves the credits. A worker that dies
+mid-run loses its lease; the stale sweep requeues the job and, at the third attempt, fails the
+generation as "interrupted" (released). The **reaper** (every 10 minutes, `lib/worker/reaper.ts`)
+closes anything left over: `listOrphanedReservations` was widened to report held reservations
+whose generation or frame job is over, missing, or live with no live job, and each is released
+or failed as interrupted. The page-load sweep that failed anything older than ten minutes is gone
+(a generation waiting in a long queue is not dead), and `polling.tsx` stops when nothing is live.
 
 **Also in this phase:** commit the account-routes pass — 61 paths and migration `0029`, already
 applied to dev, currently untracked.
@@ -202,7 +221,7 @@ until somebody watches a pass go green.
 ## Phase 3 — The worker
 
 `apps/worker/src/index.ts` is seven lines and one constant — no build script, no Redis, no BullMQ.
-Every Production generation currently runs inside the web request:
+Every Production generation ran inside the web request until roadmap task 4.3:
 
 - `apps/web/lib/production/generate.ts:125` — `after(() => runGeneration(...))`
 - `apps/web/lib/production/pipeline/runner.ts` — the job body
@@ -223,7 +242,14 @@ therefore dead and **came out of `.env.example` on 2026-09-23** (roadmap task 1.
 claims from `jobs` (`SKIP LOCKED`), wakes on `LISTEN`/`NOTIFY` (migration `0036`), heartbeats,
 recovers stale jobs, drains on `SIGTERM`, answers `GET /health` and has a Dockerfile
 (`docs/agents/worker.md`). What it runs arrives with tasks 4.3 (generations, frames) and 4.4
-(agent runs); until 4.3, the three `after()` lines above are still how Production runs.
+(agent runs).
+
+**✓ BUILT 2026-09-23 — generations and frames** (roadmap task 4.3). The `after()` line is gone:
+`createGeneration` queues a `production_generation` job the worker runs with the spec the row was
+quoted for; Storyboard frames are `frame_generation` jobs; the reaper and an R2 sweeper (logs
+unreferenced Production objects older than a day, deletes only with `R2_SWEEP_DELETE=true`) run on
+the worker's clock. The worker is not yet deployed anywhere, so until it is, a queued generation
+waits in `queued` with its credits held and its Cancel button live.
 
 **Unblocks, in order:** reliable Production runs (fixes 0.6 properly) · the Storyboard frame job
 (0.4 properly) · Characters' `✦ Generate`, disabled with the literal reason

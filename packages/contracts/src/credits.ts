@@ -62,7 +62,7 @@ export const LedgerEntrySchema = z
     kind: LedgerEntryKindSchema,
     /** Signed. Negative for reserve, spend and expire. */
     delta: CreditDeltaSchema,
-    /** The BullMQ job this belongs to. No FK: jobs are not a table yet. */
+    /** What it was taken for: a `jobs` row (a Storyboard frame) or a `generations` row (Production). No FK, since it names either. */
     jobId: JobIdSchema.nullable(),
     /** Dodo's reference on a purchase, or a refund's. Null otherwise. */
     externalRef: z.string().trim().min(1).max(200).nullable(),

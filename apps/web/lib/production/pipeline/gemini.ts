@@ -81,6 +81,7 @@ const generateContent = async (
   parts: readonly Part[],
   generationConfig: Record<string, unknown>,
   hint: string,
+  signal?: AbortSignal,
 ): Promise<ModelOutcome<readonly Part[]>> => {
   const h = headers()
   if (h === null) return { ok: false, kind: 'failed', message: NOT_CONNECTED }
@@ -90,6 +91,7 @@ const generateContent = async (
       method: 'POST',
       headers: h,
       body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig }),
+      ...(signal === undefined ? {} : { signal }),
     })
   } catch (cause) {
     return { ok: false, kind: 'failed', message: cause instanceof Error ? cause.message : 'The model could not be reached.' }
@@ -108,23 +110,30 @@ const generateContent = async (
   return { ok: true, value: candidate.content?.parts ?? [] }
 }
 
+/**
+ * What an image call reads of a spec - the prompt, the references and the
+ * aspect. A Production spec is one; a Storyboard frame's (`storyboardFrameSpec`)
+ * is another, with no film settings to snapshot.
+ */
+export type ImageSpec = Pick<GenerationSpec, 'prompt' | 'references' | 'aspect'>
+
 /** JSON text out. The caller parses and validates it. */
-export const generateText = async (model: string, spec: GenerationSpec): Promise<ModelOutcome<string>> => {
-  const out = await generateContent(model, [{ text: spec.prompt }], { responseMimeType: 'application/json', temperature: 0.7 }, 'shotlist')
+export const generateText = async (model: string, spec: GenerationSpec, signal?: AbortSignal): Promise<ModelOutcome<string>> => {
+  const out = await generateContent(model, [{ text: spec.prompt }], { responseMimeType: 'application/json', temperature: 0.7 }, 'shotlist', signal)
   if (!out.ok) return out
   const text = out.value.map((part) => part.text ?? '').join('').trim()
   return text.length === 0 ? { ok: false, kind: 'failed', message: 'The model returned no text.' } : { ok: true, value: text }
 }
 
 /** One image out, with the spec's references in as image parts. */
-export const generateImage = async (model: string, spec: GenerationSpec): Promise<ModelOutcome<ImageOut>> => {
+export const generateImage = async (model: string, spec: ImageSpec, signal?: AbortSignal): Promise<ModelOutcome<ImageOut>> => {
   const references = (await Promise.all(spec.references.slice(0, 8).map(inlinePart))).filter((part): part is NonNullable<typeof part> => part !== null)
   const labels = spec.references
     .slice(0, 8)
     .map((reference, index) => `Reference image ${String(index + 1)}: ${reference.role} - ${reference.label}.`)
     .join(' ')
   const parts: Part[] = [{ text: labels.length > 0 ? `${spec.prompt}\n${labels}` : spec.prompt }, ...references]
-  const out = await generateContent(model, parts, { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: spec.aspect } }, 'image')
+  const out = await generateContent(model, parts, { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: spec.aspect } }, 'image', signal)
   if (!out.ok) return out
   const image = out.value.find((part) => part.inlineData !== undefined)?.inlineData
   if (image === undefined) return { ok: false, kind: 'refused', reason: 'The model returned no image for this prompt. Rewrite it or take the flagged part out.' }
@@ -155,6 +164,7 @@ export const generateVideo = async (
   model: string,
   spec: GenerationSpec,
   onProgress: (percent: number) => Promise<void>,
+  signal?: AbortSignal,
 ): Promise<ModelOutcome<ImageOut>> => {
   const h = headers()
   if (h === null) return { ok: false, kind: 'failed', message: NOT_CONNECTED }
@@ -169,6 +179,7 @@ export const generateVideo = async (
         instances: [image === null ? { prompt: spec.prompt } : { prompt: spec.prompt, image: image.inlineData }],
         parameters: { aspectRatio: VEO_ASPECT[spec.aspect], durationSeconds: veoDuration(spec.durationS), resolution: '720p' },
       }),
+      ...(signal === undefined ? {} : { signal }),
     })
   } catch (cause) {
     return { ok: false, kind: 'failed', message: cause instanceof Error ? cause.message : 'The video model could not be reached.' }
@@ -183,6 +194,7 @@ export const generateVideo = async (
   let polls = 0
   while (Date.now() < deadline) {
     await sleep(10_000)
+    if (signal?.aborted === true) return { ok: false, kind: 'failed', message: 'Stopped: the generation was cancelled.' }
     polls += 1
     await onProgress(Math.min(90, polls * 6))
     const polled = await fetch(`${BASE}/${operation.name}`, { headers: h })

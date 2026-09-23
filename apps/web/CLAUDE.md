@@ -173,7 +173,11 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `Boards drawn` widget (`_chrome/sidebar-group.tsx`, `_chrome/sidebar-widget.tsx`) read the cell
   the workspace publishes (`lib/storyboard/coverage.ts`), seeded by `readBoardCoverage`; every
   derived count and colour is `lib/storyboard/board.ts`, pure and tested. Toolbar dropdowns share
-  `_chrome/use-dismiss.ts`.
+  `_chrome/use-dismiss.ts`. **Draw frame is live** since roadmap task 4.3: `requestFrameWith`
+  reserves and queues a `frame_generation` job, the worker draws it (`lib/worker/frame-generation.ts`,
+  the `shot_frame` model), and the workspace polls (`_chrome/polling.tsx`) while a frame is queued
+  or drawing, taking the server's frame state for those shots on each refresh. The button is
+  disabled only with `frameDrawingOff`'s reason (no `GEMINI_API_KEY`, no `R2_*`).
 - **The Storyboard canvas (2026-09-17)** is a free surface: `_storyboard/canvas/` holds the view,
   the viewport hook (pan by pointer capture, zoom by ctrl/cmd + wheel), the SVG threads, the card
   with its `Storyboard | Lens` tabs, the lens selects and the `⋯` menu; every number it needs is
@@ -326,9 +330,14 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `lib/production/server.ts` (`loadProduction`, `cache()`d, over `readProductionEpisode` in
   `packages/db/src/repositories/production.ts`); authoring is `actions.ts`, the paid jobs
   `generate.ts`, the derived values `derive.ts` (pure, tested), and `pipeline/` the
-  provider-neutral `spec.ts`, the Gemini client (`gemini.ts`, over `fetch`), the `after()`
-  runner and `shotlist.ts` (the model's shotlist read strictly). The page polls every 3 s while a generation
-  is live; there is no worker. Tables are `0026`'s on the spec's vocabulary - **`reel_shots`, not
+  provider-neutral `spec.ts`, the Gemini client (`gemini.ts`, over `fetch`), the runner and
+  `shotlist.ts` (the model's shotlist read strictly). **The runner runs on the worker** since
+  roadmap task 4.3: `createGeneration` queues a `production_generation` job in the statement that
+  reserves, `lib/worker/production-generation.ts` runs the spec the row stored (`specFromRun`), and
+  a cancel of a running one reaches the provider through the job's heartbeat. The page polls every
+  3 s (`_chrome/polling.tsx`) while a generation is live. `compose.ts` holds `composeScenes` and
+  `readCastAndPlaces` apart from `server.ts`'s React `cache()`, so the worker bundle never
+  loads React. Tables are `0026`'s on the spec's vocabulary - **`reel_shots`, not
   `shots`** (the Storyboard's), scenes keyed by `scene_node_id` with cast and lines derived at
   read time - plus `0027` (`reference_asset_ids`) and `0028` (`duration_s` 1–15); credits reuse
   `credit_ledger` (the generation id in `job_id`). Every cost, every enum and `MODEL_REGISTRY`

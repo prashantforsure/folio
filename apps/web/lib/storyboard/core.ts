@@ -1,5 +1,5 @@
 import type { ShotRow } from '@folio/contracts'
-import { NodeIdSchema, ShotEditSchema, ShotIdSchema } from '@folio/contracts'
+import { FRAME_GENERATION_COST, NodeIdSchema, ShotEditSchema, ShotIdSchema } from '@folio/contracts'
 import type { ProjectScope, StoryboardSceneHeader } from '@folio/db'
 import {
   acceptShots as acceptShotRows,
@@ -9,6 +9,7 @@ import {
   listSceneShots,
   listStoryboardScenes,
   moveShot as moveShotRow,
+  queueFrameGeneration,
   readBoundCues,
   readDocumentByKind,
   readSceneHeader,
@@ -19,11 +20,13 @@ import {
 import { boundCueMap, proposeShots } from '@folio/script'
 import { z } from 'zod'
 
+import { checkRateLimit } from '../agent/rate-limit'
 import { ROLE } from '../auth/roles'
 import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
 import type { EpisodeGate } from '../script/actor-gate'
 import { roleRefusal } from '../script/actor-gate'
-import type { SceneShotsResult, ShotResult } from './result'
+import { connected } from '../production/pipeline/connection'
+import type { FrameResult, SceneShotsResult, ShotResult } from './result'
 import { cutScene } from './scene-cut'
 
 /**
@@ -270,4 +273,48 @@ export const placeShotWith = async (gate: EpisodeGate, rawShotId: unknown, rawIn
   })
   if (moved === null) return { status: 'error', message: NOT_A_SHOT }
   return sceneResult(scope, scene)
+}
+
+// ---------------------------------------------------------------------------
+// The frame (roadmap task 4.3)
+// ---------------------------------------------------------------------------
+
+export const frameShotProblem = (rawShotId: unknown): Problem | null => (ShotIdSchema.safeParse(rawShotId).success ? null : { status: 'error', message: NOT_A_SHOT })
+
+/**
+ * Why a frame cannot be drawn on this server, or `null` when it can: the
+ * `shot_frame` model needs `GEMINI_API_KEY`, and the drawing needs the `R2_*`
+ * block to be stored anywhere. The button draws disabled with this reason; the
+ * action refuses with it.
+ */
+export const frameDrawingOff = (): string | null => {
+  const off = connected('shot_frame')
+  return off === null ? null : off.message
+}
+
+/**
+ * Draw (or redraw) a shot's frame - defect 0.4 closed properly. Reserve then
+ * execute, in one statement (`queueFrameGeneration`): the credits are held and
+ * the `frame_generation` job queued only if the balance covers
+ * `FRAME_GENERATION_COST`, and the worker draws it
+ * (`lib/worker/frame-generation.ts`). A proposal has no frame; the shot must be
+ * an accepted shot of a present scene of this episode. The D14 generate limit
+ * applies, as it does to every generate action.
+ */
+export const requestFrameWith = async (gate: EpisodeGate, rawShotId: unknown): Promise<FrameResult> => {
+  const refused = roleRefusal(gate, ROLE.paidGeneration)
+  if (refused !== null) return refused
+  const id = ShotIdSchema.safeParse(rawShotId)
+  if (!id.success) return { status: 'error', message: NOT_A_SHOT }
+  const off = frameDrawingOff()
+  if (off !== null) return { status: 'refused', message: off }
+  const limited = await checkRateLimit(gate.scope, gate.actor, 'generate')
+  if (limited !== null) return limited
+
+  const queued = await queueFrameGeneration(gate.scope, gate.episode.id, id.data, FRAME_GENERATION_COST)
+  if (queued.status === 'insufficient') return { status: 'insufficient', available: queued.available, cost: FRAME_GENERATION_COST }
+  if (queued.status === 'no-shot') {
+    return { status: 'error', message: queued.state === 'proposed' ? 'Accept the shot before drawing its frame. A proposal has no frame.' : NOT_A_SHOT }
+  }
+  return { status: 'queued', frame: { kind: 'queued', jobId: queued.jobId, cost: FRAME_GENERATION_COST }, available: queued.available }
 }

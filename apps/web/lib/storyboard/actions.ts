@@ -30,9 +30,11 @@ import {
   addShotWith,
   discardProblem,
   discardShotsWith,
+  frameShotProblem,
   placeProblem,
   placeShotWith,
   proposeShotsForSceneWith,
+  requestFrameWith,
   saveShotProblem,
   saveShotWith,
   sceneResult,
@@ -58,10 +60,12 @@ import type { CancelResult, FrameResult, SceneShotsResult, ShotResult } from './
  * replacing any proposal still waiting. Nothing is accepted here; the
  * writer does that, per shot or all at once, and editing is accepting.
  *
- * **The frame** - `requestFrame` refuses outright (defect 0.4): no runner
- * exists to draw a queued job, so nothing reserves credits for one.
- * `cancelFrame` still releases a queued job's reservation in one statement,
- * or asks a running one to stop - both real states a job can already be in.
+ * **The frame** - `requestFrame` reserves the cost and queues a
+ * `frame_generation` job in one statement, and the worker draws it (roadmap
+ * task 4.3, `lib/worker/frame-generation.ts`; defect 0.4 closed properly - it
+ * refused outright while no worker existed). `cancelFrame` releases a queued
+ * job's reservation in one statement, or asks a running one to stop, which its
+ * worker hears on its next heartbeat.
  *
  * **The canvas** (2026-09-17) - `placeShotOnCanvas` writes where a card
  * was dropped, and nothing else: the sequence is still `order_key`. Not
@@ -295,23 +299,19 @@ export const placeShot = async (
 // ---------------------------------------------------------------------------
 
 /**
- * Draw (or redraw) a shot's frame.
- *
- * Refused outright (defect 0.4): `apps/worker` is empty on purpose and,
- * unlike Production, nothing inside `web` stands in for it. Queuing the job
- * anyway - what this did before the fix - would reserve the cost and leave
- * it held forever with nothing ever drawing the frame. The button that calls
- * this is disabled with the same reason (`DRAW_FRAME_DISABLED`,
- * `shot-parts.tsx`); this refuses whatever reaches the action directly.
- * `queueFrameGeneration` (`@folio/db`) is what resumes this once a runner
- * exists to pick up what it queues.
+ * Draw (or redraw) a shot's frame (`requestFrameWith`): the cost reserved and
+ * the job queued in one statement, the frame drawn by the worker. It refused
+ * outright until the worker existed (defect 0.4) - queuing a job nothing picks
+ * up would have held the credits forever.
  */
 export const requestFrame = async (projectId: string, episode: string, rawShotId: string): Promise<FrameResult> => {
-  const id = ShotIdSchema.safeParse(rawShotId)
-  if (!id.success) return { status: 'error', message: NOT_A_SHOT }
+  const problem = frameShotProblem(rawShotId)
+  if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
-  return { status: 'refused', message: 'Needs a frame-drawing worker - not built yet.' }
+  const result = await requestFrameWith(gate, rawShotId)
+  if (result.status === 'queued') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 /** Stop a frame job. Queued: cancelled and released. Running: asked to stop. One statement after the gate. */

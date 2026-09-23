@@ -456,7 +456,19 @@ card says so).
   row, because `runTool` now re-reads membership once per step - which keeps `agent-tools.test.ts`'s
   "membership gone" case passing unchanged. **Follow-up:** `meetsRole` ranks an unknown *held* role
   above owner (`rankOf` returns Infinity), the opposite of its own comment - untouched here.
-- [ ] 4.3 Generations on the worker. In lib/production/generate.ts, replace after(runGeneration) with a production_generation job that the worker runs. Implement Storyboard frame generation: requestFrame calls queueFrameGeneration, and the worker processes frame_generation jobs using the shot_frame model; update the "refuses by design until the worker exists" notes in docs/remainingroadmap.md and AGENTS.md. Add a reaper job every 10 minutes that releases reservations reported by listOrphanedReservations and marks those generations failed with the reason "interrupted". Add an R2 sweeper that logs unreferenced production objects older than 24 hours, and deletes them only when an env flag is set.
+- [x] 4.3 Generations on the worker. In lib/production/generate.ts, replace after(runGeneration) with a production_generation job that the worker runs. Implement Storyboard frame generation: requestFrame calls queueFrameGeneration, and the worker processes frame_generation jobs using the shot_frame model; update the "refuses by design until the worker exists" notes in docs/remainingroadmap.md and AGENTS.md. Add a reaper job every 10 minutes that releases reservations reported by listOrphanedReservations and marks those generations failed with the reason "interrupted". Add an R2 sweeper that logs unreferenced production objects older than 24 hours, and deletes them only when an env flag is set.
+
+  **Done 2026-09-23.** `createGeneration` queues a `production_generation` job in the statement that
+  reserves (no `after()`); `lib/worker/production-generation.ts` runs the stored spec, and a cancel
+  is folded into `cancelGeneration`'s transaction. Storyboard frames are live: `requestFrameWith`
+  queues, `lib/worker/frame-generation.ts` draws with `shot_frame` and settles in one statement
+  (`settleFrameJob`), and the page polls (`Polling` moved to `_chrome/`). The reaper (10 min) works
+  on the widened `listOrphanedReservations`; the sweeper (6 h) logs, deleting only with
+  `R2_SWEEP_DELETE=true`. New SQL exercised on dev in a rolled-back transaction over `0030`-`0036`.
+  **Test change:** the shotlist assertion in `agent-write-tools-more.test.ts` lost the scheduler 4.2
+  gave it. **Deviations:** the page-load sweep that failed anything running for ten minutes is gone;
+  a reservation with no job id is logged, never released (a release with no id closes all of them).
+  The E2E walk does not click Draw frame (a real model call); unrun without `E2E_*`.
 - [ ] 4.4 Background agent runs. Runs in background mode execute in the worker with the same loop and registry, through the actor gates, re-checking membership and role before every step (D4). Each step is persisted before the next starts, so a crashed run resumes from its transcript. When a run needs the user (a confirmation or a checkpoint), it moves to waiting_for_user, and the user's reply enqueues its continuation. Add the start_background_task tool, which the model uses for work beyond the interactive caps. The panel polls live runs every 2 seconds, following _production/polling.tsx, and shows progress, proposals and a Cancel button.
 - [ ] 4.5 Story-to-script pipeline. Add the story_to_script tool. It starts a background run with the stages below; each stage produces Zod-validated output and resumes independently.
   (A) Expand the story into genre, tone, format, target length, the protagonist's want and need, stakes, setting and stated assumptions. Stop at a checkpoint for approval.

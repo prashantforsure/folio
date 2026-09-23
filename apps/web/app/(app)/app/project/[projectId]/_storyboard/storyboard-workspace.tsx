@@ -25,6 +25,7 @@ import { publishBoardCoverage } from '../../../../../../lib/storyboard/coverage'
 import type { EpisodeRoutePath } from '../../../../../../lib/workspace/hrefs'
 import { BoardView } from './board-view'
 import { CanvasView } from './canvas/canvas-view'
+import { Polling } from '../_chrome/polling'
 import { EmptyStoryboard } from './empty-storyboard'
 import type { ShotHandlers, ViewProps } from './handlers'
 import { ListView } from './list-view'
@@ -81,6 +82,10 @@ import { resetStoryboardView, setStoryboardView, useStoryboardView } from './vie
  * comes back as `insufficient` with the numbers, and the banner says them.
  */
 
+const inFlight = (frame: FrameState): boolean => frame.kind === 'queued' || frame.kind === 'running'
+
+const sameFrame = (a: FrameState, b: FrameState): boolean => JSON.stringify(a) === JSON.stringify(b)
+
 export type StoryboardWorkspaceProps = {
   readonly projectId: string
   readonly episode: string
@@ -93,6 +98,8 @@ export type StoryboardWorkspaceProps = {
   readonly cost: number | null
   /** Whether the `R2_*` block is set, so `Upload image` can do anything. */
   readonly storage: boolean
+  /** Why a frame cannot be drawn on this server, or null. */
+  readonly drawOff: string | null
 }
 
 type SaveState =
@@ -111,6 +118,7 @@ export const StoryboardWorkspace = ({
   available: initialAvailable,
   cost,
   storage,
+  drawOff,
 }: StoryboardWorkspaceProps) => {
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -148,6 +156,31 @@ export const StoryboardWorkspace = ({
     },
     [],
   )
+
+  // A refresh (`Polling`, below) brings the worker's progress: a frame this page
+  // shows in flight takes the server's state, and the balance follows the ledger.
+  useEffect(() => {
+    const served = new Map(initialScenes.flatMap((scene) => scene.shots.map((shot) => [shot.id, shot.frame] as const)))
+    setScenes((current) => {
+      let changed = false
+      const next = current.map((scene) => {
+        if (!scene.shots.some((shot) => inFlight(shot.frame))) return scene
+        return {
+          ...scene,
+          shots: scene.shots.map((shot) => {
+            const frame = served.get(shot.id)
+            if (!inFlight(shot.frame) || frame === undefined || sameFrame(frame, shot.frame)) return shot
+            changed = true
+            return { ...shot, frame }
+          }),
+        }
+      })
+      return changed ? next : current
+    })
+  }, [initialScenes])
+  useEffect(() => {
+    setAvailable(initialAvailable)
+  }, [initialAvailable])
 
   const run = useCallback(async (job: () => Promise<string | null>): Promise<void> => {
     pending.current += 1
@@ -303,6 +336,7 @@ export const StoryboardWorkspace = ({
   // ---------------------------------------------------------------------------
 
   const coverage = coverageOf(coverageRows(scenes))
+  const drawing = scenes.some((scene) => scene.shots.some((shot) => inFlight(shot.frame)))
   const selectedScene = scenes.find((scene) => scene.sceneNodeId === selected) ?? null
   const empty = state === 'empty' ? 'no-script' : scenes.length === 0 ? 'no-scenes' : null
   const visible = useCallback((shot: ShotRow) => matchesFilter(shot, filter), [filter])
@@ -319,6 +353,7 @@ export const StoryboardWorkspace = ({
     labels,
     book,
     cost: cost ?? 0,
+    drawOff,
     available,
     pending: saveState.kind === 'saving',
     handlers,
@@ -359,6 +394,7 @@ export const StoryboardWorkspace = ({
         <DisplayMenu display={display} sort={sort} filter={filter} view={view} onDisplay={setDisplay} onSort={setSort} onFilter={setFilter} />
       </div>
 
+      <Polling live={drawing} />
       {saveState.kind === 'error' ? (
         <div role="alert" className="folio-banner" data-tone="live" data-storyboard-error>
           {saveState.message}

@@ -1,5 +1,5 @@
 import type { JobKind } from '@folio/contracts'
-import type { ClaimedJob, JobHandlers, JobLease, JobOutcome, PeriodicTask, StaleSweep } from '@folio/db'
+import type { ClaimedJob, JobHandlers, JobLease, JobOutcome, PeriodicTask, StaleSweep, WorkerLog } from '@folio/db'
 
 /**
  * The worker's loop - roadmap task 4.1, ADR 0003 **D5** and **D6**.
@@ -34,7 +34,7 @@ import type { ClaimedJob, JobHandlers, JobLease, JobOutcome, PeriodicTask, Stale
  *   the queue with its attempt given back - a deploy is not the job's fault.
  */
 
-export type Log = (entry: Readonly<Record<string, unknown>>) => void
+export type Log = WorkerLog
 
 /** The queue as the loop uses it - `@folio/db`'s functions, bound to the session database in `main.ts`. */
 export type Queue = {
@@ -262,7 +262,7 @@ export const createWorker = (options: WorkerOptions): Worker => {
         if (busy || state !== 'running') return
         busy = true
         void task
-          .run()
+          .run(log)
           .catch((cause: unknown) => log({ event: 'folio.worker.task_failed', task: task.name, message: messageOf(cause) }))
           .finally(() => {
             busy = false

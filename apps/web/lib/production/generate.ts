@@ -1,13 +1,10 @@
 'use server'
 
-import { after } from 'next/server'
-
 import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisode } from '../script/gate'
 import {
   aiShotlistWith,
   cancelGenerationWith,
-  connected,
   framesProblem,
   generateFramesWith,
   generateSceneImageWith,
@@ -17,6 +14,7 @@ import {
   sceneProblem,
   shootReelWith,
 } from './generate-core'
+import { connected } from './pipeline/connection'
 import type { CancelResult, GenerationResult, ShootResult } from './result'
 
 /**
@@ -27,8 +25,9 @@ import type { CancelResult, GenerationResult, ShootResult } from './result'
  * with the failing readiness flags when the reel is not ready), and
  * cancel. Each: gate, the checks the button drew disabled on (the model
  * connected, storage for an image, readiness for a shoot), the spec
- * assembled, the row created with its credits held in one statement, and
- * the run handed to `after()` so the answer returns before the model does.
+ * assembled, and the row created with its credits held and its job queued in
+ * one statement - the worker runs it (roadmap task 4.3), so the answer returns
+ * before the model does and the run outlives the request.
  *
  * "Cost is named before it is spent": the number on the button is
  * `GENERATION_COSTS[job]`, and the same number is what `createGeneration`
@@ -40,8 +39,7 @@ import type { CancelResult, GenerationResult, ShootResult } from './result'
  * Each body is a core function in `generate-core.ts` that takes an episode
  * gate - the agent's `ai_shotlist` and `cancel_generation` call those with a
  * gate of their own. Each action runs what it always ran before the gate
- * (the parse, the connection check), opens the cookie gate, and hands the core
- * Next's `after` to run the generation once its row exists.
+ * (the parse, the connection check), opens the cookie gate, and calls the core.
  *
  * ## The rate limit, and the one action exempt from it
  *
@@ -54,17 +52,13 @@ import type { CancelResult, GenerationResult, ShootResult } from './result'
  * the hour, which is exactly the person who most needs to stop one.
  */
 
-const runAfter = (task: () => Promise<void>): void => {
-  after(task)
-}
-
 /** `POST /reels/:id/storyboard-sheet` - generate or redraw, 40 cr. Disabled with no shots (§3.4). */
 export const generateSheet = async (projectId: string, episode: string, rawReelId: unknown): Promise<GenerationResult> => {
   const problem = reelProblem(rawReelId) ?? connected('storyboard_sheet')
   if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
-  return generateSheetWith(gate, rawReelId, runAfter)
+  return generateSheetWith(gate, rawReelId)
 }
 
 /** `POST /scenes/:id/scene-image` (generate) - 40 cr. */
@@ -73,7 +67,7 @@ export const generateSceneImage = async (projectId: string, episode: string, raw
   if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
-  return generateSceneImageWith(gate, rawSceneNodeId, runAfter)
+  return generateSceneImageWith(gate, rawSceneNodeId)
 }
 
 /** The bulk bar's `✦ Generate n frames` - 4 cr each, one generation per shot; the first short balance stops the rest. */
@@ -82,7 +76,7 @@ export const generateFrames = async (projectId: string, episode: string, raw: un
   if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
-  return generateFramesWith(gate, raw, runAfter)
+  return generateFramesWith(gate, raw)
 }
 
 /**
@@ -95,7 +89,7 @@ export const aiShotlist = async (projectId: string, episode: string, rawReelId: 
   if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
-  return aiShotlistWith(gate, rawReelId, runAfter)
+  return aiShotlistWith(gate, rawReelId)
 }
 
 /**
@@ -108,7 +102,7 @@ export const shootReel = async (projectId: string, episode: string, rawReelId: u
   if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
-  return shootReelWith(gate, rawReelId, runAfter)
+  return shootReelWith(gate, rawReelId)
 }
 
 export const cancelGeneration = async (projectId: string, episode: string, rawId: unknown): Promise<CancelResult> => {

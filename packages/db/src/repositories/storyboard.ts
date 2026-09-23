@@ -850,3 +850,100 @@ export const linkRefund = async (
     .set({ refundEntryId: refundEntryId as string })
     .where(scoped(scope, frameGenerations, eq(frameGenerations.id, generationId)))
 }
+
+// ---------------------------------------------------------------------------
+// The frame job, on the worker (roadmap task 4.3)
+// ---------------------------------------------------------------------------
+
+/** A queued frame job as the worker reads it: the shot, the generation row it fills, and what it reserved. */
+export type FrameJob = {
+  readonly jobId: JobId
+  readonly generationId: GenerationId
+  readonly shotId: ShotId
+  readonly cost: number
+  readonly status: Job['status']
+  /** Set once the frame is drawn - a re-run after a crash that followed the settle has nothing to draw. */
+  readonly frameUrl: string | null
+}
+
+export const readFrameJob = async (scope: ProjectScope, jobId: JobId): Promise<FrameJob | null> => {
+  const rows = await dbOf(scope)
+    .select({ generationId: frameGenerations.id, shotId: frameGenerations.shotId, frameUrl: frameGenerations.frameUrl, cost: jobs.cost, status: jobs.status })
+    .from(frameGenerations)
+    .innerJoin(jobs, eq(jobs.id, frameGenerations.jobId))
+    .where(scoped(scope, frameGenerations, eq(frameGenerations.jobId, jobId)))
+    .limit(1)
+  const row = rows[0]
+  return row === undefined
+    ? null
+    : { jobId, generationId: row.generationId as GenerationId, shotId: row.shotId as ShotId, cost: row.cost, status: row.status, frameUrl: row.frameUrl }
+}
+
+/** How a frame job ended, as the ledger and the generation row record it. */
+export type FrameSettlement =
+  | { readonly kind: 'drawn'; readonly frameUrl: string }
+  | { readonly kind: 'failed'; readonly error: string }
+  | { readonly kind: 'blocked'; readonly reason: string }
+  | { readonly kind: 'cancelled' }
+
+/**
+ * Close a frame job's reservation, and point its generation at the frame -
+ * one statement, as the reservation was (roadmap task 4.3). The rule is the
+ * jobs table's own (`JOB_STATUSES`, `@folio/contracts`): a drawn frame is a
+ * `spend`; a failed job ran and broke, so it is a `spend` and a `refund`, the
+ * refund linked from `frame_generations.refund_entry_id`; a blocked or
+ * cancelled one did not run, so it is a `release`. Every entry is idempotent
+ * on the job, so settling twice writes once. The `jobs` row's own status is the
+ * worker's to set (`finishJob`).
+ */
+export const settleFrameJob = async (scope: ProjectScope, jobId: JobId, outcome: FrameSettlement): Promise<void> => {
+  const project = scope.projectId as string
+  const actor = scope.actor as string | null
+  const spend = outcome.kind === 'drawn' || outcome.kind === 'failed'
+  const refund = outcome.kind === 'failed'
+  const release = outcome.kind === 'blocked' || outcome.kind === 'cancelled'
+  const frameUrl = outcome.kind === 'drawn' ? outcome.frameUrl : null
+  const reason =
+    outcome.kind === 'drawn'
+      ? 'Frame drawn'
+      : outcome.kind === 'failed'
+        ? `Refunded: the frame failed - ${outcome.error.slice(0, 200)}`
+        : outcome.kind === 'blocked'
+          ? `Released: the frame was refused - ${outcome.reason.slice(0, 200)}`
+          : 'Released: the frame was cancelled'
+  await dbOf(scope).execute(sql`
+    with job as (
+      select ${jobs.id} as id, ${jobs.cost} as cost from ${jobs}
+      where ${jobs.id} = ${jobId} and ${jobs.projectId} = ${project}
+    ),
+    spent as (
+      insert into ${creditLedger} (project_id, kind, delta, job_id, idempotency_key, reason, created_by)
+      select ${project}, 'spend', -job.cost, job.id, 'spend:job:' || job.id::text, ${reason}, ${actor}::uuid
+      from job where job.cost > 0 and ${spend}
+      on conflict (project_id, idempotency_key) do nothing
+      returning id
+    ),
+    refunded as (
+      insert into ${creditLedger} (project_id, kind, delta, job_id, idempotency_key, reason, created_by)
+      select ${project}, 'refund', job.cost, job.id, 'refund:job:' || job.id::text, ${reason}, ${actor}::uuid
+      from job where job.cost > 0 and ${refund}
+      on conflict (project_id, idempotency_key) do nothing
+      returning id
+    ),
+    released as (
+      insert into ${creditLedger} (project_id, kind, delta, job_id, idempotency_key, reason, created_by)
+      select ${project}, 'release', job.cost, job.id, 'release:job:' || job.id::text, ${reason}, ${actor}::uuid
+      from job where job.cost > 0 and ${release}
+      on conflict (project_id, idempotency_key) do nothing
+      returning id
+    ),
+    drawn as (
+      update ${frameGenerations} as fg
+      set frame_url = coalesce(${frameUrl}, fg.frame_url),
+          refund_entry_id = coalesce((select id from refunded), fg.refund_entry_id)
+      where fg.job_id = ${jobId} and fg.project_id = ${project}
+      returning fg.id
+    )
+    select (select count(*) from drawn)::int as generations
+  `)
+}

@@ -189,14 +189,28 @@ authored / derived-cache / measurement. Touching `episodes` needs
   there:** postgres.js cannot serialise a `timestamptz[]` parameter (either pooler) - pass `text[]`
   and cast per element. Dev also holds **13 `queued` `frame_generation` jobs** from before defect 0.4
   was closed (oldest 2026-09-11); the first worker with a frame handler will claim them.
+- **Task 4.3's repository SQL** (no migration of its own): `createGeneration` queues its
+  `production_generation` job in the statement that reserves; `cancelGeneration` cancels a queued job
+  or asks a running one to stop, in its own transaction; `settleFrameJob` closes a frame job's
+  reservation in one statement (spend / spend + refund / release, idempotent);
+  `listOrphanedReservations` is widened for the reaper (held reserves whose generation or frame job is
+  over, missing, or live with no live job) beside `listProjectsHoldingReservations`;
+  `listUnreferencedAssetKeys` / `deleteUnreferencedAssets` are the sweeper's. All of it was
+  **exercised against dev in a rolled-back transaction** on 2026-09-23, on top of `0030`–`0036`
+  applied in order inside the same transaction - so that chain applies cleanly to dev's data.
+  **Traps found there:** a value added by `ALTER TYPE ... ADD VALUE` cannot be used in the same
+  transaction (`unsafe use of new value`) - `0036` never uses its two as literals, and neither may a
+  later migration applied in the same `db:migrate` run (drizzle runs the batch as one transaction);
+  and `credit_ledger`'s append-only trigger refuses an `UPDATE` even inside a scratch transaction.
 - **`src/seed/production.ts` is the one seed** (`pnpm --filter @folio/db seed:production -- --user <email>`,
   launched by `scripts/seed-production.mjs` through drizzle-kit's own `tsx`): a "Monsoon Line" series
   in every state the v12 mockup draws; a re-run bins the previous one of that title and writes a
   fresh one. Portraits and the plate are 1×1 PNGs put to R2 when `R2_*` is set, skipped otherwise.
   Dev only: the script goes in through the app's own import and derivation path, the Production
   rows are written to the tables directly.
-- **`env.ts` also exports `modelEnv`** - `GEMINI_API_KEY`, optional, `null` when unset; the only reader is
-  `apps/web/lib/production/pipeline/gemini.ts`. The model ids live in `@folio/contracts` (`MODEL_REGISTRY`).
+- **`env.ts` also exports `modelEnv`** - `GEMINI_API_KEY`, optional, `null` when unset; its readers are
+  `apps/web/lib/production/pipeline/gemini.ts` (called on the worker since task 4.3) and
+  `pipeline/connection.ts` (whether the buttons draw enabled). The model ids live in `@folio/contracts` (`MODEL_REGISTRY`).
 - **`env.ts` also exports `storageEnv`** - the five `R2_*` variables, optional as a block, `null`
   when none is set. The only reader is `apps/web/lib/storage/r2.ts`. And `assistantEnv` -
   `ANTHROPIC_API_KEY`, optional, `null` when unset; the only reader is

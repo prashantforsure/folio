@@ -111,11 +111,14 @@ export type JobHandler = {
 
 export type JobHandlers = Readonly<Partial<Record<JobKind, JobHandler>>>
 
-/** Work the worker does on a clock rather than off the queue: the reaper, the sweeper. */
+/** One structured log line - the worker prints it as JSON, `event` first. */
+export type WorkerLog = (entry: Readonly<Record<string, unknown>>) => void
+
+/** Work the worker does on a clock rather than off the queue: the reaper, the sweeper. It reports through the worker's log. */
 export type PeriodicTask = {
   readonly name: string
   readonly everyMs: number
-  readonly run: () => Promise<void>
+  readonly run: (log: WorkerLog) => Promise<void>
 }
 
 /**

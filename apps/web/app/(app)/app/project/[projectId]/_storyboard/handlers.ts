@@ -50,6 +50,8 @@ export type ViewProps = {
   readonly book: LabelBook
   /** `FRAME_GENERATION_COST`, named on every draw button before it is spent. */
   readonly cost: number
+  /** Why a frame cannot be drawn on this server, or null - every draw button is disabled with it as the title. */
+  readonly drawOff: string | null
   readonly available: number
   /** A write is in flight; every button waits. */
   readonly pending: boolean

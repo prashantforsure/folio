@@ -1,7 +1,8 @@
-import type { Asset, CameraMotion, ProductionGenerationId, ProductionScene, Reel, ShotType } from '@folio/contracts'
+import type { Asset, CameraMotion, ProductionGenerationId, Reel, ShotType } from '@folio/contracts'
 import { CAMERA_MOTIONS, SHOT_TYPES } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
-import { failGeneration, insertAsset, insertReelShots, progressGeneration, refuseGeneration, startGeneration, succeedGeneration } from '@folio/db'
+import { failGeneration, insertAsset, insertReelShots, progressGeneration, refuseGeneration, resumeGeneration, succeedGeneration } from '@folio/db'
+import type { CharacterId } from '@folio/script'
 import { parseDescription } from '@folio/script'
 
 import { sheetCameraNote, sheetHeading } from '../camera'
@@ -13,9 +14,11 @@ import { parseShotlist } from './shotlist'
 import type { GenerationSpec } from './spec'
 
 /**
- * Run one generation after the response (`after()` from `next/server`, in
- * the action that created the row). The row already exists in `queued`
- * with its credits held; this moves it: `startGeneration` → the provider
+ * Run one generation - on the worker since roadmap task 4.3, as its
+ * `production_generation` job (`lib/worker/production-generation.ts`); it ran
+ * in `after()` inside the request that created the row until then. The row
+ * already exists in `queued` with its credits held; this moves it:
+ * `resumeGeneration` (a retried job picks up a `running` row) → the provider
  * → the output stored in R2 as an asset → `succeedGeneration` with the
  * job's outcome, or `refuseGeneration` / `failGeneration`, each of which
  * closes the reservation. Whatever throws lands in `failed` with its
@@ -57,18 +60,21 @@ export type RunInput = {
   readonly scope: ProjectScope
   readonly id: ProductionGenerationId
   readonly spec: GenerationSpec
-  readonly scene: ProductionScene
+  /** The reel a sheet or a shotlist is for; `null` for any other job. */
   readonly reel: Reel | null
-  readonly names: readonly { readonly id: ProductionScene['cast'][number]['id']; readonly name: string }[]
+  /** The cast's names, for reading a shotlist's descriptions into parts. */
+  readonly names: readonly { readonly id: CharacterId; readonly name: string }[]
+  /** Aborted when the writer cancels: the provider call stops. */
+  readonly signal?: AbortSignal
 }
 
 const asShotType = (value: string): ShotType => (SHOT_TYPES as readonly string[]).includes(value) ? (value as ShotType) : 'Medium'
 const asMotion = (value: string): CameraMotion => (CAMERA_MOTIONS as readonly string[]).includes(value) ? (value as CameraMotion) : 'Still'
 
 export const runGeneration = async (input: RunInput): Promise<void> => {
-  const { scope, id, spec } = input
+  const { scope, id, spec, signal } = input
   try {
-    const generation = await startGeneration(scope, id)
+    const generation = await resumeGeneration(scope, id)
     if (generation === null) return
     const model = spec.route
     if (model === null) {
@@ -78,7 +84,7 @@ export const runGeneration = async (input: RunInput): Promise<void> => {
     switch (spec.job) {
       case 'storyboard_sheet': {
         if (input.reel === null) return void (await failGeneration(scope, id, 'The reel is gone.'))
-        const out = await generateImage(model, spec)
+        const out = await generateImage(model, spec, signal)
         if (!(await settle(scope, id, out)) || !out.ok) return
         const stored = await store(scope, 'sheet', out.value.bytes, out.value.mime)
         if (!stored.ok) return void (await failGeneration(scope, id, stored.message))
@@ -95,7 +101,7 @@ export const runGeneration = async (input: RunInput): Promise<void> => {
         return
       }
       case 'scene_image': {
-        const out = await generateImage(model, spec)
+        const out = await generateImage(model, spec, signal)
         if (!(await settle(scope, id, out)) || !out.ok) return
         const stored = await store(scope, 'still', out.value.bytes, out.value.mime)
         if (!stored.ok) return void (await failGeneration(scope, id, stored.message))
@@ -103,7 +109,7 @@ export const runGeneration = async (input: RunInput): Promise<void> => {
         return
       }
       case 'shot_frame': {
-        const out = await generateImage(model, spec)
+        const out = await generateImage(model, spec, signal)
         if (!(await settle(scope, id, out)) || !out.ok) return
         const stored = await store(scope, 'frame', out.value.bytes, out.value.mime)
         if (!stored.ok) return void (await failGeneration(scope, id, stored.message))
@@ -111,7 +117,7 @@ export const runGeneration = async (input: RunInput): Promise<void> => {
         return
       }
       case 'shoot_reel': {
-        const out = await generateVideo(model, spec, (percent) => progressGeneration(scope, id, percent))
+        const out = await generateVideo(model, spec, (percent) => progressGeneration(scope, id, percent), signal)
         if (!(await settle(scope, id, out)) || !out.ok) return
         const stored = await store(scope, 'clip', out.value.bytes, out.value.mime)
         if (!stored.ok) return void (await failGeneration(scope, id, stored.message))
@@ -120,7 +126,7 @@ export const runGeneration = async (input: RunInput): Promise<void> => {
       }
       case 'ai_shotlist': {
         if (input.reel === null) return void (await failGeneration(scope, id, 'The reel is gone.'))
-        const out = await generateText(model, spec)
+        const out = await generateText(model, spec, signal)
         if (!(await settle(scope, id, out)) || !out.ok) return
         const items = parseShotlist(out.value)
         if (items === null) return void (await failGeneration(scope, id, 'The model did not return a shotlist it could be read as.'))

@@ -45,7 +45,7 @@ import { publicUrl } from '../storage/r2'
 import { cutScene } from '../storyboard/scene-cut'
 import { clampRetime } from './derive'
 import type { BulkResult, DeleteReelResult, Failure, MovedResult, ReelResult, SettingsResult, ShotResult } from './result'
-import { readCastAndPlaces } from './server'
+import { readCastAndPlaces } from './compose'
 
 /**
  * The Production route's authoring writes as **core functions** - roadmap
@@ -113,7 +113,8 @@ const resolveShot = async (scope: ProjectScope, shot: ReelShotRecord): Promise<R
   return shotView(shot, await readAssetRecords(scope, ids))
 }
 
-const resolveReel = async (scope: ProjectScope, reelId: Reel['id']): Promise<Reel | null> => {
+/** A reel as the client and the runner read it: its shots, sheet and clip, with their assets resolved. */
+export const readReelView = async (scope: ProjectScope, reelId: Reel['id']): Promise<Reel | null> => {
   const reel = await readReel(scope, reelId)
   if (reel === null) return null
   return reelView(reel, await readAssetRecords(scope, assetIdsOf(reel)))
@@ -292,7 +293,7 @@ export const retimeShotWith = async (gate: EpisodeGate, raw: unknown): Promise<R
   const seconds = clampRetime(reel, input.data.shotId, input.data.durationS)
   const written = await retimeShotRow(gate.scope, input.data.shotId, seconds)
   if (written.status === 'no-shot') return error(NOT_A_SHOT)
-  const full = await resolveReel(gate.scope, reel.id)
+  const full = await readReelView(gate.scope, reel.id)
   return full === null ? error(NOT_A_REEL) : { status: 'saved', reel: full }
 }
 
@@ -404,6 +405,6 @@ export const proposeShotsWith = async (gate: EpisodeGate, rawSceneNodeId: unknow
       }
     }),
   )
-  const full = await resolveReel(scope, target.id)
+  const full = await readReelView(scope, target.id)
   return full === null ? error(NOT_A_REEL) : { status: 'saved', reel: full }
 }

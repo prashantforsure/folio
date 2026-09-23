@@ -1,9 +1,11 @@
 import type { ArtStyle, EpisodeSettings, GenerationJob, ProductionScene, Reel, ReelShot } from '@folio/contracts'
 import { MODEL_REGISTRY } from '@folio/contracts'
 import { createHash } from 'node:crypto'
+import { z } from 'zod'
 
 import { cameraString, sheetCameraNote, sheetHeading } from '../camera'
 import { shotClocks } from '../derive'
+import type { ImageSpec } from './gemini'
 
 /**
  * The provider-neutral spec every generation carries (AGENTS.md, Jobs,
@@ -199,3 +201,73 @@ export const shootSpec = (scene: ProductionScene, reel: Reel, settings: EpisodeS
     sheet: reel.sheet?.asset?.id ?? null,
   })
 }
+
+// ---------------------------------------------------------------------------
+// On the worker (roadmap task 4.3)
+// ---------------------------------------------------------------------------
+
+const StoredPromptSchema = z.object({
+  text: z.string(),
+  references: z.array(z.object({ role: z.enum(['character', 'location', 'scene_still', 'shot_frame', 'reference']), label: z.string(), url: z.string() })),
+  aspect: z.enum(['16:9', '9:16', '21:9']),
+  durationS: z.number().nullable(),
+})
+
+/**
+ * The spec a generation was queued with, read back off its row - `prompt`
+ * (text, references, aspect, duration), `settings_snapshot`, `route` and
+ * `source_hash` are exactly what `createGeneration` stored from it. The worker
+ * runs what the writer was quoted for, not a spec re-assembled from whatever
+ * the records say by the time the job is claimed. `null`: the row does not
+ * read, and the generation fails rather than runs something else.
+ */
+export const specFromRun = (row: {
+  readonly job: GenerationJob
+  readonly prompt: unknown
+  readonly settingsSnapshot: unknown
+  readonly route: string | null
+  readonly sourceHash: string | null
+}): GenerationSpec | null => {
+  const prompt = StoredPromptSchema.safeParse(row.prompt)
+  if (!prompt.success || row.settingsSnapshot === null || typeof row.settingsSnapshot !== 'object') return null
+  return {
+    job: row.job,
+    prompt: prompt.data.text,
+    references: prompt.data.references,
+    settings: row.settingsSnapshot as SettingsSnapshot,
+    aspect: prompt.data.aspect,
+    durationS: prompt.data.durationS,
+    sourceHash: row.sourceHash ?? '',
+    route: row.route,
+  }
+}
+
+/** What a Storyboard frame is drawn from: the shot as its card reads, and the scene it is in. */
+export type StoryboardFrameInput = {
+  readonly heading: string
+  /** The shot's camera, as the board prints it: `MS · eye level · static · 35mm`. */
+  readonly camera: string
+  /** The description with every `@mention` printed as the record's name. */
+  readonly description: string
+  /** Portraits of the characters the description mentions - the kept Look, as Production's frames use it. */
+  readonly cast: readonly { readonly name: string; readonly portraitUrl: string | null }[]
+}
+
+/**
+ * A Storyboard frame (`frame_generation` jobs, roadmap task 4.3), drawn with
+ * the `shot_frame` model from `MODEL_REGISTRY`. The Storyboard has no episode
+ * settings and no art style - those are Production's - so the frame is a
+ * plain storyboard drawing at 16:9, with the mentioned characters' portraits
+ * as references for consistency.
+ */
+export const storyboardFrameSpec = (input: StoryboardFrameInput): ImageSpec & { readonly route: string | null } => ({
+  prompt: [
+    `One storyboard frame, pencil-and-wash storyboard look, exactly as the camera sees it. No text, no watermark, no panel border.`,
+    `Scene: ${input.heading}.`,
+    `Camera: ${input.camera}.`,
+    `Action: ${input.description.trim().length === 0 ? 'the scene as its heading describes it' : input.description}`,
+  ].join('\n'),
+  references: input.cast.flatMap((member) => (member.portraitUrl === null ? [] : [{ role: 'character' as const, label: member.name, url: member.portraitUrl }])),
+  aspect: '16:9',
+  route: MODEL_REGISTRY.shot_frame?.model ?? null,
+})

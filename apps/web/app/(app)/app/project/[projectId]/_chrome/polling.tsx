@@ -4,10 +4,11 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
 /**
- * No realtime (AGENTS.md, Constraints): while a generation is `queued` or
- * `running` in the loaded episode the page refreshes every three seconds,
- * so the runner's progress and end states reach the screen. Nothing runs
- * while nothing is live.
+ * No realtime (AGENTS.md, Constraints): while something the page shows is
+ * `queued` or `running` on the worker - a Production generation, a
+ * Storyboard frame - the page refreshes every three seconds, so progress and
+ * end states reach the screen. Nothing runs while nothing is live. Shared
+ * chrome since roadmap task 4.3 moved Storyboard's frames onto the worker.
  */
 export const Polling = ({ live }: { readonly live: boolean }) => {
   const router = useRouter()

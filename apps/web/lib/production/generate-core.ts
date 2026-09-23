@@ -1,5 +1,5 @@
-import type { ArtStyle, EpisodeSettings, GenerationJob, GenerationTarget, ProductionScene, Reel } from '@folio/contracts'
-import { GENERATION_COSTS, MODEL_REGISTRY, NodeIdSchema, ProductionGenerationIdSchema, ReelIdSchema, ReelShotIdSchema } from '@folio/contracts'
+import type { ArtStyle, EpisodeSettings, GenerationTarget, ProductionScene, Reel } from '@folio/contracts'
+import { GENERATION_COSTS, NodeIdSchema, ProductionGenerationIdSchema, ReelIdSchema, ReelShotIdSchema } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
 import {
   cancelGeneration as cancelGenerationRow,
@@ -17,16 +17,14 @@ import { checkRateLimit } from '../agent/rate-limit'
 import { ROLE } from '../auth/roles'
 import type { EpisodeGate } from '../script/actor-gate'
 import { roleRefusal } from '../script/actor-gate'
-import type { Schedule } from '../script/server'
-import { storageAvailable } from '../storage/r2'
 import { cutScene } from '../storyboard/scene-cut'
 import { proposeShotsWith } from './core'
 import { readinessOf } from './derive'
-import { runGeneration } from './pipeline/runner'
+import { connected } from './pipeline/connection'
 import { frameSpec, sceneImageSpec, sheetSpec, shootSpec, shotlistSpec } from './pipeline/spec'
 import type { GenerationSpec } from './pipeline/spec'
 import type { CancelResult, Failure, GenerationResult, ShootResult } from './result'
-import { composeScenes, readCastAndPlaces } from './server'
+import { composeScenes, readCastAndPlaces } from './compose'
 
 /**
  * The generate actions as **core functions** - roadmap task 4.2.
@@ -39,14 +37,13 @@ import { composeScenes, readCastAndPlaces } from './server'
  * held. The actions open the cookie gate and call these; the agent's
  * `ai_shotlist` and `cancel_generation` call them with a gate of their own.
  *
- * `schedule` runs the generation once the row exists - Next's `after` from an
- * action. Roadmap task 4.3 replaces it with a job the worker claims.
+ * The generation runs on the worker (roadmap task 4.3): `createGeneration`
+ * queues its `production_generation` job in the same statement that reserves
+ * the credits, and `lib/worker/production-generation.ts` runs it.
  */
 
 const NOT_A_REEL = 'That reel is not in this episode. Reload the page.'
 const NOT_A_SCENE = 'That scene is not in this episode. Reload the page.'
-const MODEL_OFF = 'The model is not connected: set GEMINI_API_KEY on this server.'
-const STORAGE_OFF = 'Image storage is not set up on this server yet - generated images have nowhere to go.'
 
 const error = (message: string): Failure => ({ status: 'error', message })
 
@@ -89,25 +86,8 @@ const findReel = (scenes: readonly ProductionScene[], reelId: string): { readonl
   return null
 }
 
-/** The gate the buttons drew disabled on: the model, and storage for anything that makes a file. */
-export const connected = (job: GenerationJob): Failure | { readonly status: 'disconnected'; readonly message: string } | null => {
-  const registry = MODEL_REGISTRY[job]
-  if (registry === null) return null
-  if (modelEnv === null) return { status: 'disconnected', message: MODEL_OFF }
-  if (registry.kind !== 'text' && !storageAvailable()) return { status: 'disconnected', message: STORAGE_OFF }
-  return null
-}
-
-/** Create the row (credits held) and hand the run to `schedule`. */
-const launch = async (
-  g: Ground,
-  targetType: GenerationTarget,
-  targetId: string,
-  spec: GenerationSpec,
-  scene: ProductionScene,
-  reel: Reel | null,
-  schedule: Schedule,
-): Promise<GenerationResult> => {
+/** Create the row (credits held) and its job, in one statement; the worker runs it. */
+const launch = async (g: Ground, targetType: GenerationTarget, targetId: string, spec: GenerationSpec): Promise<GenerationResult> => {
   const scope: ProjectScope = g.gate.scope
   const created = await createGeneration(scope, {
     episodeId: g.gate.episode.id,
@@ -121,7 +101,6 @@ const launch = async (
     sourceHash: spec.sourceHash,
   })
   if (created.status === 'insufficient') return created
-  schedule(() => runGeneration({ scope, id: created.generation.id, spec, scene, reel, names: g.names }))
   return { status: 'queued', generation: created.generation }
 }
 
@@ -141,7 +120,7 @@ export const reelProblem = (rawReelId: unknown): Failure | null => (ReelIdSchema
 export const sceneProblem = (rawSceneNodeId: unknown): Failure | null => (NodeIdSchema.safeParse(rawSceneNodeId).success ? null : error(NOT_A_SCENE))
 
 /** `POST /reels/:id/storyboard-sheet` - generate or redraw, 40 cr. Disabled with no shots (§3.4). */
-export const generateSheetWith = async (gate: EpisodeGate, rawReelId: unknown, schedule: Schedule): Promise<GenerationResult> => {
+export const generateSheetWith = async (gate: EpisodeGate, rawReelId: unknown): Promise<GenerationResult> => {
   const reelId = ReelIdSchema.safeParse(rawReelId)
   if (!reelId.success) return error(NOT_A_REEL)
   const off = connected('storyboard_sheet')
@@ -154,11 +133,11 @@ export const generateSheetWith = async (gate: EpisodeGate, rawReelId: unknown, s
   if (found === null) return error(NOT_A_REEL)
   if (found.reel.shots.length === 0) return error('Add shots first - the sheet is drawn from the shotlist.')
   if ((await readLiveGenerationFor(gate.scope, 'reel', found.reel.id)) !== null) return error('This reel is already being drawn.')
-  return launch(g, 'reel', found.reel.id, sheetSpec(found.scene, found.reel, g.settings, g.artStyle), found.scene, found.reel, schedule)
+  return launch(g, 'reel', found.reel.id, sheetSpec(found.scene, found.reel, g.settings, g.artStyle))
 }
 
 /** `POST /scenes/:id/scene-image` (generate) - 40 cr. */
-export const generateSceneImageWith = async (gate: EpisodeGate, rawSceneNodeId: unknown, schedule: Schedule): Promise<GenerationResult> => {
+export const generateSceneImageWith = async (gate: EpisodeGate, rawSceneNodeId: unknown): Promise<GenerationResult> => {
   const sceneNodeId = NodeIdSchema.safeParse(rawSceneNodeId)
   if (!sceneNodeId.success) return error(NOT_A_SCENE)
   const off = connected('scene_image')
@@ -170,7 +149,7 @@ export const generateSceneImageWith = async (gate: EpisodeGate, rawSceneNodeId: 
   const scene = g.scenes.find((candidate) => candidate.sceneNodeId === sceneNodeId.data)
   if (scene === undefined) return error(NOT_A_SCENE)
   if ((await readLiveGenerationFor(gate.scope, 'scene', scene.sceneNodeId)) !== null) return error('This scene image is already being drawn.')
-  return launch(g, 'scene', scene.sceneNodeId, sceneImageSpec(scene, g.settings, g.artStyle), scene, null, schedule)
+  return launch(g, 'scene', scene.sceneNodeId, sceneImageSpec(scene, g.settings, g.artStyle))
 }
 
 const FrameIdsSchema = z.array(ReelShotIdSchema).min(1).max(50)
@@ -178,7 +157,7 @@ const FrameIdsSchema = z.array(ReelShotIdSchema).min(1).max(50)
 export const framesProblem = (raw: unknown): Failure | null => (FrameIdsSchema.safeParse(raw).success ? null : error('Pick at least one shot.'))
 
 /** The bulk bar's `✦ Generate n frames` - 4 cr each, one generation per shot; the first short balance stops the rest. */
-export const generateFramesWith = async (gate: EpisodeGate, raw: unknown, schedule: Schedule): Promise<GenerationResult> => {
+export const generateFramesWith = async (gate: EpisodeGate, raw: unknown): Promise<GenerationResult> => {
   const ids = FrameIdsSchema.safeParse(raw)
   if (!ids.success) return error('Pick at least one shot.')
   const off = connected('shot_frame')
@@ -194,7 +173,7 @@ export const generateFramesWith = async (gate: EpisodeGate, raw: unknown, schedu
     const shot = found.reel.shots.find((candidate) => candidate.id === shotId)
     if (shot === undefined || shot.description.trim().length === 0) continue
     if ((await readLiveGenerationFor(gate.scope, 'shot', shot.id)) !== null) continue
-    const result = await launch(g, 'shot', shot.id, frameSpec(found.scene, found.reel, shot, g.settings, g.artStyle), found.scene, found.reel, schedule)
+    const result = await launch(g, 'shot', shot.id, frameSpec(found.scene, found.reel, shot, g.settings, g.artStyle))
     if (result.status === 'insufficient') return result
     last = result
   }
@@ -207,7 +186,7 @@ export const generateFramesWith = async (gate: EpisodeGate, raw: unknown, schedu
  * rule-based proposer (`proposeShotsWith`, through the same gate), so the
  * button always does something true.
  */
-export const aiShotlistWith = async (gate: EpisodeGate, rawReelId: unknown, schedule: Schedule): Promise<GenerationResult> => {
+export const aiShotlistWith = async (gate: EpisodeGate, rawReelId: unknown): Promise<GenerationResult> => {
   const reelId = ReelIdSchema.safeParse(rawReelId)
   if (!reelId.success) return error(NOT_A_REEL)
   const stop = await mayStart(gate)
@@ -230,7 +209,7 @@ export const aiShotlistWith = async (gate: EpisodeGate, rawReelId: unknown, sche
   const nodes = read.value.map((entry) => entry.node)
   const sceneNodes = cutScene(nodes, found.scene.sceneNodeId, new Set(g.scenes.map((scene) => scene.sceneNodeId as string)))
   const sceneText = sceneNodes.map((node) => `${node.type.toUpperCase()}: ${proseOf(node.content, nameOf)}`).join('\n')
-  return launch(g, 'reel', found.reel.id, shotlistSpec(found.scene, found.reel, sceneText, g.settings, g.artStyle), found.scene, found.reel, schedule)
+  return launch(g, 'reel', found.reel.id, shotlistSpec(found.scene, found.reel, sceneText, g.settings, g.artStyle))
 }
 
 /**
@@ -238,7 +217,7 @@ export const aiShotlistWith = async (gate: EpisodeGate, rawReelId: unknown, sche
  * failing readiness flags, computed here from the rows as stored, never
  * trusted from the button. The first success locks the episode's settings.
  */
-export const shootReelWith = async (gate: EpisodeGate, rawReelId: unknown, schedule: Schedule): Promise<ShootResult> => {
+export const shootReelWith = async (gate: EpisodeGate, rawReelId: unknown): Promise<ShootResult> => {
   const reelId = ReelIdSchema.safeParse(rawReelId)
   if (!reelId.success) return error(NOT_A_REEL)
   const off = connected('shoot_reel')
@@ -252,7 +231,7 @@ export const shootReelWith = async (gate: EpisodeGate, rawReelId: unknown, sched
   const readiness = readinessOf(found.scene, found.reel)
   if (!readiness.canShoot) return { status: 'not_ready', failed: readiness.failed }
   if ((await readLiveGenerationFor(gate.scope, 'reel', found.reel.id)) !== null) return error('This reel is already shooting.')
-  return launch(g, 'reel', found.reel.id, shootSpec(found.scene, found.reel, g.settings, g.artStyle), found.scene, found.reel, schedule)
+  return launch(g, 'reel', found.reel.id, shootSpec(found.scene, found.reel, g.settings, g.artStyle))
 }
 
 export const generationIdProblem = (rawId: unknown): Failure | null =>

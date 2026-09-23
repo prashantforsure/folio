@@ -198,6 +198,11 @@ const WorkerEnvSchema = z.object({
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
   /** The port `GET /health` answers on. */
   WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
+  /**
+   * Whether the R2 sweeper (roadmap task 4.3) deletes what it finds. Off unless
+   * written as `true`: by default it only logs the unreferenced objects.
+   */
+  R2_SWEEP_DELETE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 })
 
 export type WorkerEnv = z.infer<typeof WorkerEnvSchema>
@@ -225,6 +230,7 @@ const PROVENANCE: Readonly<Record<string, string>> = {
   GEMINI_API_KEY: 'Google AI Studio, Get API key. Server only. Unset, Production draws its generate buttons disconnected.',
   WORKER_CONCURRENCY: 'Optional, the worker only: how many jobs one process runs at once, 1-32. Default 4. See docs/agents/worker.md.',
   WORKER_HEALTH_PORT: 'Optional, the worker only: the port GET /health answers on. Default 8080.',
+  R2_SWEEP_DELETE: 'Optional, the worker only: true or false. Whether the R2 sweeper deletes unreferenced production objects older than a day, rather than only logging them. Default false.',
 }
 
 // ---------------------------------------------------------------------------
@@ -353,6 +359,7 @@ export const workerEnv: WorkerEnv = parseOrThrow(
   {
     WORKER_CONCURRENCY: orDefault(process.env.WORKER_CONCURRENCY),
     WORKER_HEALTH_PORT: orDefault(process.env.WORKER_HEALTH_PORT),
+    R2_SWEEP_DELETE: orDefault(process.env.R2_SWEEP_DELETE),
   },
   'worker',
 )

@@ -269,7 +269,7 @@ describe('Production', () => {
     const shotlist = action('aiShotlist').mockResolvedValue({ status: 'disconnected', message: 'No model key: rule-based shots proposed.' })
     const { result } = await propose('ai_shotlist', { reelId: REEL })
     expect(result).toMatchObject({ ok: true })
-    expect(shotlist).toHaveBeenCalledWith(IN_EPISODE, REEL, expect.any(Function))
+    expect(shotlist).toHaveBeenCalledWith(IN_EPISODE, REEL)
   })
 
   it('patches a shot and puts the old values back', async () => {

@@ -24,6 +24,19 @@ change host; the worker is one more container beside it.
 Logs are one JSON object per line on stdout (`event` first). There is no pino and
 no Sentry yet (AGENTS.md, Tech stack: planned).
 
+## What it runs
+
+| Kind or clock | Handler | What it does |
+| --- | --- | --- |
+| `production_generation` | `apps/web/lib/worker/production-generation.ts` | queued by `createGeneration` in the statement that reserves the credits (task 4.3). Runs the spec the row stored with the runner (`pipeline/runner.ts`); the job's ending is read off the generation. Only a writer's cancel aborts the provider call - a shutdown or a lost lease leaves it for the next claim. Abandoned at the third attempt: the generation fails as "interrupted", credits released |
+| `frame_generation` | `apps/web/lib/worker/frame-generation.ts` | a Storyboard frame (task 4.3), queued by `requestFrame`. Draws with the `shot_frame` model, stores under `projects/<id>/shots/<shot>/`, settles: drawn = spend, failed = spend + refund, refused or cancelled = release. A job whose shot is gone fails and refunds |
+| reaper, every 10 min | `apps/web/lib/worker/reaper.ts` | closes reservations nothing else will (`listOrphanedReservations`): a generation still live with no live job is failed as "interrupted"; a reservation whose owner is over or gone is released under `release:job:<id>`. One with no job id is only logged (`folio.reaper.unkeyed_reservation`) |
+| R2 sweeper, every 6 h | `apps/web/lib/worker/sweeper.ts` | lists `projects/*/production/` objects older than a day and logs the ones no row points at (`folio.sweeper.unreferenced`). Deletes them - the asset rows first, then only the objects whose rows went - **only** with `R2_SWEEP_DELETE=true`. At most 10,000 objects a sweep; the next carries on after the last key |
+| `agent_run` | task 4.4 | not yet: stays queued |
+
+The worker claims only the kinds with a handler, so a queued job of any other kind
+waits rather than fails.
+
 ## Environment
 
 Everything goes through `packages/db/src/env.ts`, like the web app's. The worker
@@ -36,8 +49,9 @@ needs the same server block as web, because `env.ts` parses it whole:
 | `SUPABASE_SERVICE_ROLE_KEY` | yes (parsed) | not used by the worker, but `env.ts` requires it |
 | `WORKER_CONCURRENCY` | no, default `4` | jobs one process runs at once, 1-32 |
 | `WORKER_HEALTH_PORT` | no, default `8080` | the port `GET /health` answers on |
-| `GEMINI_API_KEY` | for generations | Production generations and Storyboard frames (task 4.3) |
-| `R2_*` (all five) | for generations | where generated images and clips are stored (task 4.3) |
+| `GEMINI_API_KEY` | for generations | Production generations and Storyboard frames (task 4.3). Without it a job fails with the model-not-connected reason and its credits come back - but the web app draws the buttons disabled then, so none is queued |
+| `R2_*` (all five) | for generations | where generated images and clips are stored, and what the sweeper lists (task 4.3) |
+| `R2_SWEEP_DELETE` | no, default `false` | `true` lets the sweeper delete unreferenced Production objects older than a day; anything else only logs them. Leave it off until a few sweeps' logs have been read |
 | `ANTHROPIC_API_KEY` | for agent runs | background runs and the story pipeline (tasks 4.4, 4.5) |
 
 The worker reads `.env` from its working directory if one is there
@@ -73,7 +87,11 @@ ECS, a VM with Docker):
 1. **Apply the migrations first.** `0036` (the queue columns and the `NOTIFY`
    trigger) must be on the database before the first worker starts - and, for
    the handlers, the migrations of the tasks that add them. Apply to staging
-   before production, as every migration here.
+   before production, as every migration here. Before the first start against a
+   database with old data, look at `select kind, status, count(*) from jobs group
+   by 1, 2`: every `queued` row of a handled kind is claimed at once (dev holds 13
+   frame jobs queued since 2026-09-11; they fail and refund if their shots are gone,
+   and draw - spending a model call - if not).
 2. **Build the image** from the repository root with the command above, or
    point the host's builder at `apps/worker/Dockerfile` with the root as the
    build context.

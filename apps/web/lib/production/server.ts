@@ -1,23 +1,6 @@
-import type {
-  ArtStyle,
-  Asset,
-  AssetId,
-  Assignee,
-  Clip,
-  CreditBalance,
-  EpisodeId,
-  EpisodeSettings,
-  Generation,
-  ProductionCastMember,
-  ProductionScene,
-  Reel,
-  ReelShot,
-  Sheet,
-  ViewPreferences,
-} from '@folio/contracts'
+import type { ArtStyle, Assignee, CreditBalance, EpisodeSettings, Generation, ProductionCastMember, ProductionScene, ViewPreferences } from '@folio/contracts'
 import { DEFAULT_ART_STYLE_KEY, DEFAULT_SETTINGS, hueOfColor } from '@folio/contracts'
-import type { AssetRecord, ClipRecord, ProductionEpisodeRecord, ProjectScope, ReelRecord, ReelShotRecord, SheetRecord } from '@folio/db'
-import { failGeneration, listCharacterRecords, listLiveGenerations, listLocationRecords, listMemberProfiles, listPropRecords, readBalance, readProductionEpisode } from '@folio/db'
+import { listCharacterRecords, listLocationRecords, listMemberProfiles, listPropRecords, readBalance, readProductionEpisode } from '@folio/db'
 import { modelEnv } from '@folio/db/env'
 import type { CharacterId, LocationId, PropId } from '@folio/script'
 import { cache } from 'react'
@@ -25,6 +8,7 @@ import { cache } from 'react'
 import { initialsOf } from '../characters/cast'
 import { publicUrl, storageAvailable } from '../storage/r2'
 import type { EpisodeContext } from '../workspace/context'
+import { composeScenes } from './compose'
 
 /**
  * The Production route's one read, `cache()`d so the layout and the page
@@ -55,120 +39,19 @@ export type ProductionLoad = {
   readonly model: boolean
 }
 
-const assetOf = (map: ReadonlyMap<AssetId, AssetRecord>, id: AssetId | null): Asset | null => {
-  if (id === null) return null
-  const record = map.get(id)
-  if (record === undefined) return null
-  const { storageKey, ...rest } = record
-  return { ...rest, url: publicUrl(storageKey) }
-}
-
-const shotOf = (shot: ReelShotRecord, map: ReadonlyMap<AssetId, AssetRecord>): ReelShot => {
-  const { frameAssetId, referenceAssetIds, ...rest } = shot
-  return {
-    ...rest,
-    frame: assetOf(map, frameAssetId),
-    references: referenceAssetIds.map((id) => assetOf(map, id)).filter((asset): asset is Asset => asset !== null),
-  }
-}
-
-const sheetOf = (sheet: SheetRecord | null, map: ReadonlyMap<AssetId, AssetRecord>): Sheet | null => {
-  if (sheet === null) return null
-  const { assetId, frames, ...rest } = sheet
-  return {
-    ...rest,
-    asset: assetOf(map, assetId),
-    frames: frames.map((frame) => {
-      const { assetId: frameAssetId, ...frameRest } = frame
-      return { ...frameRest, asset: assetOf(map, frameAssetId) }
-    }),
-  }
-}
-
-const clipOf = (clip: ClipRecord | null, map: ReadonlyMap<AssetId, AssetRecord>): Clip | null => {
-  if (clip === null) return null
-  const { posterAssetId, videoAssetId, ...rest } = clip
-  return { ...rest, poster: assetOf(map, posterAssetId), video: assetOf(map, videoAssetId) }
-}
-
-const reelOf = (reel: ReelRecord, map: ReadonlyMap<AssetId, AssetRecord>): Reel => ({
-  ...reel,
-  shots: reel.shots.map((shot) => shotOf(shot, map)),
-  sheet: sheetOf(reel.sheet, map),
-  clip: clipOf(reel.clip, map),
-})
-
-/** The spec's `INT | EXT` from the slugline's four-way reading. */
-const intExtOf = (ie: string | undefined): ProductionScene['intExt'] => {
-  if (ie === 'INT') return 'INT'
-  if (ie === 'EXT' || ie === 'EST' || ie === 'INT/EXT') return 'EXT'
-  return null
-}
-
-export const composeScenes = (
-  record: ProductionEpisodeRecord,
-  cast: ReadonlyMap<CharacterId, ProductionCastMember>,
-  locations: ReadonlyMap<LocationId, { readonly name: string; readonly plateReady: boolean }>,
-): readonly ProductionScene[] => {
-  const reelsOf = new Map<string, Reel[]>()
-  for (const reel of record.reels) {
-    const list = reelsOf.get(reel.sceneNodeId) ?? []
-    list.push(reelOf(reel, record.assets))
-    reelsOf.set(reel.sceneNodeId, list)
-  }
-  return record.scenes.map((scene) => {
-    const location = scene.locationId === null ? null : (locations.get(scene.locationId) ?? null)
-    return {
-      sceneNodeId: scene.sceneNodeId,
-      number: scene.number,
-      heading: scene.heading,
-      set: scene.reading?.set ?? scene.heading,
-      locationId: scene.locationId,
-      locationName: location?.name ?? scene.reading?.set ?? null,
-      intExt: intExtOf(scene.reading?.ie),
-      timeOfDay: scene.reading?.timeOfDay ?? null,
-      logline: scene.logline,
-      cast: scene.cast.map((id) => cast.get(id)).filter((member): member is ProductionCastMember => member !== undefined),
-      plateReady: location?.plateReady ?? false,
-      still: assetOf(record.assets, scene.stillAssetId),
-      stillState: scene.stillState,
-      setup: { ...scene.setup, note: record.notes.get(`scene:${scene.sceneNodeId}`) ?? null },
-      reels: reelsOf.get(scene.sceneNodeId) ?? [],
-    }
-  })
-}
-
-/**
- * How long a generation may sit `queued` or `running` before this page
- * decides the process that was carrying it died without saying so - a
- * serverless function killed between `startGeneration` and the provider
- * answering (defect 0.6). `runner.ts`'s `catch` only ever sees a *throw*;
- * a kill produces neither a throw nor a row update, so nothing else notices.
- *
- * There is no worker to sweep for this (`apps/worker` is empty), so the
- * page's own poll does it: every load checks the episode's live generations
- * against this age, and one that is too old is failed here exactly as
- * `runner.ts` would fail it - reservation released, target unmarked - so
- * the writer sees "failed" and can retry instead of a spinner with nothing
- * behind it. Ten minutes is well past `shoot_reel`, the slowest job.
+/*
+ * A generation stuck `queued` or `running` is no longer this page's to settle
+ * (defect 0.6, closed by roadmap task 4.3). It used to fail anything older
+ * than ten minutes on every load, because a serverless function killed mid-run
+ * left nothing else to notice. Generations run on the worker now: a dead
+ * worker's job is requeued by the stale sweep and failed at its third attempt,
+ * and the reaper (`lib/worker/reaper.ts`) fails a generation left with no live
+ * job as interrupted - so a page load writes nothing, and a generation waiting
+ * its turn in a long queue is not mistaken for a dead one.
  */
-const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
-
-const settleStuckGenerations = async (scope: ProjectScope, episodeId: EpisodeId): Promise<void> => {
-  const live = await listLiveGenerations(scope, episodeId)
-  const now = Date.now()
-  const stuck = live.filter((generation) => now - new Date(generation.startedAt ?? generation.createdAt).getTime() > GENERATION_TIMEOUT_MS)
-  if (stuck.length === 0) return
-  await Promise.all(
-    stuck.map((generation) =>
-      failGeneration(scope, generation.id, 'Timed out: the request running this died before it finished.'),
-    ),
-  )
-}
 
 export const loadProduction = cache(async (context: EpisodeContext): Promise<ProductionLoad> => {
   const { scope, episode } = context
-  await settleStuckGenerations(scope, episode.id)
   const [record, characters, locationRows, propRows, members, balance] = await Promise.all([
     readProductionEpisode(scope, episode.id),
     listCharacterRecords(scope),
@@ -210,32 +93,3 @@ export const loadProduction = cache(async (context: EpisodeContext): Promise<Pro
     model: modelEnv !== null,
   }
 })
-
-/** The composed cast and location maps for an action that needs them beside a gate. */
-export const readCastAndPlaces = async (
-  scope: ProjectScope,
-): Promise<{
-  readonly cast: ReadonlyMap<CharacterId, ProductionCastMember>
-  readonly names: readonly { readonly id: CharacterId; readonly name: string }[]
-  readonly locations: ReadonlyMap<LocationId, { readonly name: string; readonly plateReady: boolean }>
-}> => {
-  const [characters, locationRows] = await Promise.all([listCharacterRecords(scope), listLocationRecords(scope)])
-  const cast = new Map<CharacterId, ProductionCastMember>(
-    characters.map((character) => [
-      character.id,
-      {
-        id: character.id,
-        name: character.name,
-        initials: initialsOf(character.name),
-        hue: hueOfColor(character.color),
-        portraitUrl: publicUrl(character.portraitKey),
-        appearanceReady: character.portraitKey !== null,
-      },
-    ]),
-  )
-  return {
-    cast,
-    names: characters.map((character) => ({ id: character.id, name: character.name })),
-    locations: new Map(locationRows.map((location) => [location.id, { name: location.name, plateReady: location.photoKey !== null }])),
-  }
-}

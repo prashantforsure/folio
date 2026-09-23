@@ -188,24 +188,15 @@ export const drawLabel = (shot: ShotRow, cost: number): string =>
   `${shot.frame.kind === 'drawn' || shot.frame.kind === 'failed' || shot.frame.kind === 'blocked' ? 'Redraw' : 'Draw frame'} · ${String(cost)} cr`
 
 /**
- * `apps/worker` is deliberately empty and Storyboard, unlike Production, has
- * no `after()` runner standing in for it - `requestFrame` would reserve
- * credits and queue a job nothing ever picks up (defect 0.4). Drawn disabled
- * with the reason until one of the two exists, the same treatment Characters'
- * `✦ Generate` already gets for the same missing worker.
- */
-export const DRAW_FRAME_DISABLED = 'Needs a frame-drawing worker - not built yet'
-
-/**
  * The editor's footer for a shot: what can be undone on the left, what can
  * be done beside Save. A proposal discards or accepts; a shot removes, and
  * draws its frame or stops the job drawing it.
  */
 export const editorActionsFor = (
   shot: ShotRow,
-  view: Pick<ViewProps, 'cost' | 'handlers'>,
+  view: Pick<ViewProps, 'cost' | 'drawOff' | 'handlers'>,
 ): { readonly destructive: EditorAction; readonly secondary: EditorAction } => {
-  const { handlers, cost } = view
+  const { handlers, cost, drawOff } = view
   if (shot.state === 'proposed') {
     return {
       destructive: {
@@ -250,8 +241,8 @@ export const editorActionsFor = (
     secondary: {
       label: drawLabel(shot, cost),
       attrs: { 'data-draw-frame': '', 'data-cost': String(cost) },
-      disabled: true,
-      title: DRAW_FRAME_DISABLED,
+      // Off only where the server cannot draw (no model key, no storage); the worker draws it (roadmap task 4.3).
+      ...(drawOff === null ? {} : { disabled: true, title: drawOff }),
       onClick: () => {
         handlers.onDraw(shot.id)
       },

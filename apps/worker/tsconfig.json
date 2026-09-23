@@ -1,7 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2023"],
+    // web's lib and jsx: the worker typechecks web's source through `web/worker`,
+    // and tsc follows type-only imports into modules the bundle never loads.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "vitest.config.ts"]
