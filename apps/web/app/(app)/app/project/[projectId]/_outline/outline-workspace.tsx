@@ -5,7 +5,9 @@ import { labelBook, outlineHeadings, typed } from '@folio/script'
 import type { Editor } from '@tiptap/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { registerEditor } from '../../../../../../lib/agent/editor-channel'
 import { saveOutline } from '../../../../../../lib/outline/actions'
+import { applyInOutlineEditor } from '../../../../../../lib/outline/apply-ops'
 import { outlineFilename, outlineMarkdown } from '../../../../../../lib/outline/markdown'
 import { fromDoc } from '../../../../../../lib/outline/pm-model'
 import type { OutlineStats } from '../../../../../../lib/outline/server'
@@ -398,6 +400,31 @@ export const OutlineWorkspace = ({ projectId, episode, episodeTitle, outlineStat
       updateInputs(editor, inputsRef.current)
     }
   }, [])
+
+  // The agent's way in (roadmap task 3.4, ADR 0003 D10 path A) - the Script
+  // workspace's, for the outline: a proposal that edits this outline while it
+  // is open is applied here and persisted by the autosave above.
+  const registeredId = draft === null ? null : draft.documentId
+  useEffect(() => {
+    if (registeredId === null) return
+    return registerEditor(registeredId, {
+      kind: 'outline',
+      flush: async () => {
+        if (saveTimer.current !== null) {
+          window.clearTimeout(saveTimer.current)
+          saveTimer.current = null
+          await saveRef.current(false)
+        }
+        for (let tries = 0; (inFlight.current || queued.current) && tries < 100; tries += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 100))
+        }
+      },
+      apply: (ops, run) => {
+        const editor = editorRef.current
+        return editor === null ? { ok: false, message: 'The outline is not open.', stale: false } : applyInOutlineEditor(editor, ops, run)
+      },
+    })
+  }, [registeredId])
 
   const onThreadChange = useCallback((thread: ThreadView) => {
     setThreads((existing) => existing.map((entry) => (entry.id === thread.id ? thread : entry)))

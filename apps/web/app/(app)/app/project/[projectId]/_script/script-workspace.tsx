@@ -18,6 +18,8 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 
 import { createMention, exportScriptFdx, exportScriptFountain, saveScript, setFormat, setPagination } from '../../../../../../lib/script/actions'
+import { registerEditor } from '../../../../../../lib/agent/editor-channel'
+import { applyInScriptEditor } from '../../../../../../lib/script/apply-ops'
 import type { IdentityLog } from '../../../../../../lib/script/identity'
 import { newIdentityLog, retirementsSince } from '../../../../../../lib/script/identity'
 import type { LabelFor } from '../../../../../../lib/script/inline'
@@ -688,6 +690,32 @@ export const ScriptWorkspace = ({
     }
     if (editor !== null) landOnHash(editor)
   }, [])
+
+  // The agent's way in (roadmap task 3.4, ADR 0003 D10 path A): while this
+  // script is open, a proposal that edits it is applied here, as one
+  // transaction, and persisted by the autosave above - never saved over this
+  // editor from the server.
+  const documentId = draft?.documentId ?? null
+  useEffect(() => {
+    if (documentId === null) return
+    return registerEditor(documentId, {
+      kind: 'screenplay',
+      flush: async () => {
+        if (saveTimer.current !== null) {
+          window.clearTimeout(saveTimer.current)
+          saveTimer.current = null
+          await saveRef.current(false)
+        }
+        for (let tries = 0; (inFlight.current || queued.current) && tries < 100; tries += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 100))
+        }
+      },
+      apply: (ops, run) => {
+        const editor = editorRef.current
+        return editor === null ? { ok: false, message: 'The script is not open.', stale: false } : applyInScriptEditor(editor, ops, run)
+      },
+    })
+  }, [documentId])
 
   // ---------------------------------------------------------------------------
   // Threads

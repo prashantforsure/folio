@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { applyProposal, readProposalCard, rejectProposal, undoRun } from '../../../../lib/agent/actions'
-import type { UndoOutcome } from '../../../../lib/agent/apply'
+import { applyProposal, finishEditorApply, readProposalCard, rejectProposal, undoRun } from '../../../../lib/agent/actions'
+import type { ApplyOutcome, EditorReport, UndoOutcome } from '../../../../lib/agent/apply'
+import { editorFor } from '../../../../lib/agent/editor-channel'
 import type { ProposalCard as Card, ProposalCardOp } from '../../../../lib/agent/card'
 import { hrefOfTarget } from '../../../../lib/agent/navigate'
 import { asRoute } from '../../../../lib/routes'
@@ -97,19 +98,35 @@ export const ProposalCard = ({
     return result.card
   }, [projectId, proposalId])
 
+  const cardRef = useRef<Card | null>(null)
+  cardRef.current = card
+
   const apply = useCallback(
     async (confirmed: boolean) => {
       setBusy(true)
       setNotice(null)
       try {
-        const outcome = await applyProposal(projectId, proposalId, confirmed)
+        // D10 path A: a document the writer has open is edited by its editor.
+        // What is typed is saved first, so the proposal is checked against it.
+        const open = (cardRef.current?.documents ?? []).filter((id) => editorFor(id) !== undefined)
+        for (const id of open) await editorFor(id)?.flush()
+        let outcome: ApplyOutcome = await applyProposal(projectId, proposalId, confirmed, open)
+        if (outcome.status === 'editor') {
+          const reports: EditorReport[] = outcome.edits.map((edit) => {
+            const handle = editorFor(edit.documentId)
+            if (handle === undefined) return { opId: edit.opId, ok: false, message: 'The editor closed before the edit landed.' }
+            const done = handle.apply(edit.ops, edit.runId)
+            return done.ok ? { opId: edit.opId, ok: true } : { opId: edit.opId, ok: false, message: done.message, stale: done.stale }
+          })
+          outcome = await finishEditorApply(projectId, proposalId, reports)
+        }
         if (outcome.status === 'needs-confirmation') {
           setConfirming('apply')
           return
         }
         setConfirming(null)
-        if (outcome.status === 'refused' || outcome.status === 'decided') {
-          setNotice(outcome.message)
+        if (outcome.status === 'refused' || outcome.status === 'decided' || outcome.status === 'editor') {
+          if (outcome.status !== 'editor') setNotice(outcome.message)
           await load()
           return
         }

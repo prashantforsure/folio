@@ -721,8 +721,11 @@ export type {
   AgentProposalOp,
   AgentProposalStatus,
   AgentProposalWithOps,
+  ContentInput,
+  OutlineOpInput,
   ProposalBase,
   ProposalDocumentBase,
+  ScriptOpInput,
 } from './proposals'
 export {
   AGENT_AUTONOMIES,
@@ -735,9 +738,16 @@ export {
   AgentProposalOpSchema,
   AgentProposalSchema,
   AgentProposalStatusSchema,
+  AnchorSchema,
+  ContentInputSchema,
   EMPTY_PROPOSAL_BASE,
+  InlineRunInputSchema,
+  OutlineOpInputSchema,
+  OutlineOpSchema,
   ProposalBaseSchema,
   ProposalDocumentBaseSchema,
+  ScriptOpInputSchema,
+  ScriptOpSchema,
   isOpenProposal,
   needsConfirmation,
 } from './proposals'

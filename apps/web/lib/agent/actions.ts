@@ -6,8 +6,11 @@ import { readAgentRun, readEpisode, readProposal } from '@folio/db'
 
 import { ROLE } from '../auth/roles'
 import { isRefusal, openProject } from '../script/gate'
+import { DocumentIdSchema } from '@folio/contracts'
+import { z } from 'zod'
+
 import type { ApplyOutcome, UndoOutcome } from './apply'
-import { applyProposalWith, rejectProposalWith, undoRunWith } from './apply'
+import { applyProposalWith, finishEditorApplyWith, rejectProposalWith, undoRunWith } from './apply'
 import type { ProposalCard } from './card'
 import { buildProposalCard } from './card'
 import './tools'
@@ -52,11 +55,30 @@ const proposalGate = async (projectId: string, rawProposal: unknown): Promise<{ 
   return { gate, id: id.data }
 }
 
-/** Apply a proposal. `confirmed` is the writer's click on a confirmation step; without it a confirm-mode proposal answers `needs-confirmation`. */
-export const applyProposal = async (projectId: string, proposalId: string, confirmed = false): Promise<ApplyOutcome> => {
+/**
+ * Apply a proposal. `confirmed` is the writer's click on a confirmation step;
+ * without it a confirm-mode proposal answers `needs-confirmation`.
+ * `openDocuments` are the documents the panel found open in an editor (D10
+ * path A): their edits come back as `editor` rather than being saved.
+ */
+export const applyProposal = async (projectId: string, proposalId: string, confirmed = false, openDocuments: readonly string[] = []): Promise<ApplyOutcome> => {
   const opened = await proposalGate(projectId, proposalId)
   if ('status' in opened) return opened
-  return applyProposalWith(opened.gate, opened.id, { confirmed: confirmed === true })
+  const documents = z.array(DocumentIdSchema).max(64).safeParse(openDocuments)
+  return applyProposalWith(opened.gate, opened.id, { confirmed: confirmed === true, editorDocuments: new Set(documents.success ? documents.data : []) })
+}
+
+const ReportsSchema = z
+  .array(z.object({ opId: z.uuid(), ok: z.boolean(), message: z.string().max(500).optional(), stale: z.boolean().optional() }))
+  .max(64)
+
+/** The open editor's report on the edits `applyProposal` handed it; settles the proposal. */
+export const finishEditorApply = async (projectId: string, proposalId: string, rawReports: unknown): Promise<ApplyOutcome> => {
+  const opened = await proposalGate(projectId, proposalId)
+  if ('status' in opened) return opened
+  const reports = ReportsSchema.safeParse(rawReports)
+  if (!reports.success) return { status: 'refused', message: 'That report did not read.' }
+  return finishEditorApplyWith(opened.gate, opened.id, reports.data)
 }
 
 export const rejectProposal = async (

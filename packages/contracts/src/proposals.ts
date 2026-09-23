@@ -1,14 +1,20 @@
+import type { OutlineOp, ScriptOp } from '@folio/script'
 import { z } from 'zod'
 
+import { DeliveryModifierSchema, OutlineNodeTypeSchema, ScreenplayNodeTypeSchema } from './enums'
+import { assertExact } from './equality'
+import type { Equals } from './equality'
 import {
   AgentProposalIdSchema,
   AgentProposalOpIdSchema,
   DocumentIdSchema,
   EpisodeIdSchema,
+  NodeIdSchema,
   ProjectIdSchema,
   RunIdSchema,
   UserIdSchema,
 } from './ids'
+import { InlineContentSchema } from './model'
 import { TimestampSchema } from './primitives'
 
 /**
@@ -172,3 +178,110 @@ export type AgentProposalWithOps = {
   readonly proposal: AgentProposal
   readonly ops: readonly AgentProposalOp[]
 }
+
+// ---------------------------------------------------------------------------
+// Script and outline operations (roadmap task 3.4, ADR 0003 D10)
+// ---------------------------------------------------------------------------
+
+/** Where an insert or a move lands: after a node, or at the very start. */
+export const AnchorSchema = z.union([NodeIdSchema, z.literal('start')])
+
+/**
+ * `ScriptOp` and `OutlineOp` as stored on an operation: every inserted node
+ * already carries the id minted for it when the proposal was written, so the
+ * card's diff, the open editor (path A) and the server (path B) all write the
+ * same ids. The shape is `@folio/script`'s own (`node-ops.ts`), proved exact
+ * below; the content is read by the pure core's strict inline reader.
+ */
+const mintedOp = <T extends z.ZodType<string, string>>(type: T) =>
+  z.discriminatedUnion('op', [
+    z
+      .object({
+        op: z.literal('insert_after'),
+        anchor: AnchorSchema,
+        nodes: z
+          .array(
+            z
+              .object({ id: NodeIdSchema, type, content: InlineContentSchema, modifiers: z.array(DeliveryModifierSchema).readonly() })
+              .readonly(),
+          )
+          .min(1)
+          .max(500)
+          .readonly(),
+      })
+      .readonly(),
+    z
+      .object({ op: z.literal('replace_content'), id: NodeIdSchema, content: InlineContentSchema, modifiers: z.array(DeliveryModifierSchema).readonly().nullable() })
+      .readonly(),
+    z.object({ op: z.literal('change_type'), id: NodeIdSchema, type }).readonly(),
+    z.object({ op: z.literal('delete'), ids: z.array(NodeIdSchema).min(1).max(2000).readonly() }).readonly(),
+    z.object({ op: z.literal('move'), id: NodeIdSchema, after: AnchorSchema }).readonly(),
+  ])
+
+export const ScriptOpSchema = mintedOp(ScreenplayNodeTypeSchema)
+
+export const OutlineOpSchema = mintedOp(OutlineNodeTypeSchema)
+
+assertExact<Equals<z.infer<typeof ScriptOpSchema>, ScriptOp>>()
+assertExact<Equals<z.infer<typeof OutlineOpSchema>, OutlineOp>>()
+
+/**
+ * An inline run as the model writes one: text, or an `@mention` of a
+ * character or location **by its record id** - never a name (AGENTS.md, the
+ * node model: a mention is a reference to a record id). Spelled out rather
+ * than the pure reader's schema so the tool's JSON Schema can describe it; the
+ * pure reader still checks what this lets through.
+ */
+export const InlineRunInputSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('text'), text: z.string().max(20_000) }),
+  z.object({
+    kind: z.literal('mention'),
+    target: z.object({ entity: z.enum(['character', 'location']), id: z.uuid().describe('The record id, from a tool - never invented.') }),
+  }),
+])
+
+/** Content as the model writes it: plain text, or runs when it needs a mention. */
+export const ContentInputSchema = z.union([z.string().max(20_000), z.array(InlineRunInputSchema).max(200)])
+
+export type ContentInput = z.infer<typeof ContentInputSchema>
+
+/**
+ * An operation as the model sends it (the `propose_script_edit` and
+ * `propose_outline_edit` tools): new nodes carry no id - Folio mints them -
+ * and content may be a plain string. `prepareDocumentEdit`
+ * (`apps/web/lib/agent/document-ops.ts`) turns it into the stored form above.
+ */
+const inputOp = <T extends z.ZodType<string, string>>(type: T) =>
+  z.discriminatedUnion('op', [
+    z.object({
+      op: z.literal('insert_after'),
+      anchor: AnchorSchema.describe('The id of the node to insert after, or "start".'),
+      nodes: z
+        .array(
+          z.object({
+            type,
+            content: ContentInputSchema,
+            modifiers: z.array(DeliveryModifierSchema).max(3).optional().describe('Only on a character cue: V.O., O.S., O.C.'),
+          }),
+        )
+        .min(1)
+        .max(500),
+    }),
+    z.object({
+      op: z.literal('replace_content'),
+      id: NodeIdSchema,
+      content: ContentInputSchema,
+      modifiers: z.array(DeliveryModifierSchema).max(3).optional().describe("Only on a character cue. Omit to keep the cue's own."),
+    }),
+    z.object({ op: z.literal('change_type'), id: NodeIdSchema, type }),
+    z.object({ op: z.literal('delete'), ids: z.array(NodeIdSchema).min(1).max(2000) }),
+    z.object({ op: z.literal('move'), id: NodeIdSchema, after: AnchorSchema.describe('The id of the node to move after, or "start".') }),
+  ])
+
+export const ScriptOpInputSchema = inputOp(ScreenplayNodeTypeSchema)
+
+export const OutlineOpInputSchema = inputOp(OutlineNodeTypeSchema)
+
+export type ScriptOpInput = z.infer<typeof ScriptOpInputSchema>
+
+export type OutlineOpInput = z.infer<typeof OutlineOpInputSchema>

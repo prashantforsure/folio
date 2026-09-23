@@ -46,6 +46,8 @@ export type ProposalCard = {
   /** Why it asks first: each confirm or paid operation's description. */
   readonly confirmReasons: readonly string[]
   readonly ops: readonly ProposalCardOp[]
+  /** The documents it edits - the panel checks which are open in an editor (D10 path A). */
+  readonly documents: readonly string[]
 }
 
 const failureOf = (result: unknown): string | null =>
@@ -84,5 +86,6 @@ export const buildProposalCard = async (gate: ToolGate, { proposal, ops }: Agent
     balance,
     confirmReasons: rows.filter((row) => needsConfirmation(row.mode)).map((row) => row.description),
     ops: rows,
+    documents: proposal.base.documents.map((document) => document.documentId),
   }
 }

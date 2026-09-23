@@ -1,4 +1,4 @@
-import type { AgentOpMode, AgentOpStatus, AgentProposalId, AgentRoute, MembershipRole } from '@folio/contracts'
+import type { AgentOpMode, AgentOpStatus, AgentProposalId, AgentRoute, MembershipRole, VersionId } from '@folio/contracts'
 import type { DocumentId, NodeId, RunId } from '@folio/script'
 import type { z } from 'zod'
 
@@ -49,6 +49,14 @@ export type ExecContext = {
    * against the first edit's result rather than the stale base (D10).
    */
   readonly digests: Map<DocumentId, string>
+  /** The `before_agent_run` snapshot apply took of each document, before anything ran (D11). */
+  readonly snapshots: ReadonlyMap<DocumentId, VersionId>
+  /**
+   * Documents the writer has open in an editor (roadmap task 3.4, D10 path
+   * A). A document operation on one of these does not write: it answers
+   * `deferred`, and the panel hands the operations to that editor.
+   */
+  readonly editorDocuments: ReadonlySet<DocumentId>
 }
 
 export type ExecOutcome =
@@ -58,6 +66,11 @@ export type ExecOutcome =
       readonly result: unknown
       /** A better undo record than `capture`'s, known only after the run. Omitted: keep the captured one. */
       readonly undo?: unknown
+      /**
+       * Not written here: the writer's open editor applies it (D10 path A). The
+       * operation stays pending, with its undo record, until the panel reports.
+       */
+      readonly deferred?: { readonly documentId: DocumentId; readonly kind: 'screenplay' | 'outline'; readonly ops: unknown }
     }
   | {
       readonly ok: false
@@ -203,10 +216,12 @@ export const defineExecutor = <Args>(definition: ExecutorDefinition<Args>): Exec
 
 const executors = new Map<string, Executor>()
 
-/** Register executors. A name taken twice is a programming error. */
+/** Register executors. The same executor again is a no-op (a second import); another under a taken name is a programming error. */
 export const registerExecutors = (list: readonly Executor[]): void => {
   for (const executor of list) {
-    if (executors.has(executor.tool)) throw new Error(`Folio: the executor ${executor.tool} is registered twice.`)
+    const held = executors.get(executor.tool)
+    if (held === executor) continue
+    if (held !== undefined) throw new Error(`Folio: the executor ${executor.tool} is registered twice.`)
     executors.set(executor.tool, executor)
   }
 }

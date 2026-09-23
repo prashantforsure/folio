@@ -1,3 +1,5 @@
+import { DOCUMENT_EXECUTORS } from '../document-ops'
+import { registerExecutors } from '../executors'
 import { registerTools, registeredTools } from '../registry'
 import { CORE_TOOLS } from './core'
 import { ENTITY_TOOLS } from './entities'
@@ -16,5 +18,7 @@ import { TIMELINE_TOOLS } from './timeline'
 if (registeredTools().length === 0) {
   registerTools([...CORE_TOOLS, ...LAUNCHER_TOOLS, ...SCRIPT_TOOLS, ...ENTITY_TOOLS, ...TIMELINE_TOOLS, ...RESEARCH_TOOLS])
 }
+// What applying each write means (roadmap Phase 3) - idempotent, so a second import is harmless.
+registerExecutors(DOCUMENT_EXECUTORS)
 
 export { registeredTools }

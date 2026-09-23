@@ -298,6 +298,21 @@ export { cueSpelling, renameCharacterCues, renameLocationHeadings, revertCueRewr
 export type { HeadingParts } from './fountain-syntax'
 export { headingParts } from './fountain-syntax'
 
+export type { Anchor, DocumentOp, NodeDraft, NodeOpError, NodeOpFailure, OutlineOp, ScriptOp } from './node-ops'
+export {
+  applyOutlineOps,
+  applyScriptOps,
+  describeNodeOpError,
+  insertedIds,
+  makeOutlineNode,
+  restoreOutlineOps,
+  restoreScriptOps,
+  sameContent,
+} from './node-ops'
+
+export type { OutlineDiff, OutlineDiffEntry, OutlineDiffKind } from './outline-diff'
+export { diffOutlines } from './outline-diff'
+
 export type { Clipboard } from './operations'
 export {
   changeNodeType,

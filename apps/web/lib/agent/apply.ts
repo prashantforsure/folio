@@ -1,4 +1,4 @@
-import type { AgentProposalId, AgentProposalOp, AgentProposalWithOps, MembershipRole, ProposalDocumentBase } from '@folio/contracts'
+import type { AgentProposalId, AgentProposalOp, AgentProposalWithOps, MembershipRole, ProposalDocumentBase, VersionId } from '@folio/contracts'
 import { needsConfirmation } from '@folio/contracts'
 import {
   claimProposal,
@@ -66,7 +66,23 @@ import type { ToolGate } from './registry'
 
 export type ApplyStatus = 'applied' | 'partially_applied' | 'failed' | 'stale'
 
+/**
+ * A document edit handed to the writer's open editor (D10 path A): the
+ * operation, the document, the minted operations and the run to stamp them
+ * with. The panel applies it as one editor transaction, lets autosave persist
+ * it, and reports back through `finishEditorApplyWith`.
+ */
+export type EditorEdit = {
+  readonly opId: string
+  readonly documentId: DocumentId
+  readonly kind: 'screenplay' | 'outline'
+  readonly ops: unknown
+  readonly runId: RunId
+}
+
 export type ApplyOutcome =
+  /** Everything the server could do is done; these edits wait for the open editor. The proposal is still claimed, not settled. */
+  | { readonly status: 'editor'; readonly proposal: AgentProposalWithOps; readonly edits: readonly EditorEdit[]; readonly derived: RederiveOutcome | null }
   | {
       readonly status: ApplyStatus
       readonly proposal: AgentProposalWithOps
@@ -97,21 +113,38 @@ const executorsOf = (ops: readonly AgentProposalOp[]): readonly Executor[] | str
   return found
 }
 
-const context = (gate: ToolGate, proposal: AgentProposalWithOps['proposal'], op: AgentProposalOp, digests: Map<DocumentId, string>): ExecContext => ({
+const NO_SNAPSHOTS: ReadonlyMap<DocumentId, VersionId> = new Map()
+const NO_EDITORS: ReadonlySet<DocumentId> = new Set()
+
+const context = (
+  gate: ToolGate,
+  proposal: AgentProposalWithOps['proposal'],
+  op: AgentProposalOp,
+  digests: Map<DocumentId, string>,
+  snapshots: ReadonlyMap<DocumentId, VersionId> = NO_SNAPSHOTS,
+  editorDocuments: ReadonlySet<DocumentId> = NO_EDITORS,
+): ExecContext => ({
   gate,
   runId: proposal.runId,
   proposalId: proposal.id,
   idempotencyKey: op.idempotencyKey,
   digests,
+  snapshots,
+  editorDocuments,
 })
 
 /** Apply a proposal as the gate's person. Never throws for a refusal or a failed operation - those are outcomes. */
 export const applyProposalWith = async (
   gate: ToolGate,
   proposalId: AgentProposalId,
-  options: { readonly confirmed: boolean },
+  options: {
+    readonly confirmed: boolean
+    /** Documents the writer has open (path A): their edits are handed back rather than saved. */
+    readonly editorDocuments?: ReadonlySet<DocumentId>
+  },
 ): Promise<ApplyOutcome> => {
   const { scope } = gate
+  const editorDocuments = options.editorDocuments ?? NO_EDITORS
   const read = await readProposal(scope, proposalId)
   if (read === null) return { status: 'refused', message: NOT_FOUND }
   const { proposal, ops } = read
@@ -141,16 +174,21 @@ export const applyProposalWith = async (
     if (executor === undefined) continue
     for (const id of await executor.documents(context(gate, proposal, op, digests), op.args)) touched.add(id)
   }
+  const snapshots = new Map<DocumentId, VersionId>()
   for (const id of touched) {
     const state = await readDocumentState(scope, id)
-    if (state !== null) await snapshotVersion(scope, id, 'before_agent_run', state.nodes, state.nodes.length, proposal.runId)
+    if (state === null) continue
+    const version = await snapshotVersion(scope, id, 'before_agent_run', state.nodes, state.nodes.length, proposal.runId)
+    snapshots.set(id, version.id)
   }
 
+  const edits: EditorEdit[] = []
+  let applied = 0
   const { value: failure, derived } = await withDeferredDerive(scope, async (): Promise<{ readonly at: number; readonly message: string; readonly stale: boolean } | null> => {
     for (const [index, op] of ops.entries()) {
       const executor = executors[index]
       if (executor === undefined) return { at: index, message: `${op.tool} could not run.`, stale: false }
-      const ctx = context(gate, proposal, op, digests)
+      const ctx = context(gate, proposal, op, digests, snapshots, editorDocuments)
       let outcome
       try {
         // The undo record goes to the row before the action runs, so a crash
@@ -158,7 +196,14 @@ export const applyProposalWith = async (
         const captured = await executor.capture(ctx, op.args)
         await markProposalOp(scope, op.id, { status: 'pending', undo: captured })
         outcome = await executor.run(ctx, op.args, captured)
+        if (outcome.ok && outcome.deferred !== undefined) {
+          // Path A: the open editor writes it. Pending, with its undo record, until the panel reports.
+          await markProposalOp(scope, op.id, { status: 'pending', undo: outcome.undo === undefined ? captured : outcome.undo })
+          edits.push({ opId: op.id, documentId: outcome.deferred.documentId, kind: outcome.deferred.kind, ops: outcome.deferred.ops, runId: proposal.runId })
+          continue
+        }
         if (outcome.ok) {
+          applied += 1
           const undo = outcome.undo === undefined ? captured : outcome.undo
           await markProposalOp(scope, op.id, { status: 'applied', result: outcome.result, undo: executor.reversible ? undo : null })
           const target = executor.target(op.args)
@@ -180,12 +225,17 @@ export const applyProposalWith = async (
     return null
   })
 
+  if (failure === null && edits.length > 0) {
+    const current = await readProposal(scope, proposal.id)
+    if (current === null) return { status: 'refused', message: NOT_FOUND }
+    return { status: 'editor', proposal: current, edits, derived }
+  }
   if (failure === null) {
     await settleProposal(scope, proposal.id, 'applied', gate.actor)
     return settled(gate, proposal.id, 'applied', null, derived)
   }
   await skipPendingOps(scope, proposal.id)
-  const status: ApplyStatus = failure.at > 0 ? 'partially_applied' : failure.stale ? 'stale' : 'failed'
+  const status: ApplyStatus = applied > 0 ? 'partially_applied' : failure.stale ? 'stale' : 'failed'
   await settleProposal(scope, proposal.id, status, gate.actor)
   return settled(gate, proposal.id, status, failure.message, derived)
 }
@@ -203,6 +253,55 @@ export const rejectProposalWith = async (gate: ToolGate, proposalId: AgentPropos
   if (!(await claimProposal(gate.scope, proposalId, gate.actor))) return { status: 'decided', message: 'That proposal has already been decided.' }
   await settleProposal(gate.scope, proposalId, 'rejected', gate.actor)
   return { status: 'rejected' }
+}
+
+/** What the open editor made of one handed-back edit. */
+export type EditorReport = { readonly opId: string; readonly ok: boolean; readonly message?: string | undefined; readonly stale?: boolean | undefined }
+
+/**
+ * Settle a proposal whose document edits the open editor applied (D10 path
+ * A). Only the person who claimed it, and only while it is still pending: the
+ * operations the editor wrote become `applied` with the undo record apply
+ * stored for them, an `agent:<tool>` activity row each; the first it could not
+ * write stops the rest, as on the server.
+ */
+export const finishEditorApplyWith = async (gate: ToolGate, proposalId: AgentProposalId, reports: readonly EditorReport[]): Promise<ApplyOutcome> => {
+  const { scope } = gate
+  const read = await readProposal(scope, proposalId)
+  if (read === null) return { status: 'refused', message: NOT_FOUND }
+  const { proposal, ops } = read
+  if (proposal.status !== 'pending' || proposal.decidedBy !== gate.actor) return { status: 'decided', message: 'That proposal has already been decided.' }
+  const byOp = new Map(reports.map((report) => [report.opId, report]))
+  let failure: EditorReport | null = null
+  for (const op of ops) {
+    if (op.status !== 'pending') continue
+    const report = byOp.get(op.id)
+    if (report === undefined) continue
+    if (!report.ok) {
+      failure = report
+      await markProposalOp(scope, op.id, { status: 'failed', result: { message: report.message ?? 'The editor could not apply it.' } })
+      break
+    }
+    await markProposalOp(scope, op.id, { status: 'applied', result: { appliedIn: 'editor' } })
+    const executor = executorFor(op.tool)
+    const target = executor?.target(op.args) ?? { type: op.tool, id: null }
+    await logAgentActivity(scope, {
+      verb: `agent:${op.tool}`,
+      targetType: target.type,
+      targetId: target.id,
+      diff: { runId: proposal.runId, proposalId: proposal.id, opId: op.id, args: op.args, result: { appliedIn: 'editor' } },
+    })
+  }
+  if (failure === null) {
+    await settleProposal(scope, proposal.id, 'applied', gate.actor)
+    return settled(gate, proposal.id, 'applied', null, null)
+  }
+  await skipPendingOps(scope, proposal.id)
+  const after = await readProposal(scope, proposal.id)
+  const landed = after?.ops.some((op) => op.status === 'applied') === true
+  const status: ApplyStatus = landed ? 'partially_applied' : failure.stale === true ? 'stale' : 'failed'
+  await settleProposal(scope, proposal.id, status, gate.actor)
+  return settled(gate, proposal.id, status, failure.message ?? 'The editor could not apply it.', null)
 }
 
 /**

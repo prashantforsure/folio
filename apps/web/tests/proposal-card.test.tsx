@@ -20,6 +20,7 @@ const spies = vi.hoisted(() => ({
   applyProposal: vi.fn(),
   rejectProposal: vi.fn(),
   undoRun: vi.fn(),
+  finishEditorApply: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
 }))
@@ -29,12 +30,14 @@ vi.mock('../lib/agent/actions', () => ({
   applyProposal: (...args: readonly unknown[]) => spies.applyProposal(...args),
   rejectProposal: (...args: readonly unknown[]) => spies.rejectProposal(...args),
   undoRun: (...args: readonly unknown[]) => spies.undoRun(...args),
+  finishEditorApply: (...args: readonly unknown[]) => spies.finishEditorApply(...args),
 }))
 const router = { push: (...args: readonly unknown[]) => spies.push(...args), refresh: () => spies.refresh() }
 vi.mock('next/navigation', () => ({ useRouter: () => router }))
 
 const { ProposalCard } = await import('../app/(app)/_shell/assistant/proposal-card')
 const { diffViewOf } = await import('../lib/agent/diff-view')
+const { registerEditor } = await import('../lib/agent/editor-channel')
 const { visibleMessages } = await import('../lib/assistant/result')
 
 const PROJECT = '6f1c4a3e-2b7d-4c1e-9a55-0d4f3b2a1c10'
@@ -65,6 +68,7 @@ const card = (over: Record<string, unknown> = {}) => ({
   balance: null,
   confirmReasons: [],
   ops: [op()],
+  documents: [],
   ...over,
 })
 
@@ -115,7 +119,7 @@ describe('ProposalCard', () => {
     await mount()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
     await screen.findByText('applied')
-    expect(spies.applyProposal).toHaveBeenCalledWith(PROJECT, PROPOSAL, false)
+    expect(spies.applyProposal).toHaveBeenCalledWith(PROJECT, PROPOSAL, false, [])
     expect(spies.refresh).toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Undo run' })).toBeTruthy()
   })
@@ -143,7 +147,7 @@ describe('ProposalCard', () => {
     expect(screen.getByText('Rename MEERA to MIRA - rewrites 14 cues in 3 episodes')).toBeTruthy()
     expect(document.querySelector('[data-proposal-cost]')?.textContent).toBe('Costs no credits. You have 120 credits available.')
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
-    await waitFor(() => expect(spies.applyProposal).toHaveBeenCalledWith(PROJECT, PROPOSAL, true))
+    await waitFor(() => expect(spies.applyProposal).toHaveBeenCalledWith(PROJECT, PROPOSAL, true, []))
   })
 
   it('will not confirm a paid proposal the balance cannot cover', async () => {
@@ -152,6 +156,32 @@ describe('ProposalCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review and apply' }))
     expect(document.querySelector('[data-proposal-cost]')?.textContent).toBe('Costs 375 credits. You have 40 credits available.')
     expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('hands a script edit to the open editor, and settles on its report (D10 path A)', async () => {
+    const DOC = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d'
+    const calls: string[] = []
+    const unregister = registerEditor(DOC, {
+      kind: 'screenplay',
+      flush: () => {
+        calls.push('flush')
+        return Promise.resolve()
+      },
+      apply: (ops, run) => {
+        calls.push(`apply:${String(run)}:${JSON.stringify(ops)}`)
+        return { ok: true }
+      },
+    })
+    spies.readProposalCard.mockResolvedValueOnce({ status: 'ok', card: card({ documents: [DOC] }) }).mockResolvedValue({ status: 'ok', card: card({ status: 'applied', documents: [DOC] }) })
+    spies.applyProposal.mockResolvedValue({ status: 'editor', proposal: {}, derived: null, edits: [{ opId: 'op-1', documentId: DOC, kind: 'screenplay', ops: [{ op: 'delete', ids: ['x'] }], runId: RUN }] })
+    spies.finishEditorApply.mockResolvedValue(settle('applied'))
+    await mount()
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await screen.findByText('applied')
+    expect(spies.applyProposal).toHaveBeenCalledWith(PROJECT, PROPOSAL, false, [DOC])
+    expect(calls).toEqual(['flush', `apply:${RUN}:[{"op":"delete","ids":["x"]}]`])
+    expect(spies.finishEditorApply).toHaveBeenCalledWith(PROJECT, PROPOSAL, [{ opId: 'op-1', ok: true }])
+    unregister()
   })
 
   it('rejects', async () => {
@@ -186,7 +216,7 @@ describe('ProposalCard', () => {
     spies.readProposalCard.mockResolvedValue({ status: 'ok', card: card() })
     spies.applyProposal.mockResolvedValue(settle('applied'))
     await mount(true)
-    await waitFor(() => expect(spies.applyProposal).toHaveBeenCalledWith(PROJECT, PROPOSAL, false))
+    await waitFor(() => expect(spies.applyProposal).toHaveBeenCalledWith(PROJECT, PROPOSAL, false, []))
     cleanup()
     vi.resetAllMocks()
     spies.readProposalCard.mockResolvedValue({ status: 'ok', card: card({ needsConfirmation: true, confirmReasons: ['Delete MEERA'] }) })
