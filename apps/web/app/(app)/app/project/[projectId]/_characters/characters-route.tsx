@@ -2,7 +2,7 @@ import type { CharacterProfile } from '@folio/contracts'
 import type { CharacterId } from '@folio/script'
 import { notFound } from 'next/navigation'
 
-import { loadCharacters } from '../../../../../../lib/characters/server'
+import { loadCharacters, readCharacterLook } from '../../../../../../lib/characters/server'
 import { loadCharacterProfile } from '../../../../../../lib/characters/route-load'
 import type { ProjectContext } from '../../../../../../lib/workspace/context'
 import { projectRouteHref } from '../../../../../../lib/workspace/hrefs'
@@ -40,7 +40,7 @@ export const CharactersRoute = async ({
   const parsed = parseSubViews('characters', await searchParams)
   if (!parsed.ok) notFound()
   const { project, episodes, shape } = context
-  const load = await loadCharacters(context)
+  const [load, look] = await Promise.all([loadCharacters(context), readCharacterLook(context)])
 
   let profile: CharacterProfile | null = null
   if (selected !== null) {
@@ -62,6 +62,7 @@ export const CharactersRoute = async ({
       relationships={load.relationships}
       derivable={load.derivable}
       storage={load.storage}
+      look={look}
       profile={profile}
     />
   )

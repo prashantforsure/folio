@@ -259,8 +259,9 @@ the worker's clock. The worker is not yet deployed anywhere, so until it is, a q
 waits in `queued` with its credits held and its Cancel button live.
 
 **Unblocks, in order:** reliable Production runs (fixes 0.6 properly) · the Storyboard frame job
-(0.4 properly) · Characters' `✦ Generate`, disabled with the literal reason
-`'Needs the Production worker'` · the credit advisory lock · export.
+(0.4 properly) · Characters' `✦ Generate` (built 2026-09-24, roadmap task 5.2: the single look,
+drawn as the portrait; the three-angle look sheet is still disabled) · the credit advisory lock ·
+export.
 
 **Fix here too:** the Script row cache (`apps/web/lib/script/row-cache.ts:11-27`) is single-process
 and is the only thing making the save path tolerable — ~3,000 rows and 600 KB on every keystroke

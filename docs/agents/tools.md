@@ -193,7 +193,7 @@ never a model name. `moveShot` exists in both `lib/production/actions.ts` and
 | `start_background_task` | `startBackgroundRun` (`@folio/db`): the run, its chat, its brief and an `agent_run` job, in one transaction; two live per project (D14). Built, task 4.4 | writer | direct | **4** |
 | `story_to_script` | The story pipeline (`lib/agent/story/pipeline.ts`): a background run, stages A-F, checkpoints, chained scene batches. Built, task 4.5 | writer | confirm | **4** |
 | `script_to_production` | The production pipeline (`lib/agent/production/pipeline.ts`): a background run - settings and reels, shotlists, a checkpoint to accept shots, plates, then the cost table and a paid proposal for the images and another for the shoots. Built, task 5.1 | writer | confirm | **5** |
-| `generate_character_look` | The `character_look` generation (40) | writer | paid | 5 |
+| `generate_character_look` | The `character_look` generation (40), `generateCharacterLookWith`: the portrait, drawn from the record's appearance, age and gender in the first episode's art style (client ruling 2026-09-24) and stored with `setPortraitKey`. Built, task 5.2 | writer | paid | 5 |
 
 `deleteEpisode` is **not** here — deleting an episode is owner-only under ADR
 0003 **D2** and is not exposed at all under **D16**. Creating and renaming one is

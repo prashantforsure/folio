@@ -196,8 +196,14 @@ test('records come from cues: three cards on the canvas, the decision pill equal
   // Meera has two spellings in two scenes - the courtyard's `MEERA PAWAR` is still in the queue.
   await expect(node(page, 'MEERA').locator('[data-node-scenes]')).toHaveAttribute('data-node-scenes', '2')
   await expect(node(page, 'MEERA').locator('[data-node-bio]')).toHaveAttribute('data-node-bio', 'none')
-  await expect(node(page, 'MEERA').locator('[data-generate]')).toBeDisabled()
-  await expect(node(page, 'MEERA').locator('[data-generate]')).toHaveAttribute('title', 'Needs the Production worker')
+  // Generate draws the look (roadmap task 5.2): priced on the button where the server can run it, disabled with its reason where not.
+  const generate = node(page, 'MEERA').locator('[data-generate]')
+  if ((await generate.getAttribute('data-generate')) === 'off') {
+    await expect(generate).toBeDisabled()
+    await expect(generate).not.toHaveAttribute('title', '')
+  } else {
+    await expect(generate).toHaveText(/Generate · 40 cr/)
+  }
   // The pill and the badge count the same rows; nothing is drawn on the canvas for them.
   await expect(page.locator('[data-rail-badge="characters"]')).toHaveText('3')
   await expect(page.locator('[data-decision-pill]')).toHaveAttribute('data-decision-pill', '3')

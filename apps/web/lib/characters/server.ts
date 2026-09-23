@@ -1,11 +1,12 @@
 import type { CastRow, CharacterProfile, CueVariantRow, PairItem, Relationship, ResolveCandidate, ResolveItem, ResolveProposal, SceneRef } from '@folio/contracts'
-import { hueOfColor } from '@folio/contracts'
-import { listBoundCues, listCharacterRecords, listCueTallies, listOpenCueRows, listRelationships, listResolveDecisions, listSceneIndex, readMergedInto } from '@folio/db'
+import { GENERATION_COSTS, hueOfColor } from '@folio/contracts'
+import { listBoundCues, listCharacterRecords, listCueTallies, listLiveGenerationTargets, listOpenCueRows, listRelationships, listResolveDecisions, listSceneIndex, readMergedInto } from '@folio/db'
 import type { CharacterRecordRow, CueTallyRow, RelationshipRow } from '@folio/db'
 import type { CharacterId, CharacterNamePool, NodeId, ProposalTarget, ResolveSubject } from '@folio/script'
-import { canonicalKey, matchCharacterNames, similarRecords } from '@folio/script'
+import { canonicalKey, characterId, matchCharacterNames, similarRecords } from '@folio/script'
 import { cache } from 'react'
 
+import { connected } from '../production/pipeline/connection'
 import { deriveSpeculatively, readDerivationReads } from '../script/server'
 import { publicUrl, storageAvailable } from '../storage/r2'
 import type { ProjectContext } from '../workspace/context'
@@ -153,6 +154,16 @@ export type CharactersLoad = {
   readonly storage: boolean
 }
 
+/** The card's `✦ Generate` (roadmap task 5.2): its price, why it is off if it is, and whose look is drawing now. */
+export type CharacterLook = {
+  /** `GENERATION_COSTS.character_look` - named on the button before it is spent. */
+  readonly cost: number
+  /** Why Generate cannot run on this server (no model key, no storage), in the writer's terms; null when it can. */
+  readonly off: string | null
+  /** Characters with a look queued or running - their button says so, and the page polls. */
+  readonly drawing: readonly CharacterId[]
+}
+
 export type Derivable = {
   readonly count: number
   /** `MEERA · 79 scenes`, busiest first, at most three - the empty card's mono block. */
@@ -165,6 +176,17 @@ export type Derivable = {
  * rather than a page's context, read through the same cached loader.
  */
 export type CharactersContext = Pick<ProjectContext, 'scope'>
+
+/**
+ * The card's `✦ Generate` state (roadmap task 5.2) - the route's alone, read
+ * beside `loadCharacters` rather than inside it, so the agent's tools that
+ * read the cast through that loader do not pay for it. One statement.
+ */
+export const readCharacterLook = async (context: CharactersContext): Promise<CharacterLook> => ({
+  cost: GENERATION_COSTS.character_look,
+  off: connected('character_look')?.message ?? null,
+  drawing: (await listLiveGenerationTargets(context.scope, 'character')).map(characterId),
+})
 
 export const loadCharacters = cache(async (context: CharactersContext): Promise<CharactersLoad> => {
   const { scope } = context

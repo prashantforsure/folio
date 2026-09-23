@@ -33,27 +33,30 @@ import { useNodeDrag } from '../../_chrome/canvas/use-node-drag'
  *   the chips     `12 scenes` · `40 lines` - the derivation's counts with an
  *                 icon each, zero printed as zero.
  *   the bio       two lines, or `No character bio yet`.
- *   the buttons   `Edit` · `Upload` side by side, then `✦ Generate` full
- *                 width - drawn **disabled** with `Needs the Production
- *                 worker`: the look-sheet job is Production's
- *                 (`docs/production/`), its cost must be named before it is
- *                 spent, and the worker is not built (the assistant
- *                 composer's precedent). `Upload` is disabled with its reason
- *                 when the `R2_*` block is unset.
+ *   the buttons   `Edit` · `Upload` side by side, then `✦ Generate · 40 cr`
+ *                 full width (roadmap task 5.2): the character's look, drawn
+ *                 on the worker from the record's appearance, age and gender
+ *                 in the first episode's art style and stored as the
+ *                 portrait - its price on the button before it is spent, as
+ *                 Production's buttons carry theirs. `Drawing the look…`
+ *                 while it draws (the route polls); disabled with the reason
+ *                 when the server has no model key or no storage. `Upload` is
+ *                 disabled with its reason when the `R2_*` block is unset.
  *   the grip      a ring of four dots at the end of the last row: drag onto
  *                 another card to make a relationship. The view owns that
  *                 drag (it has to know which card the pointer is over); the
  *                 grip only starts it.
  *
  * `Advanced` holds the costume & makeup prompt the look sheet will read, and
- * `Look sheet` its three angle slots; both are drawn empty and inert until
- * the worker exists - the prompt field is disabled with the same reason, so
- * nothing on the card pretends to keep what it cannot.
+ * `Look sheet` its three angle slots; both are drawn empty and inert - the
+ * three-angle sheet is not built, only the single look is - and the prompt
+ * field says so, so nothing on the card pretends to keep what it cannot.
  *
  * Every value printed is read from `CastFigure` (`lib/characters/cast.ts`),
  * which names the table each came from; nothing on the card is computed.
  */
-const GENERATE_DISABLED = 'Needs the Production worker'
+/** The three-angle sheet and its prompt: not built (the single look is). */
+const LOOK_SHEET_OFF = 'The three-angle look sheet is not built yet'
 
 type FaceTab = 'portrait' | 'advanced' | 'looksheet'
 const TABS: readonly { readonly id: FaceTab; readonly label: string }[] = [
@@ -85,6 +88,8 @@ export const CharacterNode = ({
   onMeasure,
   onConnectStart,
   onUpload,
+  look,
+  onGenerate,
 }: {
   readonly figure: CastFigure
   readonly position: Point
@@ -103,6 +108,9 @@ export const CharacterNode = ({
   readonly onMeasure: (size: Size) => void
   readonly onConnectStart: (event: ReactPointerEvent<HTMLElement>) => void
   readonly onUpload: (file: File) => void
+  /** `✦ Generate` (roadmap task 5.2): the price, why it is off on this server, whether this card's look is drawing now. */
+  readonly look: { readonly cost: number; readonly off: string | null; readonly drawing: boolean }
+  readonly onGenerate: () => void
 }) => {
   const root = useRef<HTMLElement>(null)
   const picker = useRef<HTMLInputElement>(null)
@@ -130,13 +138,35 @@ export const CharacterNode = ({
     </button>
   )
 
-  const generate = (label: string) => (
+  // The single look: live, priced on the button, off with the server's reason.
+  const lookState = look.off !== null ? 'off' : look.drawing ? 'drawing' : 'ready'
+  const lookTitle = look.off ?? (look.drawing ? `${figure.name}'s look is drawing` : `Draw ${figure.name}'s look from their appearance, age and gender - ${String(look.cost)} credits`)
+  const generateLook = (
     <button
       type="button"
-      data-generate="disabled"
+      data-generate={lookState}
+      data-generate-cost={look.cost}
+      disabled={lookState !== 'ready'}
+      title={lookTitle}
+      aria-label={lookState === 'ready' ? `Generate ${figure.name}'s look for ${String(look.cost)} credits` : `Generate for ${figure.name} - ${lookTitle}`}
+      className="folio-char-action flex-1"
+      onClick={(event) => {
+        event.stopPropagation()
+        onGenerate()
+      }}
+    >
+      <span className="folio-mark">✦</span>
+      {lookState === 'drawing' ? 'Drawing the look…' : `Generate · ${String(look.cost)} cr`}
+    </button>
+  )
+
+  const generateSheet = (label: string) => (
+    <button
+      type="button"
+      data-generate-sheet="disabled"
       disabled
-      title={GENERATE_DISABLED}
-      aria-label={`${label} for ${figure.name} - ${GENERATE_DISABLED}`}
+      title={LOOK_SHEET_OFF}
+      aria-label={`${label} for ${figure.name} - ${LOOK_SHEET_OFF}`}
       className="folio-char-action flex-1"
     >
       <span className="folio-mark">✦</span>
@@ -289,7 +319,7 @@ export const CharacterNode = ({
               />
             </div>
             <div className="flex items-center gap-[8px]">
-              {generate('Generate')}
+              {generateLook}
               {grip}
             </div>
           </>
@@ -304,11 +334,11 @@ export const CharacterNode = ({
               className="folio-char-prompt"
               placeholder="Describe makeup, wardrobe, accessories, overall styling…"
               disabled
-              title={GENERATE_DISABLED}
+              title={LOOK_SHEET_OFF}
               rows={3}
             />
             <div className="flex items-center gap-[8px]">
-              {generate('Generate look sheet')}
+              {generateSheet('Generate look sheet')}
               {grip}
             </div>
           </>
@@ -323,7 +353,7 @@ export const CharacterNode = ({
               ))}
             </div>
             <div className="flex items-center gap-[8px]">
-              {generate('Generate look sheet')}
+              {generateSheet('Generate look sheet')}
               {grip}
             </div>
           </>

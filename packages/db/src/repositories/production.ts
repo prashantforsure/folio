@@ -1805,6 +1805,19 @@ export const readLiveGenerationFor = async (scope: ProjectScope, targetType: Gen
   return row === undefined ? null : generationFromRow(row)
 }
 
+/**
+ * The targets of one kind with a generation queued or running, across every
+ * episode - the Characters route's cards, which draw `Drawing…` on a look in
+ * flight and poll while any is (roadmap task 5.2). One statement.
+ */
+export const listLiveGenerationTargets = async (scope: ProjectScope, targetType: GenerationTarget): Promise<readonly string[]> => {
+  const rows = await dbOf(scope)
+    .select({ targetId: generations.targetId })
+    .from(generations)
+    .where(scoped(scope, generations, eq(generations.targetType, targetType), inArray(generations.state, ['queued', 'running'])))
+  return rows.map((row) => row.targetId)
+}
+
 /** A status override written straight, for a seed or a test. Callers in the app go through `patchShot`. */
 export const setShotStatus = async (scope: ProjectScope, shotId: ReelShotId, status: ShotStatus | null): Promise<void> => {
   await dbOf(scope).update(reelShots).set({ status, updatedAt: new Date() }).where(scoped(scope, reelShots, eq(reelShots.id, shotId)))

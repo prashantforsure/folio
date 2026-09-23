@@ -1,10 +1,12 @@
 'use server'
 
 import { ROLE } from '../auth/roles'
-import { isRefusal, openEpisode } from '../script/gate'
+import { isRefusal, openEpisode, openProject } from '../script/gate'
 import {
   aiShotlistWith,
   cancelGenerationWith,
+  characterProblem,
+  generateCharacterLookWith,
   framesProblem,
   generateFramesWith,
   generateSceneImageWith,
@@ -103,6 +105,20 @@ export const shootReel = async (projectId: string, episode: string, rawReelId: u
   const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
   return shootReelWith(gate, rawReelId)
+}
+
+/**
+ * The Characters card's `✦ Generate · 40 cr` (roadmap task 5.2): a
+ * character's look, drawn in the first episode's art style and stored as the
+ * portrait. Project-scoped, as the Characters route is - the core narrows to
+ * the first episode itself (`lookEpisodeGate`). Rate-limited with the rest.
+ */
+export const generateCharacterLook = async (projectId: string, rawCharacterId: unknown): Promise<GenerationResult> => {
+  const problem = characterProblem(rawCharacterId) ?? connected('character_look')
+  if (problem !== null) return problem
+  const gate = await openProject(projectId, ROLE.paidGeneration)
+  if (isRefusal(gate)) return gate
+  return generateCharacterLookWith(gate, rawCharacterId)
 }
 
 export const cancelGeneration = async (projectId: string, episode: string, rawId: unknown): Promise<CancelResult> => {

@@ -1,7 +1,7 @@
 import type { Asset, CameraMotion, GenerationTarget, ProductionGenerationId, Reel, ShotType } from '@folio/contracts'
 import { CAMERA_MOTIONS, SHOT_TYPES } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
-import { failGeneration, insertAsset, insertReelShots, progressGeneration, refuseGeneration, resumeGeneration, setLocationPhotoKey, succeedGeneration } from '@folio/db'
+import { failGeneration, insertAsset, insertReelShots, progressGeneration, refuseGeneration, resumeGeneration, setLocationPhotoKey, setPortraitKey, succeedGeneration } from '@folio/db'
 import type { CharacterId, LocationId } from '@folio/script'
 import { parseDescription } from '@folio/script'
 
@@ -147,6 +147,24 @@ export const runGeneration = async (input: RunInput): Promise<void> => {
           })),
         )
         await succeedGeneration(scope, id, { job: 'ai_shotlist' })
+        return
+      }
+      case 'character_look': {
+        // The look is the portrait (roadmap task 5.2): stored under the character, as an upload is, and pointed at once the row says it succeeded.
+        if (input.target?.type !== 'character') return void (await failGeneration(scope, id, 'The character is gone.'))
+        const out = await generateImage(model, spec, signal)
+        if (!(await settle(scope, id, out)) || !out.ok) return
+        const key = `projects/${scope.projectId}/characters/${input.target.id}/portrait-${crypto.randomUUID()}.${EXTENSION[out.value.mime] ?? 'bin'}`
+        const put = await putObject(key, out.value.bytes, out.value.mime)
+        if (!put.ok) return void (await failGeneration(scope, id, put.message))
+        if ((await succeedGeneration(scope, id, { job: 'character_look' })) === null) {
+          await deleteObject(key)
+          return
+        }
+        // Generate replaces the portrait - that is what it was asked for - and the old object goes once nothing points at it.
+        const pointed = await setPortraitKey(scope, input.target.id as CharacterId, key)
+        if (!pointed.found) await deleteObject(key)
+        else if (pointed.previous !== null && pointed.previous !== key) await deleteObject(pointed.previous)
         return
       }
       case 'location_plate': {

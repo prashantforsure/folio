@@ -8,6 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { placeCharacterOnCanvas } from '../../../../../../../lib/characters/actions'
 import { CHAR_NODE_MIN_H, CHAR_NODE_W, characterBounds, characterPositions, openingWindow } from '../../../../../../../lib/characters/canvas'
 import type { CastFigure } from '../../../../../../../lib/characters/cast'
+import type { CharacterLook } from '../../../../../../../lib/characters/server'
 import { authoredEdges } from '../../../../../../../lib/characters/graph'
 import type { GraphEdge } from '../../../../../../../lib/characters/graph'
 import { worldFromClient } from '../../../../../../../lib/storyboard/canvas'
@@ -64,11 +65,13 @@ export const CharacterCanvas = ({
   relationships,
   selected,
   storage,
+  look,
   run,
   onOpen,
   onConnect,
   onEditRelationship,
   onUpload,
+  onGenerate,
 }: {
   readonly projectId: ProjectId
   /** Cast order: the order the grid fills in. */
@@ -76,12 +79,15 @@ export const CharacterCanvas = ({
   readonly relationships: readonly Relationship[]
   readonly selected: CharacterId | null
   readonly storage: boolean
+  readonly look: CharacterLook
   readonly run: Run
   readonly onOpen: (id: CharacterId) => void
   /** A grip dropped on another card: the two records, grip's first. */
   readonly onConnect: (from: CharacterId, to: CharacterId) => void
   readonly onEditRelationship: (edge: GraphEdge) => void
   readonly onUpload: (id: CharacterId, file: File) => void
+  /** `✦ Generate`: draw the character's look (roadmap task 5.2). */
+  readonly onGenerate: (id: CharacterId) => void
 }) => {
   const ground = useRef<HTMLDivElement>(null)
   const viewport = useCanvasViewport(ground)
@@ -223,6 +229,7 @@ export const CharacterCanvas = ({
                 target={connect?.over === figure.id}
                 connecting={connect?.from === figure.id}
                 storage={storage}
+                look={{ cost: look.cost, off: look.off, drawing: look.drawing.includes(figure.id) }}
                 onOpen={() => {
                   onOpen(figure.id)
                 }}
@@ -238,6 +245,9 @@ export const CharacterCanvas = ({
                 }}
                 onUpload={(file) => {
                   onUpload(figure.id, file)
+                }}
+                onGenerate={() => {
+                  onGenerate(figure.id)
                 }}
               />
             )

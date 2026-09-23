@@ -349,7 +349,12 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   pill, node drag and measure lifted to `_chrome/canvas/`): `character-node.tsx` (redrawn 2026-09-21: a
   `Portrait · Advanced · Look sheet` strip on the card's top edge, component state; the face is
   the grip and the click, a deep tint off `--face-*` with the name printed white on it;
-  `Edit · Upload`, then `✦ Generate` disabled; the ring connect grip) and
+  `Edit · Upload`, then `✦ Generate · 40 cr` - live since roadmap task 5.2, the character's look drawn
+  on the worker (`generateCharacterLook`, `lib/production/generate.ts`) in the **first episode's** art
+  style and stored as the portrait; `Drawing the look…` while it draws, the route polling
+  (`look.drawing`, `listLiveGenerationTargets`); disabled with the server's reason without a model
+  key or storage. The look sheet's buttons and prompt stay disabled - the three-angle sheet is not
+  built; the ring connect grip) and
   `relationship-threads.tsx` (`.folio-rel-thread` glow + rail + gradient dash per row, a
   two-label pill at the midpoint - 13.5px, raised from 11.5px 2026-09-21 so the two labels read
   at a glance - that lights its thread on hover and opens the relationship modal on click);

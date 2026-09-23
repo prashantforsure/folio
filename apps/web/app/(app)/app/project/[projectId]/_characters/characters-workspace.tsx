@@ -6,16 +6,18 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 import { uploadPortrait } from '../../../../../../lib/characters/actions'
+import { generateCharacterLook } from '../../../../../../lib/production/generate'
 import { figuresOf, routeIdOf } from '../../../../../../lib/characters/cast'
 import { setQueueIntent, useNewCharacterOpen, useQueueIntent } from '../../../../../../lib/characters/compose'
 import { noDescriptionOf, unrelatedOf } from '../../../../../../lib/characters/facts'
 import { publishCharacterFacts } from '../../../../../../lib/characters/facts-cell'
 import { useModalToast } from '../../../../../../lib/characters/modal-toast'
 import { pairKey } from '../../../../../../lib/characters/relationships'
-import type { Derivable, SceneIndexRef } from '../../../../../../lib/characters/server'
+import type { CharacterLook, Derivable, SceneIndexRef } from '../../../../../../lib/characters/server'
 import { offerUndo } from '../../../../../../lib/characters/undo'
 import type { ProjectRoutePath, WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
 import { characterHref } from '../../../../../../lib/workspace/hrefs'
+import { Polling } from '../_chrome/polling'
 import { StatusBar } from '../_chrome/status-bar'
 import { useRun } from '../_chrome/use-run'
 import { useToast } from '../_chrome/use-toast'
@@ -86,6 +88,7 @@ export const CharactersWorkspace = ({
   relationships,
   derivable,
   storage,
+  look,
   profile,
 }: {
   readonly projectId: ProjectId
@@ -101,6 +104,8 @@ export const CharactersWorkspace = ({
   readonly relationships: readonly Relationship[]
   readonly derivable: Derivable | null
   readonly storage: boolean
+  /** The card's `✦ Generate` (roadmap task 5.2): its price, why it is off, whose look is drawing. */
+  readonly look: CharacterLook
   /** The record the drawer shows, when the path names one. */
   readonly profile: CharacterProfile | null
 }) => {
@@ -159,6 +164,15 @@ export const CharactersWorkspace = ({
   const editPair = (a: CharacterId, b: CharacterId): void => {
     setDialog({ a, b })
   }
+  // A look drawn on the worker: the answer is "queued", the page refreshes while it draws (Polling below).
+  const generate = (id: CharacterId): void => {
+    run(async () => {
+      const result = await generateCharacterLook(projectId, id)
+      if (result.status !== 'queued') return 'message' in result ? result.message : `There are not enough credits: ${String(result.cost)} needed, ${String(result.available)} available.`
+      router.refresh()
+      return null
+    })
+  }
   const upload = (id: CharacterId, file: File): void => {
     run(async () => {
       const form = new FormData()
@@ -206,6 +220,7 @@ export const CharactersWorkspace = ({
           relationships={relationships}
           selected={selected?.id ?? null}
           storage={storage}
+          look={look}
           run={run}
           onOpen={open}
           onConnect={editPair}
@@ -213,8 +228,10 @@ export const CharactersWorkspace = ({
             editPair(edge.a, edge.b)
           }}
           onUpload={upload}
+          onGenerate={generate}
         />
       )}
+      <Polling live={look.drawing.length > 0} />
 
       <StatusBar left={left} save={save} routeId={routeIdOf(selected)} toast={toast ?? modalToast} />
 

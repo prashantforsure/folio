@@ -460,7 +460,11 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   a background run that proposes the settings and a reel per scene, drafts a shotlist per reel,
   stops for the writer to accept the shots, asks about locations with no photo (upload one, or have a
   plate drawn from its description), shows the cost table with the balance, and asks **once for the
-  images and separately for the shoots** (`lib/agent/production/`).
+  images and separately for the shoots** (`lib/agent/production/`). **Shipped 2026-09-24** (roadmap
+  task 5.2): `generate_character_look` (paid) and the Characters card's `✦ Generate · 40 cr` draw a
+  character's look from their appearance, age and gender, in the project's **first episode's** art
+  style (client ruling), and store it as the portrait - the appearance reference Production draws
+  them from; the pipeline's images include a look for anyone in a reel without one.
 - Lifecycle: **Brief → Plan → Run → Review → Commit.** One run produces one revision entry.
 - **Every write returns a proposal, never a mutation.** Proposals are anchored to node ids and
   rendered as hunks against current node state. **Narrowed 2026-09-23** (the copilot pass): this

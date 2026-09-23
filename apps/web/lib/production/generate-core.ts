@@ -1,9 +1,11 @@
 import type { ArtStyle, EpisodeSettings, GenerationTarget, ProductionScene, Reel } from '@folio/contracts'
-import { GENERATION_COSTS, LocationIdSchema, NodeIdSchema, ProductionGenerationIdSchema, ReelIdSchema, ReelShotIdSchema } from '@folio/contracts'
+import { CHARACTER_GENDER_LABELS, CharacterIdSchema, GENERATION_COSTS, LocationIdSchema, NodeIdSchema, ProductionGenerationIdSchema, ReelIdSchema, ReelShotIdSchema } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
 import {
   cancelGeneration as cancelGenerationRow,
   createGeneration,
+  listCharacterRecords,
+  listEpisodes,
   listLocationRecords,
   readDocumentByKind,
   readLiveGenerationFor,
@@ -16,13 +18,14 @@ import { z } from 'zod'
 
 import { checkRateLimit } from '../agent/rate-limit'
 import { ROLE } from '../auth/roles'
-import type { EpisodeGate } from '../script/actor-gate'
-import { roleRefusal } from '../script/actor-gate'
+import type { EpisodeGate, ProjectGate } from '../script/actor-gate'
+import { episodeGateOf, isRefusal, roleRefusal } from '../script/actor-gate'
+import { publicUrl } from '../storage/r2'
 import { cutScene } from '../storyboard/scene-cut'
 import { proposeShotsWith } from './core'
 import { readinessOf } from './derive'
 import { connected } from './pipeline/connection'
-import { frameSpec, locationPlateSpec, sceneImageSpec, sheetSpec, shootSpec, shotlistSpec } from './pipeline/spec'
+import { characterLookSpec, frameSpec, locationPlateSpec, sceneImageSpec, sheetSpec, shootSpec, shotlistSpec } from './pipeline/spec'
 import type { GenerationSpec } from './pipeline/spec'
 import type { CancelResult, Failure, GenerationResult, ShootResult } from './result'
 import { composeScenes, readCastAndPlaces } from './compose'
@@ -46,6 +49,7 @@ import { composeScenes, readCastAndPlaces } from './compose'
 const NOT_A_REEL = 'That reel is not in this episode. Reload the page.'
 const NOT_A_SCENE = 'That scene is not in this episode. Reload the page.'
 const NOT_A_LOCATION = 'That location is not in this project.'
+const NOT_A_CHARACTER = 'That character is not in this project.'
 
 const error = (message: string): Failure => ({ status: 'error', message })
 
@@ -202,6 +206,61 @@ export const generateFramesEachWith = async (gate: EpisodeGate, raw: unknown): P
     if (result.status === 'insufficient') break
   }
   return launched
+}
+
+export const characterProblem = (rawCharacterId: unknown): Failure | null => (CharacterIdSchema.safeParse(rawCharacterId).success ? null : error(NOT_A_CHARACTER))
+
+/**
+ * The episode a look is drawn in: the project's first, in running order (the
+ * client's ruling, 2026-09-24). A character belongs to the project, not to an
+ * episode, but a generation is an episode's and takes its art style - so every
+ * look, from the Characters card, a tool or the production pipeline, is drawn
+ * in the same one, and a cast looks like one cast.
+ */
+export const lookEpisodeGate = async (gate: ProjectGate): Promise<EpisodeGate | Failure> => {
+  const first = [...(await listEpisodes(gate.scope))].sort((a, b) => a.ordinal - b.ordinal)[0]
+  if (first === undefined) return error('This project has no episode to draw the look in.')
+  const narrowed = await episodeGateOf(gate, first.slug)
+  return isRefusal(narrowed) ? error(narrowed.message) : narrowed
+}
+
+/**
+ * A character's look (roadmap task 5.2): one portrait, drawn from the
+ * record's appearance, age and gender in the first episode's art style -
+ * `GENERATION_COSTS.character_look`, named on the button before it is spent.
+ * The runner stores it as the portrait (`setPortraitKey`), which is the
+ * appearance reference every Production image draws the character from. A
+ * portrait already there is replaced - that is what Generate asks for - and
+ * goes in as the reference, so the likeness holds.
+ */
+export const generateCharacterLookWith = async (projectGate: ProjectGate, rawCharacterId: unknown): Promise<GenerationResult> => {
+  const characterId = CharacterIdSchema.safeParse(rawCharacterId)
+  if (!characterId.success) return error(NOT_A_CHARACTER)
+  const off = connected('character_look')
+  if (off !== null) return off
+  const gate = await lookEpisodeGate(projectGate)
+  if ('status' in gate) return gate
+  const stop = await mayStart(gate)
+  if (stop !== null) return stop
+  const g = await ground(gate)
+  if (isFailure(g)) return g
+  const character = (await listCharacterRecords(gate.scope)).find((record) => record.id === characterId.data)
+  if (character === undefined) return error(NOT_A_CHARACTER)
+  if ((await readLiveGenerationFor(gate.scope, 'character', character.id)) !== null) return error(`${character.name}'s look is already being drawn.`)
+  const spec = characterLookSpec(
+    {
+      id: character.id,
+      name: character.name,
+      appearance: character.appearance,
+      age: character.age,
+      gender: character.gender === null ? null : CHARACTER_GENDER_LABELS[character.gender],
+      role: character.role,
+      portraitUrl: publicUrl(character.portraitKey),
+    },
+    g.settings,
+    g.artStyle,
+  )
+  return launch(g, 'character', character.id, spec)
 }
 
 export const locationProblem = (rawLocationId: unknown): Failure | null => (LocationIdSchema.safeParse(rawLocationId).success ? null : error(NOT_A_LOCATION))

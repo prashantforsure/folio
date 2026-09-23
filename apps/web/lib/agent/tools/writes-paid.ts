@@ -1,12 +1,13 @@
 import type { GenerationJob } from '@folio/contracts'
-import { GENERATION_COSTS, LocationIdSchema, NodeIdSchema, ReelIdSchema, ReelShotIdSchema } from '@folio/contracts'
-import { listLiveGenerations, listLocationRecords, returnRunBudget, spendRunBudget } from '@folio/db'
+import { CharacterIdSchema, GENERATION_COSTS, LocationIdSchema, NodeIdSchema, ReelIdSchema, ReelShotIdSchema } from '@folio/contracts'
+import { listCharacterRecords, listLiveGenerationTargets, listLiveGenerations, listLocationRecords, returnRunBudget, spendRunBudget } from '@folio/db'
 import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
 import { readinessOf } from '../../production/derive'
 import type { FrameLaunch } from '../../production/generate-core'
 import {
+  generateCharacterLookWith,
   generateFramesEachWith,
   generateLocationPlateWith,
   generateSceneImageWith,
@@ -143,7 +144,7 @@ const frames = (each: readonly FrameLaunch[] | GenerationResult, asked: number):
   return { started: queued.length, of: asked, result: queued.length === asked ? (queued.at(-1)?.result ?? last) : last }
 }
 
-const JOB_OF: Readonly<Record<ImageItem['kind'], GenerationJob>> = { plate: 'location_plate', scene_image: 'scene_image', sheet: 'storyboard_sheet', frames: 'shot_frame' }
+const JOB_OF: Readonly<Record<ImageItem['kind'], GenerationJob>> = { plate: 'location_plate', look: 'character_look', scene_image: 'scene_image', sheet: 'storyboard_sheet', frames: 'shot_frame' }
 
 // ---------------------------------------------------------------------------
 // generate_images
@@ -151,6 +152,7 @@ const JOB_OF: Readonly<Record<ImageItem['kind'], GenerationJob>> = { plate: 'loc
 
 const ImageRequest = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('plate'), locationId: LocationIdSchema.describe("A location with no photo: its plate is drawn from its description and becomes its photo.") }),
+  z.object({ kind: z.literal('look'), characterId: CharacterIdSchema.describe("A character: their look is drawn as their portrait, in the first episode's art style.") }),
   z.object({ kind: z.literal('scene_image'), sceneId: NodeIdSchema.describe("The scene's heading node id.") }),
   z.object({ kind: z.literal('sheet'), reelId: ReelIdSchema }),
   z.object({ kind: z.literal('frames'), shotIds: z.array(ReelShotIdSchema).min(1).max(50) }),
@@ -162,8 +164,15 @@ type ImageRequest = z.infer<typeof ImageRequest>
 export const priceImages = async (gate: EpisodeGate, requests: readonly ImageRequest[]): Promise<{ readonly items: readonly ImageItem[]; readonly problems: readonly string[] } | string> => {
   const g = await ground(gate)
   if (isFailure(g)) return g.message
-  const [live, locations] = await Promise.all([listLiveGenerations(gate.scope, gate.episode.id), listLocationRecords(gate.scope)])
-  const drawing = new Set<string>(live.map((generation) => generation.targetId))
+  const wantsLooks = requests.some((request) => request.kind === 'look')
+  const [live, locations, characters, looks] = await Promise.all([
+    listLiveGenerations(gate.scope, gate.episode.id),
+    listLocationRecords(gate.scope),
+    wantsLooks ? listCharacterRecords(gate.scope) : Promise.resolve([]),
+    // A look is drawn in the first episode, which may not be this one: its live rows are read project-wide.
+    wantsLooks ? listLiveGenerationTargets(gate.scope, 'character') : Promise.resolve([]),
+  ])
+  const drawing = new Set<string>([...live.map((generation) => generation.targetId), ...looks])
   const items: ImageItem[] = []
   const problems: string[] = []
   const reels = g.scenes.flatMap((scene) => scene.reels.map((reel) => ({ scene, reel })))
@@ -175,6 +184,13 @@ export const priceImages = async (gate: EpisodeGate, requests: readonly ImageReq
         else if (location.photoKey !== null) problems.push(`${location.name} already has a photo - that is its plate.`)
         else if (drawing.has(location.id)) problems.push(`${location.name}'s plate is already being drawn.`)
         else items.push({ kind: 'plate', locationId: location.id, label: `The plate for ${location.name}`, cost: GENERATION_COSTS.location_plate })
+        break
+      }
+      case 'look': {
+        const character = characters.find((record) => record.id === request.characterId)
+        if (character === undefined) problems.push('A look names a character that is not in this project.')
+        else if (drawing.has(character.id)) problems.push(`${character.name}'s look is already being drawn.`)
+        else items.push({ kind: 'look', characterId: character.id, label: `The look for ${character.name}`, cost: GENERATION_COSTS.character_look })
         break
       }
       case 'scene_image': {
@@ -238,6 +254,8 @@ const startImage = (item: ImageItem): Launchable['start'] => {
   switch (item.kind) {
     case 'plate':
       return async (gate) => single(await generateLocationPlateWith(gate, item.locationId))
+    case 'look':
+      return async (gate) => single(await generateCharacterLookWith(gate, item.characterId))
     case 'scene_image':
       return async (gate) => single(await generateSceneImageWith(gate, item.sceneId))
     case 'sheet':
@@ -250,7 +268,7 @@ const startImage = (item: ImageItem): Launchable['start'] => {
 export const generateImagesTool = defineWriteTool({
   name: 'generate_images',
   description:
-    "Draw Production images for an episode, priced in credits: a location's plate (for a location with no photo, drawn from its description), a scene image, a reel's storyboard sheet, or frames for shots. Name everything in one call - it is one confirmation, which shows the writer the total and their balance before anything is spent. Nothing starts until they confirm, and nothing can be undone after.",
+    "Draw Production images for an episode, priced in credits: a location's plate (for a location with no photo, drawn from its description), a character's look (their portrait), a scene image, a reel's storyboard sheet, or frames for shots. Name everything in one call - it is one confirmation, which shows the writer the total and their balance before anything is spent. Nothing starts until they confirm, and nothing can be undone after.",
   toolset: 'production',
   minimumRole: ROLE.paidGeneration,
   mode: 'paid',
@@ -354,4 +372,42 @@ export const shootReelTool = defineWriteTool({
   },
 })
 
-export const PAID_WRITE_TOOLS: readonly WriteTool[] = [generateImagesTool, shootReelTool]
+// ---------------------------------------------------------------------------
+// generate_character_look (roadmap task 5.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * A character's look - their portrait, drawn from the record's appearance,
+ * age and gender in the first episode's art style (the client's ruling), the
+ * reference every Production image draws them from. The same core as the
+ * Characters card's `✦ Generate`; the entities toolset, so it is at hand on
+ * Characters. One look, one confirmation, its price on the card.
+ */
+export const generateCharacterLookTool = defineWriteTool({
+  name: 'generate_character_look',
+  description:
+    "Draw a character's look - their portrait, from the appearance, age and gender on their record, in the project's first episode's art style. It becomes the reference every Production image draws them from, replacing a portrait they have. Priced in credits; the writer confirms the price before anything is spent.",
+  toolset: 'entities',
+  minimumRole: ROLE.paidGeneration,
+  mode: 'paid',
+  input: z.object({ characterId: CharacterIdSchema }),
+  label: () => 'Pricing a character look',
+  prepare: async (ctx, input): Promise<Prepared<ImagesArgs>> => {
+    const off = connected('character_look')
+    if (off !== null) return { ok: false, message: off.message }
+    const priced = await priceImages(ctx.gate, [{ kind: 'look', characterId: input.characterId }])
+    if (typeof priced === 'string') return { ok: false, message: priced }
+    if (priced.problems.length > 0) return { ok: false, message: priced.problems.join(' ') }
+    return { ok: true, args: { episode: ctx.gate.episode.slug, items: [...priced.items] }, cost: totalOf(priced.items) }
+  },
+  executor: {
+    args: ImagesArgsSchema,
+    describe: (args) => `${args.items.map((item) => item.label).join('; ')} (${credits(totalOf(args.items))})`,
+    target: () => ({ type: 'generation', id: null }),
+    capture: () => Promise.resolve(null),
+    run: (ctx, args) => launchAll(ctx, args.episode, args.items.map((item) => ({ label: item.label, cost: item.cost, start: startImage(item) }))),
+    preview: (_ctx, args) => Promise.resolve({ changes: args.items.map((item) => ({ field: item.label, before: null, after: credits(item.cost) })), open: { route: 'characters' } }),
+  },
+})
+
+export const PAID_WRITE_TOOLS: readonly WriteTool[] = [generateImagesTool, shootReelTool, generateCharacterLookTool]

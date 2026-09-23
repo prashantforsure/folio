@@ -34,8 +34,9 @@ import { costTable, costTableText, credits, flagWords, imagesToDraw, missingPlat
  *   plates  only when a scene's location has no photo, which a shoot needs →
  *           **checkpoint**: upload photos, or Approve and the images include a
  *           plate drawn from each description (the client's ruling, 2026-09-24)
- *   images  the cost table (`GENERATION_COSTS`: plates, scene images, sheets,
- *           frames, and the shoots to come) with the balance, then **one paid
+ *   images  the cost table (`GENERATION_COSTS`: plates, looks for the cast
+ *           with no portrait (task 5.2), scene images, sheets, frames, and the
+ *           shoots to come) with the balance, then **one paid
  *           proposal** for every image still missing → confirmed; the job
  *           then waits on the generations it started, polling their rows as
  *           the Production route does, and plans again for any that failed
@@ -309,7 +310,7 @@ export const runProductionJob = async (job: ProductionJob): Promise<JobOutcome> 
         if (stillLive.length > 0) await wait(`${plural(stillLive.length, 'image is', 'images are')} still drawing. Reply and I will check again.`, PRODUCTION_WAITING.drawing)
         g = await read(gate)
         const live = new Set((await ports.live(gate)).map((generation) => generation.targetId))
-        const items = imagesToDraw({ scenes: g.scenes, live, plates: drawPlates })
+        const items = imagesToDraw({ scenes: g.scenes, live, plates: drawPlates, looks: true })
         if (items.length === 0 || round >= MAX_ROUNDS) {
           if (items.length > 0) await job.say(`${plural(items.length, 'image', 'images')} did not draw after ${String(MAX_ROUNDS)} tries; I will go on without ${items.length === 1 ? 'it' : 'them'}. Draw ${items.length === 1 ? 'it' : 'them'} in Production if the shoot needs ${items.length === 1 ? 'it' : 'them'}.`)
           await ports.saveStage(scope, runId, 'production_images', 'approved', { proposalId: null, round })

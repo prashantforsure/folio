@@ -18,6 +18,7 @@ import { readinessOf } from '../../production/derive'
 /** One image a paid operation starts. `cost` is its credits, the frames' already multiplied. */
 export const ImageItemSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('plate'), locationId: z.uuid(), label: z.string(), cost: z.int().min(0) }),
+  z.object({ kind: z.literal('look'), characterId: z.uuid(), label: z.string(), cost: z.int().min(0) }),
   z.object({ kind: z.literal('scene_image'), sceneId: z.uuid(), label: z.string(), cost: z.int().min(0) }),
   z.object({ kind: z.literal('sheet'), reelId: z.uuid(), label: z.string(), cost: z.int().min(0) }),
   z.object({ kind: z.literal('frames'), reelId: z.uuid(), shotIds: z.array(z.uuid()).min(1).max(50), label: z.string(), cost: z.int().min(0) }),
@@ -27,8 +28,8 @@ export type ImageItem = z.infer<typeof ImageItemSchema>
 
 export type ImageKind = ImageItem['kind']
 
-/** The order the images are drawn in: a plate is what the rest are drawn against. */
-export const IMAGE_ORDER: readonly ImageKind[] = ['plate', 'scene_image', 'sheet', 'frames']
+/** The order the images are drawn in: a plate and a look are what the rest are drawn against. */
+export const IMAGE_ORDER: readonly ImageKind[] = ['plate', 'look', 'scene_image', 'sheet', 'frames']
 
 /** A frame is drawn again from these; a drawn, uploaded, blocked or live one is left. */
 const FRAME_TO_DRAW: readonly ProductionFrameState[] = ['empty', 'ready', 'stale', 'failed', 'cancelled']
@@ -48,6 +49,8 @@ export type PlanInput = {
   readonly live: ReadonlySet<string>
   /** Plates are drawn only when the writer said so at the plates checkpoint. */
   readonly plates: boolean
+  /** Character looks for the cast with no portrait - what a shoot needs of them (roadmap task 5.2). */
+  readonly looks: boolean
 }
 
 /**
@@ -66,6 +69,17 @@ export const imagesToDraw = (input: PlanInput): readonly ImageItem[] => {
       if (scene.plateReady || scene.locationId === null || seen.has(scene.locationId) || input.live.has(scene.locationId)) continue
       seen.add(scene.locationId)
       items.push({ kind: 'plate', locationId: scene.locationId, label: `The plate for ${scene.locationName ?? scene.set}`, cost: GENERATION_COSTS.location_plate })
+    }
+  }
+
+  if (input.looks) {
+    const seen = new Set<string>()
+    for (const scene of scenes) {
+      for (const person of scene.cast) {
+        if (person.appearanceReady || seen.has(person.id) || input.live.has(person.id)) continue
+        seen.add(person.id)
+        items.push({ kind: 'look', characterId: person.id, label: `The look for ${person.name}`, cost: GENERATION_COSTS.character_look })
+      }
     }
   }
 
@@ -119,6 +133,7 @@ export type CostLine = { readonly label: string; readonly count: number; readonl
 
 const KIND_LABEL: Readonly<Record<ImageKind | 'shoot', readonly [string, string]>> = {
   plate: ['location plate', 'location plates'],
+  look: ['character look', 'character looks'],
   scene_image: ['scene image', 'scene images'],
   sheet: ['storyboard sheet', 'storyboard sheets'],
   frames: ['frame', 'frames'],
@@ -127,6 +142,7 @@ const KIND_LABEL: Readonly<Record<ImageKind | 'shoot', readonly [string, string]
 
 const EACH: Readonly<Record<ImageKind | 'shoot', number>> = {
   plate: GENERATION_COSTS.location_plate,
+  look: GENERATION_COSTS.character_look,
   scene_image: GENERATION_COSTS.scene_image,
   sheet: GENERATION_COSTS.storyboard_sheet,
   frames: GENERATION_COSTS.shot_frame,

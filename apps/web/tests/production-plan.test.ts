@@ -16,7 +16,7 @@ const NONE: ReadonlySet<string> = new Set()
 describe('imagesToDraw', () => {
   it('lists every missing image in drawing order - the plate first, the frames last - each priced from GENERATION_COSTS', () => {
     const scenes = [scene(1, [reel(1, 1)], { plateReady: false, stillState: 'empty' })]
-    const items = imagesToDraw({ scenes, live: NONE, plates: true })
+    const items = imagesToDraw({ scenes, live: NONE, plates: true, looks: false })
     expect(items.map((item) => item.kind)).toEqual(['plate', 'scene_image', 'sheet', 'frames'])
     expect(items.map((item) => item.cost)).toEqual([GENERATION_COSTS.location_plate, GENERATION_COSTS.scene_image, GENERATION_COSTS.storyboard_sheet, 3 * GENERATION_COSTS.shot_frame])
     expect(items[3]).toMatchObject({ kind: 'frames', shotIds: [uid('shot', 11), uid('shot', 12), uid('shot', 13)], label: '3 frames for Reel 1, scene 1' })
@@ -25,8 +25,8 @@ describe('imagesToDraw', () => {
   it('draws a plate only once the writer has said so, once per location, and never for a set with no location record', () => {
     const unplated = { plateReady: false }
     const scenes = [scene(1, [reel(1, 1)], unplated), scene(2, [reel(2, 2)], unplated), scene(3, [reel(3, 3)], { ...unplated, locationId: null, locationName: null, set: 'NOWHERE' })]
-    expect(imagesToDraw({ scenes, live: NONE, plates: false }).filter((item) => item.kind === 'plate')).toEqual([])
-    const plates = imagesToDraw({ scenes, live: NONE, plates: true }).filter((item) => item.kind === 'plate')
+    expect(imagesToDraw({ scenes, live: NONE, plates: false, looks: false }).filter((item) => item.kind === 'plate')).toEqual([])
+    const plates = imagesToDraw({ scenes, live: NONE, plates: true, looks: false }).filter((item) => item.kind === 'plate')
     expect(plates).toEqual([{ kind: 'plate', locationId: uid('location', 1), label: 'The plate for Jetty', cost: GENERATION_COSTS.location_plate }])
     expect(missingPlates(scenes)).toEqual([
       { id: uid('location', 1), name: 'Jetty' },
@@ -46,20 +46,31 @@ describe('imagesToDraw', () => {
       scene(1, [reel(1, 1, { shots, sheet: sheetDone(1), clipLengthS: 15 })], { stillState: 'uploaded' }),
       scene(2, [], { stillState: 'empty', plateReady: false }),
     ]
-    const items = imagesToDraw({ scenes, live: new Set([uid('shot', 15)]), plates: true })
+    const items = imagesToDraw({ scenes, live: new Set([uid('shot', 15)]), plates: true, looks: false })
     expect(items).toEqual([])
+  })
+
+  it('draws a look for each of the cast with no portrait, once however many scenes they are in, after the plate (task 5.2)', () => {
+    const cast = [member(1, 'MEERA'), member(2, 'ARJUN', false)]
+    const scenes = [scene(1, [reel(1, 1, { sheet: sheetDone(1) })], { cast, plateReady: false }), scene(2, [reel(2, 2, { sheet: sheetDone(2) })], { cast, plateReady: false })]
+    const items = imagesToDraw({ scenes, live: new Set([uid('shot', 11), uid('shot', 12), uid('shot', 13), uid('shot', 21), uid('shot', 22), uid('shot', 23)]), plates: true, looks: true })
+    expect(items).toEqual([
+      { kind: 'plate', locationId: uid('location', 1), label: 'The plate for Jetty', cost: GENERATION_COSTS.location_plate },
+      { kind: 'look', characterId: uid('character', 2), label: 'The look for ARJUN', cost: GENERATION_COSTS.character_look },
+    ])
+    expect(imagesToDraw({ scenes, live: new Set([uid('character', 2)]), plates: false, looks: true }).filter((item) => item.kind === 'look')).toEqual([])
   })
 
   it('draws a sheet only from a shotlist that fills the clip', () => {
     const short = reel(1, 1, { shots: [shot(11)] })
-    expect(imagesToDraw({ scenes: [scene(1, [short])], live: NONE, plates: false }).map((item) => item.kind)).toEqual(['frames'])
+    expect(imagesToDraw({ scenes: [scene(1, [short])], live: NONE, plates: false, looks: false }).map((item) => item.kind)).toEqual(['frames'])
   })
 })
 
 describe('the cost table', () => {
   it('groups the images by kind, adds the shoots to come at the reel price, and totals from GENERATION_COSTS', () => {
     const scenes = [scene(1, [reel(1, 1), reel(2, 1)], { stillState: 'empty' })]
-    const items = imagesToDraw({ scenes, live: NONE, plates: false })
+    const items = imagesToDraw({ scenes, live: NONE, plates: false, looks: false })
     const lines = costTable(items, 2)
     expect(lines).toEqual([
       { label: 'scene image', count: 1, each: GENERATION_COSTS.scene_image, total: GENERATION_COSTS.scene_image },

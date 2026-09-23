@@ -116,7 +116,9 @@ Facts easy to get wrong (history in git):
   sidebar, a card per record with authored relationships as threads between cards
   (`character_relationships`, one row per pair, two directional labels, migration `0024`). The
   Relationships graph tab was removed 2026-09-21 as a second view of the same fact;
-  `lib/characters/graph.ts` stays, tested, partly unread. `✦ Generate` is drawn disabled.
+  `lib/characters/graph.ts` stays, tested, partly unread. `✦ Generate · 40 cr` draws the character's
+  look as their portrait (roadmap task 5.2, in the first episode's art style); the three-angle look
+  sheet is still drawn disabled.
 - **Locations reads the script back as evidence** at request time (`packages/script/src/sets.ts`),
   never stored. **Timeline** never reads a slugline as a date: `time-cues.ts` *proposes*, the
   writer accepts; `✦ Suggest placements` is still not built, though its blocker is gone (open

@@ -202,6 +202,50 @@ export const shootSpec = (scene: ProductionScene, reel: Reel, settings: EpisodeS
   })
 }
 
+/** What a character's look is drawn from: the record's own words, and its portrait when it has one. */
+export type LookInput = {
+  readonly id: string
+  readonly name: string
+  readonly appearance: string | null
+  readonly age: string | null
+  /** The gender as the writer reads it (`CHARACTER_GENDER_LABELS`), or null. */
+  readonly gender: string | null
+  readonly role: string | null
+  /** The current portrait's URL: the likeness a redrawn look keeps. */
+  readonly portraitUrl: string | null
+}
+
+const filled = (value: string | null): string | null => (value === null || value.trim() === '' ? null : value.trim())
+
+/**
+ * A character's look (roadmap task 5.2): one portrait, the reference every
+ * later frame, sheet and clip draws the character from - the client's ruling
+ * that the portrait is the appearance reference. Drawn from the record's
+ * appearance, age and gender in the episode's art style, head and shoulders
+ * on a plain ground so it reads as a reference, and stored as the portrait.
+ * A look redrawn over a portrait keeps its likeness: the portrait goes in as
+ * the character reference.
+ */
+export const characterLookSpec = (character: LookInput, settings: EpisodeSettings, artStyle: ArtStyle): GenerationSpec => {
+  const snapshot = snapshotOf(settings, artStyle)
+  const facts = [filled(character.age) === null ? null : `age ${filled(character.age) ?? ''}`, filled(character.gender)].filter((part): part is string => part !== null)
+  const appearance = filled(character.appearance)
+  const prompt = [
+    stylePrefix(snapshot, artStyle),
+    `A character look for ${character.name}${facts.length === 0 ? '' : ` (${facts.join(', ')})`}${filled(character.role) === null ? '' : `, ${filled(character.role) ?? ''}`}: one portrait that every later image of them is drawn from.`,
+    appearance === null ? 'Their appearance is not described: draw a specific, ordinary person the name suggests, not a type.' : `Appearance: ${appearance}`,
+    `Head and shoulders, facing the camera, even soft light, a plain neutral background, their own clothes. No text, no watermark.`,
+  ].join('\n')
+  const references: readonly SpecReference[] = character.portraitUrl === null ? [] : [{ role: 'character', label: character.name, url: character.portraitUrl }]
+  return build('character_look', prompt, references, snapshot, '9:16', null, {
+    character: character.id,
+    name: character.name,
+    appearance: character.appearance,
+    age: character.age,
+    gender: character.gender,
+  })
+}
+
 /** What a location plate is drawn from: the location record's own words. */
 export type PlateInput = {
   readonly id: string
