@@ -1,65 +1,54 @@
 'use server'
 
-import type { ThreadId } from '@folio/contracts'
 import {
-  NodeIdSchema,
-  ScreenplayNodeSchema,
-  ScriptFormatSchema,
-  ThreadIdSchema,
-  ThreadNodeKindSchema,
-  TitlePageInputSchema,
-} from '@folio/contracts'
-import {
-  commitNodePlan,
   createDocument,
   createMentionTarget,
-  listComments,
-  listMemberProfiles,
   mintNodeIds,
-  openThread,
-  parseScreenplayRows,
-  planNodeWrite,
-  readDocumentById,
   readDocumentByKind,
-  readLatestLockedPages,
-  readMentionLabels,
-  readNodeRows,
   readScreenplayNodes,
-  readTombstones,
   replaceNodes,
-  replyToThread,
   retireNodes,
-  reviveNodeIds,
-  setProjectFormat,
-  setProjectPagination,
-  setThreadState,
   snapshotVersion,
-  writeTitlePage,
 } from '@folio/db'
-import type { DocumentId, NodeId, ScreenplayNode } from '@folio/script'
+import type { DocumentId, ScreenplayNode } from '@folio/script'
 import { cueSpelling } from '@folio/script'
 import {
   countFdxNodes,
   countFountainNodes,
   importFinalDraft,
   parseFountain,
-  serialiseFinalDraft,
-  serialiseFountain,
   text,
   typed,
 } from '@folio/script'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { z } from 'zod'
 
-import { isPaginationControl, paginationFromControl } from '../state/project-preferences'
-import { digestOf } from './digest'
-import { readFdx, writeFdx } from './fdx-adapter'
-import { cachedRows, forgetRows, rememberRows, rowsAfterWrite } from './row-cache'
+import { readFdx } from './fdx-adapter'
+import { cachedRows, forgetRows } from './row-cache'
 import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisode, openEpisodeWith } from './gate'
-import type { EpisodeGate } from './gate'
-import type { ThreadNodeKind, ThreadView } from './panel'
-import { initialsOf, whenLabel } from './panel'
+import type { ThreadNodeKind } from './panel'
+import {
+  exportScriptFdxWith,
+  exportScriptFountainWith,
+  formatProblem,
+  openThreadOnNodeWith,
+  openThreadProblem,
+  paginationProblem,
+  parseSaveInput,
+  replyProblem,
+  replyThreadWith,
+  resolveThreadWith,
+  saveReadsFor,
+  saveScriptWith,
+  saveTitlePageWith,
+  setFormatWith,
+  setPaginationWith,
+  threadIdProblem,
+  titlePageProblem,
+} from './core'
+import type { SaveScriptInput } from './core'
 import type {
   ExportFountainResult,
   ExportScriptResult,
@@ -70,19 +59,24 @@ import type {
   ThreadResult,
   TitlePageResult,
 } from './result'
-import {
-  deferAfterSave,
-  deriveSpeculatively,
-  measure,
-  measureAndDerive,
-  nodeDigest,
-  readDerivationReads,
-  statsFor,
-} from './server'
+import { measureAndDerive } from './server'
+
+export type { SaveScriptInput } from './core'
 
 /**
  * The Script route's writes. The only surface in the product that writes the
  * document, and every write goes: gate -> repository -> pipeline -> result.
+ *
+ * ## Thin actions over core functions (roadmap task 4.2)
+ *
+ * Every write the agent's tools reach is a core function in `core.ts` taking
+ * an episode gate and the raw input - the tools and the worker call those with
+ * a gate of their own. The action here parses what it always parsed before
+ * the gate, opens the cookie gate with its capability, and calls the core;
+ * `saveScript` also runs the save's reads beside the gate, as it always did,
+ * and hands the core Next's `after` for the half that runs after the answer.
+ * Signatures and results are unchanged. Creating a blank script, importing and
+ * minting a mention are as they were.
  *
  * ## Saving is last-write-wins with a conflict banner
  *
@@ -109,52 +103,8 @@ import {
  * import path takes one `before_import`. Cadence is an assumption, flagged.
  */
 
-const RetirementSchema = z.object({
-  nodeId: z.string().min(1),
-  mergedInto: z.string().min(1).nullable(),
-})
-
-const SaveScriptInputSchema = z.object({
-  projectId: z.string(),
-  episode: z.string(),
-  documentId: z.string().uuid(),
-  baseUpdatedAt: z.string(),
-  /** Every node that is new or changed since the client's last save, whole. */
-  upserts: z.array(ScreenplayNodeSchema),
-  /**
-   * The full id list in document order - or null when no node was added,
-   * removed or moved since the last save, in which case the stored order
-   * stands and `upserts` may name only stored ids.
-   */
-  order: z.array(z.string().min(1)).nullable(),
-  retirements: z.array(RetirementSchema),
-  snapshot: z.boolean(),
-  derive: z.boolean(),
-  /** `digestOf([record, paged])` of the record the client drew for this list, if it computed one. */
-  recordDigest: z.string().nullable(),
-  /**
-   * The `nodeDigest` of the stored list this save was planned against, for a
-   * caller that wants a compare-and-swap rather than last-write-wins.
-   *
-   * Absent - which is every save the editor makes - and behaviour is exactly
-   * what it was: the write lands and a `conflict` rides back on the result.
-   * Present and disagreeing with the stored list, and **nothing is written**.
-   * ADR 0003 **D10**: an agent's operations planned against a document that
-   * has since changed describe a document that no longer exists, so the
-   * proposal goes stale and is re-planned rather than force-applied.
-   */
-  expectedDigest: z.string().min(1).optional(),
-})
-
-export type SaveScriptInput = z.input<typeof SaveScriptInputSchema>
-
-const invalid = (message: string): SaveScriptResult => ({
-  status: 'invalid',
-  message: `The script did not read as a node list (${message}).`,
-})
-
 /**
- * Save the script.
+ * Save the script (`saveScriptWith`).
  *
  * ## The request is a delta; the write is still a node list
  *
@@ -174,139 +124,23 @@ const invalid = (message: string): SaveScriptResult => ({
  * Every read a save needs is issued **beside the gate**, in one round trip
  * (`openEpisodeWith`); the write is one statement (`commitNodePlan`); the
  * measurement is computed in memory and returned. Storing that measurement
- * and re-deriving the project happen after the response (`deferAfterSave`).
- * Three round trips between the keystroke's request and its answer, where
- * there were nineteen. The snapshot, when asked for, runs beside the write.
+ * and re-deriving the project happen after the response (`deferAfterSave`,
+ * through Next's `after`). Three round trips between the keystroke's request
+ * and its answer, where there were nineteen. The snapshot, when asked for,
+ * runs beside the write.
  */
 export const saveScript = async (raw: SaveScriptInput): Promise<SaveScriptResult> => {
-  const parsed = SaveScriptInputSchema.safeParse(raw)
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0]
-    return invalid(issue === undefined ? 'shape' : `${issue.path.join('.')}: ${issue.message}`)
-  }
-  const input = parsed.data
-  const documentId = input.documentId as DocumentId
+  const parsed = parseSaveInput(raw)
+  if (!parsed.ok) return parsed.result
+  const input = parsed.input
 
   // The stored rows, if this process wrote them last (`row-cache.ts`): the
   // read is skipped beside the gate and the entry checked against the
   // document's stamp once that has come back.
-  const cached = cachedRows(documentId)
-  const gate = await openEpisodeWith(input.projectId, input.episode, async (scope) => {
-    const [document, freshRows, labels, reads] = await Promise.all([
-      readDocumentById(scope, documentId),
-      cached === undefined ? readNodeRows(scope, documentId) : Promise.resolve(null),
-      readMentionLabels(scope),
-      input.derive ? readDerivationReads(scope) : Promise.resolve(null),
-    ])
-    return { document, freshRows, labels, reads }
-  }, ROLE.authoredEdit)
+  const cached = cachedRows(input.documentId as DocumentId)
+  const gate = await openEpisodeWith(input.projectId, input.episode, saveReadsFor(input, cached), ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-  const { scope, project, episode } = gate
-  const { document, freshRows, labels, reads } = gate.extra
-
-  if (document === null || document.episodeId !== episode.id || document.kind !== 'screenplay') {
-    return { status: 'refused', message: 'That script no longer exists. Reload to continue.' }
-  }
-  const rows =
-    freshRows ??
-    (cached !== undefined && cached.updatedAt === document.updatedAt
-      ? cached.rows
-      : await readNodeRows(scope, documentId))
-  const stored = parseScreenplayRows(rows)
-  if (!stored.ok) {
-    return { status: 'refused', message: 'The stored script would not read. Reload to continue.' }
-  }
-
-  // The delta over the stored list, checked as a list.
-  const held = new Map(stored.value.map((entry) => [entry.node.id as string, entry.node]))
-  const upserts = new Map(input.upserts.map((node) => [node.id as string, node as ScreenplayNode]))
-  let next: ScreenplayNode[]
-  if (input.order === null) {
-    for (const id of upserts.keys()) {
-      if (!held.has(id)) return invalid(`node ${id} is new but no order was sent`)
-    }
-    next = stored.value.map((entry) => upserts.get(entry.node.id as string) ?? entry.node)
-  } else {
-    const seen = new Set<string>()
-    next = []
-    for (const id of input.order) {
-      if (seen.has(id)) return invalid(`node ${id} appears twice in the order`)
-      seen.add(id)
-      const node = upserts.get(id) ?? held.get(id)
-      if (node === undefined) return invalid(`node ${id} is in the order but was neither stored nor sent`)
-      next.push(node)
-    }
-    for (const id of upserts.keys()) {
-      if (!seen.has(id)) return invalid(`node ${id} was sent but is not in the order`)
-    }
-  }
-
-  const conflict =
-    document.updatedAt === input.baseUpdatedAt
-      ? null
-      : { expected: input.baseUpdatedAt, found: document.updatedAt }
-
-  // The compare-and-swap, before the plan is built and long before it is
-  // written. `baseUpdatedAt` above is a *report* - the write lands either way,
-  // which is last-write-wins with a banner and is right for two people typing.
-  // This is a *condition*, and it is what a caller that cannot see the
-  // document needs instead.
-  if (input.expectedDigest !== undefined && nodeDigest(stored.value.map((entry) => entry.node)) !== input.expectedDigest) {
-    return { status: 'stale', conflict: conflict ?? { expected: input.baseUpdatedAt, found: document.updatedAt } }
-  }
-
-  // Every id that leaves the list gets its tombstone in the same statement
-  // as its delete. What it was merged into is the client's to say - it saw
-  // the merge - and an id the client did not mention is retired as deleted.
-  const plan = planNodeWrite(rows, next)
-  const mergedInto = new Map(input.retirements.map((entry) => [entry.nodeId, entry.mergedInto]))
-  const tombstones = plan.deletes.map((nodeId) => {
-    const survivor = mergedInto.get(nodeId as string) ?? null
-    return { nodeId, mergedInto: survivor === null ? null : (survivor as NodeId) }
-  })
-
-  const [firstWrite, lockedPages, snapshot] = await Promise.all([
-    commitNodePlan(scope, document.id, 'screenplay', plan, tombstones),
-    readLatestLockedPages(scope, episode.id),
-    input.snapshot
-      ? snapshotVersion(scope, document.id, 'autosave', next, next.length).then(() => true)
-      : Promise.resolve(false),
-  ])
-
-  // A save that reintroduces a tombstoned id - undo after a delete, chiefly -
-  // is not reuse (ADR 0001; `reviveNodeIds`'s header is the argument): it is
-  // the same node taking its own id back. Lift the tombstone and retry once
-  // before refusing the write; an id still unusable after that is a real
-  // conflict (it collides with a live node, not a retired one).
-  let written = firstWrite
-  if ('unusable' in written) {
-    const revivable = (await readTombstones(scope, written.unusable)).map((t) => t.nodeId)
-    if (revivable.length > 0) {
-      await reviveNodeIds(scope, revivable)
-      written = await commitNodePlan(scope, document.id, 'screenplay', plan, tombstones)
-    }
-  }
-  if ('unusable' in written) return { status: 'ids-unusable', ids: written.unusable }
-  rememberRows(documentId, written.updatedAt, rowsAfterWrite(rows, next, plan, 'screenplay'))
-
-  const measurement = measure(next, project, episode.revisionColour, { labels, lockedPages })
-  const digest = measurement.ok ? digestOf([measurement.record, measurement.paged]) : null
-  const stats =
-    reads === null
-      ? null
-      : statsFor(next, deriveSpeculatively(reads, { storedIds: new Set(held.keys()), nodes: next }))
-
-  deferAfterSave(scope, episode, document, measurement, next, { derive: input.derive })
-
-  return {
-    status: 'saved',
-    updatedAt: written.updatedAt,
-    conflict,
-    measurement: digest !== null && digest === input.recordDigest ? null : measurement,
-    stats,
-    labels,
-    snapshotTaken: snapshot,
-  }
+  return saveScriptWith(gate, raw, { schedule: (task) => after(task), prepared: { reads: gate.extra, cached } })
 }
 
 // ---------------------------------------------------------------------------
@@ -456,11 +290,11 @@ export const setPagination = async (
   episode: string,
   control: string,
 ): Promise<SimpleResult> => {
-  if (!isPaginationControl(control)) return { status: 'error', message: 'Unknown pagination control.' }
+  const problem = paginationProblem(control)
+  if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-  await setProjectPagination(gate.scope, paginationFromControl(control))
-  return { status: 'done' }
+  return setPaginationWith(gate, control)
 }
 
 export const setFormat = async (
@@ -468,12 +302,11 @@ export const setFormat = async (
   episode: string,
   format: string,
 ): Promise<SimpleResult> => {
-  const parsed = ScriptFormatSchema.safeParse(format)
-  if (!parsed.success) return { status: 'error', message: 'Unknown format.' }
+  const problem = formatProblem(format)
+  if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-  await setProjectFormat(gate.scope, parsed.data)
-  return { status: 'done' }
+  return setFormatWith(gate, format)
 }
 
 // ---------------------------------------------------------------------------
@@ -481,46 +314,22 @@ export const setFormat = async (
 // ---------------------------------------------------------------------------
 
 /**
- * The script as `.fdx` text: the stored rows, read strictly, through the pure
- * `serialiseFinalDraft` and the adapter's `XMLBuilder`. Comments never enter
- * it (AGENTS.md, Export); what the mapping changed is counted back so the
- * panel can say so. Nothing is written, nothing is stored - the file goes
- * straight to the browser's download, so the built-in-SMTP-only constraint
- * on "your export is ready" never comes up. Not an agent-writable surface.
+ * The script as `.fdx` text (`exportScriptFdxWith`): the stored rows, read
+ * strictly, through the pure `serialiseFinalDraft` and the adapter's
+ * `XMLBuilder`. Comments never enter it (AGENTS.md, Export); what the mapping
+ * changed is counted back so the panel can say so. Nothing is written, nothing
+ * is stored - the file goes straight to the browser's download, so the
+ * built-in-SMTP-only constraint on "your export is ready" never comes up. Not
+ * an agent-writable surface.
  */
 export const exportScriptFdx = async (projectId: string, episode: string): Promise<ExportScriptResult> => {
   const gate = await openEpisode(projectId, episode, ROLE.export)
   if (isRefusal(gate)) return gate
-  const { scope, episode: current } = gate
-  const document = await readDocumentByKind(scope, current.id, 'screenplay')
-  if (document === null) return { status: 'error', message: 'There is no script to export yet.' }
-  const [read, labels] = await Promise.all([readScreenplayNodes(scope, document.id), readMentionLabels(scope)])
-  if (!read.ok) {
-    return { status: 'error', message: `The stored script would not read (${read.error.at || 'node'}: ${read.error.reason.kind}).` }
-  }
-  const exported = serialiseFinalDraft(
-    read.value.map((entry) => entry.node),
-    { mentionLabels: labels },
-  )
-  const count = (reason: 'subtitle-as-general' | 'unresolved-mention' | 'empty-block'): number =>
-    exported.unrepresentable.filter((entry) => entry.reason === reason).length
-  const stem = current.title
-    .trim()
-    .replace(/[^\p{L}\p{N}]+/gu, '-')
-    .replace(/^-|-$/gu, '')
-  return {
-    status: 'exported',
-    filename: `${stem === '' ? current.slug : stem}.fdx`,
-    xml: writeFdx(exported.root),
-    omitted: exported.omitted.length,
-    subtitlesAsGeneral: count('subtitle-as-general'),
-    unresolvedMentions: count('unresolved-mention'),
-    emptyBlocks: count('empty-block'),
-  }
+  return exportScriptFdxWith(gate)
 }
 
 /**
- * The same export, as Fountain.
+ * The same export, as Fountain (`exportScriptFountainWith`).
  *
  * `serialiseFountain` is a pure function in `packages/script` and has been
  * since the Fountain pass; nothing called it. The Script route's menu offered
@@ -547,27 +356,7 @@ export const exportScriptFdx = async (projectId: string, episode: string): Promi
 export const exportScriptFountain = async (projectId: string, episode: string): Promise<ExportFountainResult> => {
   const gate = await openEpisode(projectId, episode, ROLE.export)
   if (isRefusal(gate)) return gate
-  const { scope, episode: current } = gate
-  const document = await readDocumentByKind(scope, current.id, 'screenplay')
-  if (document === null) return { status: 'error', message: 'There is no script to export yet.' }
-  const read = await readScreenplayNodes(scope, document.id)
-  if (!read.ok) {
-    return { status: 'error', message: `The stored script would not read (${read.error.at || 'node'}: ${read.error.reason.kind}).` }
-  }
-  const nodes = read.value.map((entry) => entry.node)
-  const exportable = nodes.filter((node) => node.type !== 'comment')
-  const serialised = serialiseFountain(exportable)
-  const stem = current.title
-    .trim()
-    .replace(/[^\p{L}\p{N}]+/gu, '-')
-    .replace(/^-|-$/gu, '')
-  return {
-    status: 'exported',
-    filename: `${stem === '' ? current.slug : stem}.fountain`,
-    text: serialised.text,
-    omitted: nodes.length - exportable.length,
-    forced: serialised.unrepresentable.length,
-  }
+  return exportScriptFountainWith(gate)
 }
 
 // ---------------------------------------------------------------------------
@@ -579,12 +368,11 @@ export const saveTitlePage = async (
   episode: string,
   raw: unknown,
 ): Promise<TitlePageResult> => {
-  const parsed = TitlePageInputSchema.safeParse(raw)
-  if (!parsed.success) return { status: 'error', message: 'The cover did not read.' }
+  const problem = titlePageProblem(raw)
+  if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-  const titlePage = await writeTitlePage(gate.scope, gate.episode.id, parsed.data)
-  return { status: 'saved', titlePage }
+  return saveTitlePageWith(gate, raw)
 }
 
 // ---------------------------------------------------------------------------
@@ -621,35 +409,13 @@ export const createMention = async (
 // Threads, inline in the document
 // ---------------------------------------------------------------------------
 
-const BodySchema = z.string().trim().min(1).max(4000)
-
 /**
- * A thread as the card draws it, shaped here so every action that changes
- * one returns the whole card and the client replaces it - no route
- * revalidation, no second read. The member list is one read; a thread has
- * a handful of turns.
- */
-const threadViewOf = async (gate: EpisodeGate, threadId: ThreadId, nodeId: string, state: 'open' | 'resolved'): Promise<ThreadView> => {
-  const [comments, members] = await Promise.all([listComments(gate.scope, threadId), listMemberProfiles(gate.scope)])
-  const nameOf = (userId: string): string => members.find((member) => member.userId === userId)?.displayName ?? 'Someone'
-  return {
-    id: threadId,
-    nodeId,
-    state,
-    turns: comments.map((comment) => {
-      const who = nameOf(comment.authorId)
-      return { id: comment.id, who, initials: initialsOf(who), when: whenLabel(comment.createdAt), body: comment.body, mine: comment.authorId === gate.actor }
-    }),
-  }
-}
-
-/**
- * Open a thread on a node. From the block's `+` handle - creation did not
- * exist before the redesign. The Script passes `script_node`, the Outline
- * `outline_block` (`ThreadNodeKindSchema`, `@folio/contracts`): both are node
- * ids in the same table, and the anchor kind is what `loadScript` /
- * `loadOutline` filter their threads by, so a kind that lied would draw the
- * card on neither route.
+ * Open a thread on a node (`openThreadOnNodeWith`). From the block's `+`
+ * handle - creation did not exist before the redesign. The Script passes
+ * `script_node`, the Outline `outline_block` (`ThreadNodeKindSchema`,
+ * `@folio/contracts`): both are node ids in the same table, and the anchor
+ * kind is what `loadScript` / `loadOutline` filter their threads by, so a kind
+ * that lied would draw the card on neither route.
  *
  * `kind` is parsed rather than trusted. A `ThreadNodeKind` parameter is a
  * TypeScript constraint and nothing else: a server action is an endpoint, and
@@ -663,22 +429,18 @@ export const openThreadOnNode = async (
   body: string,
   kind: ThreadNodeKind = 'script_node',
 ): Promise<ThreadResult> => {
-  const id = NodeIdSchema.safeParse(nodeId)
-  const anchor = ThreadNodeKindSchema.safeParse(kind)
-  const parsedBody = BodySchema.safeParse(body)
-  if (!id.success || !anchor.success || !parsedBody.success) {
-    return { status: 'error', message: 'Write a comment first.' }
-  }
+  const problem = openThreadProblem(nodeId, body, kind)
+  if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.comment)
   if (isRefusal(gate)) return gate
-  const thread = await openThread(gate.scope, { kind: anchor.data, nodeId: id.data }, parsedBody.data)
-  return { status: 'ok', thread: await threadViewOf(gate, thread.id, id.data as string, thread.state) }
+  return openThreadOnNodeWith(gate, nodeId, body, kind)
 }
 
 /**
- * Reply to a thread. `nodeId` is parsed for the same reason `kind` is above:
- * it is echoed straight back into the `ThreadView` the client draws the card
- * from, so an unvalidated value crosses the boundary in both directions.
+ * Reply to a thread (`replyThreadWith`). `nodeId` is parsed for the same
+ * reason `kind` is above: it is echoed straight back into the `ThreadView` the
+ * client draws the card from, so an unvalidated value crosses the boundary in
+ * both directions.
  */
 export const replyThread = async (
   projectId: string,
@@ -687,16 +449,11 @@ export const replyThread = async (
   nodeId: string,
   body: string,
 ): Promise<ThreadResult> => {
-  const id = ThreadIdSchema.safeParse(threadId)
-  const node = NodeIdSchema.safeParse(nodeId)
-  const parsedBody = BodySchema.safeParse(body)
-  if (!id.success || !node.success || !parsedBody.success) {
-    return { status: 'error', message: 'Write a reply first.' }
-  }
+  const problem = replyProblem(threadId, nodeId, body)
+  if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.comment)
   if (isRefusal(gate)) return gate
-  await replyToThread(gate.scope, id.data as ThreadId, parsedBody.data)
-  return { status: 'ok', thread: await threadViewOf(gate, id.data as ThreadId, node.data as string, 'open') }
+  return replyThreadWith(gate, threadId, nodeId, body)
 }
 
 export const resolveThread = async (
@@ -704,10 +461,9 @@ export const resolveThread = async (
   episode: string,
   threadId: string,
 ): Promise<SimpleResult> => {
-  const id = ThreadIdSchema.safeParse(threadId)
-  if (!id.success) return { status: 'error', message: 'That thread could not be found.' }
+  const problem = threadIdProblem(threadId)
+  if (problem !== null) return problem
   const gate = await openEpisode(projectId, episode, ROLE.comment)
   if (isRefusal(gate)) return gate
-  await setThreadState(gate.scope, id.data as ThreadId, 'resolved')
-  return { status: 'done' }
+  return resolveThreadWith(gate, threadId)
 }

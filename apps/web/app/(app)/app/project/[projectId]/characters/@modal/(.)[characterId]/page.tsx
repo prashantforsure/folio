@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation'
 
 import { CharacterEditModal } from '../../../_characters/character-edit-modal'
 import { figuresOf } from '../../../../../../../../lib/characters/cast'
-import { loadCharacterProfile, loadCharacters } from '../../../../../../../../lib/characters/server'
+import { loadCharacters } from '../../../../../../../../lib/characters/server'
+import { loadCharacterProfile } from '../../../../../../../../lib/characters/route-load'
 import { loadProject } from '../../../../../../../../lib/workspace/context'
 import { projectRouteHref } from '../../../../../../../../lib/workspace/hrefs'
 

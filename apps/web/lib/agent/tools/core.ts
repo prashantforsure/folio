@@ -19,7 +19,7 @@ import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
 import { formatSceneRef, sceneRefOf } from '../../characters/figures'
-import { readSceneLines } from '../../timeline/actions'
+import { readSceneLinesWith } from '../../timeline/core'
 import { ROUTE_TITLE } from '../../workspace/routes'
 import { TOOLSETS, defineTool, registeredTools } from '../registry'
 import type { Tool, ToolContext, Toolset } from '../registry'
@@ -34,8 +34,9 @@ import { resolveTarget } from '../targets'
  * `writes-episodes.ts` with the other writes. Counts in a result are
  * computed here, so the model has a number to quote rather than one to work
  * out (ruling **R4**). Where an action already answers the question
- * (`readSceneLines`), the tool calls it, and it re-checks the gate as it does
- * for the browser (integration plan, design choice 1).
+ * (`readSceneLines`), the tool calls its core (`readSceneLinesWith`, roadmap
+ * task 4.2) with the turn's gate, which checks the role as the action's gate
+ * does - so the same call works from a request and from the worker.
  */
 
 const plural = (count: number, one: string, many = `${one}s`): string => `${String(count)} ${count === 1 ? one : many}`
@@ -145,7 +146,7 @@ export const readScene = defineTool({
   input: z.object({ sceneId: NodeIdSchema.describe('The scene id (its heading node id).') }),
   label: () => 'Reading a scene',
   run: async (ctx, input) => {
-    const [result, index] = await Promise.all([readSceneLines(ctx.gate.project.id, input.sceneId), listSceneIndex(scopeOf(ctx))])
+    const [result, index] = await Promise.all([readSceneLinesWith(ctx.gate, input.sceneId), listSceneIndex(scopeOf(ctx))])
     if (result.status !== 'ok') return { ok: false, message: result.message }
     const row = index.find((entry) => entry.sceneNodeId === input.sceneId)
     const ref = row === undefined ? null : formatSceneRef(sceneRefOf(row))

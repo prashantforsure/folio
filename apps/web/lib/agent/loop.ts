@@ -2,6 +2,7 @@ import type { AgentEvent, AgentRoute, AgentStopReason, AssistantContent } from '
 import type { RunId } from '@folio/script'
 import Anthropic from '@anthropic-ai/sdk'
 
+import type { GateRefusal } from '../script/actor-gate'
 import type { DirectOutcome, ProposedOp, Proposing, Tool, ToolContext, Toolset } from './registry'
 import { labelOf, runTool, toolDefinitions, toolsFor } from './registry'
 
@@ -101,7 +102,13 @@ export type LoopInput = {
   readonly messages: readonly Anthropic.MessageParam[]
   readonly route: AgentRoute | null
   /** What a tool runs as, minus the per-call fields the loop fills in. */
-  readonly context: Omit<ToolContext, 'idempotencyKey' | 'loaded' | 'proposals'>
+  readonly context: Omit<ToolContext, 'idempotencyKey' | 'loaded' | 'proposals' | 'membership'>
+  /**
+   * Whether the gate's person is still a member (`stillMember`), asked once
+   * per step before its tools run - the caller's, so the loop reads nothing
+   * itself. Absent (a test), every step answers yes.
+   */
+  readonly checkMembership?: () => Promise<GateRefusal | null>
   /** Where proposals go. Absent: a write tool's operation is queued and dropped (a read-only caller, a test). */
   readonly proposals?: ProposalSink
   readonly emit: (event: AgentEvent) => void
@@ -289,9 +296,12 @@ export const runAgentLoop = async (input: LoopInput): Promise<LoopOutcome> => {
           return done
         },
       })
+      // One membership read per step, shared by its calls (`runTool`).
+      let membershipRead: Promise<GateRefusal | null> | null = null
+      const membership = (): Promise<GateRefusal | null> => (membershipRead ??= input.checkMembership?.() ?? Promise.resolve(null))
       for (const use of calls) {
         input.emit({ type: 'tool_started', id: use.id, name: use.name, label: labelOf(use.name, use.input, tools) })
-        const result = await runTool(use.name, use.input, { ...input.context, idempotencyKey: use.id, loaded, proposals: proposing(use.id) }, tools)
+        const result = await runTool(use.name, use.input, { ...input.context, idempotencyKey: use.id, loaded, proposals: proposing(use.id), membership }, tools)
         input.emit({
           type: 'tool_finished',
           id: use.id,

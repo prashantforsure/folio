@@ -1,16 +1,11 @@
-import type { Episode, MembershipRole, Project, ProjectId, UserId } from '@folio/contracts'
-import { ProjectIdSchema, parseEpisodeSegment, userId as brandUserId } from '@folio/contracts'
-import {
-  openProjectForRequest,
-  readEpisodeBySlug,
-  readMembershipFor,
-  readProject,
-  transactionDatabase,
-} from '@folio/db'
+import type { MembershipRole } from '@folio/contracts'
+import { ProjectIdSchema, userId as brandUserId } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
 
-import { ROLE, ROLE_REFUSED, meetsRole } from '../auth/roles'
+import { ROLE } from '../auth/roles'
 import { currentIdentity } from '../auth/session'
+import type { EpisodeGate, GateRefusal, ProjectGate } from './actor-gate'
+import { REFUSED, openEpisodeAsWith, openProjectAs, parseGateInput } from './actor-gate'
 
 /**
  * The gate every Script server action runs before it touches a row.
@@ -26,62 +21,33 @@ import { currentIdentity } from '../auth/session'
  * Membership **and role**, since 2026-09-23. Every gate takes the minimum
  * role the action needs - `ROLE.read` by default, which every member holds -
  * and refuses a member whose role does not reach it with a message of its own
- * (`lib/auth/roles.ts`, ADR 0003 **D2**). The table there is the decision; this
- * file is the one place it is applied, so a request from the browser and a
- * request from the agent are refused identically.
+ * (`lib/auth/roles.ts`, ADR 0003 **D2**).
  *
- * ## The three reads run at once
+ * ## The cookie half, and the actor half (roadmap task 4.2)
+ *
+ * This file is the **cookie** half: it verifies who is signed in and nothing
+ * else. Everything after identity - parsing, the membership, project and
+ * episode reads, the role - is `actor-gate.ts`'s `openEpisodeAs` /
+ * `openProjectAs`, which the worker calls with the run's starter instead of a
+ * cookie (ADR 0003 D4). One implementation of the checks, two ways in, so a
+ * request from the browser and a job in the worker are refused identically.
+ * The types, `isRefusal` and the refusals are re-exported from there, so every
+ * existing import of this file still reads.
+ *
+ * ## The reads run at once
  *
  * Identity is verified first and alone - nothing is asked of the database
  * on behalf of someone who is not signed in. Then the membership row, the
- * project row and the episode row are read **in parallel**: each is one
- * parameterised statement, each is two round trips on the request path
- * (`@folio/db`'s `client.ts`), and in sequence they were the slowest thing
- * between a keystroke and "saved". The membership answer is still checked
- * before the other two are looked at, and a non-member gets `REFUSED`
- * exactly as before - the project and episode rows they were read
- * alongside are dropped unread. The scope machinery guarantees those reads
- * could not have crossed projects; the gate guarantees nobody acts on them.
- *
- * The profile row (`shellUserFrom`) is no longer read here. No action needs
- * a display name; they need the actor's id, which the verified identity
- * carries and the scope records.
+ * project row and the episode row are read **in parallel** (`actor-gate.ts`):
+ * each is one parameterised statement, each is two round trips on the request
+ * path (`@folio/db`'s `client.ts`), and in sequence they were the slowest thing
+ * between a keystroke and "saved".
  */
 
-export type EpisodeGate = {
-  readonly actor: UserId
-  readonly scope: ProjectScope<'transaction'>
-  readonly project: Project
-  readonly episode: Episode
-  /**
-   * The caller's own role, for an action whose refusal depends on more than
-   * the gate could know - and for the tool registry, which needs the role it
-   * is acting under without re-reading the membership row.
-   */
-  readonly role: MembershipRole
-}
+export type { EpisodeGate, GateRefusal, ProjectGate } from './actor-gate'
+export { REFUSED, ROLE_REFUSAL, isRefusal, parseGateInput, roleRefusal } from './actor-gate'
 
-export type GateRefusal = { readonly status: 'refused'; readonly message: string }
-
-export const REFUSED: GateRefusal = {
-  status: 'refused',
-  message: 'That script could not be found.',
-}
-
-/** A member whose role does not reach what the action asked for. */
-export const ROLE_REFUSAL: GateRefusal = { status: 'refused', message: ROLE_REFUSED }
-
-/** `null` when the two segments do not even parse. Nothing has been read. */
-export const parseGateInput = (
-  rawProjectId: unknown,
-  rawEpisode: unknown,
-): { readonly projectId: ProjectId; readonly slug: Episode['slug'] } | null => {
-  const parsedId = ProjectIdSchema.safeParse(typeof rawProjectId === 'string' ? rawProjectId : '')
-  if (!parsedId.success) return null
-  const segment = parseEpisodeSegment(typeof rawEpisode === 'string' ? rawEpisode : '')
-  if (!segment.ok) return null
-  return { projectId: parsedId.data, slug: segment.slug }
-}
+const SIGNED_OUT: GateRefusal = { status: 'refused', message: 'Sign in to keep writing.' }
 
 /**
  * Open the gate, and read whatever else the caller needs through the same
@@ -96,32 +62,14 @@ export const parseGateInput = (
 export const openEpisodeWith = async <T>(
   rawProjectId: unknown,
   rawEpisode: unknown,
-  alongside: (scope: ProjectScope<'transaction'>) => Promise<T>,
+  alongside: (scope: ProjectScope) => Promise<T>,
   minimum: MembershipRole = ROLE.read,
 ): Promise<(EpisodeGate & { readonly extra: T }) | GateRefusal> => {
-  const input = parseGateInput(rawProjectId, rawEpisode)
-  if (input === null) return REFUSED
-
+  // Parsed before identity, as it always was: a malformed segment asks nothing of anybody.
+  if (parseGateInput(rawProjectId, rawEpisode) === null) return REFUSED
   const identity = await currentIdentity()
-  if (identity === null) return { status: 'refused', message: 'Sign in to keep writing.' }
-  const actor = brandUserId(identity.id)
-
-  const db = await transactionDatabase()
-  const scope = await openProjectForRequest(input.projectId, actor)
-  const [membership, project, episode, extra] = await Promise.all([
-    readMembershipFor(db, actor, input.projectId),
-    readProject(scope),
-    readEpisodeBySlug(scope, input.slug),
-    alongside(scope),
-  ])
-  if (membership === null) return REFUSED
-  if (project === null || project.kind !== 'screenwriting') return REFUSED
-  if (episode === null) return REFUSED
-  // Role last: a stranger learns nothing about the project, and a member is
-  // told the truth about their own role rather than that the script is gone.
-  if (!meetsRole(membership.role, minimum)) return ROLE_REFUSAL
-
-  return { actor, scope, project, episode, role: membership.role, extra }
+  if (identity === null) return SIGNED_OUT
+  return openEpisodeAsWith(brandUserId(identity.id), rawProjectId, rawEpisode, alongside, minimum)
 }
 
 export const openEpisode = async (
@@ -130,13 +78,10 @@ export const openEpisode = async (
   minimum: MembershipRole = ROLE.read,
 ): Promise<EpisodeGate | GateRefusal> => {
   const gate = await openEpisodeWith(rawProjectId, rawEpisode, () => Promise.resolve(undefined), minimum)
-  if (isRefusal(gate)) return gate
+  if ('status' in gate) return gate
   const { actor, scope, project, episode, role } = gate
   return { actor, scope, project, episode, role }
 }
-
-export const isRefusal = <T extends EpisodeGate | ProjectGate>(value: T | GateRefusal): value is GateRefusal =>
-  'status' in value
 
 // ---------------------------------------------------------------------------
 // The project-scoped gate
@@ -148,37 +93,13 @@ export const isRefusal = <T extends EpisodeGate | ProjectGate>(value: T | GateRe
  * round trip, then a scope. A refusal is the same message for a stranger
  * and a missing project, for the reason the episode gate gives.
  */
-export type ProjectGate = {
-  readonly actor: UserId
-  readonly scope: ProjectScope<'transaction'>
-  readonly project: Project
-  /**
-   * The caller's own role, already checked against this gate's minimum. Carried
-   * because an action may refuse further on it - `issueShareLink` did so before
-   * D2 and still does - and because the tool registry acts under it.
-   */
-  readonly role: MembershipRole
-}
-
 export const openProject = async (
   rawProjectId: unknown,
   minimum: MembershipRole = ROLE.read,
 ): Promise<ProjectGate | GateRefusal> => {
-  const parsedId = ProjectIdSchema.safeParse(typeof rawProjectId === 'string' ? rawProjectId : '')
-  if (!parsedId.success) return REFUSED
-
+  // Parsed before identity, as it always was.
+  if (!ProjectIdSchema.safeParse(typeof rawProjectId === 'string' ? rawProjectId : '').success) return REFUSED
   const identity = await currentIdentity()
-  if (identity === null) return { status: 'refused', message: 'Sign in to keep writing.' }
-  const actor = brandUserId(identity.id)
-
-  const db = await transactionDatabase()
-  const scope = await openProjectForRequest(parsedId.data, actor)
-  const [membership, project] = await Promise.all([
-    readMembershipFor(db, actor, parsedId.data),
-    readProject(scope),
-  ])
-  if (membership === null) return REFUSED
-  if (project === null || project.kind !== 'screenwriting') return REFUSED
-  if (!meetsRole(membership.role, minimum)) return ROLE_REFUSAL
-  return { actor, scope, project, role: membership.role }
+  if (identity === null) return SIGNED_OUT
+  return openProjectAs(brandUserId(identity.id), rawProjectId, minimum)
 }

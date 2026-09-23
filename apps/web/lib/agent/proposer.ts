@@ -3,6 +3,8 @@ import { needsConfirmation } from '@folio/contracts'
 import { createProposal, readProposal, readProposalOpByKey } from '@folio/db'
 import type { RunId } from '@folio/script'
 
+import type { Schedule } from '../script/server'
+
 import { applyProposalWith, summaryOf } from './apply'
 import type { ProposalMade, ProposalSink } from './loop'
 import type { ToolGate } from './registry'
@@ -30,7 +32,7 @@ import type { ToolGate } from './registry'
  * `confirm` or `paid` operation never applies without a click, whatever the
  * setting: `applyProposalWith` refuses it without `confirmed`.
  */
-export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy = 'review'): ProposalSink => ({
+export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy = 'review', schedule?: Schedule): ProposalSink => ({
   create: async (groups) => {
     const made: ProposalMade[] = []
     for (const group of groups) {
@@ -58,7 +60,7 @@ export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy
         ops: group.ops.map((entry) => ({ tool: entry.op.tool, args: entry.op.args, mode: entry.op.mode, idempotencyKey: entry.key })),
       })
       if (autonomy === 'auto' && !asks && documents.size === 0) {
-        const outcome = await applyProposalWith(gate, created.proposal.id, { confirmed: false })
+        const outcome = await applyProposalWith(gate, created.proposal.id, { confirmed: false, ...(schedule === undefined ? {} : { schedule }) })
         made.push({ proposalId: created.proposal.id, runId: run, summary, needsConfirmation: false, auto: false, applied: outcome.status === 'applied' })
         continue
       }
@@ -76,7 +78,7 @@ export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy
       creditCost: null,
       ops: [{ tool: op.tool, args: op.args, mode: 'direct', idempotencyKey: key }],
     })
-    const outcome = await applyProposalWith(gate, created.proposal.id, { confirmed: true })
+    const outcome = await applyProposalWith(gate, created.proposal.id, { confirmed: true, ...(schedule === undefined ? {} : { schedule }) })
     if (outcome.status === 'applied') return { ok: true, proposalId: created.proposal.id, result: outcome.proposal.ops[0]?.result ?? null }
     if (outcome.status === 'refused' || outcome.status === 'decided' || outcome.status === 'needs-confirmation') return { ok: false, message: outcome.message }
     if (outcome.status === 'editor') return { ok: false, message: 'That cannot run from here.' }

@@ -15,32 +15,32 @@ import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
 import {
-  deleteCharacter,
-  deleteRelationship,
-  mergeCharacters,
-  previewRename as previewCharacterRename,
-  renameCharacter,
-  resolveCue,
-  revokeDecision as revokeCueDecision,
-  saveProfile,
-  saveRelationship,
-  undoRename as undoCharacterRename,
-} from '../../characters/actions'
+  deleteCharacterWith,
+  deleteRelationshipWith,
+  mergeCharactersWith,
+  previewRenameWith as previewCharacterRename,
+  renameCharacterWith,
+  resolveCueWith,
+  revokeDecisionWith as revokeCueDecision,
+  saveProfileWith,
+  saveRelationshipWith,
+  undoRenameWith as undoCharacterRename,
+} from '../../characters/core'
 import { createCharacterIn } from '../../characters/create'
 import {
-  createLocation,
-  deleteLocation,
-  mergeLocations,
-  previewRename as previewLocationRename,
-  renameLocation,
-  resolveSlugline,
-  resolveStructure,
-  revokeDecision as revokeLocationDecision,
-  saveLocation,
-  setParent,
-  undoRename as undoLocationRename,
-} from '../../locations/actions'
-import { createProp, deleteProp, mergeProps, renameProp, saveProp } from '../../props/actions'
+  createLocationWith,
+  deleteLocationWith,
+  mergeLocationsWith,
+  previewRenameWith as previewLocationRename,
+  renameLocationWith,
+  resolveSluglineWith,
+  resolveStructureWith,
+  revokeDecisionWith as revokeLocationDecision,
+  saveLocationWith,
+  setParentWith,
+  undoRenameWith as undoLocationRename,
+} from '../../locations/core'
+import { createPropWith, deletePropWith, mergePropsWith, renamePropWith, savePropWith } from '../../props/core'
 import type { RecordChange } from '../diff-view'
 import type { ExecContext, ExecOutcome, InvertOutcome } from '../executors'
 import type { ToolContext } from '../registry'
@@ -49,9 +49,10 @@ import { defineWriteTool } from '../write-tool'
 
 /**
  * The Characters, Locations and Props write tools - `docs/agents/tools.md`,
- * the Phase 3 rows, roadmap task 3.5. Each wraps the action the route's own
- * buttons call, re-gated there for the browser and the agent alike (D2); the
- * one exception is `create_character`, which goes through the action's own
+ * the Phase 3 rows, roadmap task 3.5. Each calls the core function of the
+ * action the route's own buttons call (`lib/<route>/core.ts`, roadmap task
+ * 4.2), with the apply's gate, and the core checks the same capability the
+ * action's gate does (D2); `create_character` goes through the action's own
  * body (`characters/create.ts`) so the record says `origin = 'agent'` (D11).
  *
  * **Undo records.** An update stores the fields it overwrote; a rename stores
@@ -161,7 +162,7 @@ export const createCharacterTool = defineWriteTool({
     },
     invert: async (ctx, _args, undo) => {
       const { id } = IdResult.parse(undo)
-      const result = await deleteCharacter(ctx.gate.project.id, id)
+      const result = await deleteCharacterWith(ctx.gate, id)
       if (result.status === 'deleted') return { kind: 'undone' }
       return { kind: 'skipped', reason: `Kept: ${result.message}` }
     },
@@ -200,12 +201,12 @@ export const createLocationTool = defineWriteTool({
     target: () => ({ type: 'location', id: null }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await createLocation(ctx.gate.project.id, args.name, args.parent, ctx.idempotencyKey)
+      const result = await createLocationWith(ctx.gate, args.name, args.parent, ctx.idempotencyKey)
       return result.status === 'created' ? { ok: true, result: { id: result.id }, undo: { id: result.id } } : failure(result, 'The location could not be created.')
     },
     invert: async (ctx, _args, undo) => {
       const { id } = IdResult.parse(undo)
-      const result = await deleteLocation(ctx.gate.project.id, id)
+      const result = await deleteLocationWith(ctx.gate, id)
       return result.status === 'deleted' ? { kind: 'undone' } : { kind: 'skipped', reason: `Kept: ${result.message}` }
     },
     preview: (_ctx, args, op) => {
@@ -239,12 +240,12 @@ export const createPropTool = defineWriteTool({
     target: () => ({ type: 'prop', id: null }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await createProp(ctx.gate.project.id, args.name, args.category, ctx.idempotencyKey)
+      const result = await createPropWith(ctx.gate, args.name, args.category, ctx.idempotencyKey)
       return result.status === 'created' ? { ok: true, result: { id: result.id }, undo: { id: result.id } } : failure(result, 'The prop could not be created.')
     },
     invert: async (ctx, _args, undo) => {
       const { id } = IdResult.parse(undo)
-      const result = await deleteProp(ctx.gate.project.id, id)
+      const result = await deletePropWith(ctx.gate, id)
       return result.status === 'deleted' ? { kind: 'undone' } : { kind: 'skipped', reason: `Kept: ${result.message}` }
     },
     preview: (_ctx, args, op) => {
@@ -271,7 +272,7 @@ const updateTool = <Edit extends Readonly<Record<string, unknown>>>(spec: {
   readonly description: string
   readonly edit: z.ZodType<Edit>
   readonly read: (ctx: { readonly gate: ToolContext['gate'] }, id: string) => Promise<Readonly<Record<string, unknown>> | undefined>
-  readonly save: (projectId: string, id: string, edit: Edit) => Promise<Failure>
+  readonly save: (gate: ToolContext['gate'], id: string, edit: Edit) => Promise<Failure>
 }) => {
   const Args = z.object({ id: z.uuid(), name: z.string(), edit: spec.edit })
   const Input = z.object({ id: z.uuid().describe(`The ${spec.entity}'s id.`), edit: spec.edit })
@@ -298,7 +299,7 @@ const updateTool = <Edit extends Readonly<Record<string, unknown>>>(spec: {
         return record === undefined ? null : priorOf(record, args.edit)
       },
       run: async (ctx, args) => {
-        const result = await spec.save(ctx.gate.project.id, args.id, args.edit)
+        const result = await spec.save(ctx.gate, args.id, args.edit)
         return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, `The ${spec.entity} could not be saved.`)
       },
       invert: async (ctx, args, undo): Promise<InvertOutcome> => {
@@ -310,7 +311,7 @@ const updateTool = <Edit extends Readonly<Record<string, unknown>>>(spec: {
         }
         const restored = spec.edit.safeParse(prior)
         if (!restored.success) return { kind: 'failed', message: 'The prior values did not read.' }
-        const result = await spec.save(ctx.gate.project.id, args.id, restored.data)
+        const result = await spec.save(ctx.gate, args.id, restored.data)
         return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.message ?? 'It could not be put back.' }
       },
       preview: async (ctx, args, op) => {
@@ -327,7 +328,7 @@ export const updateCharacterTool = updateTool<CharacterProfileEdit>({
   description: "Propose changes to a character's record: colour, gender, age, role, bio or appearance. Only the fields you name change.",
   edit: CharacterProfileEditSchema,
   read: characterById,
-  save: saveProfile,
+  save: saveProfileWith,
 })
 
 export const updateLocationTool = updateTool<LocationEdit>({
@@ -336,7 +337,7 @@ export const updateLocationTool = updateTool<LocationEdit>({
   description: "Propose changes to a location's record: description, address, status (pending, scouted, locked) or scheduled shooting days.",
   edit: LocationEditSchema,
   read: locationById,
-  save: saveLocation,
+  save: saveLocationWith,
 })
 
 export const updatePropTool = updateTool<PropEdit>({
@@ -345,7 +346,7 @@ export const updatePropTool = updateTool<PropEdit>({
   description: "Propose changes to a prop's record: category, description or status (needed, sourced, on set).",
   edit: PropEditSchema,
   read: propById,
-  save: saveProp,
+  save: savePropWith,
 })
 
 // ---------------------------------------------------------------------------
@@ -373,7 +374,7 @@ export const renameEntityTool = defineWriteTool({
     const from = await nameOf(ctx, input.entity, input.id)
     if (from === null) return { ok: false, message: `There is no such ${input.entity}.` }
     if (input.entity === 'prop') return { ok: true, args: { ...input, from, to: input.name, reach: '' } }
-    const preview = input.entity === 'character' ? await previewCharacterRename(ctx.gate.project.id, input.id, input.name) : await previewLocationRename(ctx.gate.project.id, input.id, input.name)
+    const preview = input.entity === 'character' ? await previewCharacterRename(ctx.gate, input.id, input.name) : await previewLocationRename(ctx.gate, input.id, input.name)
     if (preview.status !== 'preview') return { ok: false, message: preview.message }
     if (preview.taken !== null) return { ok: false, message: `${preview.to} is already ${preview.taken.name}'s name. Merge the two instead, or choose another name.` }
     const count = 'cues' in preview ? preview.cues : preview.headings
@@ -389,31 +390,31 @@ export const renameEntityTool = defineWriteTool({
     capture: (_ctx, args) => Promise.resolve({ previousName: args.from }),
     run: async (ctx, args) => {
       if (args.entity === 'character') {
-        const result = await renameCharacter(ctx.gate.project.id, args.id, args.to)
+        const result = await renameCharacterWith(ctx.gate, args.id, args.to)
         if (result.status === 'renamed') return { ok: true, result: { cues: result.cues, episodes: result.episodes }, undo: { previousName: result.previousName, restores: result.restores } }
         if (result.status === 'taken') return { ok: false, message: `${result.name} is already another character's name.` }
         return failure(result, 'The rename did not run.')
       }
       if (args.entity === 'location') {
-        const result = await renameLocation(ctx.gate.project.id, args.id, args.to)
+        const result = await renameLocationWith(ctx.gate, args.id, args.to)
         if (result.status === 'renamed') return { ok: true, result: { headings: result.headings, episodes: result.episodes }, undo: result.undo }
         if (result.status === 'taken') return { ok: false, message: `${result.name} is already another location's name.` }
         return failure(result, 'The rename did not run.')
       }
-      const result = await renameProp(ctx.gate.project.id, args.id, args.to)
+      const result = await renamePropWith(ctx.gate, args.id, args.to)
       return result.status === 'saved' ? { ok: true, result: { renamed: true }, undo: { previousName: args.from } } : failure(result, 'The rename did not run.')
     },
     // The restore payload the rename handed back is what its own undo takes.
     invert: async (ctx, args, undo) => {
       if (args.entity === 'character') {
-        const result = await undoCharacterRename(ctx.gate.project.id, args.id, CharacterUndo.parse(undo))
+        const result = await undoCharacterRename(ctx.gate, args.id, CharacterUndo.parse(undo))
         return result.status === 'undone' ? { kind: 'undone', ...(result.skipped > 0 ? { note: `${String(result.skipped)} cue(s) edited since were left.` } : {}) } : { kind: 'failed', message: result.message }
       }
       if (args.entity === 'location') {
-        const result = await undoLocationRename(ctx.gate.project.id, undo)
+        const result = await undoLocationRename(ctx.gate, undo)
         return result.status === 'undone' ? { kind: 'undone', ...(result.skipped > 0 ? { note: `${String(result.skipped)} heading(s) edited since were left.` } : {}) } : { kind: 'failed', message: result.message }
       }
-      const result = await renameProp(ctx.gate.project.id, args.id, PropUndo.parse(undo).previousName)
+      const result = await renamePropWith(ctx.gate, args.id, PropUndo.parse(undo).previousName)
       return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: (_ctx, args) => Promise.resolve({ changes: [{ field: 'Name', before: args.from, after: args.to }], open: { route: ROUTE_OF[args.entity], recordId: args.id } }),
@@ -449,8 +450,8 @@ export const mergeEntitiesTool = defineWriteTool({
     documents: () => Promise.resolve([]),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const projectId = ctx.gate.project.id
-      const result = args.entity === 'character' ? await mergeCharacters(projectId, args.loser, args.winner) : args.entity === 'location' ? await mergeLocations(projectId, args.loser, args.winner) : await mergeProps(projectId, args.loser, args.winner)
+      const gate = ctx.gate
+      const result = args.entity === 'character' ? await mergeCharactersWith(gate, args.loser, args.winner) : args.entity === 'location' ? await mergeLocationsWith(gate, args.loser, args.winner) : await mergePropsWith(gate, args.loser, args.winner)
       return result.status === 'merged' ? { ok: true, result: { into: args.winner } } : failure(result, 'The merge did not run.')
     },
     preview: (_ctx, args) => Promise.resolve({ changes: [{ field: 'Merged into', before: args.loserName, after: args.winnerName }], open: { route: ROUTE_OF[args.entity], recordId: args.winner } }),
@@ -478,8 +479,8 @@ export const deleteEntityTool = defineWriteTool({
     target: (args) => ({ type: args.entity, id: args.id }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const projectId = ctx.gate.project.id
-      const result = args.entity === 'character' ? await deleteCharacter(projectId, args.id) : args.entity === 'location' ? await deleteLocation(projectId, args.id) : await deleteProp(projectId, args.id)
+      const gate = ctx.gate
+      const result = args.entity === 'character' ? await deleteCharacterWith(gate, args.id) : args.entity === 'location' ? await deleteLocationWith(gate, args.id) : await deletePropWith(gate, args.id)
       return result.status === 'deleted' ? { ok: true, result: { deleted: args.id } } : failure(result, 'The delete did not run.')
     },
     preview: (_ctx, args) => Promise.resolve({ changes: [{ field: 'Record', before: args.name, after: null }] }),
@@ -521,7 +522,7 @@ export const setLocationParentTool = defineWriteTool({
       return { parent: record?.parentId ?? null, parentName: parent?.name ?? null }
     },
     run: async (ctx, args) => {
-      const result = await setParent(ctx.gate.project.id, args.id, args.parent)
+      const result = await setParentWith(ctx.gate, args.id, args.parent)
       return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The set could not be moved.')
     },
     invert: async (ctx, args, undo) => {
@@ -531,7 +532,7 @@ export const setLocationParentTool = defineWriteTool({
       if ((record.parentId ?? null) !== args.parent) {
         return { kind: 'changed', note: `${args.name} was moved after the run.`, ops: [{ tool: 'set_location_parent', args: { id: args.id, parent: prior.parent, name: args.name, parentName: prior.parentName }, mode: 'propose' }] }
       }
-      const result = await setParent(ctx.gate.project.id, args.id, prior.parent)
+      const result = await setParentWith(ctx.gate, args.id, prior.parent)
       return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: async (ctx, args, op) => {
@@ -606,14 +607,14 @@ export const resolveQueueItemTool = defineWriteTool({
     irreversible: (args) => revocationOf(args) === null,
     capture: (_ctx, args) => Promise.resolve(revocationOf(args)),
     run: async (ctx, args) => {
-      const projectId = ctx.gate.project.id
+      const gate = ctx.gate
       const result =
-        args.queue === 'cue' ? await resolveCue(projectId, args.key, args.choice) : args.queue === 'slugline' ? await resolveSlugline(projectId, args.key, args.choice) : await resolveStructure(projectId, args.key, args.choice)
+        args.queue === 'cue' ? await resolveCueWith(gate, args.key, args.choice) : args.queue === 'slugline' ? await resolveSluglineWith(gate, args.key, args.choice) : await resolveStructureWith(gate, args.key, args.choice)
       return result.status === 'resolved' ? { ok: true, result: { resolved: args.key } } : failure(result, 'That queue item could not be resolved.')
     },
     invert: async (ctx, args, undo) => {
-      const projectId = ctx.gate.project.id
-      const result = args.queue === 'cue' ? await revokeCueDecision(projectId, args.key, undo) : await revokeLocationDecision(projectId, args.key, undo)
+      const gate = ctx.gate
+      const result = args.queue === 'cue' ? await revokeCueDecision(gate, args.key, undo) : await revokeLocationDecision(gate, args.key, undo)
       return result.status === 'resolved' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: (_ctx, args) => Promise.resolve({ open: { route: args.queue === 'cue' ? 'characters' : 'locations' } }),
@@ -654,12 +655,12 @@ export const saveRelationshipTool = defineWriteTool({
     target: (args) => ({ type: 'character', id: args.input.aId }),
     capture: async (ctx, args) => ({ prior: await priorRelationship(ctx, args.input.aId, args.input.bId) }),
     run: async (ctx, args) => {
-      const result = await saveRelationship(ctx.gate.project.id, args.input)
+      const result = await saveRelationshipWith(ctx.gate, args.input)
       return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The relationship could not be saved.')
     },
     invert: async (ctx, args, undo) => {
       const { prior } = RelationshipUndo.parse(undo)
-      const result = prior === null ? await deleteRelationship(ctx.gate.project.id, args.input.aId, args.input.bId) : await saveRelationship(ctx.gate.project.id, prior)
+      const result = prior === null ? await deleteRelationshipWith(ctx.gate, args.input.aId, args.input.bId) : await saveRelationshipWith(ctx.gate, prior)
       return result.status === 'saved' || result.status === 'gone' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: async (ctx, args, op) => {
@@ -699,13 +700,13 @@ export const deleteRelationshipTool = defineWriteTool({
     target: (args) => ({ type: 'character', id: args.aId }),
     capture: async (ctx, args) => ({ prior: await priorRelationship(ctx, args.aId, args.bId) }),
     run: async (ctx, args) => {
-      const result = await deleteRelationship(ctx.gate.project.id, args.aId, args.bId)
+      const result = await deleteRelationshipWith(ctx.gate, args.aId, args.bId)
       return result.status === 'gone' ? { ok: true, result: { removed: true } } : failure(result, 'The relationship could not be removed.')
     },
     invert: async (ctx, _args, undo) => {
       const { prior } = RelationshipUndo.parse(undo)
       if (prior === null) return { kind: 'undone' }
-      const result = await saveRelationship(ctx.gate.project.id, prior)
+      const result = await saveRelationshipWith(ctx.gate, prior)
       return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.status === 'gone' ? 'A character in it is gone.' : result.message }
     },
     preview: (_ctx, args) => Promise.resolve({ open: { route: 'characters', recordId: args.aId } }),

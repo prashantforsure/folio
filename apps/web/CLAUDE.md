@@ -18,6 +18,18 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `lib/script/gate.ts`; `openForActor` in `lib/projects/actions.ts`). A member whose role falls
   short gets "Your role on this project doesn't allow that", never the not-found refusal a
   stranger gets. A new action passes a `ROLE.*` capability, never a bare role.
+- **Actions are thin; the work is a core function** (roadmap task 4.2). The cookie gates in
+  `lib/script/gate.ts` are identity plus `openEpisodeAs` / `openProjectAs`
+  (`lib/script/actor-gate.ts`, no cookie, `pooler: 'session'` for the worker). Every action an agent
+  tool wraps is split: `lib/<route>/core.ts` holds `<action>With(gate, …raw input)`, which checks
+  its own capability (`roleRefusal`) and does the work; the action in `actions.ts` keeps its
+  pre-gate parse (the `*Problem` helpers), opens the cookie gate, calls the core and revalidates on
+  the outcome it always did. Tools and the worker call the cores - never a `'use server'` module,
+  whose every export is a public endpoint. `tests/worker-import-graph.test.ts` walks the tool
+  registry's and the worker's imports and fails on any `next/*`, cookie session or `'use server'`
+  module; `lib/characters/route-load.ts` holds the two loaders that need `redirect`/`notFound`, so
+  `characters/server.ts` stays reachable. A save's after-the-answer work takes a `schedule`
+  (`deferAfterSave`): Next's `after` from an action, `runDetached` elsewhere.
 - **State:** Google OAuth **and** email + password (AGENTS.md Constraints was rewritten for
   this), session in Server Components, route protection in two places. Two
   shells under one boundary: [app/(app)/layout.tsx](app/(app)/layout.tsx) is `requireUser()` and

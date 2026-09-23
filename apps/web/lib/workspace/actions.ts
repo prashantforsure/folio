@@ -1,14 +1,11 @@
 'use server'
 
-import { TitleSchema } from '@folio/contracts'
-import { appendEpisode, deleteEpisode as remove, listEpisodes, renameEpisode as rename } from '@folio/db'
+import { deleteEpisode as remove, listEpisodes } from '@folio/db'
 import { revalidatePath } from 'next/cache'
 
 import { ROLE } from '../auth/roles'
-import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
-import { REFUSED, isRefusal, openEpisode, openProject } from '../script/gate'
-import type { GateRefusal } from '../script/gate'
-import { defaultEpisodeTitle } from './format'
+import { isRefusal, openEpisode, openProject } from '../script/gate'
+import { createEpisodeWith, episodeKeyProblem, episodeTitleProblem, refusalOf, renameEpisodeWith } from './core'
 import { episodeRouteHref } from './hrefs'
 import type { EpisodeActionResult } from './result'
 
@@ -43,6 +40,11 @@ import type { EpisodeActionResult } from './result'
  * none), and a film's only episode is the film. The confirm in the menu
  * says all of this before the call.
  *
+ * Creating and renaming are thin actions over core functions (`core.ts`,
+ * roadmap task 4.2) that the agent's episode tools and the worker call with a
+ * gate of their own; deleting has no core, because D16 gives the agent no
+ * delete.
+ *
  * None of the actions redirects. They return the episode and a script URL
  * and the popover navigates, so a refusal can be shown in place instead of
  * surfacing as a thrown redirect the client cannot tell from a failure. For
@@ -50,71 +52,28 @@ import type { EpisodeActionResult } from './result'
  * after - since the current one is gone.
  */
 
-const NOT_FOUND = 'That project could not be found.'
-
-/**
- * A gate refusal as this route's result.
- *
- * Every refusal used to become `NOT_FOUND`, which was already wrong for "Sign
- * in to keep writing" and became worse with roles: a member told their episode
- * does not exist, when what happened is that their role does not reach
- * `ROLE.episodeDelete`, will look for the episode. Only the gate's own
- * not-found wording is replaced - and only to say "project" where the shared
- * gate says "script", because this popover is about neither.
- */
-const refusalOf = (gate: GateRefusal): EpisodeActionResult => ({
-  status: 'error',
-  message: gate.message === REFUSED.message ? NOT_FOUND : gate.message,
-})
-
-const parseTitle = (raw: unknown): string | null => {
-  const parsed = TitleSchema.safeParse(typeof raw === 'string' ? raw : '')
-  return parsed.success ? parsed.data : null
-}
-
 export const createEpisode = async (
   projectId: string,
   title: string | null,
   rawKey: unknown = null,
 ): Promise<EpisodeActionResult> => {
-  const key = idempotencyKeyOf(rawKey)
-  if (!key.ok) return { status: 'error', message: BAD_IDEMPOTENCY_KEY }
+  const problem = episodeKeyProblem(rawKey)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.episodeCreate)
   if (isRefusal(gate)) return refusalOf(gate)
-  if (gate.project.projectType === 'film') {
-    return { status: 'error', message: 'A film is one document. It has one episode and cannot take another.' }
-  }
-
-  // An empty name is the default, not a refusal: the placeholder said so.
-  const existing = await listEpisodes(gate.scope)
-  const next = (existing.at(-1)?.ordinal ?? 0) + 1
-  const named = title === null || title.trim().length === 0 ? defaultEpisodeTitle(next) : parseTitle(title)
-  if (named === null) return { status: 'error', message: 'A name is up to 200 characters.' }
-
-  const episode = await appendEpisode(gate.scope, named, key.key)
-  revalidatePath(`/app/project/${gate.project.id}`, 'layout')
-  return {
-    status: 'done',
-    episode: { slug: episode.slug, ordinal: episode.ordinal, title: episode.title },
-    href: episodeRouteHref({ projectId: gate.project.id, shape: 'episodic', episode: episode.slug }, 'script'),
-  }
+  const result = await createEpisodeWith(gate, title, rawKey)
+  if (result.status === 'done') revalidatePath(`/app/project/${gate.project.id}`, 'layout')
+  return result
 }
 
 export const renameEpisode = async (projectId: string, episodeSlug: string, title: string): Promise<EpisodeActionResult> => {
-  const named = parseTitle(title)
-  if (named === null) return { status: 'error', message: 'Give the episode a name - up to 200 characters.' }
-
+  const problem = episodeTitleProblem(title)
+  if (problem !== null) return problem
   const gate = await openEpisode(projectId, episodeSlug, ROLE.episodeCreate)
   if (isRefusal(gate)) return refusalOf(gate)
-
-  if (named !== gate.episode.title) await rename(gate.scope, gate.episode.id, named)
-  revalidatePath(`/app/project/${gate.project.id}`, 'layout')
-  const shape = gate.project.projectType === 'film' ? 'collapsed' : 'episodic'
-  return {
-    status: 'done',
-    episode: { slug: gate.episode.slug, ordinal: gate.episode.ordinal, title: named },
-    href: episodeRouteHref({ projectId: gate.project.id, shape, episode: gate.episode.slug }, 'script'),
-  }
+  const result = await renameEpisodeWith(gate, title)
+  if (result.status === 'done') revalidatePath(`/app/project/${gate.project.id}`, 'layout')
+  return result
 }
 
 export const deleteEpisode = async (projectId: string, episodeSlug: string): Promise<EpisodeActionResult> => {

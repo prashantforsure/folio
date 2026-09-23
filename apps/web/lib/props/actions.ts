@@ -1,29 +1,17 @@
 'use server'
 
-import { PROP_PHOTO_MAX_BYTES, PropAliasSchema, PropEditSchema, PropIdSchema, TitleSchema } from '@folio/contracts'
-import {
-  bindPropAlias,
-  createPropRecord,
-  deletePropRecord,
-  listPropAliases,
-  listPropRecords,
-  mergePropRecords,
-  renamePropRecord,
-  setPropPhotoKey,
-  unbindPropAlias,
-  updatePropRecord,
-} from '@folio/db'
+import { PROP_PHOTO_MAX_BYTES, PropAliasSchema, PropIdSchema } from '@folio/contracts'
+import { bindPropAlias, setPropPhotoKey, unbindPropAlias } from '@folio/db'
 import type { PropId } from '@folio/script'
-import { canonicalKey } from '@folio/script'
 import { revalidatePath } from 'next/cache'
 
 import { ROLE } from '../auth/roles'
-import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
 import { isRefusal, openProject } from '../script/gate'
 import { IMAGE_EXTENSION, readImage } from '../storage/image'
 import { deleteObject, publicUrl, putObject, storageAvailable } from '../storage/r2'
+import { createPropProblem, createPropWith, deletePropWith, mergePropProblem, mergePropsWith, propEditProblem, propIdProblem, renamePropProblem, renamePropWith, savePropWith } from './core'
 import type { BindResult, CreateResult, DeleteResult, MergeResult, PhotoResult, SavedResult } from './result'
-import { REFUSED_NAME, REFUSED_PROP } from './result'
+import { REFUSED_PROP } from './result'
 
 /**
  * The Props route's writes.
@@ -33,6 +21,14 @@ import { REFUSED_NAME, REFUSED_PROP } from './result'
  * Characters and Locations routes' do, and every write here is a writer's
  * (ADR 0003 D2): `ROLE.entityOperation` for the record and its aliases,
  * `ROLE.authoredEdit` for a field or a photo.
+ *
+ * ## Thin actions over core functions (roadmap task 4.2)
+ *
+ * The five record writes the agent reaches are core functions in `core.ts`
+ * taking a gate and the raw input; each action here parses what it always
+ * parsed before the gate, opens the cookie gate, calls the core and
+ * revalidates on the outcome it always did. The photo and the alias table
+ * are as they were.
  *
  * ## Nothing here re-derives, and that is the point
  *
@@ -77,7 +73,7 @@ const parseId = (raw: unknown): PropId | null => {
 // ---------------------------------------------------------------------------
 
 /**
- * Mint a record, with its name bound as its first alias.
+ * Mint a record, with its name bound as its first alias (`createPropWith`).
  *
  * The binding is what makes the record able to collect a line at all: the
  * evidence reading scores the page against a record's keys, and a record
@@ -91,82 +87,58 @@ export const createProp = async (
   rawCategory: unknown = null,
   rawKey: unknown = null,
 ): Promise<CreateResult> => {
-  const name = TitleSchema.safeParse(rawName)
-  const category = PropEditSchema.shape.category.safeParse(rawCategory ?? null)
-  if (!name.success || !category.success) return { status: 'error', message: REFUSED_NAME }
-  const key = idempotencyKeyOf(rawKey)
-  if (!key.ok) return { status: 'error', message: BAD_IDEMPOTENCY_KEY }
+  const problem = createPropProblem(rawName, rawCategory, rawKey)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-
-  const trimmed = category.data ?? null
-  const id = await createPropRecord(gate.scope, name.data, trimmed === '' ? null : trimmed, key.key)
-  await bindPropAlias(gate.scope, id, name.data)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'created', id }
+  const result = await createPropWith(gate, rawName, rawCategory, rawKey)
+  if (result.status === 'created') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 export const saveProp = async (projectId: string, rawId: string, rawEdit: unknown): Promise<SavedResult> => {
-  const id = parseId(rawId)
-  const edit = PropEditSchema.safeParse(rawEdit)
-  if (id === null || !edit.success) return { status: 'error', message: 'That edit could not be read.' }
+  const problem = propEditProblem(rawId, rawEdit)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  const written = await updatePropRecord(gate.scope, id, edit.data)
-  if (!written) return { status: 'error', message: REFUSED_PROP }
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
+  const result = await savePropWith(gate, rawId, rawEdit)
+  if (result.status === 'saved') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 /**
- * Rename the record. The alias that *is* the old name is swapped for the
- * new spelling; every other alias the writer bound stays bound, because
- * "the ball" is still what the page calls it. See the header for why this
- * is not a write-back.
+ * Rename the record (`renamePropWith`). The alias that *is* the old name is
+ * swapped for the new spelling; every other alias the writer bound stays
+ * bound, because "the ball" is still what the page calls it. See the header
+ * for why this is not a write-back.
  */
 export const renameProp = async (projectId: string, rawId: string, rawName: string): Promise<SavedResult> => {
-  const id = parseId(rawId)
-  const name = TitleSchema.safeParse(rawName)
-  if (id === null || !name.success) return { status: 'error', message: REFUSED_NAME }
+  const problem = renamePropProblem(rawId, rawName)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-
-  const [records, aliases] = await Promise.all([listPropRecords(gate.scope), listPropAliases(gate.scope)])
-  const record = records.find((entry) => entry.id === id)
-  if (record === undefined) return { status: 'error', message: REFUSED_PROP }
-  const oldKey = canonicalKey(record.name)
-  const oldAliases = aliases
-    .filter((entry) => entry.propId === id && canonicalKey(entry.alias) === oldKey)
-    .map((entry) => entry.alias)
-
-  const outcome = await renamePropRecord(gate.scope, id, name.data, oldAliases, name.data)
-  if (outcome.status !== 'renamed') return { status: 'error', message: REFUSED_PROP }
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
+  const result = await renamePropWith(gate, rawId, rawName)
+  if (result.status === 'saved') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 /**
- * Merge this record into another. The loser keeps its row as a tombstone,
- * so `/props/:loserId` redirects to the survivor, and both Production
- * columns that pointed at it are repointed in the same statement.
+ * Merge this record into another (`mergePropsWith`). The loser keeps its row
+ * as a tombstone, so `/props/:loserId` redirects to the survivor, and both
+ * Production columns that pointed at it are repointed in the same statement.
  */
 export const mergeProps = async (projectId: string, rawLoser: string, rawWinner: string): Promise<MergeResult> => {
-  const loser = parseId(rawLoser)
-  const winner = parseId(rawWinner)
-  if (loser === null || winner === null) return { status: 'error', message: REFUSED_PROP }
+  const problem = mergePropProblem(rawLoser, rawWinner)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-
-  const outcome = await mergePropRecords(gate.scope, loser, winner)
-  if (outcome.status === 'same') return { status: 'refused', message: 'A prop cannot be merged into itself.' }
-  if (outcome.status !== 'merged') return { status: 'error', message: REFUSED_PROP }
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'merged', into: outcome.into }
+  const result = await mergePropsWith(gate, rawLoser, rawWinner)
+  if (result.status === 'merged') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 /**
- * Delete the record outright.
+ * Delete the record outright (`deletePropWith`).
  *
  * There is no "still in the script" refusal to make, and that is the
  * difference from `deleteLocation`: a location deleted under a live
@@ -176,17 +148,13 @@ export const mergeProps = async (projectId: string, rawLoser: string, rawWinner:
  * `prop_id` - which the drawer says in words before the button is pressed.
  */
 export const deleteProp = async (projectId: string, rawId: string): Promise<DeleteResult> => {
-  const id = parseId(rawId)
-  if (id === null) return { status: 'error', message: REFUSED_PROP }
+  const problem = propIdProblem(rawId)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-
-  const before = (await listPropRecords(gate.scope)).find((entry) => entry.id === id)
-  const deleted = await deletePropRecord(gate.scope, id)
-  if (!deleted) return { status: 'error', message: REFUSED_PROP }
-  if (before?.photoKey != null && storageAvailable()) await deleteObject(before.photoKey)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'deleted' }
+  const result = await deletePropWith(gate, rawId)
+  if (result.status === 'deleted') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 // ---------------------------------------------------------------------------

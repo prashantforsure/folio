@@ -36,7 +36,6 @@ import type {
   ScreenplayNode,
 } from '@folio/script'
 import { canonicalKey, countDerivationIds, derive, paginate, readCue, renderableNodes } from '@folio/script'
-import { after } from 'next/server'
 import { createHash } from 'node:crypto'
 
 import { healNameCues } from '../characters/heal'
@@ -65,7 +64,9 @@ import type { ScriptStats } from './stats'
  * "saved". A save awaits exactly what the answer depends on: the node write,
  * and the measurement *computed* - the sheet is drawn from it. Everything
  * whose result the answer does not carry runs **after the response**
- * (`after()` from `next/server`, which Server Functions support):
+ * (`after()` from `next/server`, which Server Functions support - handed in
+ * by the action as `deferAfterSave`'s `schedule`, so this file stays free of
+ * Next for the worker, roadmap task 4.2):
  *
  *   1. storing the measurement - `writeMeasurement`, one statement per mode,
  *      for the routes that count pages from the table;
@@ -350,8 +351,30 @@ export const measureAndDerive = async (
 }
 
 /**
+ * Something that runs a task once the answer has gone: `after()` from
+ * `next/server` in a request, the worker's own task runner in a job.
+ */
+export type Schedule = (task: () => Promise<void>) => void
+
+/**
+ * A `Schedule` with no request to hang off: the task starts now and nobody
+ * awaits it; a throw is logged, never raised. For a long-lived process (the
+ * worker), where "after the answer" is simply "in the background".
+ */
+export const runDetached: Schedule = (task) => {
+  void task().catch((cause: unknown) => {
+    console.error({ event: 'folio.schedule.task_failed', message: cause instanceof Error ? cause.message : String(cause) })
+  })
+}
+
+/**
  * The same pipeline, after the response. Queued per document (the store)
  * and per project (the derivation), newest wins - see the header.
+ *
+ * `schedule` is the caller's since roadmap task 4.2: the Script route's save
+ * passes Next's `after`, and a save made by the worker runs the task itself -
+ * so this file, which the worker's code reaches through `rederiveProject`,
+ * imports nothing from Next.
  */
 export const deferAfterSave = (
   scope: ProjectScope,
@@ -359,9 +382,9 @@ export const deferAfterSave = (
   document: DocumentRecord,
   measurement: MeasureOutcome,
   nodes: readonly ScreenplayNode[],
-  options: { readonly derive: boolean },
+  options: { readonly derive: boolean; readonly schedule: Schedule },
 ): void => {
-  after(async () => {
+  options.schedule(async () => {
     await Promise.all([
       later(`measurement:${document.id}`, () => storeMeasurement(scope, episode, document, measurement, nodes)),
       options.derive

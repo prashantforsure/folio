@@ -498,6 +498,12 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   `lib/auth/session.ts` for the account routes and page loaders. The order is **parse → identity
   → membership → scope**, and a non-member and a non-existent project get the *same* refusal, so
   there is no existence oracle. A gate returns a `ProjectScope` or a refusal; it never throws.
+  **Updated 2026-09-23** (roadmap task 4.2): the three cookie gates are identity plus
+  `openEpisodeAs` / `openProjectAs` in `apps/web/lib/script/actor-gate.ts`, which make the same
+  checks for a known actor with no cookie - so the worker opens a gate as a run's starter (ADR
+  0003 D4) and is refused exactly as the browser is. Every action a tool wraps is a thin action
+  over a **core function** (`lib/<route>/core.ts`, `<action>With(gate, …)`) that checks its own
+  capability; the tools and the worker call the cores, never the actions.
   **`openProjectForRequest` checks nothing about the actor** — the scope guarantees a query
   cannot cross projects, not that the caller was entitled to this one. The gate is the only
   entitlement check, which is why a repository call that skips it skips authorisation entirely.

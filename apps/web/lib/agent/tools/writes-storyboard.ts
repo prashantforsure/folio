@@ -7,7 +7,8 @@ import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
 import { formatSceneRef, sceneRefOf } from '../../characters/figures'
-import { acceptShots, addShot, discardShots, placeShot, proposeShotsForScene, saveShot } from '../../storyboard/actions'
+import { acceptShotsWith, addShotWith, discardShotsWith, placeShotWith, proposeShotsForSceneWith, saveShotWith } from '../../storyboard/core'
+import { inEpisode } from '../episode-gate'
 import type { ExecOutcome } from '../executors'
 import type { ToolContext } from '../registry'
 import type { WriteTool } from '../write-tool'
@@ -86,7 +87,7 @@ export const proposeStoryboardShotsTool = defineWriteTool({
     target: (args) => ({ type: 'scene', id: args.sceneId }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await proposeShotsForScene(ctx.gate.project.id, args.episode, args.sceneId)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => proposeShotsForSceneWith(gate, args.sceneId))
       if (result.status !== 'saved') return failure(result, 'The shots could not be drafted.')
       const proposed = result.shots.filter((shot) => shot.state === 'proposed').map((shot) => shot.id)
       return { ok: true, result: { proposed: proposed.length }, undo: { shotIds: proposed } }
@@ -96,7 +97,7 @@ export const proposeStoryboardShotsTool = defineWriteTool({
       const { shotIds } = z.object({ shotIds: z.array(z.uuid()) }).parse(undo)
       const waiting = (await listSceneShots(ctx.gate.scope, args.sceneId as NodeId)).filter((shot) => shot.state === 'proposed' && shotIds.includes(shot.id)).map((shot) => shot.id)
       if (waiting.length === 0) return { kind: 'undone', note: 'None of the drafted shots were still waiting.' }
-      const result = await discardShots(ctx.gate.project.id, args.episode, { sceneNodeId: args.sceneId, shotIds: waiting })
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => discardShotsWith(gate, { sceneNodeId: args.sceneId, shotIds: waiting }))
       return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: () => Promise.resolve({ open: { route: 'storyboard' } }),
@@ -152,23 +153,21 @@ export const editStoryboardShotTool = defineWriteTool({
       return shot === null ? null : { spec: specOfShot(shot) }
     },
     run: async (ctx, args, captured) => {
-      const projectId = ctx.gate.project.id
       if (args.action === 'add') {
-        const result = await addShot(projectId, args.episode, args.sceneId, args.shot, ctx.idempotencyKey)
+        const result = await inEpisode(ctx.gate, args.episode, (gate) => addShotWith(gate, args.sceneId, args.shot, ctx.idempotencyKey))
         if (result.status !== 'saved') return failure(result, 'The shot could not be added.')
         const before = z.object({ before: z.array(z.string()) }).safeParse(captured).data?.before ?? []
         const added = result.shots.find((shot) => !before.includes(shot.id))
         return { ok: true, result: { shotId: added?.id ?? null }, undo: { shotId: added?.id ?? null } }
       }
-      const result = await saveShot(projectId, args.episode, args.shotId, args.shot)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => saveShotWith(gate, args.shotId, args.shot))
       return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The shot could not be saved.')
     },
     invert: async (ctx, args, undo) => {
-      const projectId = ctx.gate.project.id
       if (args.action === 'add') {
         const { shotId } = z.object({ shotId: z.uuid().nullable() }).parse(undo)
         if (shotId === null) return { kind: 'skipped', reason: 'The added shot could not be found.' }
-        const result = await discardShots(projectId, args.episode, { sceneNodeId: args.sceneId, shotIds: [shotId] })
+        const result = await inEpisode(ctx.gate, args.episode, (gate) => discardShotsWith(gate, { sceneNodeId: args.sceneId, shotIds: [shotId] }))
         return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
       }
       const { spec } = z.object({ spec: SpecStored }).parse(undo)
@@ -177,7 +176,7 @@ export const editStoryboardShotTool = defineWriteTool({
       if (JSON.stringify(specOfShot(now)) !== JSON.stringify(args.shot)) {
         return { kind: 'changed', note: `A shot in ${args.ref} was edited after the run.`, ops: [{ tool: 'edit_storyboard_shot', args: { ...args, shot: spec }, mode: 'propose' }] }
       }
-      const result = await saveShot(projectId, args.episode, args.shotId, spec)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => saveShotWith(gate, args.shotId, spec))
       return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: () => Promise.resolve({ open: { route: 'storyboard' } }),
@@ -206,7 +205,7 @@ export const acceptOrDiscardShotsTool = defineWriteTool({
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
       const input = { sceneNodeId: args.sceneId, shotIds: args.shotIds }
-      const result = args.action === 'accept' ? await acceptShots(ctx.gate.project.id, args.episode, input) : await discardShots(ctx.gate.project.id, args.episode, input)
+      const result = args.action === 'accept' ? await inEpisode(ctx.gate, args.episode, (gate) => acceptShotsWith(gate, input)) : await inEpisode(ctx.gate, args.episode, (gate) => discardShotsWith(gate, input))
       return result.status === 'saved' ? { ok: true, result: { done: args.shotIds.length } } : failure(result, 'The shots could not be changed.')
     },
     preview: () => Promise.resolve({ open: { route: 'storyboard' } }),
@@ -235,12 +234,12 @@ export const reorderStoryboardShotTool = defineWriteTool({
     target: (args) => ({ type: 'shot', id: args.shotId }),
     capture: async (ctx, args) => ({ index: Math.max(0, (await listSceneShots(ctx.gate.scope, args.sceneId as NodeId)).findIndex((shot) => shot.id === args.shotId)) }),
     run: async (ctx, args) => {
-      const result = await placeShot(ctx.gate.project.id, args.episode, args.shotId, args.index)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => placeShotWith(gate, args.shotId, args.index))
       return result.status === 'saved' ? { ok: true, result: { placed: args.index } } : failure(result, 'The shot could not be moved.')
     },
     invert: async (ctx, args, undo) => {
       const { index } = z.object({ index: z.number().int() }).parse(undo)
-      const result = await placeShot(ctx.gate.project.id, args.episode, args.shotId, index)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => placeShotWith(gate, args.shotId, index))
       return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: () => Promise.resolve({ open: { route: 'storyboard' } }),

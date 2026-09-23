@@ -27,6 +27,7 @@ import { assistantEnv } from '@folio/db/env'
 import type { RunId, ScreenplayNode } from '@folio/script'
 import { establishingLines, formatStoryTime, quadrantOf } from '@folio/script'
 import Anthropic from '@anthropic-ai/sdk'
+import { after } from 'next/server'
 
 import { formatSceneRef, sceneRefOf } from '../characters/figures'
 import { dayNightShort, quadrantLabel } from '../locations/view'
@@ -39,6 +40,7 @@ import { checkRateLimit } from '../agent/rate-limit'
 import { replayOf } from '../agent/replay'
 import '../agent/tools'
 import { ROLE } from '../auth/roles'
+import { stillMember } from '../script/actor-gate'
 import { isRefusal, openEpisodeWith } from '../script/gate'
 import { readContinuity } from '../timeline/server'
 import { findingNote, findingsAbout, previousFrameScene, sceneRef } from '../timeline/view'
@@ -430,9 +432,12 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
           messages,
           route: input.route ?? null,
           context: { gate: toolGate, runId: run.id, emit },
+          checkMembership: () => stillMember(toolGate),
           // Phase 3: what a write tool proposes is written here, one proposal per step,
           // and under the writer's `auto` applied at once where D1 allows (task 3.7).
-          proposals: proposalSink(toolGate, run.id, autonomy),
+          proposals: proposalSink(toolGate, run.id, autonomy, (task) => {
+            after(task)
+          }),
           emit,
           signal,
           tokenBudget,

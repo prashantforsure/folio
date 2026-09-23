@@ -79,7 +79,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 - `packages/contracts` — Zod boundary schemas; `production.ts` holds `MODEL_REGISTRY`, the only
   place a **generation** model is named. The model that reads and drafts is
   `apps/web/lib/assistant/model.ts` — two registries, two owners, neither an environment
-  variable (ADR 0003 D12). `packages/db` — Drizzle schema, forward-only migrations `0000`–`0030`
+  variable (ADR 0003 D12). `packages/db` — Drizzle schema, forward-only migrations `0000`–`0036`
   (which are applied to dev is tracked in its `CLAUDE.md`), project-scoped repositories, the
   Production dev seed. `packages/ui` — tokens as CSS custom properties, the inline SVG icon set, a
   few small components.
@@ -88,7 +88,8 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
   to Projects since 2026-09-22), workspace chrome (`_chrome/project-shell.tsx`) and all ten
   route bodies: Script, Outline, Storyboard, Scenes, Characters, Locations, Props, Timeline,
   Research, Production. Each is `app/(app)/app/project/[projectId]/_<route>/` plus `lib/<route>/` for its
-  actions. `lib/workspace/routes.ts` is the route tree; `lib/workspace/views.ts` tables each
+  actions (thin, cookie-gated) and their core functions (`core.ts`, gate-taking - what the agent's
+  tools and the worker call). `lib/workspace/routes.ts` is the route tree; `lib/workspace/views.ts` tables each
   route's `?view=` tabs, drawn in the header's centre. The assistant (`lib/assistant/`) and
   share links (`lib/share/`) are cross-route. `lib/production/pipeline/` is the Gemini spec,
   client and runner.
@@ -150,7 +151,7 @@ Production walk at a seeded project.
 pnpm typecheck   # 6 packages — also a test suite: @ts-expect-error guarantees live in it
 pnpm lint        # eslint.config.mjs is AGENTS.md made executable; each ban error carries its reason
 pnpm test        # only @folio/script, web and worker have test scripts
-pnpm build       # web only; ends with scripts/assert-no-server-secrets.mjs
+pnpm build       # web (ends with scripts/assert-no-server-secrets.mjs) and the worker's bundle
 pnpm test:e2e    # Playwright, web only
 
 pnpm --filter @folio/script exec vitest run src/paginate.test.ts    # one file

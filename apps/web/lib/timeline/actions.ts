@@ -4,32 +4,33 @@ import type { TextExportResult } from '../workspace/export'
 import { listEpisodes } from '@folio/db'
 import { chronologyExport, readContinuity } from './server'
 
-import { FindingVerdictSchema, NodeIdSchema, PlacementsSchema, SceneThreadsSchema, StoryThreadEditSchema, StoryThreadIdSchema, StoryTimeEditSchema, ThreadOrderSchema } from '@folio/contracts'
-import type { StoryThreadId } from '@folio/contracts'
-import {
-  createStoryThread,
-  deleteStoryThread,
-  listTimelineScenes,
-  markFindingDeliberate,
-  orderStoryThreads,
-  placeScenes as placeScenesNow,
-  readMentionLabels,
-  readScreenplayNodes,
-  reopenFinding as reopenFindingNow,
-  unplaceScenes as unplaceScenesNow,
-  updateStoryThread,
-  writeSceneThreads,
-  writeStoryTime,
-} from '@folio/db'
-import type { NodeId } from '@folio/script'
-import { labelBook } from '@folio/script'
 import { revalidatePath } from 'next/cache'
-import { z } from 'zod'
 
-import { cutExcerpts } from '../scenes/excerpt'
 import { ROLE } from '../auth/roles'
-import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
 import { isRefusal, openProject } from '../script/gate'
+import {
+  createThreadProblem,
+  createThreadWith,
+  deleteThreadWith,
+  findingKeyProblem,
+  markDeliberateWith,
+  orderThreadsWith,
+  placeScenesWith,
+  placementsProblem,
+  readSceneLinesWith,
+  reopenFindingWith,
+  saveStoryTimeWith,
+  saveThreadProblem,
+  saveThreadWith,
+  sceneIdProblem,
+  sceneThreadsProblem,
+  setSceneThreadsWith,
+  storyTimeProblem,
+  threadIdProblem,
+  threadOrderProblem,
+  unplaceScenesWith,
+  verdictProblem,
+} from './core'
 import type { DeletedResult, PlacedResult, SavedResult, SceneLinesResult, ThreadCreatedResult, UnplacedResult } from './result'
 
 /**
@@ -40,6 +41,13 @@ import type { DeletedResult, PlacedResult, SavedResult, SceneLinesResult, Thread
  * Every write is `ROLE.authoredEdit` (a thread, a placement, a verdict),
  * except deleting a thread, which is `ROLE.entityOperation` because it
  * reaches every scene; `readSceneLines` is `ROLE.read` (ADR 0003 D2).
+ *
+ * ## Thin actions over core functions (roadmap task 4.2)
+ *
+ * Each action parses what it always parsed before the gate, opens the cookie
+ * gate with its capability, calls its core in `core.ts` - which the agent's
+ * tools and the worker call with a gate of their own - and revalidates on the
+ * outcome it always did. Signatures and results are unchanged.
  *
  * ## Nothing here re-derives, and nothing here writes a node
  *
@@ -68,63 +76,40 @@ import type { DeletedResult, PlacedResult, SavedResult, SceneLinesResult, Thread
 
 const timelinePath = (projectId: string): string => `/app/project/${projectId}/timeline`
 
-const REFUSED_SCENE = 'That scene could not be found.'
-const REFUSED_THREAD = 'That thread could not be found.'
-const UNREADABLE = 'That edit could not be read.'
-const THREAD_SHAPE = 'A thread needs a name, up to 80 characters.'
-
-const parseSceneId = (raw: unknown): NodeId | null => {
-  const parsed = NodeIdSchema.safeParse(typeof raw === 'string' ? raw : '')
-  return parsed.success ? parsed.data : null
-}
-
-const parseThreadId = (raw: unknown): StoryThreadId | null => {
-  const parsed = StoryThreadIdSchema.safeParse(typeof raw === 'string' ? raw : '')
-  return parsed.success ? parsed.data : null
-}
-
 // ---------------------------------------------------------------------------
 // Story time
 // ---------------------------------------------------------------------------
 
 export const saveStoryTime = async (projectId: string, rawSceneId: string, rawEdit: unknown): Promise<SavedResult> => {
-  const sceneNodeId = parseSceneId(rawSceneId)
-  const edit = StoryTimeEditSchema.safeParse(rawEdit)
-  if (sceneNodeId === null) return { status: 'error', message: REFUSED_SCENE }
-  if (!edit.success) {
-    return { status: 'error', message: edit.error.issues[0]?.message ?? UNREADABLE }
-  }
+  const problem = storyTimeProblem(rawSceneId, rawEdit)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  const written = await writeStoryTime(gate.scope, sceneNodeId, edit.data)
-  if (!written) return { status: 'error', message: REFUSED_SCENE }
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'saved' }
+  const result = await saveStoryTimeWith(gate, rawSceneId, rawEdit)
+  if (result.status === 'saved') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 /** The queue's `Accept all`: every proposal the writer accepted, one write, only where the scene still has no day. */
 export const placeScenes = async (projectId: string, rawPlacements: unknown): Promise<PlacedResult> => {
-  const placements = PlacementsSchema.safeParse(rawPlacements)
-  if (!placements.success) return { status: 'error', message: UNREADABLE }
+  const problem = placementsProblem(rawPlacements)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  const landed = await placeScenesNow(gate.scope, placements.data)
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'placed', placements: landed }
+  const result = await placeScenesWith(gate, rawPlacements)
+  if (result.status === 'placed') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 /** Take a bulk placement back: the placements `placeScenes` answered with, still exactly so, go back to unplaced. */
 export const unplaceScenes = async (projectId: string, rawPlacements: unknown): Promise<UnplacedResult> => {
-  const placements = PlacementsSchema.safeParse(rawPlacements)
-  if (!placements.success) return { status: 'error', message: UNREADABLE }
+  const problem = placementsProblem(rawPlacements)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  const scenes = await unplaceScenesNow(gate.scope, placements.data)
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'unplaced', scenes }
+  const result = await unplaceScenesWith(gate, rawPlacements)
+  if (result.status === 'unplaced') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 // ---------------------------------------------------------------------------
@@ -132,70 +117,55 @@ export const unplaceScenes = async (projectId: string, rawPlacements: unknown): 
 // ---------------------------------------------------------------------------
 
 export const createThread = async (projectId: string, rawEdit: unknown, rawKey: unknown = null): Promise<ThreadCreatedResult> => {
-  const edit = StoryThreadEditSchema.safeParse(rawEdit)
-  if (!edit.success) return { status: 'error', message: THREAD_SHAPE }
-  const key = idempotencyKeyOf(rawKey)
-  if (!key.ok) return { status: 'error', message: BAD_IDEMPOTENCY_KEY }
+  const problem = createThreadProblem(rawEdit, rawKey)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  const id = await createStoryThread(gate.scope, edit.data, key.key)
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'created', id }
+  const result = await createThreadWith(gate, rawEdit, rawKey)
+  if (result.status === 'created') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 export const saveThread = async (projectId: string, rawId: string, rawEdit: unknown): Promise<SavedResult> => {
-  const id = parseThreadId(rawId)
-  const edit = StoryThreadEditSchema.safeParse(rawEdit)
-  if (id === null) return { status: 'error', message: REFUSED_THREAD }
-  if (!edit.success) return { status: 'error', message: THREAD_SHAPE }
+  const problem = saveThreadProblem(rawId, rawEdit)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  const written = await updateStoryThread(gate.scope, id, edit.data)
-  if (!written) return { status: 'error', message: REFUSED_THREAD }
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'saved' }
+  const result = await saveThreadWith(gate, rawId, rawEdit)
+  if (result.status === 'saved') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 export const deleteThread = async (projectId: string, rawId: string): Promise<DeletedResult> => {
-  const id = parseThreadId(rawId)
-  if (id === null) return { status: 'error', message: REFUSED_THREAD }
+  const problem = threadIdProblem(rawId)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-
-  const deleted = await deleteStoryThread(gate.scope, id)
-  if (!deleted) return { status: 'error', message: REFUSED_THREAD }
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'deleted' }
+  const result = await deleteThreadWith(gate, rawId)
+  if (result.status === 'deleted') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 /** The sidebar's drag: the whole row order. A list that disagrees with the project's threads writes nothing. */
 export const orderThreads = async (projectId: string, rawIds: unknown): Promise<SavedResult> => {
-  const ids = ThreadOrderSchema.safeParse(rawIds)
-  if (!ids.success) return { status: 'error', message: UNREADABLE }
+  const problem = threadOrderProblem(rawIds)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  const written = await orderStoryThreads(gate.scope, ids.data)
-  if (!written) return { status: 'error', message: 'The threads changed under you. Reload and try again.' }
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'saved' }
+  const result = await orderThreadsWith(gate, rawIds)
+  if (result.status === 'saved') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 /** A scene's threads, whole and in order - the drawer's chips, a drop onto a row, a `×`. The first is its row. */
 export const setSceneThreads = async (projectId: string, rawSceneId: string, rawIds: unknown): Promise<SavedResult> => {
-  const sceneNodeId = parseSceneId(rawSceneId)
-  const ids = SceneThreadsSchema.safeParse(rawIds)
-  if (sceneNodeId === null) return { status: 'error', message: REFUSED_SCENE }
-  if (!ids.success) return { status: 'error', message: UNREADABLE }
+  const problem = sceneThreadsProblem(rawSceneId, rawIds)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  const written = await writeSceneThreads(gate.scope, sceneNodeId, ids.data)
-  if (!written) return { status: 'error', message: 'That scene or one of those threads could not be found.' }
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'saved' }
+  const result = await setSceneThreadsWith(gate, rawSceneId, rawIds)
+  if (result.status === 'saved') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 // ---------------------------------------------------------------------------
@@ -204,26 +174,24 @@ export const setSceneThreads = async (projectId: string, rawSceneId: string, raw
 
 /** `It's deliberate` on a finding: one row, keyed on the check's key. */
 export const markDeliberate = async (projectId: string, rawVerdict: unknown): Promise<SavedResult> => {
-  const verdict = FindingVerdictSchema.safeParse(rawVerdict)
-  if (!verdict.success) return { status: 'error', message: UNREADABLE }
+  const problem = verdictProblem(rawVerdict)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  await markFindingDeliberate(gate.scope, verdict.data)
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'saved' }
+  const result = await markDeliberateWith(gate, rawVerdict)
+  if (result.status === 'saved') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 /** `Reopen`: the row goes and the finding is listed again. */
 export const reopenFinding = async (projectId: string, rawKey: unknown): Promise<SavedResult> => {
-  const key = z.string().min(1).max(200).safeParse(rawKey)
-  if (!key.success) return { status: 'error', message: UNREADABLE }
+  const problem = findingKeyProblem(rawKey)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  await reopenFindingNow(gate.scope, key.data)
-  revalidatePath(timelinePath(gate.project.id))
-  return { status: 'saved' }
+  const result = await reopenFindingWith(gate, rawKey)
+  if (result.status === 'saved') revalidatePath(timelinePath(gate.project.id))
+  return result
 }
 
 // ---------------------------------------------------------------------------
@@ -231,31 +199,16 @@ export const reopenFinding = async (projectId: string, rawKey: unknown): Promise
 // ---------------------------------------------------------------------------
 
 /**
- * One scene's own lines, for `Read in story order`: the heading and every
- * renderable node under it, as the Scenes route's reading modal draws
- * them (`lib/scenes/excerpt.ts`, the same cut). Read when the reader
- * turns to the scene rather than shipped with the route - a series is the
- * whole script, and the reader wants one scene at a time.
+ * One scene's own lines, for `Read in story order` (`readSceneLinesWith`).
+ * Read when the reader turns to the scene rather than shipped with the route -
+ * a series is the whole script, and the reader wants one scene at a time.
  */
 export const readSceneLines = async (projectId: string, rawSceneId: string): Promise<SceneLinesResult> => {
-  const sceneNodeId = parseSceneId(rawSceneId)
-  if (sceneNodeId === null) return { status: 'error', message: REFUSED_SCENE }
+  const problem = sceneIdProblem(rawSceneId)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.read)
   if (isRefusal(gate)) return gate
-
-  const scenes = await listTimelineScenes(gate.scope, gate.project.format)
-  const record = scenes.find((scene) => scene.sceneNodeId === sceneNodeId)
-  if (record === undefined) return { status: 'error', message: REFUSED_SCENE }
-  const [read, labels] = await Promise.all([readScreenplayNodes(gate.scope, record.documentId), readMentionLabels(gate.scope)])
-  if (!read.ok) return { status: 'error', message: 'That scene could not be read.' }
-  const present = scenes.filter((scene) => scene.documentId === record.documentId).map((scene) => scene.sceneNodeId)
-  const { excerpts } = cutExcerpts(
-    read.value.map((entry) => entry.node),
-    present,
-    labelBook(labels),
-  )
-  const excerpt = excerpts.get(sceneNodeId)
-  return excerpt === undefined ? { status: 'error', message: REFUSED_SCENE } : { status: 'ok', lines: excerpt.lines }
+  return readSceneLinesWith(gate, rawSceneId)
 }
 
 // ---------------------------------------------------------------------------

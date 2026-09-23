@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
 import { outlineExport } from '../../outline/server'
-import { exportScriptFdx, exportScriptFountain } from '../../script/actions'
+import { exportScriptFdxWith, exportScriptFountainWith } from '../../script/core'
 import { readPageCount } from '../../script/page-count'
 import { defineTool } from '../registry'
 import type { Tool, ToolContext } from '../registry'
@@ -56,11 +56,11 @@ export const exportScript = defineTool({
     const episode = await episodeFor(ctx, input.episode)
     if (episode === null) return { ok: false, message: `There is no episode ${String(input.episode)}.` }
     if (input.format === 'fdx') {
-      const result = await exportScriptFdx(ctx.gate.project.id, episode.slug)
+      const result = await exportScriptFdxWith({ ...ctx.gate, episode })
       if (result.status !== 'exported') return { ok: false, message: result.message }
       return deliver(ctx, { filename: result.filename, mime: 'application/xml', text: result.xml }, { commentsLeftOut: result.omitted })
     }
-    const result = await exportScriptFountain(ctx.gate.project.id, episode.slug)
+    const result = await exportScriptFountainWith({ ...ctx.gate, episode })
     if (result.status !== 'exported') return { ok: false, message: result.message }
     return deliver(ctx, { filename: result.filename, mime: 'text/plain;charset=utf-8', text: result.text }, { commentsLeftOut: result.omitted })
   },

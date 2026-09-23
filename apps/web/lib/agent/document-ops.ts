@@ -18,8 +18,8 @@ import {
 } from '@folio/script'
 import { z } from 'zod'
 
-import { saveOutline } from '../outline/actions'
-import { saveScript } from '../script/actions'
+import { saveOutlineWith } from '../outline/core'
+import { saveScriptWith } from '../script/core'
 import { nodeDigest } from '../script/server'
 import type { DiffView } from './diff-view'
 import { diffViewOf } from './diff-view'
@@ -236,7 +236,7 @@ const snapshotNodes = async <T>(ctx: { readonly gate: ToolGate }, versionId: str
 
 /** Write a whole node list over `from` with the save's compare-and-swap. `stale` when the stored list is not `from`. */
 const writeList = async (
-  ctx: { readonly gate: ToolGate },
+  ctx: Pick<ExecContext, 'gate' | 'schedule'>,
   state: DocumentState,
   next: readonly (ScreenplayNode | OutlineNode)[],
   expectedDigest: string,
@@ -249,7 +249,7 @@ const writeList = async (
     const held = new Map<string, string>(state.nodes.map((node) => [node.id, JSON.stringify(node)]))
     const upserts = next.filter((node) => held.get(node.id) !== JSON.stringify(node))
     const sameOrder = next.length === state.nodes.length && next.every((node, index) => state.nodes[index]?.id === node.id)
-    const saved = await saveScript({
+    const saved = await saveScriptWith({ ...ctx.gate, episode }, {
       projectId: ctx.gate.project.id,
       episode: episode.slug,
       documentId: state.documentId,
@@ -261,12 +261,12 @@ const writeList = async (
       derive: true,
       recordDigest: null,
       expectedDigest,
-    })
+    }, { schedule: ctx.schedule })
     if (saved.status === 'saved') return { ok: true }
     if (saved.status === 'stale') return { ok: false, message: 'The script changed since this was proposed.', stale: true }
     return { ok: false, message: 'message' in saved ? saved.message : 'The script could not be saved.', stale: false }
   }
-  const saved = await saveOutline({
+  const saved = await saveOutlineWith({ ...ctx.gate, episode }, {
     projectId: ctx.gate.project.id,
     episode: episode.slug,
     documentId: state.documentId,

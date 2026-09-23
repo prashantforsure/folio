@@ -443,7 +443,19 @@ card says so).
   (`apps/web/lib/worker/`, empty until 4.3/4.4), bundled by esbuild (approved 2026-09-23).
   **Follow-ups:** `0036` is not applied anywhere; the image was not built here (Docker's daemon was
   not running) - the bundle was, and a smoke run against dev answered `/health` 200 with `LISTEN` up.
-- [ ] 4.2 Actor gates and core functions. Add openProjectAs and openEpisodeAs(actor, projectId, episode, minRole), which perform the same membership, project and role checks without cookies, and make the cookie gates call them. Split every server action that a tool wraps into a core function that takes a gate and input, plus a thin action that runs the cookie gate, calls the core and revalidates. Public action signatures and behaviour stay identical. Switch the tool registry to the cores. Existing tests must pass unchanged.
+- [x] 4.2 Actor gates and core functions. Add openProjectAs and openEpisodeAs(actor, projectId, episode, minRole), which perform the same membership, project and role checks without cookies, and make the cookie gates call them. Split every server action that a tool wraps into a core function that takes a gate and input, plus a thin action that runs the cookie gate, calls the core and revalidates. Public action signatures and behaviour stay identical. Switch the tool registry to the cores. Existing tests must pass unchanged.
+
+  **Done 2026-09-23.** `lib/script/actor-gate.ts` holds `openProjectAs` / `openEpisodeAs` (a
+  `pooler` for the worker) and the cookie gates are identity plus them. 71 actions in 11 modules are
+  thin over `lib/<route>/core.ts` (`<action>With(gate, …)`, own capability check; pre-gate parses
+  kept as `*Problem`); every tool and executor calls the cores, `inEpisode` narrows to an operation's
+  episode, and a save's after-the-answer work takes a `schedule` (Next's `after` in a request).
+  `tests/actor-gates.test.ts` and `tests/worker-import-graph.test.ts` are new. **Test changes, as
+  ruled:** the three agent write-tool files mock `lib/*/core` with the gate as first argument
+  (positional reads moved with it; the shotlist call gained its scheduler) and mock a membership
+  row, because `runTool` now re-reads membership once per step - which keeps `agent-tools.test.ts`'s
+  "membership gone" case passing unchanged. **Follow-up:** `meetsRole` ranks an unknown *held* role
+  above owner (`rankOf` returns Infinity), the opposite of its own comment - untouched here.
 - [ ] 4.3 Generations on the worker. In lib/production/generate.ts, replace after(runGeneration) with a production_generation job that the worker runs. Implement Storyboard frame generation: requestFrame calls queueFrameGeneration, and the worker processes frame_generation jobs using the shot_frame model; update the "refuses by design until the worker exists" notes in docs/remainingroadmap.md and AGENTS.md. Add a reaper job every 10 minutes that releases reservations reported by listOrphanedReservations and marks those generations failed with the reason "interrupted". Add an R2 sweeper that logs unreferenced production objects older than 24 hours, and deletes them only when an env flag is set.
 - [ ] 4.4 Background agent runs. Runs in background mode execute in the worker with the same loop and registry, through the actor gates, re-checking membership and role before every step (D4). Each step is persisted before the next starts, so a crashed run resumes from its transcript. When a run needs the user (a confirmation or a checkpoint), it moves to waiting_for_user, and the user's reply enqueues its continuation. Add the start_background_task tool, which the model uses for work beyond the interactive caps. The panel polls live runs every 2 seconds, following _production/polling.tsx, and shows progress, proposals and a Cancel button.
 - [ ] 4.5 Story-to-script pipeline. Add the story_to_script tool. It starts a background run with the stages below; each stage produces Zod-validated output and resumes independently.

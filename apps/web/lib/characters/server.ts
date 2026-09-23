@@ -4,16 +4,13 @@ import { listBoundCues, listCharacterRecords, listCueTallies, listOpenCueRows, l
 import type { CharacterRecordRow, CueTallyRow, RelationshipRow } from '@folio/db'
 import type { CharacterId, CharacterNamePool, NodeId, ProposalTarget, ResolveSubject } from '@folio/script'
 import { canonicalKey, matchCharacterNames, similarRecords } from '@folio/script'
-import { notFound, redirect } from 'next/navigation'
 import { cache } from 'react'
 
 import { deriveSpeculatively, readDerivationReads } from '../script/server'
 import { publicUrl, storageAvailable } from '../storage/r2'
 import type { ProjectContext } from '../workspace/context'
-import { loadProject } from '../workspace/context'
 import { CSV_MIME } from '../workspace/export'
 import type { TextExport } from '../workspace/export'
-import { characterHref } from '../workspace/hrefs'
 import { figuresOf } from './cast'
 import type { CastFigure } from './cast'
 import { noDescriptionOf, unrelatedOf } from './facts'
@@ -320,27 +317,6 @@ export const loadProfile = cache(async (context: ProjectContext, characterId: Ch
     },
   }
 })
-
-/**
- * `loadProfile` plus the two doors every caller of it takes the same way:
- * a record merged into another redirects to the survivor, and an id that
- * names nothing here is a 404. Shared by the full `/characters/:id` page
- * (`characters-route.tsx`) and the intercepted one that opens the edit
- * modal over the canvas (`characters/@modal/(.)[characterId]/page.tsx`) -
- * one branch, written once.
- */
-export const loadCharacterProfile = async (context: ProjectContext, characterId: CharacterId): Promise<CharacterProfile> => {
-  const result = await loadProfile(context, characterId)
-  if (result.state === 'merged') redirect(characterHref(context.project.id, result.into))
-  if (result.state === 'missing') notFound()
-  return result.profile
-}
-
-/** The route's context and its load, for a page or a layout that has only raw params. */
-export const enterCharacters = async (rawProjectId: string): Promise<{ readonly context: ProjectContext; readonly load: CharactersLoad }> => {
-  const context = await loadProject(rawProjectId)
-  return { context, load: await loadCharacters(context) }
-}
 
 // ---------------------------------------------------------------------------
 // Server-side reads of what the workspace computes (roadmap task 2.4)

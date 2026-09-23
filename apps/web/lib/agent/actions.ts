@@ -7,6 +7,7 @@ import { readAgentRun, readEpisode, readProposal } from '@folio/db'
 import { ROLE } from '../auth/roles'
 import { isRefusal, openProject } from '../script/gate'
 import { DocumentIdSchema } from '@folio/contracts'
+import { after } from 'next/server'
 import { z } from 'zod'
 
 import type { ApplyOutcome, UndoOutcome } from './apply'
@@ -32,6 +33,11 @@ import type { ToolGate } from './registry'
  */
 
 const NOT_FOUND = 'That proposal could not be found.'
+
+/** What an operation leaves for after its answer (a script save's measurement and derivation) runs after this request's, as the Script route's own save does. */
+const runAfter = (task: () => Promise<void>): void => {
+  after(task)
+}
 
 /** The tool gate an apply runs as: the project gate, and the episode the proposal was planned in. */
 const gateFor = async (projectId: string, episodeId: EpisodeId | null): Promise<ToolGate | { readonly status: 'refused'; readonly message: string }> => {
@@ -65,7 +71,7 @@ export const applyProposal = async (projectId: string, proposalId: string, confi
   const opened = await proposalGate(projectId, proposalId)
   if ('status' in opened) return opened
   const documents = z.array(DocumentIdSchema).max(64).safeParse(openDocuments)
-  return applyProposalWith(opened.gate, opened.id, { confirmed: confirmed === true, editorDocuments: new Set(documents.success ? documents.data : []) })
+  return applyProposalWith(opened.gate, opened.id, { confirmed: confirmed === true, editorDocuments: new Set(documents.success ? documents.data : []), schedule: runAfter })
 }
 
 const ReportsSchema = z
@@ -100,7 +106,7 @@ export const undoRun = async (projectId: string, rawRun: string): Promise<UndoOu
   if (row === null) return { status: 'refused', message: 'That run could not be found.' }
   const gate = await gateFor(projectId, row.episodeId)
   if ('status' in gate) return gate
-  return undoRunWith(gate, run.data)
+  return undoRunWith(gate, run.data, { schedule: runAfter })
 }
 
 /** The card's content: the proposal, each operation described and previewed, and - when it asks first - the balance. */

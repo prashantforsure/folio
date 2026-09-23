@@ -47,6 +47,12 @@ name is ambiguous or the target is not an action, the column says so, because
 four names collide across modules and several entries are pure helpers or
 repository functions that need a server action written around them first.
 
+Since roadmap task 4.2 a tool calls the action's **core function** -
+`<action>With(gate, …)` in the same route's `core.ts` - rather than the action
+itself: the same body, run as the turn's (or the worker's) gate instead of a
+cookie, checking the same capability. The column still names the action,
+because that is what the writer's button calls and what the tool must match.
+
 ---
 
 ## Core — always loaded

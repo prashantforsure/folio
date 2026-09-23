@@ -2,6 +2,7 @@ import type { AgentOpMode, AgentOpStatus, AgentProposalId, AgentRoute, Membershi
 import type { DocumentId, NodeId, RunId } from '@folio/script'
 import type { z } from 'zod'
 
+import type { Schedule } from '../script/server'
 import type { DiffView, RecordChange } from './diff-view'
 import type { ToolGate } from './registry'
 
@@ -57,6 +58,12 @@ export type ExecContext = {
    * `deferred`, and the panel hands the operations to that editor.
    */
   readonly editorDocuments: ReadonlySet<DocumentId>
+  /**
+   * What runs the work an operation leaves for after its answer - a script
+   * save's measurement and derivation (roadmap task 4.2). Next's `after` when
+   * the apply is a request's; the worker's own runner in a job.
+   */
+  readonly schedule: Schedule
 }
 
 export type ExecOutcome =

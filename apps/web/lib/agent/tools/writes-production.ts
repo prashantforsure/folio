@@ -21,8 +21,9 @@ import { readArtStyleByKey, readEpisodeSettings, readReel, readReelIdOfShot } fr
 import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
-import { addReel, addShot, bulkPatchShots, deleteReel, deleteShot, moveShot, patchReel, patchShot, retimeShot, saveSettings } from '../../production/actions'
-import { aiShotlist, cancelGeneration } from '../../production/generate'
+import { addReelWith, addShotWith, bulkPatchShotsWith, deleteReelWith, deleteShotWith, moveShotWith, patchReelWith, patchShotWith, retimeShotWith, saveSettingsWith } from '../../production/core'
+import { aiShotlistWith, cancelGenerationWith } from '../../production/generate-core'
+import { inEpisode } from '../episode-gate'
 import { episodeNumbered } from '../document-ops'
 import type { ExecOutcome } from '../executors'
 import type { ToolContext } from '../registry'
@@ -95,13 +96,13 @@ export const saveEpisodeSettingsTool = defineWriteTool({
     target: (args) => ({ type: 'episode', id: args.episodeId }),
     capture: (ctx, args) => currentSettings(ctx, args.episodeId),
     run: async (ctx, args) => {
-      const result = await saveSettings(ctx.gate.project.id, args.episode, args.settings)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => saveSettingsWith(gate, args.settings))
       if (result.status === 'locked') return { ok: false, message: 'The settings are locked: this episode has been shot.' }
       return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The settings could not be saved.')
     },
     invert: async (ctx, args, undo) => {
       const prior = Settings.parse(undo)
-      const result = await saveSettings(ctx.gate.project.id, args.episode, prior)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => saveSettingsWith(gate, prior))
       return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.status === 'locked' ? 'The settings are locked now.' : result.message }
     },
     preview: async (ctx, args, op) => {
@@ -160,29 +161,27 @@ export const manageReelsTool = defineWriteTool({
       return reel === null ? null : { name: reel.name, clipLengthS: reel.clipLengthS }
     },
     run: async (ctx, args) => {
-      const projectId = ctx.gate.project.id
       if (args.action === 'add') {
-        const result = await addReel(projectId, args.episode, args.sceneId, ctx.idempotencyKey)
+        const result = await inEpisode(ctx.gate, args.episode, (gate) => addReelWith(gate, args.sceneId, ctx.idempotencyKey))
         return result.status === 'saved' ? { ok: true, result: { reelId: result.reel.id }, undo: { reelId: result.reel.id } } : failure(result, 'The reel could not be added.')
       }
       if (args.action === 'delete') {
-        const result = await deleteReel(projectId, args.episode, args.reelId)
+        const result = await inEpisode(ctx.gate, args.episode, (gate) => deleteReelWith(gate, args.reelId))
         return result.status === 'deleted' ? { ok: true, result: { deleted: args.reelId } } : failure(result, 'The reel could not be deleted.')
       }
-      const result = await patchReel(projectId, args.episode, args.reelId, args.patch)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => patchReelWith(gate, args.reelId, args.patch))
       return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The reel could not be changed.')
     },
     invert: async (ctx, args, undo) => {
-      const projectId = ctx.gate.project.id
       if (args.action === 'add') {
         const { reelId } = z.object({ reelId: z.uuid() }).parse(undo)
-        const result = await deleteReel(projectId, args.episode, reelId)
+        const result = await inEpisode(ctx.gate, args.episode, (gate) => deleteReelWith(gate, reelId))
         return result.status === 'deleted' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
       }
       if (args.action === 'delete') return { kind: 'skipped', reason: 'A deleted reel cannot be brought back.' }
       const prior = z.object({ name: z.string(), clipLengthS: ClipLengthSchema }).parse(undo)
       const patch = Object.fromEntries(Object.keys(args.patch).map((field) => [field, prior[field as keyof typeof prior]]))
-      const result = await patchReel(projectId, args.episode, args.reelId, patch)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => patchReelWith(gate, args.reelId, patch))
       return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: () => Promise.resolve({ open: { route: 'production' } }),
@@ -280,58 +279,56 @@ export const manageShotsTool = defineWriteTool({
       }
     },
     run: async (ctx, args) => {
-      const projectId = ctx.gate.project.id
       switch (args.action) {
         case 'add': {
-          const result = await addShot(projectId, args.slug, { reelId: args.reelId, ...(args.description === undefined ? {} : { description: args.description }), ...(args.durationS === undefined ? {} : { durationS: args.durationS }) }, ctx.idempotencyKey)
+          const result = await inEpisode(ctx.gate, args.slug, (gate) => addShotWith(gate, { reelId: args.reelId, ...(args.description === undefined ? {} : { description: args.description }), ...(args.durationS === undefined ? {} : { durationS: args.durationS }) }, ctx.idempotencyKey))
           return result.status === 'saved' ? { ok: true, result: { shotId: result.shot.id }, undo: { shotId: result.shot.id } } : failure(result, 'The shot could not be added.')
         }
         case 'patch': {
-          const result = await patchShot(projectId, args.slug, args.shotId, args.patch)
+          const result = await inEpisode(ctx.gate, args.slug, (gate) => patchShotWith(gate, args.shotId, args.patch))
           return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The shot could not be changed.')
         }
         case 'bulk_patch': {
-          const result = await bulkPatchShots(projectId, args.slug, { ids: args.ids, patch: args.patch })
+          const result = await inEpisode(ctx.gate, args.slug, (gate) => bulkPatchShotsWith(gate, { ids: args.ids, patch: args.patch }))
           return result.status === 'saved' ? { ok: true, result: { changed: result.changed } } : failure(result, 'The shots could not be changed.')
         }
         case 'move': {
-          const result = await moveShot(projectId, args.slug, { shotId: args.shotId, reelId: args.reelId, beforeId: args.beforeId })
+          const result = await inEpisode(ctx.gate, args.slug, (gate) => moveShotWith(gate, { shotId: args.shotId, reelId: args.reelId, beforeId: args.beforeId }))
           return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The shot could not be moved.')
         }
         case 'retime': {
-          const result = await retimeShot(projectId, args.slug, { shotId: args.shotId, durationS: args.durationS })
+          const result = await inEpisode(ctx.gate, args.slug, (gate) => retimeShotWith(gate, { shotId: args.shotId, durationS: args.durationS }))
           return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The shot could not be retimed.')
         }
         case 'delete': {
-          const result = await deleteShot(projectId, args.slug, args.shotId)
+          const result = await inEpisode(ctx.gate, args.slug, (gate) => deleteShotWith(gate, args.shotId))
           return result.status === 'saved' ? { ok: true, result: { deleted: args.shotId } } : failure(result, 'The shot could not be deleted.')
         }
       }
     },
     invert: async (ctx, args, undo) => {
-      const projectId = ctx.gate.project.id
       const done = (result: Failure) => (result.status === 'saved' ? { kind: 'undone' as const } : { kind: 'failed' as const, message: result.message ?? 'It could not be put back.' })
       switch (args.action) {
         case 'add':
-          return done(await deleteShot(projectId, args.slug, z.object({ shotId: z.uuid() }).parse(undo).shotId))
+          return done(await inEpisode(ctx.gate, args.slug, (gate) => deleteShotWith(gate, z.object({ shotId: z.uuid() }).parse(undo).shotId)))
         case 'patch':
-          return done(await patchShot(projectId, args.slug, args.shotId, ShotPatchSchema.parse(undo)))
+          return done(await inEpisode(ctx.gate, args.slug, (gate) => patchShotWith(gate, args.shotId, ShotPatchSchema.parse(undo))))
         case 'bulk_patch': {
           const { shots } = z.object({ shots: z.array(z.object({ id: z.uuid(), prior: z.record(z.string(), z.unknown()) })) }).parse(undo)
           for (const shot of shots) {
-            const result = await patchShot(projectId, args.slug, shot.id, ShotPatchSchema.parse(shot.prior))
+            const result = await inEpisode(ctx.gate, args.slug, (gate) => patchShotWith(gate, shot.id, ShotPatchSchema.parse(shot.prior)))
             if (result.status !== 'saved') return { kind: 'failed', message: result.message }
           }
           return { kind: 'undone' }
         }
         case 'move': {
           const prior = z.object({ reelId: z.uuid(), beforeId: z.uuid().nullable() }).parse(undo)
-          return done(await moveShot(projectId, args.slug, { shotId: args.shotId, reelId: prior.reelId, beforeId: prior.beforeId }))
+          return done(await inEpisode(ctx.gate, args.slug, (gate) => moveShotWith(gate, { shotId: args.shotId, reelId: prior.reelId, beforeId: prior.beforeId })))
         }
         case 'retime': {
           const prior = z.object({ durationS: z.number().int().nullable() }).parse(undo)
-          if (prior.durationS === null) return done(await patchShot(projectId, args.slug, args.shotId, { durationS: null }))
-          return done(await retimeShot(projectId, args.slug, { shotId: args.shotId, durationS: prior.durationS }))
+          if (prior.durationS === null) return done(await inEpisode(ctx.gate, args.slug, (gate) => patchShotWith(gate, args.shotId, { durationS: null })))
+          return done(await inEpisode(ctx.gate, args.slug, (gate) => retimeShotWith(gate, { shotId: args.shotId, durationS: prior.durationS })))
         }
         case 'delete':
           return { kind: 'skipped', reason: 'A deleted shot cannot be brought back.' }
@@ -365,7 +362,7 @@ export const aiShotlistTool = defineWriteTool({
     target: (args) => ({ type: 'reel', id: args.reelId }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await aiShotlist(ctx.gate.project.id, args.episode, args.reelId)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => aiShotlistWith(gate, args.reelId, ctx.schedule))
       // Without a model key the rule-based proposal lands instead - still proposed shots, still no credits.
       if (result.status === 'queued') return { ok: true, result: { queued: true, generationId: result.generation.id } }
       if (result.status === 'disconnected') return { ok: true, result: { proposed: 'rule-based', note: result.message } }
@@ -394,7 +391,7 @@ export const cancelGenerationTool = defineWriteTool({
     target: (args) => ({ type: 'generation', id: args.generationId }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await cancelGeneration(ctx.gate.project.id, args.episode, args.generationId)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => cancelGenerationWith(gate, args.generationId))
       if (result.status === 'cancelled') return { ok: true, result: { cancelled: true } }
       if (result.status === 'already-over') return { ok: true, result: { cancelled: false, note: 'It had already finished.' } }
       return failure(result, 'The generation could not be cancelled.')

@@ -4,7 +4,8 @@ import type { RunId } from '@folio/script'
 import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
-import { createEpisode, renameEpisode } from '../../workspace/actions'
+import { createEpisodeWith, renameEpisodeWith } from '../../workspace/core'
+import { inEpisode } from '../episode-gate'
 import { undoRunWith } from '../apply'
 import type { WriteTool } from '../write-tool'
 import { defineWriteTool } from '../write-tool'
@@ -39,7 +40,7 @@ export const createEpisodeTool = defineWriteTool({
     target: () => ({ type: 'episode', id: null }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await createEpisode(ctx.gate.project.id, args.title, ctx.idempotencyKey)
+      const result = await createEpisodeWith(ctx.gate, args.title, ctx.idempotencyKey)
       return result.status === 'done' ? { ok: true, result: { episode: result.episode } } : { ok: false, message: result.message }
     },
     preview: (_ctx, args) => Promise.resolve({ changes: [{ field: 'Episode', before: null, after: args.title ?? 'Untitled' }] }),
@@ -66,7 +67,7 @@ export const renameEpisodeTool = defineWriteTool({
     target: () => ({ type: 'episode', id: null }),
     capture: (_ctx, args) => Promise.resolve({ title: args.from }),
     run: async (ctx, args) => {
-      const result = await renameEpisode(ctx.gate.project.id, args.slug, args.title)
+      const result = await inEpisode(ctx.gate, args.slug, (gate) => renameEpisodeWith(gate, args.title))
       return result.status === 'done' ? { ok: true, result: { title: args.title } } : { ok: false, message: result.message }
     },
     invert: async (ctx, args, undo) => {
@@ -74,7 +75,7 @@ export const renameEpisodeTool = defineWriteTool({
       const now = (await listEpisodes(ctx.gate.scope)).find((entry) => entry.slug === args.slug)
       if (now === undefined) return { kind: 'skipped', reason: 'The episode no longer exists.' }
       if (now.title !== args.title) return { kind: 'changed', note: `Episode ${String(args.ordinal)} was retitled after the run.`, ops: [{ tool: 'rename_episode', args: { ...args, from: now.title, title: prior.title }, mode: 'propose' }] }
-      const result = await renameEpisode(ctx.gate.project.id, args.slug, prior.title)
+      const result = await inEpisode(ctx.gate, args.slug, (gate) => renameEpisodeWith(gate, prior.title))
       return result.status === 'done' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: (_ctx, args) => Promise.resolve({ changes: [{ field: `Episode ${String(args.ordinal)}`, before: args.from, after: args.title }] }),

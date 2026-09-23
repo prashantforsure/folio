@@ -2,9 +2,9 @@ import { listEpisodes } from '@folio/db'
 import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
-import { previewRename as previewCharacterRename } from '../../characters/actions'
+import { previewRenameWith as previewCharacterRename } from '../../characters/core'
 import { charactersCsv } from '../../characters/server'
-import { previewRename as previewLocationRename } from '../../locations/actions'
+import { previewRenameWith as previewLocationRename } from '../../locations/core'
 import { locationBreakdownCsv, locationsCsv } from '../../locations/server'
 import { defineTool } from '../registry'
 import type { Tool } from '../registry'
@@ -32,11 +32,11 @@ export const previewRename = defineTool({
   label: (input) => `Previewing a ${input.entity} rename`,
   run: async (ctx, input) => {
     if (input.entity === 'character') {
-      const result = await previewCharacterRename(ctx.gate.project.id, input.id, input.name)
+      const result = await previewCharacterRename(ctx.gate, input.id, input.name)
       if (result.status !== 'preview') return { ok: false, message: result.message }
       return { ok: true, content: result, summary: `${String(result.cues)} ${result.cues === 1 ? 'cue' : 'cues'} would change` }
     }
-    const result = await previewLocationRename(ctx.gate.project.id, input.id, input.name)
+    const result = await previewLocationRename(ctx.gate, input.id, input.name)
     if (result.status !== 'preview') return { ok: false, message: result.message }
     return { ok: true, content: result, summary: `${String(result.headings)} ${result.headings === 1 ? 'heading' : 'headings'} would change` }
   },

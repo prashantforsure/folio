@@ -28,14 +28,15 @@ const spies = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }))
 
-const mocked = (names: readonly string[], prefix = '') => Object.fromEntries(names.map((name) => [name, (...args: readonly unknown[]) => spies.actions[`${prefix}${name}`]?.(...args)]))
+/** A core module (roadmap task 4.2): each `<name>With` export answers through the spy the test names `<name>`. */
+const cores = (names: readonly string[], prefix = '') => Object.fromEntries(names.map((name) => [`${name}With`, (...args: readonly unknown[]) => spies.actions[`${prefix}${name}`]?.(...args)]))
 
-vi.mock('../lib/script/actions', () => mocked(['openThreadOnNode', 'replyThread', 'resolveThread', 'saveTitlePage', 'setFormat', 'setPagination', 'saveScript']))
-vi.mock('../lib/outline/actions', () => mocked(['saveOutline']))
-vi.mock('../lib/storyboard/actions', () => mocked(['acceptShots', 'addShot', 'discardShots', 'placeShot', 'proposeShotsForScene', 'saveShot'], 'storyboard.'))
-vi.mock('../lib/production/actions', () => mocked(['addReel', 'addShot', 'bulkPatchShots', 'deleteReel', 'deleteShot', 'moveShot', 'patchReel', 'patchShot', 'retimeShot', 'saveSettings'], 'production.'))
-vi.mock('../lib/production/generate', () => mocked(['aiShotlist', 'cancelGeneration']))
-vi.mock('../lib/workspace/actions', () => mocked(['createEpisode', 'renameEpisode']))
+vi.mock('../lib/script/core', () => cores(['openThreadOnNode', 'replyThread', 'resolveThread', 'saveTitlePage', 'setFormat', 'setPagination', 'saveScript']))
+vi.mock('../lib/outline/core', () => cores(['saveOutline']))
+vi.mock('../lib/storyboard/core', () => cores(['acceptShots', 'addShot', 'discardShots', 'placeShot', 'proposeShotsForScene', 'saveShot'], 'storyboard.'))
+vi.mock('../lib/production/core', () => cores(['addReel', 'addShot', 'bulkPatchShots', 'deleteReel', 'deleteShot', 'moveShot', 'patchReel', 'patchShot', 'retimeShot', 'saveSettings'], 'production.'))
+vi.mock('../lib/production/generate-core', () => cores(['aiShotlist', 'cancelGeneration']))
+vi.mock('../lib/workspace/core', () => cores(['createEpisode', 'renameEpisode']))
 vi.mock('../lib/auth/session', async (actual) => ({ ...(await actual<Record<string, unknown>>()), requireUser: (...args: readonly unknown[]) => spies.requireUser(...args) }))
 vi.mock('next/cache', () => ({ revalidatePath: (...args: readonly unknown[]) => spies.revalidatePath(...args) }))
 vi.mock('../lib/script/server', async (actual) => ({ ...(await actual<Record<string, unknown>>()), rederiveProject: () => Promise.resolve({ ok: true, derivation: null }) }))
@@ -63,6 +64,7 @@ vi.mock('@folio/db', async (actual) => {
     'logAgentActivity',
     'createProjectFor',
     'transactionDatabase',
+    'readMembershipFor',
   ]
   for (const name of names) spies.db[name] = vi.fn()
   return { ...real, ...repository, ...Object.fromEntries(names.map((name) => [name, (...args: readonly unknown[]) => spies.db[name]?.(...args)])) }
@@ -98,6 +100,9 @@ const gate = (role: 'reader' | 'writer' | 'owner' = 'writer', projectType: 'film
   role,
 })
 
+/** A core's first argument (roadmap task 4.2): the gate, on the episode the operation names, not the project id and slug. */
+const IN_EPISODE = expect.objectContaining({ project: expect.objectContaining({ id: PROJECT }), episode: expect.objectContaining({ slug: 'ep_001' }) })
+
 const TOOLS: readonly Tool[] = [
   ...DOCUMENT_TOOLS,
   ...toolsOf(SCRIPT_WRITE_TOOLS),
@@ -127,6 +132,8 @@ beforeEach(() => {
   store.clear()
   for (const key of Object.keys(spies.actions)) delete spies.actions[key]
   spies.db.listEpisodes?.mockResolvedValue([EPISODE])
+  spies.db.readMembershipFor?.mockResolvedValue({ role: 'writer' })
+  spies.db.transactionDatabase?.mockResolvedValue({})
   spies.db.listSceneIndex?.mockResolvedValue([{ sceneNodeId: SCENE, episodeOrdinal: 1, ordinalInEpisode: 3, number: 3 }])
   spies.db.readDocumentByKind?.mockResolvedValue({ id: DOCUMENT, kind: 'screenplay', episodeId: EPISODE.id, updatedAt: '' })
   spies.db.readDocumentById?.mockResolvedValue({ id: DOCUMENT, kind: 'screenplay', episodeId: EPISODE.id, updatedAt: '' })
@@ -201,7 +208,7 @@ describe('the title page, comments, format and pagination', () => {
     const save = action('saveTitlePage').mockResolvedValue({ status: 'saved' })
     const { queue } = await propose('save_title_page', { fields: { draftDate: '23 September 2026' } })
     await applyProposalWith(gate(), agentProposalId(await stage(queue)), { confirmed: false })
-    expect(save).toHaveBeenCalledWith(PROJECT, 'ep_001', expect.objectContaining({ title: 'Harbour Lights', author: 'A. Writer', draftDate: '23 September 2026' }))
+    expect(save).toHaveBeenCalledWith(IN_EPISODE, expect.objectContaining({ title: 'Harbour Lights', author: 'A. Writer', draftDate: '23 September 2026' }))
   })
 
   it('lets a reader propose and apply a comment - D2 gives comment threads to a reader - and says it cannot be undone', async () => {
@@ -210,7 +217,7 @@ describe('the title page, comments, format and pagination', () => {
     expect(result.ok).toBe(true)
     const proposal = await stage(queue)
     expect((await applyProposalWith(gate('reader'), agentProposalId(proposal), { confirmed: false })).status).toBe('applied')
-    expect(open).toHaveBeenCalledWith(PROJECT, 'ep_001', id(2), 'Is it too quiet?', 'script_node')
+    expect(open).toHaveBeenCalledWith(IN_EPISODE, id(2), 'Is it too quiet?', 'script_node')
     expect(executorFor('comment_on_node')?.reversible(queue[0]?.args)).toBe(false)
   })
 
@@ -227,7 +234,7 @@ describe('the title page, comments, format and pagination', () => {
     expect((await applyProposalWith(gate(), agentProposalId(proposal), { confirmed: false })).status).toBe('needs-confirmation')
     await applyProposalWith(gate(), agentProposalId(proposal), { confirmed: true })
     await undoRunWith(gate(), RUN)
-    expect(setFormat.mock.calls.map((call) => call[2])).toEqual(['asian', 'hollywood'])
+    expect(setFormat.mock.calls.map((call) => call[1])).toEqual(['asian', 'hollywood'])
   })
 })
 
@@ -240,7 +247,7 @@ describe('the Storyboard', () => {
     expect([...store.values()][0]?.proposal.status).toBe('applied')
     spies.db.listSceneShots?.mockResolvedValue([{ id: SHOT, state: 'proposed' }, { id: '70000000-0000-4000-8000-000000000002', state: 'accepted' }])
     await undoRunWith(gate(), RUN)
-    expect(discard).toHaveBeenCalledWith(PROJECT, 'ep_001', { sceneNodeId: SCENE, shotIds: [SHOT] })
+    expect(discard).toHaveBeenCalledWith(IN_EPISODE, { sceneNodeId: SCENE, shotIds: [SHOT] })
   })
 
   it('marks accepting shots as something that cannot be undone', async () => {
@@ -262,7 +269,7 @@ describe('Production', () => {
     const shotlist = action('aiShotlist').mockResolvedValue({ status: 'disconnected', message: 'No model key: rule-based shots proposed.' })
     const { result } = await propose('ai_shotlist', { reelId: REEL })
     expect(result).toMatchObject({ ok: true })
-    expect(shotlist).toHaveBeenCalledWith(PROJECT, 'ep_001', REEL)
+    expect(shotlist).toHaveBeenCalledWith(IN_EPISODE, REEL, expect.any(Function))
   })
 
   it('patches a shot and puts the old values back', async () => {
@@ -272,7 +279,7 @@ describe('Production', () => {
     const { queue } = await propose('manage_shots', { action: 'patch', shotId: SHOT, patch: { priority: 'high', notes: 'Rain rig' } })
     await applyProposalWith(gate(), agentProposalId(await stage(queue)), { confirmed: false })
     await undoRunWith(gate(), RUN)
-    expect(patch.mock.calls.map((call) => call[3])).toEqual([{ priority: 'high', notes: 'Rain rig' }, { priority: 'low', notes: null }])
+    expect(patch.mock.calls.map((call) => call[2])).toEqual([{ priority: 'high', notes: 'Rain rig' }, { priority: 'low', notes: null }])
   })
 })
 

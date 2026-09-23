@@ -6,19 +6,19 @@ import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
 import { formatSceneRef, sceneRefOf } from '../../characters/figures'
-import { saveSynopsis } from '../../scenes/actions'
+import { saveSynopsisWith } from '../../scenes/core'
 import {
-  createThread,
-  deleteThread,
-  markDeliberate,
-  orderThreads,
-  placeScenes,
-  reopenFinding,
-  saveStoryTime,
-  saveThread,
-  setSceneThreads,
-  unplaceScenes,
-} from '../../timeline/actions'
+  createThreadWith,
+  deleteThreadWith,
+  markDeliberateWith,
+  orderThreadsWith,
+  placeScenesWith,
+  reopenFindingWith,
+  saveStoryTimeWith,
+  saveThreadWith,
+  setSceneThreadsWith,
+  unplaceScenesWith,
+} from '../../timeline/core'
 import { readContinuity } from '../../timeline/server'
 import { findingNote, verdictOf } from '../../timeline/view'
 import type { ExecOutcome, InvertOutcome } from '../executors'
@@ -65,7 +65,7 @@ const SynopsisUndo = z.object({ synopsis: z.string().nullable() })
 const writeSynopsis = async (ctx: { readonly gate: ToolContext['gate'] }, ordinal: number, sceneId: string, synopsis: string): Promise<Failure> => {
   const episode = (await listEpisodes(ctx.gate.scope)).find((entry) => entry.ordinal === ordinal)
   if (episode === undefined) return { status: 'error', message: 'That episode no longer exists.' }
-  return saveSynopsis({ projectId: ctx.gate.project.id, episode: episode.slug, sceneNodeId: sceneId, synopsis })
+  return saveSynopsisWith({ ...ctx.gate, episode }, { projectId: ctx.gate.project.id, episode: episode.slug, sceneNodeId: sceneId, synopsis })
 }
 
 export const setSynopsisTool = defineWriteTool({
@@ -150,7 +150,7 @@ export const setStoryTimeTool = defineWriteTool({
     target: (args) => ({ type: 'scene', id: args.sceneId }),
     capture: (ctx, args) => storyTimeOf(ctx, args.sceneId),
     run: async (ctx, args) => {
-      const result = await saveStoryTime(ctx.gate.project.id, args.sceneId, { day: args.day, clock: args.clock, flashback: args.flashback })
+      const result = await saveStoryTimeWith(ctx.gate, args.sceneId, { day: args.day, clock: args.clock, flashback: args.flashback })
       return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The story time could not be saved.')
     },
     invert: async (ctx, args, undo) => {
@@ -159,7 +159,7 @@ export const setStoryTimeTool = defineWriteTool({
       if (now.day !== args.day || now.clock !== (args.day === null ? null : args.clock) || now.flashback !== args.flashback) {
         return { kind: 'changed', note: `${args.ref}'s story time was changed after the run.`, ops: [{ tool: 'set_story_time', args: { ...prior, sceneId: args.sceneId, ref: args.ref }, mode: 'propose' }] }
       }
-      return undone(await saveStoryTime(ctx.gate.project.id, args.sceneId, prior))
+      return undone(await saveStoryTimeWith(ctx.gate, args.sceneId, prior))
     },
     preview: async (ctx, args, op) => {
       const before = op.status === 'pending' ? await storyTimeOf(ctx, args.sceneId) : (StoryTimeUndo.safeParse(op.undo).data ?? null)
@@ -189,14 +189,14 @@ export const placeScenesTool = defineWriteTool({
     target: () => ({ type: 'timeline', id: null }),
     capture: () => Promise.resolve({ placements: [] }),
     run: async (ctx, args) => {
-      const result = await placeScenes(ctx.gate.project.id, args.placements)
+      const result = await placeScenesWith(ctx.gate, args.placements)
       // The undo record is what landed - `unplaceScenes` takes exactly that back.
       return result.status === 'placed' ? { ok: true, result: { placed: result.placements.length }, undo: { placements: result.placements } } : failure(result, 'The placements could not be saved.')
     },
     invert: async (ctx, _args, undo) => {
       const { placements } = z.object({ placements: z.array(z.unknown()) }).parse(undo)
       if (placements.length === 0) return { kind: 'undone', note: 'Nothing had been placed.' }
-      return undone(await unplaceScenes(ctx.gate.project.id, placements))
+      return undone(await unplaceScenesWith(ctx.gate, placements))
     },
     preview: async (ctx, args) => {
       const index = await listSceneIndex(ctx.gate.scope)
@@ -290,36 +290,34 @@ export const manageThreadsTool = defineWriteTool({
       }
     },
     run: async (ctx, args) => {
-      const projectId = ctx.gate.project.id
       switch (args.action) {
         case 'create': {
-          const result = await createThread(projectId, { name: args.name, colour: args.colour }, ctx.idempotencyKey)
+          const result = await createThreadWith(ctx.gate, { name: args.name, colour: args.colour }, ctx.idempotencyKey)
           return result.status === 'created' ? { ok: true, result: { id: result.id }, undo: { id: result.id } } : failure(result, 'The thread could not be created.')
         }
         case 'save': {
-          const result = await saveThread(projectId, args.id, { name: args.name, colour: args.colour })
+          const result = await saveThreadWith(ctx.gate, args.id, { name: args.name, colour: args.colour })
           return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The thread could not be saved.')
         }
         case 'order': {
-          const result = await orderThreads(projectId, args.ids)
+          const result = await orderThreadsWith(ctx.gate, args.ids)
           return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The threads could not be reordered.')
         }
         case 'set_scene': {
-          const result = await setSceneThreads(projectId, args.sceneId, args.threadIds)
+          const result = await setSceneThreadsWith(ctx.gate, args.sceneId, args.threadIds)
           return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, "The scene's threads could not be saved.")
         }
         case 'delete': {
-          const result = await deleteThread(projectId, args.id)
+          const result = await deleteThreadWith(ctx.gate, args.id)
           return result.status === 'deleted' ? { ok: true, result: { deleted: args.id } } : failure(result, 'The thread could not be deleted.')
         }
       }
     },
     invert: async (ctx, args, undo) => {
-      const projectId = ctx.gate.project.id
       switch (args.action) {
         case 'create': {
           const { id } = z.object({ id: z.uuid() }).parse(undo)
-          return undone(await deleteThread(projectId, id))
+          return undone(await deleteThreadWith(ctx.gate, id))
         }
         case 'save': {
           const prior = z.object({ name: z.string(), colour: StoryThreadColourSchema }).parse(undo)
@@ -328,13 +326,13 @@ export const manageThreadsTool = defineWriteTool({
           if (thread.name !== args.name || thread.colour !== args.colour) {
             return { kind: 'changed', note: `The thread ${args.name} was edited after the run.`, ops: [{ tool: 'manage_threads', args: { action: 'save', id: args.id, ...prior, label: args.name }, mode: 'propose' }] }
           }
-          return undone(await saveThread(projectId, args.id, prior))
+          return undone(await saveThreadWith(ctx.gate, args.id, prior))
         }
         case 'order': {
           const prior = z.object({ ids: z.array(z.uuid()) }).parse(undo)
           const now = (await listStoryThreads(ctx.gate.scope)).map((thread) => thread.id as string)
           const kept = prior.ids.filter((id) => now.includes(id))
-          return kept.length === now.length ? undone(await orderThreads(projectId, kept)) : { kind: 'skipped', reason: 'The threads changed since; their order was left.' }
+          return kept.length === now.length ? undone(await orderThreadsWith(ctx.gate, kept)) : { kind: 'skipped', reason: 'The threads changed since; their order was left.' }
         }
         case 'set_scene': {
           const prior = z.object({ threadIds: z.array(z.string()) }).parse(undo)
@@ -342,7 +340,7 @@ export const manageThreadsTool = defineWriteTool({
           if (JSON.stringify(now) !== JSON.stringify(args.threadIds)) {
             return { kind: 'changed', note: `${args.label}'s threads were changed after the run.`, ops: [{ tool: 'manage_threads', args: { action: 'set_scene', sceneId: args.sceneId, threadIds: prior.threadIds, label: args.label }, mode: 'propose' }] }
           }
-          return undone(await setSceneThreads(projectId, args.sceneId, prior.threadIds))
+          return undone(await setSceneThreadsWith(ctx.gate, args.sceneId, prior.threadIds))
         }
         case 'delete':
           return { kind: 'skipped', reason: 'A deleted thread cannot be brought back.' }
@@ -387,10 +385,10 @@ export const markFindingDeliberateTool = defineWriteTool({
     target: (args) => ({ type: 'timeline_finding', id: args.verdict?.aRef ?? null }),
     capture: (_ctx, args) => Promise.resolve(args.verdict),
     run: async (ctx, args) => {
-      const result = args.action === 'mark' ? await markDeliberate(ctx.gate.project.id, args.verdict) : await reopenFinding(ctx.gate.project.id, args.key)
+      const result = args.action === 'mark' ? await markDeliberateWith(ctx.gate, args.verdict) : await reopenFindingWith(ctx.gate, args.key)
       return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The verdict could not be saved.')
     },
-    invert: async (ctx, args, undo) => (args.action === 'mark' ? undone(await reopenFinding(ctx.gate.project.id, args.key)) : undone(await markDeliberate(ctx.gate.project.id, undo))),
+    invert: async (ctx, args, undo) => (args.action === 'mark' ? undone(await reopenFindingWith(ctx.gate, args.key)) : undone(await markDeliberateWith(ctx.gate, undo))),
     preview: () => Promise.resolve({ open: { route: 'timeline' } }),
   },
 })

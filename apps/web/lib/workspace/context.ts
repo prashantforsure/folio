@@ -50,7 +50,8 @@ import type { EpisodeRoute } from './routes'
 
 export type ProjectContext = {
   readonly user: ShellUser
-  readonly scope: ProjectScope<'transaction'>
+  /** Either pooler: a page reads over the transaction pooler; the worker's reads share these helpers (roadmap task 4.2). */
+  readonly scope: ProjectScope
   readonly project: Project
   readonly shape: WorkspaceShape
   /** Every episode, in running order. Never empty - creation writes one. */

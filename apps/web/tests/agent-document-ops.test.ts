@@ -59,8 +59,9 @@ vi.mock('@folio/db', async (actual) => {
   for (const name of names) spies.db[name] = vi.fn()
   return { ...real, ...repository, ...Object.fromEntries(names.map((name) => [name, (...args: readonly unknown[]) => spies.db[name]?.(...args)])) }
 })
-vi.mock('../lib/script/actions', () => ({ saveScript: (...args: readonly unknown[]) => spies.saveScript(...args) }))
-vi.mock('../lib/outline/actions', () => ({ saveOutline: (...args: readonly unknown[]) => spies.saveOutline(...args) }))
+// The saves are core functions since roadmap task 4.2: the gate first, then the input.
+vi.mock('../lib/script/core', () => ({ saveScriptWith: (...args: readonly unknown[]) => spies.saveScript(...args) }))
+vi.mock('../lib/outline/core', () => ({ saveOutlineWith: (...args: readonly unknown[]) => spies.saveOutline(...args) }))
 vi.mock('../lib/script/server', async (actual) => ({ ...(await actual<Record<string, unknown>>()), rederiveProject: () => Promise.resolve({ ok: true, derivation: null }) }))
 
 const { prepareScriptEdit, scriptEditExecutor, describeEdit } = await import('../lib/agent/document-ops')
@@ -108,7 +109,7 @@ beforeEach(() => {
   spies.db.snapshotVersion?.mockResolvedValue({ id: VERSION })
   spies.db.readVersionSnapshot?.mockImplementation(() => Promise.resolve(JSON.parse(JSON.stringify(SCRIPT))))
   spies.db.logAgentActivity?.mockResolvedValue(undefined)
-  spies.saveScript.mockImplementation((raw: unknown) => {
+  spies.saveScript.mockImplementation((_gate: unknown, raw: unknown) => {
     const input = raw as { upserts: ScreenplayNode[]; order: string[] | null; retirements: { nodeId: string }[] }
     // Lay the delta over the stored list, as the real save does.
     const held = new Map(stored.map((node) => [node.id as string, node]))
@@ -187,7 +188,7 @@ describe('path B - nobody has it open', () => {
     const proposal = await propose()
     const outcome = await applyProposalWith(gate, agentProposalId(proposal), { confirmed: false })
     expect(outcome.status).toBe('applied')
-    const input = spies.saveScript.mock.calls[0]?.[0] as { expectedDigest: string; upserts: ScreenplayNode[]; order: string[]; episode: string; snapshot: boolean }
+    const input = spies.saveScript.mock.calls[0]?.[1] as { expectedDigest: string; upserts: ScreenplayNode[]; order: string[]; episode: string; snapshot: boolean }
     expect(input.expectedDigest).toBe(nodeDigest(SCRIPT))
     expect(input.episode).toBe('ep_001')
     expect(input.upserts).toEqual([makeScreenplayNode('action', { id: id(100), provenance: byAgent(RUN), content: [text('A monitor beeps.')], modifiers: [] })])
@@ -248,7 +249,7 @@ describe('undo', () => {
     const outcome = await undoRunWith(gate, RUN)
     expect(outcome.status).toBe('undone')
     expect(stored).toEqual(SCRIPT)
-    const input = spies.saveScript.mock.calls[0]?.[0] as { expectedDigest: string; retirements: { nodeId: string }[] }
+    const input = spies.saveScript.mock.calls[0]?.[1] as { expectedDigest: string; retirements: { nodeId: string }[] }
     expect(input.retirements).toEqual([{ nodeId: id(100), mergedInto: null }])
   })
 

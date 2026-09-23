@@ -1,10 +1,11 @@
-import type { AgentEvent, AgentOpMode, AgentRoute, Episode, MembershipRole, Project, ProposalDocumentBase, UserId } from '@folio/contracts'
-import type { ProjectScope } from '@folio/db'
+import type { AgentEvent, AgentOpMode, AgentRoute, MembershipRole, ProposalDocumentBase } from '@folio/contracts'
 import type { RunId } from '@folio/script'
 import type Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 
 import { ROLE_REFUSED, meetsRole } from '../auth/roles'
+import type { EpisodeGate, GateRefusal } from '../script/actor-gate'
+import { stillMember } from '../script/actor-gate'
 
 /**
  * The tool registry - ADR 0003 **D13**, `docs/agents/tools.md`.
@@ -22,14 +23,17 @@ import { ROLE_REFUSED, meetsRole } from '../auth/roles'
  * Adding a tool is a change to the catalogue and to this registry in the same
  * pull request.
  *
- * ## The role is checked here as well as in the gate
+ * ## The role is checked here as well as in the core
  *
- * Every tool wraps something that already opens a gate, and the gate is where
- * the D2 matrix is applied (`lib/script/gate.ts`). The check here is the
- * catalogue's own column - a tool whose minimum is `writer` refuses a
- * `reader` before it touches anything, with the gate's own words
- * (`ROLE_REFUSED`). Two checks of one table, not two tables: `meetsRole` and
- * the roles come from `lib/auth/roles.ts`.
+ * Since roadmap task 4.2 a tool calls **core functions** (`lib/<route>/core.ts`)
+ * with the turn's gate rather than the cookie-gated actions, and each core
+ * checks its own capability against the gate's role - the D2 matrix, applied
+ * where the write is (`lib/auth/roles.ts`). The check here is the catalogue's
+ * own column - a tool whose minimum is `writer` refuses a `reader` before it
+ * touches anything, with the gate's own words (`ROLE_REFUSED`). Two checks of
+ * one table, not two tables. And because a core trusts the gate it is handed,
+ * `runTool` also asks whether the person is still a member (`stillMember`),
+ * once per step: the wrapped actions' cookie gates used to, on every call.
  *
  * ## Schemas come from Zod, converted once
  *
@@ -59,14 +63,12 @@ export const ToolsetSchema = z.enum(TOOLSETS)
 /**
  * What a tool runs as: the gate the turn opened. `episode` is the one the
  * panel reads - every chat belongs to an episode, so a turn always has one.
+ *
+ * It **is** an episode gate (`lib/script/actor-gate.ts`), so a tool hands it
+ * straight to a core function (roadmap task 4.2); its scope may be either
+ * pooler's, because a background run's comes from the worker's session pooler.
  */
-export type ToolGate = {
-  readonly actor: UserId
-  readonly scope: ProjectScope<'transaction'>
-  readonly project: Project
-  readonly episode: Episode
-  readonly role: MembershipRole
-}
+export type ToolGate = EpisodeGate
 
 /**
  * One operation a write tool asks for (roadmap Phase 3). It is not applied by
@@ -116,6 +118,12 @@ export type ToolContext = {
   readonly loaded: Set<Toolset>
   /** Where a write tool puts what it would change (Phase 3). */
   readonly proposals: Proposing
+  /**
+   * Whether the gate's person is still a member - memoised by the loop for
+   * one step, so a step's tools cost one read between them. Absent (a tool
+   * called outside the loop), `runTool` asks for itself.
+   */
+  readonly membership?: () => Promise<GateRefusal | null>
 }
 
 /**
@@ -257,6 +265,13 @@ export const runTool = async (name: string, rawInput: unknown, ctx: ToolContext,
   if (tool === undefined) return { ok: false, message: `There is no tool called ${name} on this turn.` }
   if (tool.minimumRole !== null && !meetsRole(ctx.gate.role, tool.minimumRole)) return { ok: false, message: ROLE_REFUSED }
   try {
+    // A project tool runs only for a member who still is one: the wrapped
+    // actions' cookie gates re-read the membership on every call, and the
+    // core functions the tools call now (roadmap task 4.2) trust their gate.
+    if (tool.minimumRole !== null) {
+      const gone = await (ctx.membership ?? (() => stillMember(ctx.gate)))()
+      if (gone !== null) return { ok: false, message: gone.message }
+    }
     return await tool.run(ctx, rawInput)
   } catch (cause) {
     console.error({ event: 'folio.agent.tool_threw', tool: name, message: cause instanceof Error ? cause.message : String(cause) })

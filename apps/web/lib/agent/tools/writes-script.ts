@@ -6,7 +6,8 @@ import { insertedIds } from '@folio/script'
 import { z } from 'zod'
 
 import { ROLE } from '../../auth/roles'
-import { openThreadOnNode, replyThread, resolveThread, saveTitlePage, setFormat, setPagination } from '../../script/actions'
+import { openThreadOnNodeWith, replyThreadWith, resolveThreadWith, saveTitlePageWith, setFormatWith, setPaginationWith } from '../../script/core'
+import { inEpisode } from '../episode-gate'
 import { PAGINATION_CONTROLS } from '../../state/project-preferences'
 import type { PaginationControl } from '../../state/project-preferences'
 import { describeEdit, episodeNumbered, prepareOutlineEdit, prepareScriptEdit } from '../document-ops'
@@ -159,7 +160,7 @@ export const saveTitlePageTool = defineWriteTool({
       return coverOf(await readTitlePage(ctx.gate.scope, episode.id))
     },
     run: async (ctx, args) => {
-      const result = await saveTitlePage(ctx.gate.project.id, args.episode, asInput(args.cover))
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => saveTitlePageWith(gate, asInput(args.cover)))
       return result.status === 'saved' ? { ok: true, result: { saved: true } } : failure(result, 'The title page could not be saved.')
     },
     invert: async (ctx, args, undo) => {
@@ -169,7 +170,7 @@ export const saveTitlePageTool = defineWriteTool({
       if (JSON.stringify(now) !== JSON.stringify(args.cover)) {
         return { kind: 'changed', note: 'The title page was edited after the run.', ops: [{ tool: 'save_title_page', args: { ...args, cover: prior }, mode: 'propose' }] }
       }
-      const result = await saveTitlePage(ctx.gate.project.id, args.episode, asInput(prior))
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => saveTitlePageWith(gate, asInput(prior)))
       return result.status === 'saved' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: async (ctx, args, op) => {
@@ -207,7 +208,7 @@ export const commentOnNodeTool = defineWriteTool({
     target: (args) => ({ type: 'node', id: args.nodeId }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await openThreadOnNode(ctx.gate.project.id, args.episode, args.nodeId, args.body, args.on === 'script' ? 'script_node' : 'outline_block')
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => openThreadOnNodeWith(gate, args.nodeId, args.body, args.on === 'script' ? 'script_node' : 'outline_block'))
       return result.status === 'ok' ? { ok: true, result: { threadId: result.thread.id } } : failure(result, 'The comment could not be added.')
     },
   },
@@ -231,7 +232,7 @@ export const replyThreadTool = defineWriteTool({
     target: (args) => ({ type: 'comment_thread', id: args.threadId }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await replyThread(ctx.gate.project.id, args.episode, args.threadId, args.nodeId, args.body)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => replyThreadWith(gate, args.threadId, args.nodeId, args.body))
       return result.status === 'ok' ? { ok: true, result: { threadId: args.threadId } } : failure(result, 'The reply could not be added.')
     },
   },
@@ -255,7 +256,7 @@ export const resolveThreadTool = defineWriteTool({
     target: (args) => ({ type: 'comment_thread', id: args.threadId }),
     capture: () => Promise.resolve(null),
     run: async (ctx, args) => {
-      const result = await resolveThread(ctx.gate.project.id, args.episode, args.threadId)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => resolveThreadWith(gate, args.threadId))
       return result.status === 'done' ? { ok: true, result: { resolved: args.threadId } } : failure(result, 'The thread could not be resolved.')
     },
   },
@@ -283,12 +284,12 @@ export const setFormatTool = defineWriteTool({
     target: () => ({ type: 'project', id: null }),
     capture: async (ctx) => ({ format: (await readProject(ctx.gate.scope))?.format ?? ctx.gate.project.format }),
     run: async (ctx, args) => {
-      const result = await setFormat(ctx.gate.project.id, args.episode, args.format)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => setFormatWith(gate, args.format))
       return result.status === 'done' ? { ok: true, result: { format: args.format } } : failure(result, 'The format could not be set.')
     },
     invert: async (ctx, args, undo) => {
       const prior = z.object({ format: ScriptFormatSchema }).parse(undo)
-      const result = await setFormat(ctx.gate.project.id, args.episode, prior.format)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => setFormatWith(gate, prior.format))
       return result.status === 'done' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
     preview: async (ctx, args, op) => ({
@@ -317,12 +318,12 @@ export const setPaginationTool = defineWriteTool({
       return { control: controlOf(project.pageMode, project.liveRepaginate) }
     },
     run: async (ctx, args) => {
-      const result = await setPagination(ctx.gate.project.id, args.episode, args.control)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => setPaginationWith(gate, args.control))
       return result.status === 'done' ? { ok: true, result: { control: args.control } } : failure(result, 'Pagination could not be set.')
     },
     invert: async (ctx, args, undo) => {
       const prior = z.object({ control: z.enum(PAGINATION_CONTROLS) }).parse(undo)
-      const result = await setPagination(ctx.gate.project.id, args.episode, prior.control)
+      const result = await inEpisode(ctx.gate, args.episode, (gate) => setPaginationWith(gate, prior.control))
       return result.status === 'done' ? { kind: 'undone' } : { kind: 'failed', message: result.message }
     },
   },

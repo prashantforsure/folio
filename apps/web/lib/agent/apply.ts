@@ -15,6 +15,8 @@ import {
 import type { DocumentId, RunId } from '@folio/script'
 
 import { ROLE_ORDER, ROLE_REFUSED, meetsRole } from '../auth/roles'
+import type { Schedule } from '../script/server'
+import { runDetached } from '../script/server'
 import type { RederiveOutcome } from '../script/derive-batch'
 import { withDeferredDerive } from '../script/derive-batch'
 import { readDocumentState } from './documents'
@@ -123,6 +125,7 @@ const context = (
   digests: Map<DocumentId, string>,
   snapshots: ReadonlyMap<DocumentId, VersionId> = NO_SNAPSHOTS,
   editorDocuments: ReadonlySet<DocumentId> = NO_EDITORS,
+  schedule: Schedule = runDetached,
 ): ExecContext => ({
   gate,
   runId: proposal.runId,
@@ -131,6 +134,7 @@ const context = (
   digests,
   snapshots,
   editorDocuments,
+  schedule,
 })
 
 /** Apply a proposal as the gate's person. Never throws for a refusal or a failed operation - those are outcomes. */
@@ -141,6 +145,8 @@ export const applyProposalWith = async (
     readonly confirmed: boolean
     /** Documents the writer has open (path A): their edits are handed back rather than saved. */
     readonly editorDocuments?: ReadonlySet<DocumentId>
+    /** What runs the work an operation leaves for after its answer: Next's after in a request, detached otherwise. */
+    readonly schedule?: Schedule
   },
 ): Promise<ApplyOutcome> => {
   const { scope } = gate
@@ -188,7 +194,7 @@ export const applyProposalWith = async (
     for (const [index, op] of ops.entries()) {
       const executor = executors[index]
       if (executor === undefined) return { at: index, message: `${op.tool} could not run.`, stale: false }
-      const ctx = context(gate, proposal, op, digests, snapshots, editorDocuments)
+      const ctx = context(gate, proposal, op, digests, snapshots, editorDocuments, options.schedule)
       let outcome
       try {
         // The undo record goes to the row before the action runs, so a crash
@@ -346,7 +352,7 @@ const CANNOT = 'This cannot be undone.'
  * undoing it; the run's own proposals are read from the gate's project, so a
  * run id from another project finds nothing.
  */
-export const undoRunWith = async (gate: ToolGate, run: RunId): Promise<UndoOutcome> => {
+export const undoRunWith = async (gate: ToolGate, run: RunId, options: { readonly schedule?: Schedule } = {}): Promise<UndoOutcome> => {
   const { scope } = gate
   const proposals = await listRunProposals(scope, run)
   if (proposals.length === 0) return { status: 'refused', message: 'That run made no changes in this project.' }
@@ -376,7 +382,7 @@ export const undoRunWith = async (gate: ToolGate, run: RunId): Promise<UndoOutco
       }
       let outcome
       try {
-        outcome = await executor.invert(context(gate, proposal, op, new Map()), op.args, op.undo, op.result)
+        outcome = await executor.invert(context(gate, proposal, op, new Map(), NO_SNAPSHOTS, NO_EDITORS, options.schedule), op.args, op.undo, op.result)
       } catch (cause) {
         console.error({ event: 'folio.agent.undo_threw', tool: op.tool, message: cause instanceof Error ? cause.message : String(cause) })
         outcome = { kind: 'failed' as const, message: `${op.tool} could not be undone.` }

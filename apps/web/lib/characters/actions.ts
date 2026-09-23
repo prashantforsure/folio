@@ -6,54 +6,44 @@ import { charactersCsv } from './server'
 import {
   CanvasPositionSchema,
   CharacterIdSchema,
-  CharacterProfileEditSchema,
   NewCharacterSchema,
   PORTRAIT_MAX_BYTES,
   PORTRAIT_TYPES,
-  RelationshipInputSchema,
 } from '@folio/contracts'
 import type { PortraitType } from '@folio/contracts'
-import {
-  bindCue,
-  deleteAbsentCharacter,
-  deleteBlankCharacter,
-  deleteRelationship as deleteRelationshipRow,
-  deleteResolveDecisions,
-  listBoundCues,
-  listCharacterRecords,
-  listEpisodes,
-  listOpenCueRows,
-  listResolveDecisions,
-  mergeCharacterRecords,
-  placeCharacter,
-  proposalTargetKey,
-  readDerivationInput,
-  readDocumentByKind,
-  readScreenplayNodes,
-  recordDecisionByKey,
-  recordResolveDecisions,
-  renameCharacterRecord,
-  rewriteCueNodes,
-  setPortraitKey,
-  snapshotVersion,
-  unbindCue,
-  updateCharacterProfile,
-  upsertRelationship,
-} from '@folio/db'
-import type { CueNodeRewrite, ProjectScope } from '@folio/db'
-import type { CharacterId, NodeId, ProposalTarget, ResolveSubject } from '@folio/script'
-import { canonicalKey, cueSpelling, matchCharacters, readCue, renameCharacterCues, revertCueRewrites } from '@folio/script'
+import { listEpisodes, placeCharacter, recordDecisionByKey, setPortraitKey } from '@folio/db'
+import type { CharacterId } from '@folio/script'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { ROLE } from '../auth/roles'
 import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
 import { isRefusal, openProject } from '../script/gate'
-import { requestRederive } from '../script/derive-batch'
 import { rederiveProject } from '../script/server'
 import { deleteObject, publicUrl, putObject, storageAvailable } from '../storage/r2'
+import {
+  characterIdProblem,
+  deleteCharacterWith,
+  deleteRelationshipWith,
+  mergeCharacterInto,
+  mergeCharactersWith,
+  mergeProblem,
+  pairProblem,
+  previewRenameWith,
+  profileProblem,
+  relationshipProblem,
+  renameCharacterWith,
+  renameProblem,
+  resolveCueProblem,
+  resolveCueWith,
+  revokeDecisionWith,
+  revokeProblem,
+  saveProfileWith,
+  saveRelationshipWith,
+  undoRenameProblem,
+  undoRenameWith,
+} from './core'
 import { createCharacterIn } from './create'
-import { orderInput, orderPair } from './relationships'
 import type {
   CreateResult,
   DeleteResult,
@@ -64,13 +54,12 @@ import type {
   PortraitResult,
   RelationshipResult,
   RenamePreview,
-  RenameRestore,
   RenameResult,
   ResolveResult,
   SavedResult,
   UndoRenameResult,
 } from './result'
-import { pairDecisionKey, relationshipOf } from './server'
+import { pairDecisionKey } from './server'
 
 /**
  * The Characters route's writes.
@@ -80,6 +69,16 @@ import { pairDecisionKey, relationshipOf } from './server'
  * project, and the capability each write needs - `ROLE.entityOperation` for
  * the record operations, `ROLE.authoredEdit` for a field or a portrait,
  * `ROLE.read` for the rename preview (ADR 0003 D2, `lib/auth/roles.ts`).
+ *
+ * ## Thin actions over core functions (roadmap task 4.2)
+ *
+ * Every write the agent's tools reach is split: the body is a core function in
+ * `core.ts` that takes a gate and the raw input - which the tools and the
+ * worker call with a gate of their own - and the action here parses what it
+ * always parsed before the gate, opens the cookie gate with its capability,
+ * calls the core, and revalidates on the outcome it always did. Signatures and
+ * results are unchanged. The actions no tool reaches (the portrait, the
+ * canvas, the pair row, the derive button, the export) are as they were.
  *
  * ## Which writes re-derive, and which do not
  *
@@ -189,247 +188,55 @@ export const createCharacter = async (projectId: string, rawInput: unknown, rawK
   return { status: 'created', id }
 }
 
-export const saveProfile = async (
-  projectId: string,
-  rawId: string,
-  rawEdit: unknown,
-): Promise<SavedResult> => {
-  const id = parseId(rawId)
-  const edit = CharacterProfileEditSchema.safeParse(rawEdit)
-  if (id === null || !edit.success) return { status: 'error', message: 'That edit could not be read.' }
+export const saveProfile = async (projectId: string, rawId: string, rawEdit: unknown): Promise<SavedResult> => {
+  const problem = profileProblem(rawId, rawEdit)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-
-  const written = await updateCharacterProfile(gate.scope, id, edit.data)
-  if (!written) return { status: 'error', message: REFUSED_CHARACTER }
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved' }
+  const result = await saveProfileWith(gate, rawId, rawEdit)
+  if (result.status === 'saved') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
-/**
- * The record-level rename. See the header.
- *
- * The old name's bound spellings are the ones whose canonical key is the
- * old name's; they are swapped for the new spelling in the alias table
- * (`renameCharacterRecord`), and the cues carrying the old name are
- * rewritten in every episode. Aliases the writer bound stay bound.
- */
-export const renameCharacter = async (
-  projectId: string,
-  rawId: string,
-  rawName: string,
-): Promise<RenameResult> => {
-  const id = parseId(rawId)
-  const name = z.string().trim().min(1).max(200).safeParse(rawName)
-  if (id === null || !name.success) return { status: 'error', message: 'A character needs a name, up to 200 characters.' }
+/** The record-level rename (`renameCharacterWith`). See the header. */
+export const renameCharacter = async (projectId: string, rawId: string, rawName: string): Promise<RenameResult> => {
+  const problem = renameProblem(rawId, rawName)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-  const { scope, project } = gate
-
-  const [records, bound] = await Promise.all([listCharacterRecords(scope), listBoundCues(scope)])
-  const record = records.find((entry) => entry.id === id)
-  if (record === undefined) return { status: 'error', message: REFUSED_CHARACTER }
-  const oldKey = canonicalKey(record.name)
-  const oldCues = bound
-    .filter((entry) => entry.characterId === id && canonicalKey(entry.cue) === oldKey)
-    .map((entry) => entry.cue)
-  const newCue = cueSpelling(name.data)
-
-  const outcome = await renameCharacterRecord(scope, id, name.data, oldCues, newCue)
-  if (outcome.status === 'taken') {
-    const holder = records.find((entry) => entry.id === outcome.by)
-    return { status: 'taken', by: outcome.by, name: holder?.name ?? 'another character', cue: newCue }
-  }
-  if (outcome.status === 'missing') return { status: 'error', message: REFUSED_CHARACTER }
-
-  // The rewrite, episode by episode: a `before_rename` version of every
-  // script that changes, then every changed cue in one statement.
-  const restores: RenameRestore[] = []
-  const pending: CueNodeRewrite[] = []
-  for (const episode of await listEpisodes(scope)) {
-    const document = await readDocumentByKind(scope, episode.id, 'screenplay')
-    if (document === null) continue
-    const read = await readScreenplayNodes(scope, document.id)
-    if (!read.ok) continue
-    const before = read.value.map((entry) => entry.node)
-    const result = renameCharacterCues(before, record.name, name.data)
-    if (result.rewritten.length === 0) continue
-    restores.push({ episode: episode.slug, restores: result.before })
-    await snapshotVersion(scope, document.id, 'before_rename', before, before.length)
-    const changed = new Set(result.rewritten)
-    for (const node of result.nodes) if (changed.has(node.id)) pending.push({ id: node.id, content: node.content })
-  }
-  const cues = await rewriteCueNodes(scope, pending)
-  await requestRederive(scope)
-  revalidatePath(workspacePath(project.id), 'layout')
-  return { status: 'renamed', cues, episodes: restores.length, previousName: record.name, name: name.data, restores }
+  const result = await renameCharacterWith(gate, rawId, rawName)
+  if (result.status === 'renamed') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
-const RestoreSchema = z.object({
-  previousName: z.string().trim().min(1).max(200),
-  restores: z.array(
-    z.object({
-      episode: z.string().min(1),
-      restores: z.array(z.object({ id: z.string().min(1), text: z.string() })).max(10_000),
-    }),
-  ),
-})
-
-/**
- * Take a rename back. The inverse alias swap first (the old spelling
- * becomes the name's again; `taken` when somebody bound the old spelling
- * meanwhile - the rename cannot be undone from here), then per episode the
- * old text back by node id behind a `before_rename` snapshot - one undo
- * entry per direction - and a re-derive. A cue edited since the rename is
- * skipped and counted.
- */
+/** Take a rename back (`undoRenameWith`). */
 export const undoRename = async (projectId: string, rawId: string, rawRestore: unknown): Promise<UndoRenameResult> => {
-  const id = parseId(rawId)
-  const restore = RestoreSchema.safeParse(rawRestore)
-  if (id === null || !restore.success) return { status: 'error', message: 'That rename could not be taken back.' }
+  const problem = undoRenameProblem(rawId, rawRestore)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-  const { scope, project } = gate
-
-  const [records, bound] = await Promise.all([listCharacterRecords(scope), listBoundCues(scope)])
-  const record = records.find((entry) => entry.id === id)
-  if (record === undefined) return { status: 'error', message: REFUSED_CHARACTER }
-  const currentKey = canonicalKey(record.name)
-  const currentCues = bound
-    .filter((entry) => entry.characterId === id && canonicalKey(entry.cue) === currentKey)
-    .map((entry) => entry.cue)
-  const oldCue = cueSpelling(restore.data.previousName)
-
-  const outcome = await renameCharacterRecord(scope, id, restore.data.previousName, currentCues, oldCue)
-  if (outcome.status === 'taken') {
-    const holder = records.find((entry) => entry.id === outcome.by)
-    return {
-      status: 'refused',
-      message: `${oldCue} is now ${holder?.name ?? 'another character'}'s cue. The rename cannot be undone from here - merge the two records instead.`,
-    }
-  }
-  if (outcome.status === 'missing') return { status: 'error', message: REFUSED_CHARACTER }
-
-  let skipped = 0
-  const pending: CueNodeRewrite[] = []
-  const episodes = await listEpisodes(scope)
-  for (const entry of restore.data.restores) {
-    const episode = episodes.find((candidate) => candidate.slug === entry.episode)
-    if (episode === undefined) {
-      skipped += entry.restores.length
-      continue
-    }
-    const document = await readDocumentByKind(scope, episode.id, 'screenplay')
-    if (document === null) {
-      skipped += entry.restores.length
-      continue
-    }
-    const read = await readScreenplayNodes(scope, document.id)
-    if (!read.ok) {
-      skipped += entry.restores.length
-      continue
-    }
-    const before = read.value.map((node) => node.node)
-    const result = revertCueRewrites(
-      before,
-      entry.restores.map((line) => ({ id: line.id as NodeId, text: line.text })),
-      currentKey,
-    )
-    skipped += result.skipped.length
-    if (result.restored.length === 0) continue
-    await snapshotVersion(scope, document.id, 'before_rename', before, before.length)
-    const changed = new Set(result.restored)
-    for (const node of result.nodes) if (changed.has(node.id)) pending.push({ id: node.id, content: node.content })
-  }
-  const cues = await rewriteCueNodes(scope, pending)
-  await requestRederive(scope)
-  revalidatePath(workspacePath(project.id), 'layout')
-  return { status: 'undone', cues, skipped }
+  const result = await undoRenameWith(gate, rawId, rawRestore)
+  if (result.status === 'undone') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
-/**
- * What a rename would do, before it does. The same reads and the same pure
- * decision as `renameCharacter`, nothing written: the cues per episode,
- * the record's other bound spellings (which a rename leaves bound), and
- * whether the new spelling is already somebody's.
- */
+/** What a rename would do, before it does (`previewRenameWith`). Nothing written. */
 export const previewRename = async (projectId: string, rawId: string, rawName: string): Promise<RenamePreview> => {
-  const id = parseId(rawId)
-  const name = z.string().trim().min(1).max(200).safeParse(rawName)
-  if (id === null || !name.success) return { status: 'error', message: 'A character needs a name, up to 200 characters.' }
+  const problem = renameProblem(rawId, rawName)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.read)
   if (isRefusal(gate)) return gate
-  const { scope } = gate
-
-  const [records, bound, episodes] = await Promise.all([listCharacterRecords(scope), listBoundCues(scope), listEpisodes(scope)])
-  const record = records.find((entry) => entry.id === id)
-  if (record === undefined) return { status: 'error', message: REFUSED_CHARACTER }
-  const oldKey = canonicalKey(record.name)
-  const newCue = cueSpelling(name.data)
-  const newKey = canonicalKey(newCue)
-
-  // Three waves of reads rather than two per episode in series.
-  const documents = await Promise.all(episodes.map((episode) => readDocumentByKind(scope, episode.id, 'screenplay')))
-  const reads = await Promise.all(
-    documents.map((document) => (document === null ? Promise.resolve(null) : readScreenplayNodes(scope, document.id))),
-  )
-  const perEpisode = episodes.flatMap((episode, index) => {
-    const read = reads[index]
-    if (read === null || read === undefined || !read.ok) return []
-    const nodes = read.value.map((entry) => entry.node)
-    const cues = renameCharacterCues(nodes, record.name, name.data).rewritten.length
-    return cues === 0 ? [] : [{ ordinal: episode.ordinal, cues }]
-  })
-
-  const stays = bound
-    .filter((entry) => entry.characterId === id)
-    .map((entry) => entry.cue)
-    .filter((cue) => {
-      const key = canonicalKey(readCue(cue).name)
-      return key !== oldKey && key !== newKey
-    })
-  // The unique index is on the spelling itself, so `taken` mirrors it exactly.
-  const holder = bound.find((entry) => entry.characterId !== id && entry.cue === newCue)
-  const holderRecord = holder === undefined ? undefined : records.find((entry) => entry.id === holder.characterId)
-
-  return {
-    status: 'preview',
-    to: newCue,
-    cues: perEpisode.reduce((total, entry) => total + entry.cues, 0),
-    episodes: perEpisode,
-    stays,
-    taken: holder === undefined ? null : { by: holder.characterId, name: holderRecord?.name ?? 'another character' },
-  }
+  return previewRenameWith(gate, rawId, rawName)
 }
 
-/** The merge itself, shared by the drawer's foot and the queue's pair row. */
-const mergeInto = async (scope: ProjectScope, projectId: string, loser: CharacterId, winner: CharacterId): Promise<MergeResult> => {
-  const before = (await listCharacterRecords(scope)).find((entry) => entry.id === loser)
-  const merged = await mergeCharacterRecords(scope, loser, winner)
-  if (!merged) return { status: 'error', message: REFUSED_CHARACTER }
-  // The loser's portrait has no card to sit on any more. Best effort: a
-  // failed delete leaves an orphan object, never a broken row.
-  if (before?.portraitKey !== undefined && before.portraitKey !== null && storageAvailable()) {
-    await deleteObject(before.portraitKey)
-  }
-  await requestRederive(scope)
-  revalidatePath(workspacePath(projectId), 'layout')
-  return { status: 'merged', into: winner }
-}
-
-export const mergeCharacters = async (
-  projectId: string,
-  rawLoser: string,
-  rawWinner: string,
-): Promise<MergeResult> => {
-  const loser = parseId(rawLoser)
-  const winner = parseId(rawWinner)
-  if (loser === null || winner === null || loser === winner) {
-    return { status: 'error', message: 'Pick a different character to merge into.' }
-  }
+export const mergeCharacters = async (projectId: string, rawLoser: string, rawWinner: string): Promise<MergeResult> => {
+  const problem = mergeProblem(rawLoser, rawWinner)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-  return mergeInto(gate.scope, gate.project.id, loser, winner)
+  const result = await mergeCharactersWith(gate, rawLoser, rawWinner)
+  if (result.status === 'merged') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 /**
@@ -451,33 +258,24 @@ export const decidePair = async (
   }
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-  if (verdict.data === 'merge') return mergeInto(gate.scope, gate.project.id, other, keep)
+  if (verdict.data === 'merge') {
+    const merged = await mergeCharacterInto(gate.scope, other, keep)
+    if (merged.status === 'merged') revalidatePath(workspacePath(gate.project.id), 'layout')
+    return merged
+  }
   await recordDecisionByKey(gate.scope, pairDecisionKey(keep, other), 'rejected', { kind: 'character', id: other })
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'different' }
 }
 
 export const deleteCharacter = async (projectId: string, rawId: string): Promise<DeleteResult> => {
-  const id = parseId(rawId)
-  if (id === null) return { status: 'error', message: REFUSED_CHARACTER }
+  const problem = characterIdProblem(rawId)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-
-  const before = (await listCharacterRecords(gate.scope)).find((entry) => entry.id === id)
-  const outcome = await deleteAbsentCharacter(gate.scope, id)
-  if (outcome === 'missing') return { status: 'error', message: REFUSED_CHARACTER }
-  if (outcome === 'present') {
-    return {
-      status: 'refused',
-      message: 'This character is still in the script. Remove their cues first, or merge the record into another.',
-    }
-  }
-  if (before?.portraitKey !== undefined && before.portraitKey !== null && storageAvailable()) {
-    await deleteObject(before.portraitKey)
-  }
-  await requestRederive(gate.scope)
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'deleted' }
+  const result = await deleteCharacterWith(gate, rawId)
+  if (result.status === 'deleted') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 // ---------------------------------------------------------------------------
@@ -562,157 +360,31 @@ export const removePortrait = async (projectId: string, rawId: string): Promise<
 // The resolve queue
 // ---------------------------------------------------------------------------
 
-const ChoiceSchema = z.discriminatedUnion('kind', [
-  /** Take the row's own proposal, whatever it points at. */
-  z.object({ kind: z.literal('proposal') }),
-  /** "Someone else…": bind to this record instead. */
-  z.object({ kind: z.literal('character'), id: CharacterIdSchema }),
-  z.object({ kind: z.literal('new-record') }),
-  /** "Not a character": this cue is nobody. Never ask again. */
-  z.object({ kind: z.literal('walk-on') }),
-  /**
-   * "It's deliberate" on a conflict block (README, "Conflict blocks"): the
-   * spelling is not this record. Only that candidate is rejected; the next
-   * pass proposes the next one, or a new record, and the cue stays open.
-   */
-  z.object({ kind: z.literal('not-this'), id: CharacterIdSchema }),
-])
-
-const isCueSubject = (value: unknown): value is Extract<ResolveSubject, { kind: 'cue' }> =>
-  typeof value === 'object' && value !== null && 'kind' in value && value.kind === 'cue'
-
-const isTarget = (value: unknown): value is ProposalTarget =>
-  typeof value === 'object' && value !== null && 'kind' in value && typeof value.kind === 'string'
-
-const pendingCount = async (scope: ProjectScope): Promise<number> =>
-  (await listOpenCueRows(scope)).filter((row) => row.proposalTarget !== null).length
-
 export const resolveCue = async (projectId: string, rawKey: string, rawChoice: unknown): Promise<ResolveResult> => {
-  const key = z.string().min(1).max(400).safeParse(rawKey)
-  const choice = ChoiceSchema.safeParse(rawChoice)
-  if (!key.success || !choice.success) return { status: 'error', message: 'That decision could not be read.' }
+  const problem = resolveCueProblem(rawKey, rawChoice)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-  const { scope, project } = gate
-
-  const row = (await listOpenCueRows(scope)).find((entry) => entry.key === key.data)
-  if (row === undefined || !isCueSubject(row.subject)) {
-    return { status: 'error', message: 'That name is no longer waiting. It may have been matched already.' }
-  }
-  const subject = row.subject
-  const target: ProposalTarget | null = isTarget(row.proposalTarget) ? row.proposalTarget : null
-
-  if (choice.data.kind === 'walk-on') {
-    const previous = await readDerivationInput(scope)
-    const candidates = matchCharacters(subject.cue, previous.characters)
-    await recordResolveDecisions(scope, subject, [
-      { verdict: 'rejected', target: { kind: 'new-record' } },
-      ...candidates.map((candidate) => ({
-        verdict: 'rejected' as const,
-        target: { kind: 'character' as const, id: candidate.id },
-      })),
-    ])
-  } else if (choice.data.kind === 'not-this') {
-    await recordResolveDecisions(scope, subject, [
-      { verdict: 'rejected', target: { kind: 'character', id: choice.data.id } },
-    ])
-  } else {
-    const chosen: ProposalTarget | null =
-      choice.data.kind === 'proposal'
-        ? target
-        : choice.data.kind === 'character'
-          ? { kind: 'character', id: choice.data.id }
-          : { kind: 'new-record' }
-    if (chosen === null) return { status: 'error', message: 'That name has no suggestion to take. Pick a character, or mark it as not one.' }
-    if (chosen.kind === 'character') {
-      const outcome = await bindCue(scope, chosen.id, cueSpelling(subject.cue))
-      if (outcome.status === 'taken') {
-        return { status: 'refused', message: 'That spelling already resolves to another character. Reload the page.' }
-      }
-      if (outcome.status === 'missing') return { status: 'error', message: REFUSED_CHARACTER }
-    } else if (chosen.kind !== 'new-record') {
-      return { status: 'error', message: 'A name can only be matched to a character or made a new one.' }
-    }
-    await recordResolveDecisions(scope, subject, [{ verdict: 'accepted', target: chosen }])
-  }
-
-  const pass = await requestRederive(scope)
-  if (!pass.ok) return { status: 'error', message: `The script could not be re-derived (${pass.error.kind}).` }
-  revalidatePath(workspacePath(project.id), 'layout')
-  return { status: 'resolved', pending: await pendingCount(scope) }
+  const result = await resolveCueWith(gate, rawKey, rawChoice)
+  if (result.status === 'resolved') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
-const UndoSchema = z.discriminatedUnion('kind', [
-  /** "Actually a character" on a walk-on, or Undo on "Not a character": every rejection on the row goes. */
-  z.object({ kind: z.literal('walk-on') }),
-  /** Undo on "It's deliberate": that one rejection goes; the pass proposes the record again. */
-  z.object({ kind: z.literal('not-this'), id: CharacterIdSchema }),
-  /** Undo on an accept: the acceptance goes and the spelling is unbound from the record. */
-  z.object({ kind: z.literal('bound'), id: CharacterIdSchema }),
-  /** Undo on "New character": the acceptance goes and the minted record, still blank, with it. */
-  z.object({ kind: z.literal('new-record') }),
-])
-
 /**
- * Take a queue decision back. The decisions are rows and the insert is
- * idempotent on the row and its target, so the reverse is a delete of
- * exactly the rows that decision wrote, then whatever it bound or minted
- * is undone, then the project re-derives so the cue is asked about again.
- * The row itself may be `settled` by now (a bind settles it); the key is
- * the cue's, and the decisions are looked up by it, not by an open row.
+ * Take a queue decision back (`revokeDecisionWith`). The decisions are rows
+ * and the insert is idempotent on the row and its target, so the reverse is a
+ * delete of exactly the rows that decision wrote, then whatever it bound or
+ * minted is undone, then the project re-derives so the cue is asked about
+ * again.
  */
 export const revokeDecision = async (projectId: string, rawKey: string, rawUndo: unknown): Promise<ResolveResult> => {
-  const key = z.string().min(1).max(400).safeParse(rawKey)
-  const undo = UndoSchema.safeParse(rawUndo)
-  if (!key.success || !undo.success) return { status: 'error', message: 'That decision could not be read.' }
-  if (!key.data.startsWith('cue:')) return { status: 'error', message: 'That decision could not be read.' }
+  const problem = revokeProblem(rawKey, rawUndo)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
-  const { scope, project } = gate
-
-  const decisions = (await listResolveDecisions(scope)).filter((decision) => decision.rowKey === key.data)
-  if (decisions.length === 0) return { status: 'error', message: 'There is nothing to take back on that name.' }
-  // The cue's spelling, from the key: `cue:<canonical key>`; the bound row
-  // carries the spelling as typed, so read it from what was accepted.
-  const cueOf = (id: CharacterId): string | null => {
-    const accepted = decisions.find(
-      (decision) => decision.verdict === 'accepted' && isTarget(decision.target) && decision.target.kind === 'character' && decision.target.id === id,
-    )
-    return accepted === undefined ? null : key.data.slice('cue:'.length)
-  }
-
-  if (undo.data.kind === 'walk-on') {
-    await deleteResolveDecisions(scope, key.data, null)
-  } else if (undo.data.kind === 'not-this') {
-    await deleteResolveDecisions(scope, key.data, [proposalTargetKey({ kind: 'character', id: undo.data.id })])
-  } else if (undo.data.kind === 'bound') {
-    const id = undo.data.id
-    if (cueOf(id) === null) return { status: 'error', message: 'That name was not matched to this character.' }
-    const bound = (await listBoundCues(scope)).filter((entry) => entry.characterId === id)
-    const spelling = bound.find((entry) => canonicalKey(readCue(entry.cue).name) === key.data.slice('cue:'.length))
-    if (spelling === undefined) return { status: 'error', message: 'That spelling is no longer bound here.' }
-    const outcome = await unbindCue(scope, id, spelling.cue)
-    if (outcome === 'last') {
-      return { status: 'refused', message: 'That is the only spelling bound to this record. Rename the record, or merge it, instead.' }
-    }
-    await deleteResolveDecisions(scope, key.data, [proposalTargetKey({ kind: 'character', id })])
-  } else {
-    await deleteResolveDecisions(scope, key.data, [proposalTargetKey({ kind: 'new-record' })])
-    const cueKey = key.data.slice('cue:'.length)
-    const holder = (await listBoundCues(scope)).find((entry) => canonicalKey(readCue(entry.cue).name) === cueKey)
-    if (holder !== undefined) {
-      const gone = await deleteBlankCharacter(scope, holder.characterId)
-      // A record the writer has already written on is kept; only its
-      // binding goes, so the cue proposes it (`same name`) rather than
-      // resolving to it. Honest either way.
-      if (gone === 'kept') await unbindCue(scope, holder.characterId, holder.cue)
-    }
-  }
-
-  const pass = await requestRederive(scope)
-  if (!pass.ok) return { status: 'error', message: `The script could not be re-derived (${pass.error.kind}).` }
-  revalidatePath(workspacePath(project.id), 'layout')
-  return { status: 'resolved', pending: await pendingCount(scope) }
+  const result = await revokeDecisionWith(gate, rawKey, rawUndo)
+  if (result.status === 'resolved') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 // ---------------------------------------------------------------------------
@@ -737,41 +409,28 @@ export const placeCharacterOnCanvas = async (projectId: string, rawId: string, r
 }
 
 /**
- * Write a pair's relationship, whole - the modal's `Create` and `Save`.
- * The pair is sorted and the labels swapped with it (`orderInput`), so
- * either end of the modal lands on the one row. Authored beside the
- * record, never derived from it: nothing re-derives, and the label
- * `derive.ts` reads next pass is this row's.
+ * Write a pair's relationship, whole - the modal's `Create` and `Save`
+ * (`saveRelationshipWith`). Authored beside the record, never derived from it:
+ * nothing re-derives, and the label `derive.ts` reads next pass is this row's.
  */
 export const saveRelationship = async (projectId: string, rawInput: unknown): Promise<RelationshipResult> => {
-  const input = RelationshipInputSchema.safeParse(rawInput)
-  if (!input.success) return { status: 'error', message: input.error.issues[0]?.message ?? 'That relationship could not be read.' }
+  const problem = relationshipProblem(rawInput)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-  const ordered = orderInput(input.data)
-  const row = await upsertRelationship(gate.scope, {
-    aId: ordered.aId,
-    bId: ordered.bId,
-    aIs: ordered.aIs,
-    bIs: ordered.bIs,
-    description: ordered.description === '' ? null : ordered.description,
-  })
-  if (row === null) return { status: 'error', message: 'One of those characters could not be found.' }
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'saved', relationship: relationshipOf(row) }
+  const result = await saveRelationshipWith(gate, rawInput)
+  if (result.status === 'saved') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 export const deleteRelationship = async (projectId: string, rawA: string, rawB: string): Promise<RelationshipResult> => {
-  const a = parseId(rawA)
-  const b = parseId(rawB)
-  if (a === null || b === null || a === b) return { status: 'error', message: 'That relationship could not be read.' }
+  const problem = pairProblem(rawA, rawB)
+  if (problem !== null) return problem
   const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
-  const [x, y] = orderPair(a, b)
-  const gone = await deleteRelationshipRow(gate.scope, x, y)
-  if (!gone) return { status: 'error', message: 'That relationship is not here any more.' }
-  revalidatePath(workspacePath(gate.project.id), 'layout')
-  return { status: 'gone' }
+  const result = await deleteRelationshipWith(gate, rawA, rawB)
+  if (result.status === 'gone') revalidatePath(workspacePath(gate.project.id), 'layout')
+  return result
 }
 
 /** The empty state's "Derive N characters": a pass, awaited, project-wide. */
