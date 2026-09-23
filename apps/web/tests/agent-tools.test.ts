@@ -2,6 +2,7 @@
 import type { AgentEvent, Episode, Project } from '@folio/contracts'
 import { episodeId, episodeSlug, projectId, userId } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
+import type { ProposedOp, Toolset } from '../lib/agent/registry'
 import type { NodeId, RunId } from '@folio/script'
 import { documentId, nodeId, parseFountain, typed } from '@folio/script'
 import { readFileSync } from 'node:fs'
@@ -134,6 +135,7 @@ vi.mock('../lib/script/server', async (actual) => ({
 await import('../lib/agent/tools')
 const { defineTool, registerTools, registeredTools, runTool } = await import('../lib/agent/registry')
 const { hrefOfTarget } = await import('../lib/agent/navigate')
+const { executorFor } = await import('../lib/agent/executors')
 type ToolResult = Awaited<ReturnType<typeof runTool>>
 const { ROLE_REFUSED } = await import('../lib/auth/roles')
 
@@ -189,22 +191,32 @@ const seed = (): void => {
 
 const context = (role: 'reader' | 'writer' | 'owner' = 'reader') => {
   const events: AgentEvent[] = []
+  const proposed: ProposedOp[] = []
   return {
     events,
+    proposed,
     ctx: {
       gate: { actor: ME, scope: SCOPE, project: PROJECT, episode: EPISODE, role },
       runId: RUN,
       idempotencyKey: 'toolu_test',
       emit: (event: AgentEvent) => events.push(event),
-      loaded: new Set<'core' | 'launcher' | 'script' | 'entities' | 'timeline' | 'research'>(),
+      loaded: new Set<Toolset>(),
+      // Phase 3: a write tool queues here; nothing is applied by a call.
+      proposals: {
+        propose: (op: ProposedOp) => {
+          proposed.push(op)
+        },
+        earlier: () => undefined,
+        applyNow: () => Promise.resolve({ ok: false as const, message: 'not in this test' }),
+      },
     },
   }
 }
 
 const call = async (name: string, input: unknown, role: 'reader' | 'writer' | 'owner' = 'reader') => {
-  const { ctx, events } = context(role)
+  const { ctx, events, proposed } = context(role)
   const result = await runTool(name, input, ctx, registeredTools())
-  return { result, events, ctx }
+  return { result, events, ctx, proposed }
 }
 
 const ok = <T>(result: ToolResult): T => {
@@ -228,23 +240,33 @@ describe('the registry against docs/agents/tools.md', () => {
     phase: (match[4] ?? '').trim(),
   }))
   const phaseTwo = rows.filter((row) => row.phase.startsWith('2'))
+  const built = rows.filter((row) => row.phase.startsWith('2') || row.phase.startsWith('3'))
 
-  it('registers every Phase 2 tool the catalogue lists, and nothing it does not', () => {
+  it('registers every Phase 2 tool the catalogue lists, and nothing it does not list for Phases 2 and 3', () => {
     expect(phaseTwo.length).toBe(17)
-    expect(registeredTools().map((tool) => tool.name).sort()).toEqual(phaseTwo.map((row) => row.name).sort())
+    const names = registeredTools().map((tool) => tool.name)
+    for (const row of phaseTwo) expect(names, row.name).toContain(row.name)
+    for (const name of names) expect(built.map((row) => row.name), name).toContain(name)
   })
 
-  it('gives each tool the catalogue`s role and mode', () => {
+  it('gives each tool the catalogue`s role and mode - a "propose · confirm" tool is registered as propose and confirms its destructive action', () => {
     for (const tool of registeredTools()) {
-      const row = phaseTwo.find((entry) => entry.name === tool.name)
+      const row = built.find((entry) => entry.name === tool.name)
       expect(row, tool.name).toBeDefined()
       expect(tool.minimumRole ?? 'user', tool.name).toBe(row?.role)
-      expect(tool.mode, tool.name).toBe(row?.mode)
+      expect(tool.mode, tool.name).toBe(row?.mode.split(' · ')[0])
     }
   })
 
-  it('registers no write: every Phase 2 tool is a read or a client tool (ruling R8)', () => {
-    expect(new Set(registeredTools().map((tool) => tool.mode))).toEqual(new Set(['read', 'client']))
+  it('registers no paid tool before Phase 5, and no Research write at all (ruling R3)', () => {
+    expect(registeredTools().filter((tool) => tool.mode === 'paid')).toEqual([])
+    expect(registeredTools().filter((tool) => tool.toolset === 'research' && tool.mode !== 'read')).toEqual([])
+  })
+
+  it('gives every write tool an executor under its own name, so a stored operation can be applied', () => {
+    for (const tool of registeredTools().filter((entry) => entry.mode !== 'read' && entry.mode !== 'client')) {
+      expect(executorFor(tool.name), tool.name).toBeDefined()
+    }
   })
 })
 
@@ -320,7 +342,8 @@ describe('core', () => {
 
   it('load_toolset adds a route`s tools for the rest of the turn, and never the launcher`s', async () => {
     const { result, ctx } = await call('load_toolset', { toolset: 'timeline' })
-    expect(ok<{ tools: string[] }>(result).tools).toEqual(['run_continuity_check', 'export_chronology'])
+    // Its reads, and since Phase 3 its writes.
+    expect(ok<{ tools: string[] }>(result).tools).toEqual(['run_continuity_check', 'export_chronology', 'set_story_time', 'place_scenes', 'manage_threads', 'mark_finding_deliberate'])
     expect(ctx.loaded.has('timeline')).toBe(true)
     expect((await call('load_toolset', { toolset: 'launcher' })).result).toMatchObject({ ok: false })
   })

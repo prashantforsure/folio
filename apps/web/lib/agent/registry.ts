@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentRoute, Episode, MembershipRole, Project, UserId } from '@folio/contracts'
+import type { AgentEvent, AgentOpMode, AgentRoute, Episode, MembershipRole, Project, ProposalDocumentBase, UserId } from '@folio/contracts'
 import type { ProjectScope } from '@folio/db'
 import type { RunId } from '@folio/script'
 import type Anthropic from '@anthropic-ai/sdk'
@@ -39,7 +39,7 @@ import { ROLE_REFUSED, meetsRole } from '../auth/roles'
  * the tool, and moves to contracts when a second reader appears.
  */
 
-/** `tools.md`, *Modes*. Phase 2 registers only `read` and `client` tools (AGENTS.md ruling R8). */
+/** `tools.md`, *Modes*. Phase 2 registered only `read` and `client` tools; Phase 3 adds the writes (AGENTS.md ruling R8). */
 export const TOOL_MODES = ['read', 'propose', 'confirm', 'paid', 'direct', 'client'] as const
 
 export type ToolMode = (typeof TOOL_MODES)[number]
@@ -50,7 +50,7 @@ export type ToolMode = (typeof TOOL_MODES)[number]
  * `launcher` is the panel's outside a project, where no model turn runs yet
  * (ruled 2026-09-23) - its tools are registered and tested all the same.
  */
-export const TOOLSETS = ['core', 'launcher', 'script', 'entities', 'timeline', 'research'] as const
+export const TOOLSETS = ['core', 'launcher', 'script', 'entities', 'timeline', 'research', 'storyboard', 'production'] as const
 
 export type Toolset = (typeof TOOLSETS)[number]
 
@@ -68,6 +68,39 @@ export type ToolGate = {
   readonly role: MembershipRole
 }
 
+/**
+ * One operation a write tool asks for (roadmap Phase 3). It is not applied by
+ * the tool: the loop collects a step's operations and writes them as
+ * proposals once every call of the step has run (`loop.ts`).
+ */
+export type ProposedOp = {
+  readonly tool: string
+  readonly args: unknown
+  readonly mode: AgentOpMode
+  /** Code's words for it (the executor's `describe`), for the summary and the tool result. */
+  readonly description: string
+  /** The document it was planned against, for D10's compare-and-swap. */
+  readonly base?: ProposalDocumentBase | undefined
+  /**
+   * A second call with the same key in one step folds into the first - two
+   * edits to one script become one operation, so its undo is one snapshot.
+   */
+  readonly mergeKey?: string | undefined
+}
+
+/** What a `direct` tool gets back: it ran at once, as a one-operation proposal already applied. */
+export type DirectOutcome = { readonly ok: true; readonly proposalId: string; readonly result: unknown } | { readonly ok: false; readonly message: string }
+
+/** A turn's proposal machinery, as a tool sees it. */
+export type Proposing = {
+  /** Queue an operation for this step's proposal. */
+  readonly propose: (op: ProposedOp) => void
+  /** The args of an operation already queued this step under `mergeKey`, if any. */
+  readonly earlier: (mergeKey: string) => unknown
+  /** Run a `direct` operation now: it lands as proposed rows, or only cancels something. */
+  readonly applyNow: (op: ProposedOp) => Promise<DirectOutcome>
+}
+
 export type ToolContext = {
   readonly gate: ToolGate
   readonly runId: RunId
@@ -81,6 +114,8 @@ export type ToolContext = {
   readonly emit: (event: AgentEvent) => void
   /** Toolsets this turn has loaded beyond the core and the route's - `load_toolset` adds to it. */
   readonly loaded: Set<Toolset>
+  /** Where a write tool puts what it would change (Phase 3). */
+  readonly proposals: Proposing
 }
 
 /**
@@ -154,7 +189,7 @@ export const registeredTools = (): readonly Tool[] => [...registry.values()]
 
 export const toolNamed = (name: string): Tool | undefined => registry.get(name)
 
-/** The toolset a route loads beside the core. Storyboard and Production have no Phase 2 reads. */
+/** The toolset a route loads beside the core. */
 export const toolsetForRoute = (route: AgentRoute | null): Toolset | null => {
   switch (route) {
     case 'script':
@@ -170,7 +205,9 @@ export const toolsetForRoute = (route: AgentRoute | null): Toolset | null => {
     case 'research':
       return 'research'
     case 'storyboard':
+      return 'storyboard'
     case 'production':
+      return 'production'
     case null:
       return null
   }

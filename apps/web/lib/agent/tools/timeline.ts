@@ -39,7 +39,8 @@ export const runContinuityCheck = defineTool({
     return {
       ok: true,
       content: {
-        open: buckets.open.map((finding) => ({ scene: refOf(finding.sceneId), sceneId: finding.sceneId, kind: finding.kind, note: findingNote(finding, book) })),
+        // `key` is what mark_finding_deliberate takes (roadmap task 3.5).
+        open: buckets.open.map((finding) => ({ key: finding.key, scene: refOf(finding.sceneId), sceneId: finding.sceneId, kind: finding.kind, note: findingNote(finding, book) })),
         notes: buckets.notes.map((finding) => ({ scene: refOf(finding.sceneId), kind: finding.kind, note: findingNote(finding, book) })),
         markedDeliberate: buckets.deliberate.length,
         unplaced: facts.unplaced.map((ref) => `E${String(ref.episodeOrdinal)} Sc ${String(ref.number)}`),

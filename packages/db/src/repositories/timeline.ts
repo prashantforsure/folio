@@ -480,3 +480,38 @@ export const reopenFinding = async (scope: ProjectScope, key: string): Promise<b
     .returning({ id: timelineFindings.id })
   return rows.length > 0
 }
+
+// ---------------------------------------------------------------------------
+// Prior values, for an agent's undo record (roadmap task 3.5)
+// ---------------------------------------------------------------------------
+
+/** What the writer authored on one scene's row: synopsis, story time, threads. Null when the scene has no row. */
+export type SceneAuthoredValues = {
+  readonly synopsis: string | null
+  readonly storyDay: number | null
+  readonly storyClock: string | null
+  readonly flashback: boolean
+  readonly threads: readonly string[]
+}
+
+/**
+ * One scene's authored values, read before an agent operation changes them
+ * so "undo this run" can put them back (ADR 0003 D11). One statement.
+ */
+export const readSceneAuthored = async (scope: ProjectScope, sceneNodeId: NodeId): Promise<SceneAuthoredValues | null> => {
+  const rows = await dbOf(scope)
+    .select({ synopsis: scenes.synopsis, storyDay: scenes.storyDay, storyClock: scenes.storyClock, flashback: scenes.flashback, threads: scenes.threads })
+    .from(scenes)
+    .where(scoped(scope, scenes, eq(scenes.sceneNodeId, sceneNodeId)))
+    .limit(1)
+  const row = rows[0]
+  return row === undefined ? null : { synopsis: row.synopsis, storyDay: row.storyDay, storyClock: row.storyClock, flashback: row.flashback, threads: row.threads }
+}
+
+/** One `It's deliberate` verdict by the check's key, or null - what reopening a finding would need to undo. */
+export const readFindingVerdict = async (scope: ProjectScope, key: string): Promise<FindingVerdict | null> => {
+  const rows = await dbOf(scope).select().from(timelineFindings).where(scoped(scope, timelineFindings, eq(timelineFindings.key, key))).limit(1)
+  const row = rows[0]
+  if (row === undefined) return null
+  return { kind: row.kind, key: row.key, aRef: row.aRef as NodeId, bRef: row.bRef === null ? null : (row.bRef as NodeId), subject: row.subject }
+}

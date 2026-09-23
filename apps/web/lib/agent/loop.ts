@@ -1,7 +1,8 @@
 import type { AgentEvent, AgentRoute, AgentStopReason, AssistantContent } from '@folio/contracts'
+import type { RunId } from '@folio/script'
 import Anthropic from '@anthropic-ai/sdk'
 
-import type { Tool, ToolContext, Toolset } from './registry'
+import type { DirectOutcome, ProposedOp, Proposing, Tool, ToolContext, Toolset } from './registry'
 import { labelOf, runTool, toolDefinitions, toolsFor } from './registry'
 
 /**
@@ -44,6 +45,37 @@ export const MAX_TURN_MS = 60_000
 
 export const REFUSAL_NOTE = '\n\n[The assistant declined to answer this one.]'
 
+/**
+ * The operations one step queued, grouped as they become proposals: every
+ * `propose` operation of the step together - related changes are one
+ * proposal, one review - and each `confirm` or `paid` operation alone, so each
+ * destructive or spending act is confirmed by itself (ADR 0003 D1).
+ */
+export type ProposalGroup = { readonly ops: readonly { readonly key: string; readonly op: ProposedOp }[] }
+
+/** A proposal the sink wrote, as the panel's `proposal` event carries it. */
+export type ProposalMade = {
+  readonly proposalId: string
+  readonly runId: RunId
+  readonly summary: string
+  readonly needsConfirmation: boolean
+  /** The writer's autonomy lets the panel apply it at once (never with `needsConfirmation`). */
+  readonly auto: boolean
+}
+
+/** Where a turn's proposals are written - `lib/agent/proposer.ts`; a test passes arrays. */
+export type ProposalSink = {
+  readonly create: (groups: readonly ProposalGroup[]) => Promise<readonly ProposalMade[]>
+  readonly applyNow: (op: ProposedOp, key: string) => Promise<DirectOutcome>
+}
+
+/** Group a step's queued operations into proposals. */
+export const groupsOf = (queued: readonly { readonly key: string; readonly op: ProposedOp }[]): readonly ProposalGroup[] => {
+  const together = queued.filter((entry) => entry.op.mode === 'propose')
+  const alone = queued.filter((entry) => entry.op.mode === 'confirm' || entry.op.mode === 'paid')
+  return [...(together.length === 0 ? [] : [{ ops: together }]), ...alone.map((entry) => ({ ops: [entry] }))]
+}
+
 /** A model message, narrowed to the fields the loop reads. */
 export type ModelMessage = Pick<Anthropic.Message, 'content' | 'stop_reason'> & {
   readonly usage: Pick<Anthropic.Usage, 'input_tokens' | 'output_tokens' | 'cache_creation_input_tokens' | 'cache_read_input_tokens'>
@@ -67,7 +99,9 @@ export type LoopInput = {
   readonly messages: readonly Anthropic.MessageParam[]
   readonly route: AgentRoute | null
   /** What a tool runs as, minus the per-call fields the loop fills in. */
-  readonly context: Omit<ToolContext, 'idempotencyKey' | 'loaded'>
+  readonly context: Omit<ToolContext, 'idempotencyKey' | 'loaded' | 'proposals'>
+  /** Where proposals go. Absent: a write tool's operation is queued and dropped (a read-only caller, a test). */
+  readonly proposals?: ProposalSink
   readonly emit: (event: AgentEvent) => void
   readonly signal: AbortSignal
   /** Tokens left of today's allowance when the turn began. */
@@ -115,6 +149,47 @@ const stored = (blocks: readonly unknown[]): AssistantContent => JSON.parse(JSON
 
 const textOf = (message: ModelMessage): string =>
   message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('')
+
+/**
+ * Write a step's queued operations as proposals, tell the panel, and put each
+ * proposal's id into the results of the calls that made it - the model can
+ * refer to it, and a reloaded chat finds its cards (`proposalIdsIn`). If the
+ * write fails, those calls become errors: the model must not say it proposed
+ * something that was never stored.
+ */
+const writeProposals = async (
+  sink: ProposalSink,
+  queued: readonly { readonly key: string; readonly op: ProposedOp }[],
+  foldedInto: ReadonlyMap<string, string>,
+  results: Anthropic.ToolResultBlockParam[],
+  emit: (event: AgentEvent) => void,
+): Promise<void> => {
+  const groups = groupsOf(queued)
+  const proposalOf = new Map<string, string>()
+  try {
+    const made = await sink.create(groups)
+    for (const [index, group] of groups.entries()) {
+      const proposal = made[index]
+      if (proposal === undefined) continue
+      for (const entry of group.ops) proposalOf.set(entry.key, proposal.proposalId)
+      emit({ type: 'proposal', proposalId: proposal.proposalId, runId: proposal.runId, summary: proposal.summary, needsConfirmation: proposal.needsConfirmation, auto: proposal.auto })
+      if (proposal.needsConfirmation) emit({ type: 'confirm_required', id: proposal.proposalId, name: group.ops[0]?.op.tool ?? 'proposal', summary: proposal.summary, cost: null })
+    }
+  } catch (cause) {
+    console.error({ event: 'folio.agent.proposal_failed', message: cause instanceof Error ? cause.message : String(cause) })
+  }
+  for (const [index, block] of results.entries()) {
+    const key = foldedInto.get(block.tool_use_id) ?? block.tool_use_id
+    if (!queued.some((entry) => entry.key === key) || block.is_error === true) continue
+    const proposalId = proposalOf.get(key)
+    if (proposalId === undefined) {
+      results[index] = { type: 'tool_result', tool_use_id: block.tool_use_id, content: 'The proposal could not be saved. Nothing was proposed.', is_error: true }
+      continue
+    }
+    const content = typeof block.content === 'string' ? (JSON.parse(block.content) as Record<string, unknown>) : {}
+    results[index] = { ...block, content: JSON.stringify({ ...content, proposalId }) }
+  }
+}
 
 export const runAgentLoop = async (input: LoopInput): Promise<LoopOutcome> => {
   const now = input.now ?? Date.now
@@ -186,9 +261,31 @@ export const runAgentLoop = async (input: LoopInput): Promise<LoopOutcome> => {
       if (message.stop_reason !== 'tool_use' || calls.length === 0) return outcome('end_turn')
 
       const results: Anthropic.ToolResultBlockParam[] = []
+      // The step's writes: queued by the tools, written as proposals below.
+      const queued: { key: string; op: ProposedOp }[] = []
+      const foldedInto = new Map<string, string>()
+      const proposing = (key: string): Proposing => ({
+        propose: (op) => {
+          const earlier = op.mergeKey === undefined ? undefined : queued.find((entry) => entry.op.mergeKey === op.mergeKey)
+          if (earlier !== undefined) {
+            earlier.op = op
+            foldedInto.set(key, earlier.key)
+            return
+          }
+          queued.push({ key, op })
+        },
+        earlier: (mergeKey) => queued.find((entry) => entry.op.mergeKey === mergeKey)?.op.args,
+        applyNow: async (op) => {
+          if (input.proposals === undefined) return { ok: false, message: 'Changes cannot be made from here.' }
+          const done = await input.proposals.applyNow(op, key)
+          // A direct operation is already applied; its card is how the writer sees it, and undoes the run.
+          if (done.ok) input.emit({ type: 'proposal', proposalId: done.proposalId, runId: input.context.runId, summary: op.description, needsConfirmation: false, auto: false })
+          return done
+        },
+      })
       for (const use of calls) {
         input.emit({ type: 'tool_started', id: use.id, name: use.name, label: labelOf(use.name, use.input, tools) })
-        const result = await runTool(use.name, use.input, { ...input.context, idempotencyKey: use.id, loaded }, tools)
+        const result = await runTool(use.name, use.input, { ...input.context, idempotencyKey: use.id, loaded, proposals: proposing(use.id) }, tools)
         input.emit({
           type: 'tool_finished',
           id: use.id,
@@ -202,6 +299,7 @@ export const runAgentLoop = async (input: LoopInput): Promise<LoopOutcome> => {
             : { type: 'tool_result', tool_use_id: use.id, content: result.message, is_error: true },
         )
       }
+      if (queued.length > 0 && input.proposals !== undefined) await writeProposals(input.proposals, queued, foldedInto, results, input.emit)
 
       if (inputTokens + outputTokens >= input.tokenBudget) {
         messages.push({ role: 'user', content: results })

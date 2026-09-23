@@ -205,7 +205,7 @@ export const applyProposalWith = async (
         if (outcome.ok) {
           applied += 1
           const undo = outcome.undo === undefined ? captured : outcome.undo
-          await markProposalOp(scope, op.id, { status: 'applied', result: outcome.result, undo: executor.reversible ? undo : null })
+          await markProposalOp(scope, op.id, { status: 'applied', result: outcome.result, undo: executor.reversible(op.args) ? undo : null })
           const target = executor.target(op.args)
           await logAgentActivity(scope, {
             verb: `agent:${op.tool}`,
@@ -382,6 +382,10 @@ export const undoRunWith = async (gate: ToolGate, run: RunId): Promise<UndoOutco
         outcome = { kind: 'failed' as const, message: `${op.tool} could not be undone.` }
       }
       if (outcome.kind === 'failed') return { tool: op.tool, message: outcome.message }
+      if (outcome.kind === 'skipped') {
+        skipped.push({ tool: op.tool, description, reason: outcome.reason })
+        continue
+      }
       if (outcome.kind === 'changed') {
         notes.push(outcome.note)
         for (const [position, next] of outcome.ops.entries()) inverse.push({ op: next, key: `${UNDO_KEY_PREFIX}${op.id}:${String(position)}` })

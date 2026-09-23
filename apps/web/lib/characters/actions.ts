@@ -15,7 +15,6 @@ import {
 import type { PortraitType } from '@folio/contracts'
 import {
   bindCue,
-  createCharacterRecord,
   deleteAbsentCharacter,
   deleteBlankCharacter,
   deleteRelationship as deleteRelationshipRow,
@@ -53,6 +52,7 @@ import { isRefusal, openProject } from '../script/gate'
 import { requestRederive } from '../script/derive-batch'
 import { rederiveProject } from '../script/server'
 import { deleteObject, publicUrl, putObject, storageAvailable } from '../storage/r2'
+import { createCharacterIn } from './create'
 import { orderInput, orderPair } from './relationships'
 import type {
   CreateResult,
@@ -183,16 +183,8 @@ export const createCharacter = async (projectId: string, rawInput: unknown, rawK
   const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
-  const { name, ...profile } = input.data
-  // A repeat returns the record the first call made, and everything after
-  // this line is idempotent in its own right: binding a spelling the record
-  // already holds writes nothing, and a derivation pass is a pass.
-  const id = await createCharacterRecord(gate.scope, name, profile, 'hand', key.key)
-  // The name's spelling binds to the new record, so a cue typed later
-  // resolves to it rather than proposing. A spelling somebody else already
-  // holds is left with them; the cue lands in the queue proposing this record.
-  await bindCue(gate.scope, id, cueSpelling(name))
-  await requestRederive(gate.scope)
+  // One path with the agent's `create_character` (`./create.ts`); a person's record is `hand`.
+  const id = await createCharacterIn(gate.scope, input.data, key.key, 'hand')
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'created', id }
 }

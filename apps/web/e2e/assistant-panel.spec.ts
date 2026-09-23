@@ -9,9 +9,8 @@ import type { WalkOptions } from '../playwright.config'
  * What this proves, in order:
  *
  *   1. **Outside a project the panel is the launcher** (ADR 0003 D15): `⌘J`
- *      opens it on `/app/projects`, it lists recent projects as links and
- *      draws `Start from a story` disabled, and it has no composer - the
- *      launcher runs no model turn in Phase 2 (ruled 2026-09-23).
+ *      opens it on `/app/projects`, it lists recent projects as links, and it
+ *      has no composer - the launcher runs no model turn (ruled 2026-09-23).
  *   2. **The panel survives navigation between routes.** Opened on Script with
  *      a draft typed, it is the same element after a client-side move to
  *      Characters and to Timeline through the rail - never re-mounted - and the
@@ -21,8 +20,14 @@ import type { WalkOptions } from '../playwright.config'
  *      session store; with the assistant connected, the question asked on the
  *      first project and its answer are on screen again.
  *
- * The conversation half of 3 needs `ANTHROPIC_API_KEY` on the server; without
- * it the composer is disabled with its reason, and the walk proves the rest.
+ *   4. **A proposal is reviewed, applied and undone** (roadmap Phase 3): asked
+ *      for a character, the assistant answers with a proposal card that changes
+ *      nothing until Apply; Apply lands it on the Characters page; Undo run
+ *      takes it away again.
+ *
+ * The conversation half of 3, and all of 4, need `ANTHROPIC_API_KEY` on the
+ * server; without it the composer is disabled with its reason, and the walk
+ * proves the rest.
  * Needs a real account; skips without one. Leaves two projects behind per run.
  */
 
@@ -151,4 +156,35 @@ test('the conversation survives a move to another project and back', async ({ pa
   await page.goto(first)
   await expect(panel(page)).toBeVisible()
   if (connected) await expect(panel(page).locator('[data-turn="user"]').first()).toHaveText(question)
+})
+
+test('a proposal is reviewed as a card, applied, and the run undone', async ({ page, account }) => {
+  await signIn(page, account)
+  await page.goto(first)
+  if (!(await panel(page).isVisible())) await openWithShortcut(page)
+  await expect(panel(page)).toBeVisible()
+  const connected = (await page.locator('[data-assistant-disconnected]').count()) === 0
+  test.skip(!connected, 'The proposal walk needs ANTHROPIC_API_KEY on the server.')
+
+  const name = `WALKER ${String(Date.now()).slice(-5)}`
+  await panel(page).getByRole('button', { name: '+ New' }).click()
+  await panel(page).getByLabel('Ask the assistant').fill(`Create a character called ${name}. Propose it now; do not ask me anything first.`)
+  await panel(page).getByRole('button', { name: 'Send' }).click()
+
+  const card = panel(page).locator('[data-proposal-card]').last()
+  await expect(card).toHaveAttribute('data-proposal-status', 'pending', { timeout: 120_000 })
+  await expect(card.locator('[data-proposal-tool="create_character"]')).toBeVisible()
+  // Nothing has changed yet: the record is not on the Characters page.
+  await page.locator('[data-rail-item="characters"]').click()
+  await page.waitForURL(/\/characters$/)
+  await expect(page.getByText(name, { exact: true })).toHaveCount(0)
+
+  await card.locator('[data-proposal-apply]').click()
+  await expect(card).toHaveAttribute('data-proposal-status', 'applied', { timeout: 60_000 })
+  await expect(page.getByText(name, { exact: true }).first()).toBeVisible({ timeout: 30_000 })
+
+  await card.locator('[data-proposal-undo]').click()
+  await card.locator('[data-proposal-undo-yes]').click()
+  await expect(card.locator('[data-proposal-undone]')).toContainText('Put back 1 change.', { timeout: 60_000 })
+  await expect(page.getByText(name, { exact: true })).toHaveCount(0, { timeout: 30_000 })
 })

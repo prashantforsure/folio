@@ -91,6 +91,8 @@ export type InvertOutcome =
   /** The target changed since the run: nothing was overwritten, and these operations would restore it. */
   | { readonly kind: 'changed'; readonly ops: readonly InverseOp[]; readonly note: string }
   | { readonly kind: 'failed'; readonly message: string }
+  /** Left as it is, on purpose, with the reason - a character the script now uses is not deleted. */
+  | { readonly kind: 'skipped'; readonly reason: string }
 
 /**
  * What the card shows for one operation (roadmap task 3.3): record changes as
@@ -143,6 +145,8 @@ export type ExecutorDefinition<Args> = {
   readonly run: (ctx: ExecContext, args: Args, captured: unknown) => Promise<ExecOutcome>
   /** Absent: the operation cannot be undone, whatever `capture` said. */
   readonly invert?: (ctx: ExecContext, args: Args, undo: unknown, result: unknown) => Promise<InvertOutcome>
+  /** For a tool with a destructive action beside reversible ones (`manage_threads`' delete): which calls cannot be undone. */
+  readonly irreversible?: (args: Args) => boolean
   /** What the card shows. Absent: the description is all there is to show. */
   readonly preview?: (ctx: PreviewContext, args: Args, op: StoredOp) => Promise<OpPreview>
 }
@@ -151,7 +155,8 @@ export type ExecutorDefinition<Args> = {
 export type Executor = {
   readonly tool: string
   readonly minimumRole: MembershipRole
-  readonly reversible: boolean
+  /** Whether this call can be undone - said on the card before it is applied. */
+  readonly reversible: (raw: unknown) => boolean
   readonly parse: (raw: unknown) => { readonly ok: true; readonly args: unknown } | { readonly ok: false; readonly message: string }
   readonly describe: (raw: unknown) => string
   readonly target: (raw: unknown) => ActivityTarget
@@ -175,7 +180,11 @@ export const defineExecutor = <Args>(definition: ExecutorDefinition<Args>): Exec
   return {
     tool: definition.tool,
     minimumRole: definition.minimumRole,
-    reversible: invert !== undefined,
+    reversible: (raw) => {
+      if (invert === undefined) return false
+      const args = parse(raw)
+      return args !== null && definition.irreversible?.(args) !== true
+    },
     parse: (raw) => {
       const args = parse(raw)
       return args === null ? { ok: false, message: unreadable(definition.tool) } : { ok: true, args }

@@ -67,7 +67,7 @@ export const buildProposalCard = async (gate: ToolGate, { proposal, ops }: Agent
       description: executor?.describe(op.args) ?? op.tool,
       status: op.status,
       mode: op.mode,
-      reversible: executor !== undefined && executor.reversible && (op.status === 'pending' || (op.undo !== null && op.undo !== undefined)),
+      reversible: executor !== undefined && executor.reversible(op.args) && (op.status === 'pending' || (op.undo !== null && op.undo !== undefined)),
       failure: op.status === 'failed' ? (failureOf(op.result) ?? 'It could not run.') : null,
       changes: preview.changes ?? [],
       diff: preview.diff ?? null,

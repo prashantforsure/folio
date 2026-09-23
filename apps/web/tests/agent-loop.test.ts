@@ -118,7 +118,24 @@ const run = async (
   return { outcome, events, stored, tokens, sent }
 }
 
+/** A write tool for the test: it queues an operation and returns, as a real one does. */
+const queuing = (name: string, mode: 'propose' | 'confirm') =>
+  defineTool({
+    name,
+    description: `A ${mode} tool, for the test.`,
+    toolset: 'core',
+    minimumRole: 'reader',
+    mode,
+    input: z.object({ what: z.string() }),
+    label: () => 'Proposing',
+    run: (ctx, input) => {
+      ctx.proposals.propose({ tool: name, args: input, mode, description: input.what })
+      return Promise.resolve({ ok: true, content: { proposed: input.what }, summary: `Proposed: ${input.what}` })
+    },
+  })
+
 beforeAll(() => {
+  registerTools([queuing('test_propose', 'propose'), queuing('test_confirm', 'confirm')])
   registerTools([
     defineTool({
       name: 'boom',
@@ -291,5 +308,45 @@ describe('what is kept of today`s behaviour', () => {
     expect(outcome.stopReason).toBe('error')
     expect(events).toContainEqual({ type: 'error', message: 'The assistant could not answer.' })
     expect(outcome.unsaved).toBe('Partly\n\n[The assistant could not answer.]')
+  })
+})
+
+describe('proposals (roadmap task 3.5)', () => {
+  const step = { calls: [
+    { id: 'toolu_a', name: 'test_propose', input: { what: 'Create MEERA' } },
+    { id: 'toolu_b', name: 'test_confirm', input: { what: 'Rename ARJUN' } },
+    { id: 'toolu_c', name: 'test_propose', input: { what: 'Update MEERA' } },
+  ] }
+
+  it('writes a step as proposals - the proposes together, each confirm alone - and tells the panel', async () => {
+    const created: string[][] = []
+    const sink = {
+      create: (groups: readonly { readonly ops: readonly { readonly key: string }[] }[]) => {
+        created.push(...groups.map((group) => group.ops.map((entry) => entry.key)))
+        return Promise.resolve(groups.map((_, index) => ({ proposalId: `00000000-0000-4000-8000-00000000000${String(index + 1)}`, runId: 'run-1' as RunId, summary: `group ${String(index)}`, needsConfirmation: index === 1, auto: false })))
+      },
+      applyNow: () => Promise.resolve({ ok: false as const, message: 'no' }),
+    }
+    const { events, sent } = await run([step, { text: 'Proposed.' }], { proposals: sink })
+    expect(created).toEqual([['toolu_a', 'toolu_c'], ['toolu_b']])
+    expect(events.filter((event) => event.type === 'proposal').map((event) => (event.type === 'proposal' ? event.proposalId : ''))).toEqual([
+      '00000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000002',
+    ])
+    expect(events.filter((event) => event.type === 'confirm_required')).toHaveLength(1)
+    // The ids go back to the model in the results, so it can refer to them and a reload finds the cards.
+    const results = sent[1]?.messages.at(-1)?.content as Anthropic.ToolResultBlockParam[]
+    expect(results.map((block) => JSON.parse(String(block.content)) as { proposalId: string }).map((content) => content.proposalId)).toEqual([
+      '00000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000002',
+      '00000000-0000-4000-8000-000000000001',
+    ])
+  })
+
+  it('turns the calls into errors when the proposal could not be stored - the model must not claim it', async () => {
+    const sink = { create: () => Promise.reject(new Error('db down')), applyNow: () => Promise.resolve({ ok: false as const, message: 'no' }) }
+    const { sent } = await run([step, { text: 'Sorry.' }], { proposals: sink })
+    const results = sent[1]?.messages.at(-1)?.content as Anthropic.ToolResultBlockParam[]
+    expect(results.every((block) => block.is_error === true && block.content === 'The proposal could not be saved. Nothing was proposed.')).toBe(true)
   })
 })

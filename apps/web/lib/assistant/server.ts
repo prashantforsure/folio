@@ -33,6 +33,7 @@ import type { EpisodeGate } from '../script/gate'
 import { DAILY_TOKENS_PER_USER } from '../agent/limits'
 import { runAgentLoop } from '../agent/loop'
 import type { ModelClient } from '../agent/loop'
+import { proposalSink } from '../agent/proposer'
 import { checkRateLimit } from '../agent/rate-limit'
 import { replayOf } from '../agent/replay'
 import '../agent/tools'
@@ -415,6 +416,7 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
         const question = await appendMessage(scope, chatId, 'user', input.message, { runId: run.id })
         await startAgentRun(scope, run.id, question.id)
 
+        const toolGate = { actor: gate.actor, scope, project, episode, role: gate.role }
         const outcome = await runAgentLoop({
           client,
           model: ASSISTANT_MODEL,
@@ -422,7 +424,9 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
           system,
           messages,
           route: input.route ?? null,
-          context: { gate: { actor: gate.actor, scope, project, episode, role: gate.role }, runId: run.id, emit },
+          context: { gate: toolGate, runId: run.id, emit },
+          // Phase 3: what a write tool proposes is written here, one proposal per step.
+          proposals: proposalSink(toolGate, run.id),
           emit,
           signal,
           tokenBudget,

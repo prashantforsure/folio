@@ -382,7 +382,17 @@ Phase 2 is done when every box is ticked, the Playwright specs pass, and a user 
   `lib/outline/apply-ops.ts`) and `finishEditorApply` settles. The save schemas already carried
   provenance - a test holds it. **Follow-up:** undoing a run while the script is open writes on
   the server; the open editor shows its conflict banner rather than the restored text.
-- [ ] 3.5 Entity, scene and timeline write tools. Register every Phase 3 tool in docs/agents/tools.md for characters, locations, props, synopses and timeline, in their listed modes. Research stays read-only (AGENTS.md ruling R3). Rename tools must call preview_rename first and store the restore payload as the undo record.
+- [x] 3.5 Entity, scene and timeline write tools. Register every Phase 3 tool in docs/agents/tools.md for characters, locations, props, synopses and timeline, in their listed modes. Research stays read-only (AGENTS.md ruling R3). Rename tools must call preview_rename first and store the restore payload as the undo record.
+
+  **Done 2026-09-23.** Eighteen tools in `lib/agent/tools/writes-entities.ts` and
+  `writes-timeline.ts`, each built with `defineWriteTool` (`lib/agent/write-tool.ts`) beside its
+  executor: a call checks, describes and queues; `loop.ts` writes a step's `propose` operations as
+  one proposal and each `confirm` alone (`proposer.ts`), emits `proposal` / `confirm_required`, and
+  hands the id back in the tool result. `rename_entity` runs `previewRename` when it proposes (the
+  confirmation names the blast radius) and stores the rename's restore payload as its undo;
+  `create_character` goes through `characters/create.ts` so the record is `origin = 'agent'`.
+  Research has no write tool (R3). **Follow-up:** `resolve_queue_item` takes a queue key no read
+  tool returns yet - adding one widens what the agent reads, which is ask-first.
 - [ ] 3.6 Remaining write tools. Register the Phase 3 tools for script and outline edits, comments (minimum role reader, per D2), title page, format and pagination, storyboard, non-paid production edits (including ai_shotlist, which costs 0 credits), episodes, start_story_project and undo_run. start_story_project wraps an adapter around createProject's logic that returns the new project instead of redirecting. Enable the launcher's "Start from a story" button: it creates the project after confirmation and continues the chat inside it.
 - [ ] 3.7 Autonomy and prompt v3. Add the autonomy setting to account settings and honour it in apply, per D1. Rewrite the system prompt: the agent can now act through proposals. Include the rules from docs/agents/craft.md. Add a tool policy: read before writing, preview renames, create characters and locations before referencing them in the script, use their bound cue and slugline spellings exactly, never invent ids, group related changes into one proposal, and explain each proposal in a sentence or two. Remove the "cannot write" lines from the focus blocks, and update AGENTS.md ruling R8's status now that writes have shipped.
 
