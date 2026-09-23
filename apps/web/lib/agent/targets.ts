@@ -33,14 +33,24 @@ const RECORD_ENTITY: Partial<Record<AgentRoute, 'character' | 'location' | 'prop
   research: 'research',
 }
 
+/** The two reads a resolution needs, when the caller already holds them - the run history resolves many links from one read of each (roadmap task 5.4). */
+export type KnownPlaces = {
+  readonly episodes: Awaited<ReturnType<typeof listEpisodes>>
+  readonly index: Awaited<ReturnType<typeof listSceneIndex>>
+}
+
 export const resolveTarget = async (
   gate: ToolGate,
   input: PlaceInput,
+  known?: KnownPlaces,
 ): Promise<{ readonly ok: true; readonly target: NavigateTarget } | { readonly ok: false; readonly message: string }> => {
   const { project } = gate
   if ((AGENT_EPISODE_ROUTES as readonly string[]).includes(input.route)) {
     const route = z.enum(AGENT_EPISODE_ROUTES).parse(input.route)
-    const [episodes, index] = await Promise.all([listEpisodes(gate.scope), input.sceneId === undefined ? Promise.resolve([]) : listSceneIndex(gate.scope)])
+    const [episodes, index] =
+      known !== undefined
+        ? [known.episodes, known.index]
+        : await Promise.all([listEpisodes(gate.scope), input.sceneId === undefined ? Promise.resolve([]) : listSceneIndex(gate.scope)])
     const scene = input.sceneId === undefined ? undefined : index.find((row) => row.sceneNodeId === input.sceneId)
     if (input.sceneId !== undefined && scene === undefined) return { ok: false, message: 'There is no such scene in this project.' }
     const ordinal = scene?.episodeOrdinal ?? input.episode ?? gate.episode.ordinal

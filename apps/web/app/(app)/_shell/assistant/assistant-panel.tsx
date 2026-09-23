@@ -34,6 +34,7 @@ import { CitationChips } from '../../app/project/[projectId]/_chrome/citation-ch
 import { Orb } from '../../app/project/[projectId]/_chrome/orb'
 import { ProposalCard } from './proposal-card'
 import { RunCard, isLiveRun } from './run-card'
+import { RunHistory } from './run-history'
 import { useLivePoll } from './use-live-poll'
 
 /**
@@ -613,6 +614,8 @@ export const AssistantPanel = ({
   /** The background run the open chat belongs to, when it is one's (roadmap task 4.4). */
   const [chatRun, setChatRun] = useState<RunView | null>(null)
   const [listOpen, setListOpen] = useState(false)
+  /** `Chat · History` (roadmap task 5.4): client state, like every switch in a panel. History lists the project's runs. */
+  const [tab, setTab] = useState<'chat' | 'history'>('chat')
   const scroller = useRef<HTMLDivElement>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
   const abort = useRef<AbortController | null>(null)
@@ -1005,7 +1008,31 @@ export const AssistantPanel = ({
           ) : null}
         </div>
         <div className="flex-1" />
-        <button type="button" onClick={fresh} className="folio-ghost-button rounded-[8px] px-[10px] py-[6px] text-12-5 text-ink2">
+        <div role="tablist" aria-label="Assistant view" className="flex items-center gap-[2px] rounded-pill border border-line2 bg-s1 p-[2px]">
+          {(['chat', 'history'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              data-panel-tab={value}
+              aria-selected={tab === value ? 'true' : 'false'}
+              onClick={() => {
+                setTab(value)
+              }}
+              className={`rounded-pill px-[9px] py-[3px] text-12 ${tab === value ? 'bg-s2 text-ink' : 'text-ink3'}`}
+            >
+              {value === 'chat' ? 'Chat' : 'History'}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setTab('chat')
+            fresh()
+          }}
+          className="folio-ghost-button rounded-[8px] px-[10px] py-[6px] text-12-5 text-ink2"
+        >
           + New
         </button>
         <button
@@ -1019,6 +1046,16 @@ export const AssistantPanel = ({
         </button>
       </div>
 
+      {tab === 'history' ? (
+        <RunHistory
+          projectId={projectId}
+          onOpenChat={(chatId, about) => {
+            setTab('chat')
+            void open(chatId, about ?? episode)
+          }}
+        />
+      ) : (
+      <>
       {empty ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[16px] px-[28px] py-[20px]">
           <Orb size={124} drift />
@@ -1229,6 +1266,8 @@ export const AssistantPanel = ({
           </div>
         </div>
       </div>
+      </>
+      )}
     </aside>
   )
 }

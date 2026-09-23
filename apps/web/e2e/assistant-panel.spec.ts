@@ -189,3 +189,25 @@ test('a proposal is reviewed as a card, applied, and the run undone', async ({ p
   await expect(card.locator('[data-proposal-undone]')).toContainText('Put back 1 change.', { timeout: 60_000 })
   await expect(page.getByText(name, { exact: true })).toHaveCount(0, { timeout: 30_000 })
 })
+
+test('the History tab lists the runs with what they did, and the chat is one click back (roadmap task 5.4)', async ({ page, account }) => {
+  await signIn(page, account)
+  await page.goto(first)
+  if (!(await panel(page).isVisible())) await openWithShortcut(page)
+  await expect(panel(page)).toBeVisible()
+  const connected = (await page.locator('[data-assistant-disconnected]').count()) === 0
+
+  await panel(page).locator('[data-panel-tab="history"]').click()
+  const history = panel(page).locator('[data-run-history]')
+  await expect(history).toBeVisible()
+  await expect(panel(page).getByLabel('Ask the assistant')).toHaveCount(0)
+  if (connected) {
+    // The walk above made a character and undid the run: its operation says so.
+    await expect(history.locator('[data-history-tool="create_character"]').first()).toContainText('undone', { timeout: 30_000 })
+  } else {
+    await expect(history.locator('[data-history-run], [data-history-empty]').first()).toBeVisible({ timeout: 30_000 })
+  }
+
+  await panel(page).locator('[data-panel-tab="chat"]').click()
+  await expect(panel(page).getByLabel('Ask the assistant')).toBeVisible()
+})

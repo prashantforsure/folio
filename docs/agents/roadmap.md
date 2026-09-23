@@ -548,7 +548,15 @@ Phase 4 is done when every box is ticked, the worker is deployed to staging, and
   `encoding: 'base64'`. **Flags:** fontkit 1.1.1's Indic shaper needs `regeneratorRuntime` - a
   minimal shim in `pdf-fonts.ts` instead of a package; labels past a lock print as measured (open
   decision 12); fonts are OFL TTFs in `apps/web/assets/fonts/` (user-approved). E2E unrun.
-- [ ] 5.4 Run history. Add a History tab to the panel listing runs with their proposals, operations, status, tokens and credits, linking to the affected items, with an Undo run button. Read from agent_runs, agent_proposals and activity_log.
+- [x] 5.4 Run history. Add a History tab to the panel listing runs with their proposals, operations, status, tokens and credits, linking to the affected items, with an Undo run button. Read from agent_runs, agent_proposals and activity_log.
+
+  **Done 2026-09-24.** `Chat · History` in the panel header (client state). `readRunHistoryWith`
+  (`lib/agent/history.ts`) reads the runs, then their proposals and operations, their
+  `activity_log` rows (when an operation was undone), the turns' first messages, the episodes and
+  the scene index in parallel; each operation is its executor's `describe` with a link from
+  `placeOf` + `resolveTarget` (a created record through its result id). `run-history.tsx` draws
+  both states, tokens and credits, and Undo run (the proposal card's `undoSentence`). **Follow-ups:**
+  twenty runs, no paging; E2E walk added but unrun (no `E2E_*`).
 - [ ] 5.5 Evals. Add an eval harness, for example apps/web/evals with a pnpm eval script that does not run in CI (D19), with 10 fixture stories: thin one-liners, detailed treatments, a series pilot, and one mixing Hindi and English. It runs story_to_script against a scratch project and scores the output with structural checks (the script parses, derive leaves zero unresolved cues, every scene has a heading) and a model-judged rubric built from docs/agents/craft.md. It writes a Markdown report with per-story scores and quoted weak spots for human review.
 - [ ] 5.6 Hardening. Add Playwright specs for: the panel persisting across navigation, a cited answer, applying and undoing a character creation, a script edit applied in the open editor, a background run with a checkpoint, and a paid confirmation. Verify the rate limits and caps under load. Write docs/agents/README.md covering env vars, worker deployment, costs and troubleshooting, and confirm AGENTS.md's "What we are building" section still describes the shipped system accurately.
 

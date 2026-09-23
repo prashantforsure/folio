@@ -229,6 +229,10 @@ authored / derived-cache / measurement. Touching `episodes` needs
   only raise of `credit_budget`, called when a paid proposal is confirmed), `spendRunBudget` (one
   conditional update, refused past the budget) and `returnRunBudget`; `continueBackgroundRun`'s
   approval takes any `RunCheckpoint`.
+- **The run history's reads** (roadmap task 5.4): `listRunsWithInput` (`agent.ts`, the runs with
+  their input, newest first), `listProposalsForRuns` and `listRunActivity` (`agent-proposals.ts` -
+  proposals and operations for many runs in two statements; the `agent:%` activity rows by the run
+  id in their diff), `readMessageBodies` (`assistant.ts`). No schema change.
 - **`readMeasurementLayout`** (`repositories/measurement.ts`, roadmap task 5.3) reads a stored
   measurement's pages and every node's runs, two statements in parallel, for the PDF export; the
   jsonb `runs` and `artefacts` are read back through guards, and what does not read is left out

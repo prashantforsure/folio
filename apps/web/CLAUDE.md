@@ -149,6 +149,14 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `canonicalScreenplay` (the stored-copy form), so applied in order each finds its base; one that goes
   stale is planned again on the next reply. Proposal keys are deterministic, so a replayed job finds
   what it made. The confirm card draws the run's card under it once applied (`card.ts` `run`).
+- **Run history** (roadmap task 5.4): the panel header's `Chat · History` switch is client state;
+  History is `_shell/assistant/run-history.tsx` over `readRunHistory` (`lib/agent/actions.ts`) and
+  `readRunHistoryWith` (`lib/agent/history.ts`): the runs (`listRunsWithInput`), then their
+  proposals and operations, their `activity_log` rows, the turns' first messages, the episodes and
+  the scene index - five statements in parallel - with every link resolved by `resolveTarget`
+  against those two reads (its optional `known`). A created record links through its result's id.
+  Undo run reuses `undoRun` and the proposal card's `undoSentence`. Read on open and on Refresh,
+  never polled.
 - **Paid tools and the production pipeline** (roadmap task 5.1): `generate_images` and `shoot_reel`
   (`tools/writes-paid.ts`, **paid**) price a call from `GENERATION_COSTS` in `prepare`
   (`priceImages`, `priceShoot`); the proposal carries the sum as `credit_cost`; confirming it grants

@@ -414,3 +414,18 @@ export const countRunSteps = async (scope: ProjectScope, id: RunId): Promise<num
     .where(scoped(scope, assistantMessages, eq(assistantMessages.runId, id), eq(assistantMessages.role, 'assistant')))
   return rows[0]?.steps ?? 0
 }
+
+/**
+ * The project's runs, newest first, each with its input - the panel's run
+ * history (roadmap task 5.4): a background run's title is in its input, a
+ * turn's is the message that started it. One statement.
+ */
+export const listRunsWithInput = async (scope: ProjectScope, limit = 30): Promise<readonly BackgroundRunRow[]> => {
+  const rows = await dbOf(scope)
+    .select()
+    .from(agentRuns)
+    .where(scoped(scope, agentRuns))
+    .orderBy(desc(agentRuns.createdAt))
+    .limit(Math.max(1, Math.min(limit, 100)))
+  return rows.map((row) => ({ run: toRun(row), input: row.input }))
+}

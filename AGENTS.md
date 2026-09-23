@@ -464,7 +464,12 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   task 5.2): `generate_character_look` (paid) and the Characters card's `✦ Generate · 40 cr` draw a
   character's look from their appearance, age and gender, in the project's **first episode's** art
   style (client ruling), and store it as the portrait - the appearance reference Production draws
-  them from; the pipeline's images include a look for anyone in a reel without one.
+  them from; the pipeline's images include a look for anyone in a reel without one. **Shipped
+  2026-09-24** (roadmap task 5.4): the panel's **History** tab lists every run of the project with
+  its proposals, each operation in code's words with where it stands and when it was undone, a link
+  to what it changed, the tokens it used and the credits it was granted and spent - read from
+  `agent_runs`, `agent_proposals` and `activity_log` (`lib/agent/history.ts`) - with **Undo run**
+  where there is something left to put back.
 - Lifecycle: **Brief → Plan → Run → Review → Commit.** One run produces one revision entry.
 - **Every write returns a proposal, never a mutation.** Proposals are anchored to node ids and
   rendered as hunks against current node state. **Narrowed 2026-09-23** (the copilot pass): this

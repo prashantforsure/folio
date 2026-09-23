@@ -3,6 +3,7 @@ import type {
   AssistantChatId,
   AssistantContent,
   AssistantMessage,
+  AssistantMessageId,
   AssistantRole,
   EpisodeId,
   UserId,
@@ -10,7 +11,7 @@ import type {
 import type { RunId } from '@folio/script'
 import { runId as brandRunId } from '@folio/script'
 import { assistantChatId, assistantMessageId, episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
-import { asc, desc, eq } from 'drizzle-orm'
+import { asc, desc, eq, inArray } from 'drizzle-orm'
 
 import { assistantChats, assistantMessages } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
@@ -144,4 +145,17 @@ export const appendMessage = async (
 
 export const deleteChat = async (scope: ProjectScope, chatId: AssistantChatId): Promise<void> => {
   await dbOf(scope).delete(assistantChats).where(scoped(scope, assistantChats, eq(assistantChats.id, chatId)))
+}
+
+/**
+ * The bodies of these messages, by id - the words that started each turn, a
+ * run's title in the panel's history (roadmap task 5.4). One statement.
+ */
+export const readMessageBodies = async (scope: ProjectScope, ids: readonly AssistantMessageId[]): Promise<ReadonlyMap<string, string>> => {
+  if (ids.length === 0) return new Map()
+  const rows = await dbOf(scope)
+    .select({ id: assistantMessages.id, body: assistantMessages.body })
+    .from(assistantMessages)
+    .where(scoped(scope, assistantMessages, inArray(assistantMessages.id, [...ids])))
+  return new Map(rows.map((row) => [row.id, row.body]))
 }

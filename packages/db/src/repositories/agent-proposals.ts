@@ -14,7 +14,7 @@ import type {
 import { ProposalBaseSchema, agentProposalId, agentProposalOpId, episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
 import type { RunId } from '@folio/script'
 import { runId as brandRunId } from '@folio/script'
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
 import { activityLog, agentProposalOps, agentProposals } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
@@ -264,4 +264,50 @@ export const logAgentActivity = async (scope: ProjectScope, entry: AgentActivity
   await dbOf(scope)
     .insert(activityLog)
     .values({ ...tenant(scope), actorId: scope.actor, verb: entry.verb, targetType: entry.targetType, targetId: entry.targetId, diff: jsonb(entry.diff) })
+}
+
+// ---------------------------------------------------------------------------
+// Run history (roadmap task 5.4)
+// ---------------------------------------------------------------------------
+
+/** Every proposal of these runs, oldest first, each with its operations - two statements, however many runs. */
+export const listProposalsForRuns = async (scope: ProjectScope, runs: readonly RunId[]): Promise<readonly AgentProposalWithOps[]> => {
+  if (runs.length === 0) return []
+  const rows = await dbOf(scope)
+    .select()
+    .from(agentProposals)
+    .where(scoped(scope, agentProposals, inArray(agentProposals.runId, [...runs])))
+    .orderBy(asc(agentProposals.createdAt))
+  const ops = await opsOf(
+    scope,
+    rows.map((row) => row.id),
+  )
+  return rows.map((row) => ({ proposal: toProposal(row), ops: ops.get(row.id) ?? [] }))
+}
+
+/** One `activity_log` row an agent operation wrote (D11): applied as `agent:<tool>`, put back as `agent:undo_run`. */
+export type RunActivityRow = {
+  readonly runId: string
+  readonly opId: string | null
+  readonly verb: string
+  readonly targetType: string
+  readonly targetId: string | null
+  readonly at: string
+}
+
+/**
+ * The activity these runs' operations wrote, oldest first - what landed and
+ * when, and what was undone - read by the run's id in each row's diff. One
+ * statement. The history reads it beside the proposal tables because the log
+ * is the record of what *happened*; an operation's status is where it stands.
+ */
+export const listRunActivity = async (scope: ProjectScope, runs: readonly RunId[]): Promise<readonly RunActivityRow[]> => {
+  if (runs.length === 0) return []
+  const runIdOf = sql<string>`${activityLog.diff} ->> 'runId'`
+  const rows = await dbOf(scope)
+    .select({ runId: runIdOf, opId: sql<string | null>`${activityLog.diff} ->> 'opId'`, verb: activityLog.verb, targetType: activityLog.targetType, targetId: activityLog.targetId, createdAt: activityLog.createdAt })
+    .from(activityLog)
+    .where(scoped(scope, activityLog, sql`${activityLog.verb} like 'agent:%'`, inArray(runIdOf, runs.map((run) => run as string))))
+    .orderBy(asc(activityLog.createdAt))
+  return rows.map((row) => ({ runId: row.runId, opId: row.opId, verb: row.verb, targetType: row.targetType, targetId: row.targetId, at: row.createdAt.toISOString() }))
 }

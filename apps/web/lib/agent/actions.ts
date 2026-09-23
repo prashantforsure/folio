@@ -13,6 +13,8 @@ import { z } from 'zod'
 import type { ApplyOutcome, UndoOutcome } from './apply'
 import { applyProposalWith, finishEditorApplyWith, rejectProposalWith, undoRunWith } from './apply'
 import type { ProposalCard } from './card'
+import type { HistoryRun } from './history'
+import { readRunHistoryWith } from './history'
 import type { RunActionResult, RunViewResult } from './runs'
 import { approveRunWith, cancelRunWith, continueRunWith, readRunViewWith } from './runs'
 import { buildProposalCard } from './card'
@@ -122,6 +124,18 @@ export const readProposalCard = async (
   const read = await readProposal(opened.gate.scope, opened.id)
   if (read === null) return { status: 'refused', message: NOT_FOUND }
   return { status: 'ok', card: await buildProposalCard(opened.gate, read) }
+}
+
+/**
+ * The panel's History tab (roadmap task 5.4): the project's runs, newest
+ * first, with their proposals, operations, tokens and credits. A member's
+ * read; undoing one is `undoRun`, which checks the role against every
+ * operation it would reverse.
+ */
+export const readRunHistory = async (projectId: string): Promise<{ readonly status: 'ok'; readonly runs: readonly HistoryRun[] } | { readonly status: 'refused'; readonly message: string }> => {
+  const gate = await openProject(projectId, ROLE.read)
+  if (isRefusal(gate)) return gate
+  return { status: 'ok', runs: await readRunHistoryWith(gate) }
 }
 
 // ---------------------------------------------------------------------------

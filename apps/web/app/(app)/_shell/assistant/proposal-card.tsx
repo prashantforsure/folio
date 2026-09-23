@@ -62,7 +62,7 @@ const OP_TONE: Readonly<Record<ProposalCardOp['status'], string>> = {
 
 const credits = (count: number): string => `${String(count)} ${count === 1 ? 'credit' : 'credits'}`
 
-const undoSentence = (outcome: Exclude<UndoOutcome, { readonly status: 'refused' }>): string => {
+export const undoSentence = (outcome: Exclude<UndoOutcome, { readonly status: 'refused' }>): string => {
   const parts: string[] = []
   parts.push(outcome.undone === 0 ? 'Nothing was put back.' : `Put back ${String(outcome.undone)} ${outcome.undone === 1 ? 'change' : 'changes'}.`)
   if (outcome.skipped.length > 0) parts.push(`${String(outcome.skipped.length)} could not be undone: ${outcome.skipped.map((skip) => skip.description).join('; ')}.`)
