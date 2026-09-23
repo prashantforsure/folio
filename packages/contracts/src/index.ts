@@ -692,7 +692,18 @@ export {
   AssistantRoleSchema,
 } from './assistant'
 
-export type { AgentEvent, AgentEventType, AgentRoute, AgentRun, AgentRunMode, AgentRunStatus, AgentStopReason, NavigateTarget } from './agent'
+export type {
+  AgentEvent,
+  AgentEventType,
+  AgentRoute,
+  AgentRun,
+  AgentRunMode,
+  AgentRunStatus,
+  AgentStopReason,
+  BackgroundRunInput,
+  BackgroundTaskInput,
+  NavigateTarget,
+} from './agent'
 export {
   AGENT_DOWNLOAD_MAX,
   AGENT_EPISODE_ROUTES,
@@ -709,6 +720,8 @@ export {
   AgentRunSchema,
   AgentRunStatusSchema,
   AgentStopReasonSchema,
+  BackgroundRunInputSchema,
+  BackgroundTaskInputSchema,
   NavigateTargetSchema,
   isTerminalRunStatus,
 } from './agent'

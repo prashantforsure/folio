@@ -130,6 +130,13 @@ export const agentRuns = pgTable(
     creditsSpent: integer('credits_spent').notNull().default(0),
     /** The reason in the writer's terms when `status` is `failed`. */
     error: text('error'),
+    /**
+     * What a background run was asked to do (`BackgroundRunInputSchema`,
+     * migration `0037`, roadmap task 4.4): the worker rebuilds the run's
+     * context from it on every job. Null for an interactive turn, whose
+     * request carries it.
+     */
+    input: jsonb('input'),
     createdAt: createdAtColumn(),
     startedAt: timestampColumn('started_at'),
     finishedAt: timestampColumn('finished_at'),

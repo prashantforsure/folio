@@ -244,6 +244,9 @@ recovers stale jobs, drains on `SIGTERM`, answers `GET /health` and has a Docker
 (`docs/agents/worker.md`). What it runs arrives with tasks 4.3 (generations, frames) and 4.4
 (agent runs).
 
+**✓ BUILT 2026-09-23 — background agent runs** (roadmap task 4.4): `agent_run` jobs, resumed from
+their transcript, waiting for the writer on a confirmation, two live per project.
+
 **✓ BUILT 2026-09-23 — generations and frames** (roadmap task 4.3). The `after()` line is gone:
 `createGeneration` queues a `production_generation` job the worker runs with the spec the row was
 quoted for; Storyboard frames are `frame_generation` jobs; the reaper and an R2 sweeper (logs

@@ -13,12 +13,15 @@ import { z } from 'zod'
 import type { ApplyOutcome, UndoOutcome } from './apply'
 import { applyProposalWith, finishEditorApplyWith, rejectProposalWith, undoRunWith } from './apply'
 import type { ProposalCard } from './card'
+import type { RunActionResult, RunViewResult } from './runs'
+import { cancelRunWith, continueRunWith, readRunViewWith } from './runs'
 import { buildProposalCard } from './card'
 import './tools'
 import type { ToolGate } from './registry'
 
 /**
- * The panel's buttons on a proposal - roadmap task 3.2. Apply, Reject and
+ * The panel's buttons on a proposal - roadmap task 3.2 - and on a background
+ * run (task 4.4, at the foot). Apply, Reject and
  * Undo run, each behind the project gate and each re-reading the proposal from
  * the gate's own scope, so an id from another project is not found rather than
  * refused (no existence oracle).
@@ -119,4 +122,29 @@ export const readProposalCard = async (
   const read = await readProposal(opened.gate.scope, opened.id)
   if (read === null) return { status: 'refused', message: NOT_FOUND }
   return { status: 'ok', card: await buildProposalCard(opened.gate, read) }
+}
+
+// ---------------------------------------------------------------------------
+// Background runs (roadmap task 4.4): the run card's poll and its two buttons
+// ---------------------------------------------------------------------------
+
+/** The run card's figures, polled every two seconds while the run is live (D7). */
+export const readBackgroundRunView = async (projectId: string, runId: string): Promise<RunViewResult> => {
+  const gate = await openProject(projectId, ROLE.read)
+  if (isRefusal(gate)) return gate
+  return readRunViewWith(gate, runId)
+}
+
+/** Stop a background run - its starter's, or an owner's. */
+export const cancelBackgroundRunAction = async (projectId: string, runId: string): Promise<RunActionResult> => {
+  const gate = await openProject(projectId, ROLE.read)
+  if (isRefusal(gate)) return gate
+  return cancelRunWith(gate, runId)
+}
+
+/** Reply to a background run waiting for its starter; the reply queues its next job. */
+export const continueBackgroundRunAction = async (projectId: string, runId: string, reply: string): Promise<RunActionResult> => {
+  const gate = await openProject(projectId, ROLE.read)
+  if (isRefusal(gate)) return gate
+  return continueRunWith(gate, runId, reply)
 }

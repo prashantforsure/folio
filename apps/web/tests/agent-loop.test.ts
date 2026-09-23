@@ -350,3 +350,96 @@ describe('proposals (roadmap task 3.5)', () => {
     expect(results.every((block) => block.is_error === true && block.content === 'The proposal could not be saved. Nothing was proposed.')).toBe(true)
   })
 })
+
+describe('a background run (roadmap task 4.4)', () => {
+  const sinkAsking = (asks: boolean) => ({
+    create: (groups: readonly unknown[]) =>
+      Promise.resolve(groups.map((_, index) => ({ proposalId: `00000000-0000-4000-8000-00000000000${String(index + 1)}`, runId: 'run-1' as RunId, summary: 'a proposal', needsConfirmation: asks, auto: false }))),
+    applyNow: () => Promise.resolve({ ok: false as const, message: 'no' }),
+  })
+
+  it('answers the calls its last job left unanswered first, with their own ids, before the next model call', async () => {
+    const pending = [{ id: 'toolu_old', name: 'list_scenes', input: {} }]
+    const { outcome, stored, sent } = await run([{ text: 'Two scenes, as I found.' }], {
+      messages: [
+        { role: 'user', content: 'Count the scenes.' },
+        { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_old', name: 'list_scenes', input: {} }] },
+      ],
+      pending,
+    })
+    expect(outcome.stopReason).toBe('end_turn')
+    // The results were stored before the model was called again, answering the old id.
+    expect(stored[0]?.role).toBe('user')
+    expect(stored[0]?.content).toEqual([expect.objectContaining({ type: 'tool_result', tool_use_id: 'toolu_old' })])
+    const sentResults = sent[0]?.messages.at(-1)?.content as Anthropic.ToolResultBlockParam[]
+    expect(sentResults.map((block) => block.tool_use_id)).toEqual(['toolu_old'])
+  })
+
+  it('asks beforeStep before every step, runs the step as the gate it returns, and stops when it says so', async () => {
+    let asked = 0
+    const writer = gate('writer')
+    const { outcome, events } = await run(
+      [{ calls: [{ id: 'toolu_1', name: 'writer_only', input: {} }] }, { text: 'never reached' }],
+      {
+        beforeStep: () => {
+          asked += 1
+          return Promise.resolve(
+            asked === 1
+              ? { ok: true as const, gate: writer, proposals: sinkAsking(false) }
+              : { ok: false as const, reason: 'refused' as const, message: 'That script could not be found.' },
+          )
+        },
+      },
+    )
+    // The turn's own gate is a reader's; the step ran as the writer beforeStep handed back.
+    expect(events).toContainEqual({ type: 'tool_finished', id: 'toolu_1', name: 'writer_only', ok: true, summary: 'wrote' })
+    expect(asked).toBe(2)
+    expect(outcome.stopReason).toBe('error')
+    expect(outcome.stopMessage).toBe('That script could not be found.')
+  })
+
+  it('stops as aborted when beforeStep finds the run cancelled, before spending a model call', async () => {
+    const { outcome, sent } = await run([{ text: 'never' }], {
+      beforeStep: () => Promise.resolve({ ok: false as const, reason: 'cancelled' as const, message: 'The run was cancelled.' }),
+    })
+    expect(outcome.stopReason).toBe('aborted')
+    expect(sent).toHaveLength(0)
+  })
+
+  it('pauses after a step that writes a proposal only the writer can confirm, with its results stored', async () => {
+    const step = { calls: [{ id: 'toolu_c', name: 'test_confirm', input: { what: 'Rename ARJUN' } }] }
+    const paused = await run([step, { text: 'never reached' }], { proposals: sinkAsking(true), pauseOnConfirmation: true })
+    expect(paused.outcome.stopReason).toBe('confirmation')
+    expect(paused.sent).toHaveLength(1)
+    expect(paused.stored.at(-1)?.role).toBe('user')
+    // Without the flag - an interactive turn - it carries on, as it always did.
+    const carried = await run([step, { text: 'Proposed.' }], { proposals: sinkAsking(true) })
+    expect(carried.outcome.stopReason).toBe('end_turn')
+  })
+
+  it('offers only the tools `offer` lets through', async () => {
+    const { sent } = await run([{ text: 'ok' }], { offer: (tool) => tool.name !== 'navigate' })
+    const names = (sent[0]?.tools ?? []).map((tool) => ('name' in tool ? tool.name : ''))
+    expect(names).not.toContain('navigate')
+    expect(names).toContain('list_scenes')
+  })
+
+  it('names the run`s own step cap in the summary it asks for', async () => {
+    const { outcome, sent } = await run((call) => (call <= 3 ? { calls: [{ id: `toolu_${String(call)}`, name: 'list_scenes', input: {} }] } : { text: 'Summary.' }), { maxSteps: 3 })
+    expect(outcome.stopReason).toBe('step_cap')
+    const closing = sent.at(-1)?.messages.at(-1)?.content
+    expect(Array.isArray(closing) ? closing.at(-1) : null).toMatchObject({ type: 'text', text: expect.stringContaining('limit of 3 steps') })
+  })
+
+  it('marks a rate limit, an overload or a lost connection transient - a bad request is not', async () => {
+    const headers = new Headers()
+    const overloaded = await run([{ text: '' }], {}, { throwOn: 1, error: Anthropic.APIError.generate(529, undefined, 'Overloaded', headers) })
+    expect(overloaded.outcome).toMatchObject({ stopReason: 'error', transient: true })
+    const limited = await run([{ text: '' }], {}, { throwOn: 1, error: Anthropic.APIError.generate(429, undefined, 'Slow down', headers) })
+    expect(limited.outcome.transient).toBe(true)
+    const lost = await run([{ text: '' }], {}, { throwOn: 1, error: new Anthropic.APIConnectionError({ message: 'socket hang up' }) })
+    expect(lost.outcome.transient).toBe(true)
+    const bad = await run([{ text: '' }], {}, { throwOn: 1, error: Anthropic.APIError.generate(400, undefined, 'Bad request', headers) })
+    expect(bad.outcome.transient).toBe(false)
+  })
+})

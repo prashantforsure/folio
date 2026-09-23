@@ -435,7 +435,14 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   into an **unsaved** field, `Check for contradictions` into `character_findings` rows) were the
   first steps past the chat; the route's fourth pass removed them on 2026-09-20 (the drawer is a
   form now), `character_findings` is orphaned and kept, and the rule below still binds whatever
-  comes next. The lifecycle below is where it goes next.
+  comes next. The lifecycle below is where it goes next. **Shipped 2026-09-23** (roadmap task 4.4,
+  ADR 0003 D4/D5/D7/D14): **background runs**. A turn hands work past its 12 steps to
+  `start_background_task`, which writes a run, a chat of its own and an `agent_run` job; the worker
+  runs it with the same loop and registry, as its starter, re-opening the gate before every step;
+  every step is stored first, so a crashed run resumes from its transcript; it waits for the writer
+  (`waiting_for_user`) on a confirmation, after 40 steps or at the daily token cap, and their reply is
+  its next job. Two live (`queued` or `running`) per project. The panel polls it every 2 s; only its
+  starter replies, its starter or an owner cancels (`lib/agent/background.ts`, `runs.ts`).
 - Lifecycle: **Brief → Plan → Run → Review → Commit.** One run produces one revision entry.
 - **Every write returns a proposal, never a mutation.** Proposals are anchored to node ids and
   rendered as hunks against current node state. **Narrowed 2026-09-23** (the copilot pass): this

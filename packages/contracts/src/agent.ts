@@ -20,7 +20,7 @@ import { TimestampSchema } from './primitives'
  * "interactive turns stream newline-delimited JSON events"), the status of a
  * run as `agent_runs` stores it, and the mode a run executes in.
  *
- * ## An event is a line, and a line is one of ten shapes
+ * ## An event is a line, and a line is one of eleven shapes
  *
  * The panel has to tell a sentence from a navigation from a download without
  * parsing prose, which is why the stream is typed at all (D7's rationale).
@@ -56,8 +56,13 @@ export type AgentRunMode = (typeof AGENT_RUN_MODES)[number]
 
 export const AgentRunModeSchema = z.enum(AGENT_RUN_MODES)
 
-/** Why a turn ended. `step_cap`, `time_cap` and `token_cap` are the three limits a run can reach. */
-export const AGENT_STOP_REASONS = ['end_turn', 'step_cap', 'time_cap', 'token_cap', 'refusal', 'aborted', 'error'] as const
+/**
+ * Why a turn ended. `step_cap`, `time_cap` and `token_cap` are the three
+ * limits a run can reach. `confirmation` is a background run stopping on a
+ * proposal only the writer can confirm (roadmap task 4.4) - an interactive
+ * turn carries on past one, because the writer is there to click it.
+ */
+export const AGENT_STOP_REASONS = ['end_turn', 'step_cap', 'time_cap', 'token_cap', 'refusal', 'aborted', 'error', 'confirmation'] as const
 
 export type AgentStopReason = (typeof AGENT_STOP_REASONS)[number]
 
@@ -138,6 +143,28 @@ export const NavigateTargetSchema = z.discriminatedUnion('kind', [
 
 export type NavigateTarget = z.infer<typeof NavigateTargetSchema>
 
+/**
+ * What a background run was asked to do - `agent_runs.input` (migration
+ * `0037`, roadmap task 4.4). The worker rebuilds the run's context from it on
+ * every job: the route decides the toolset, `scope` whether the script is the
+ * episode's or the project's. `task` is the model's own brief, written when it
+ * called `start_background_task`, and is also the run chat's first message.
+ */
+export const BackgroundTaskInputSchema = z.object({
+  kind: z.literal('task'),
+  title: z.string().trim().min(1).max(120),
+  task: z.string().trim().min(1).max(4_000),
+  route: AgentRouteSchema.nullable(),
+  scope: z.enum(['episode', 'project']),
+})
+
+export type BackgroundTaskInput = z.infer<typeof BackgroundTaskInputSchema>
+
+/** The kinds of background run: a task the model handed itself. The story pipeline (task 4.5) adds its own. */
+export const BackgroundRunInputSchema = z.discriminatedUnion('kind', [BackgroundTaskInputSchema])
+
+export type BackgroundRunInput = z.infer<typeof BackgroundRunInputSchema>
+
 // ---------------------------------------------------------------------------
 // The event stream
 // ---------------------------------------------------------------------------
@@ -165,6 +192,11 @@ export const AgentEventSchema = z.discriminatedUnion('type', [
     needsConfirmation: z.boolean(),
     auto: z.boolean(),
   }),
+  /**
+   * A background run started from this turn (roadmap task 4.4): it works in a
+   * chat of its own, `chatId`, and the panel polls it every two seconds (D7).
+   */
+  z.object({ type: z.literal('background_run'), runId: RunIdSchema, chatId: AssistantChatIdSchema, title: z.string() }),
   /** Phase 3. A confirm- or paid-mode action waiting for the writer; `cost` in credits when it spends. */
   z.object({ type: z.literal('confirm_required'), id: z.string(), name: z.string(), summary: z.string(), cost: z.number().int().nonnegative().nullable() }),
   z.object({ type: z.literal('navigate'), target: NavigateTargetSchema }),

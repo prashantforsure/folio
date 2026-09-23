@@ -117,6 +117,23 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   (`lib/agent/document-ops.ts`) go to the **open editor** when there is one
   (`lib/agent/editor-channel.ts`, registered by both workspaces) and are saved with `expectedDigest`
   when there is not. The card is `_shell/assistant/proposal-card.tsx`.
+- **Background runs** (roadmap task 4.4, ADR 0003 D4/D5/D7): `start_background_task`
+  (`lib/agent/tools/writes-runs.ts`, direct, core toolset) writes the run, its own chat, the brief as
+  that chat's first message and an `agent_run` job in one transaction (`startBackgroundRun`, D14's
+  two-live limit under an advisory lock). The worker's `lib/agent/background.ts` runs one job of it:
+  `resumeOf` (`replay.ts`) picks the transcript up - unanswered calls answered first, with their ids;
+  the loop's `beforeStep` re-reads the run and re-opens the gate (`openEpisodeAs`, session pooler)
+  before every step; `pauseOnConfirmation` and the 40-step cap leave it `waiting_for_user`; a
+  transient model error throws for the runtime to retry; a shutdown writes nothing. The context is
+  `lib/assistant/turn-context.ts` (out of `server.ts`, which imports `next/server`) plus
+  `BACKGROUND_NOTE`; the SDK is `lib/assistant/client.ts`. The panel: `_shell/assistant/run-card.tsx`
+  under the answer that started it (polled with `use-live-poll.ts`), and in the run's own chat the
+  card above the composer, the chat re-read every 2 s while live, the composer off while it works and
+  sending `continueBackgroundRunAction` when it waits on its starter; `ask()` refuses a turn there
+  with a `409` until the run is over. The core is `lib/agent/runs.ts`; the doors are in
+  `lib/agent/actions.ts`. **Trap:** the `lib/*/server.ts` modules the tools reach import React's
+  `cache`; in the worker it is React 19's passthrough (no memoisation), which is fine - do not reach
+  for `react-dom` or anything Next from there (`tests/worker-import-graph.test.ts`).
 - **What a workspace computes, the server can read** (roadmap task 2.4): `readContinuity`
   (`lib/timeline/server.ts`, over `continuityOf` in `view.ts`), `readPageCount` (`lib/script/page-count.ts`
   - the stored measurement when its digest matches, else `measure()`; asian refuses), `readProjectList`

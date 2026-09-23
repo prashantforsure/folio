@@ -1,6 +1,8 @@
 import type { AssistantMessage } from '@folio/contracts'
 import type Anthropic from '@anthropic-ai/sdk'
 
+import type { ToolCall } from './loop'
+
 /**
  * A chat's stored turns, as the API is replayed them (roadmap task 2.3).
  *
@@ -70,6 +72,46 @@ const blocksOf = (message: AssistantMessage): Anthropic.ContentBlockParam[] => {
     const request = requestBlock(block)
     return request === null ? [] : [request]
   })
+}
+
+/**
+ * A background run's transcript, ready to go on - roadmap task 4.4.
+ *
+ * A worker that dies mid-step leaves one of three endings, and each is read
+ * here rather than repaired away:
+ *
+ *   - **the model's calls, unanswered** - it died between the model's answer
+ *     and the results. `replayOf` would drop them; a resumed run answers them
+ *     instead, with their own ids (`pending`), so a write already proposed is
+ *     found again rather than proposed twice (D13).
+ *   - **the model's last word, with no call** - the run had finished and only
+ *     its status was lost. `finished`: nothing to go on with.
+ *   - **a user turn** - the brief, a step's results, or the writer's reply.
+ *     The next model call picks up from it.
+ */
+export type Resume = {
+  readonly messages: Anthropic.MessageParam[]
+  readonly pending: readonly ToolCall[]
+  readonly finished: boolean
+}
+
+export const resumeOf = (stored: readonly AssistantMessage[]): Resume => {
+  const lastIndex = stored.findLastIndex((message) => blocksOf(message).length > 0)
+  const last = stored[lastIndex]
+  if (last === undefined || last.role === 'user') return { messages: replayOf(stored), pending: [], finished: false }
+  const blocks = blocksOf(last)
+  const pending = blocks.flatMap((block): ToolCall[] => (block.type === 'tool_use' ? [{ id: block.id, name: block.name, input: block.input }] : []))
+  if (pending.length === 0) return { messages: replayOf(stored), pending: [], finished: true }
+  const messages = replayOf(stored.slice(0, lastIndex))
+  const previous = messages.at(-1)
+  if (previous?.role === 'assistant') {
+    // Two model turns in a row (a step cut off before its results): one message, as the API takes it.
+    const earlier = typeof previous.content === 'string' ? [{ type: 'text' as const, text: previous.content }] : previous.content
+    messages[messages.length - 1] = { role: 'assistant', content: [...earlier, ...blocks] }
+  } else {
+    messages.push({ role: 'assistant', content: blocks })
+  }
+  return { messages, pending, finished: false }
 }
 
 export const replayOf = (messages: readonly AssistantMessage[]): Anthropic.MessageParam[] => {

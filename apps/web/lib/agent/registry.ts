@@ -114,6 +114,8 @@ export type ToolContext = {
   readonly idempotencyKey: string
   /** Send an event to the panel: a navigation, a download, a refresh. */
   readonly emit: (event: AgentEvent) => void
+  /** The route the turn was asked from, when the caller knows it - what a background run started here reads (roadmap task 4.4). */
+  readonly route?: AgentRoute | null
   /** Toolsets this turn has loaded beyond the core and the route's - `load_toolset` adds to it. */
   readonly loaded: Set<Toolset>
   /** Where a write tool puts what it would change (Phase 3). */

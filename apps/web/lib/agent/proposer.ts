@@ -69,6 +69,13 @@ export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy
     return made
   },
   applyNow: async (op, key) => {
+    // A replayed call (D13) - a resumed background run answering its last step again: the first answer, not a second run.
+    const replayed = await readProposalOpByKey(gate.scope, key)
+    if (replayed !== null) {
+      return replayed.status === 'applied'
+        ? { ok: true, proposalId: replayed.proposalId, result: replayed.result ?? null }
+        : { ok: false, message: 'This already ran once and did not finish. Check the run before trying again.' }
+    }
     const created = await createProposal(gate.scope, {
       runId: run,
       episodeId: gate.episode.id,

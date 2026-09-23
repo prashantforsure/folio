@@ -2,8 +2,9 @@
 
 import type { AssistantChatId } from '@folio/contracts'
 import { AssistantChatIdSchema } from '@folio/contracts'
-import { createChat, deleteChat, listChats, listMessages, readChat } from '@folio/db'
+import { countRunSteps, createChat, deleteChat, listChats, listMessages, listRunProposals, readBackgroundRun, readChat, readChatRun } from '@folio/db'
 
+import { runViewOf } from '../agent/runs'
 import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisode } from '../script/gate'
 import type { ChatResult, ChatsResult, SimpleAssistantResult } from './result'
@@ -45,8 +46,14 @@ export const openAssistantChat = async (
   if (chat === null || chat.episodeId !== gate.episode.id) {
     return { status: 'error', message: 'That chat could not be found.' }
   }
-  const messages = await listMessages(gate.scope, chat.id)
-  return { status: 'ok', chat: chatRowOf(chat), messages: visibleMessages(messages) }
+  const [messages, chatRun] = await Promise.all([listMessages(gate.scope, chat.id), readChatRun(gate.scope, chat.id)])
+  // A background run's own chat (roadmap task 4.4): the panel polls it while the run is live, and routes the composer to it.
+  const run = chatRun === null ? null : await readBackgroundRun(gate.scope, chatRun.id)
+  const view =
+    run === null
+      ? null
+      : runViewOf(run.run, run.input, await listRunProposals(gate.scope, run.run.id), await countRunSteps(gate.scope, run.run.id), gate.actor)
+  return { status: 'ok', chat: chatRowOf(chat), messages: visibleMessages(messages), run: view }
 }
 
 /**

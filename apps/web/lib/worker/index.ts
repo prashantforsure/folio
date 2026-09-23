@@ -1,5 +1,6 @@
 import type { JobHandlers, PeriodicTask } from '@folio/db'
 
+import { agentRunHandler } from './agent-run'
 import { frameGenerationHandler } from './frame-generation'
 import { productionGenerationHandler } from './production-generation'
 import { reaper } from './reaper'
@@ -21,13 +22,14 @@ import { sweeper } from './sweeper'
  * cookie. `tests/worker-import-graph.test.ts` walks the imports and holds it.
  *
  * 4.3 added `production_generation`, `frame_generation`, the reaper and the
- * sweeper; 4.4 adds `agent_run`. The worker claims only the kinds this map
- * holds, so a queued job of a kind with no handler yet stays queued rather
- * than failing.
+ * sweeper; 4.4 `agent_run`, a background agent run (`lib/agent/background.ts`).
+ * The worker claims only the kinds this map holds, so a queued job of a kind
+ * with no handler stays queued rather than failing.
  */
 export const workerHandlers: JobHandlers = {
   production_generation: productionGenerationHandler,
   frame_generation: frameGenerationHandler,
+  agent_run: agentRunHandler,
 }
 
 export const periodicTasks: readonly PeriodicTask[] = [reaper, sweeper]

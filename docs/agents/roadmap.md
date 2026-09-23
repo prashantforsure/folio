@@ -469,7 +469,20 @@ card says so).
   gave it. **Deviations:** the page-load sweep that failed anything running for ten minutes is gone;
   a reservation with no job id is logged, never released (a release with no id closes all of them).
   The E2E walk does not click Draw frame (a real model call); unrun without `E2E_*`.
-- [ ] 4.4 Background agent runs. Runs in background mode execute in the worker with the same loop and registry, through the actor gates, re-checking membership and role before every step (D4). Each step is persisted before the next starts, so a crashed run resumes from its transcript. When a run needs the user (a confirmation or a checkpoint), it moves to waiting_for_user, and the user's reply enqueues its continuation. Add the start_background_task tool, which the model uses for work beyond the interactive caps. The panel polls live runs every 2 seconds, following _production/polling.tsx, and shows progress, proposals and a Cancel button.
+- [x] 4.4 Background agent runs. Runs in background mode execute in the worker with the same loop and registry, through the actor gates, re-checking membership and role before every step (D4). Each step is persisted before the next starts, so a crashed run resumes from its transcript. When a run needs the user (a confirmation or a checkpoint), it moves to waiting_for_user, and the user's reply enqueues its continuation. Add the start_background_task tool, which the model uses for work beyond the interactive caps. The panel polls live runs every 2 seconds, following _production/polling.tsx, and shows progress, proposals and a Cancel button.
+
+  **Done 2026-09-23.** `start_background_task` (direct, core) writes a run with its own chat, the
+  brief and an `agent_run` job in one transaction (`0037`: `agent_runs.input`; D14's two live under
+  an advisory lock). `lib/agent/background.ts` runs a job of it through the same loop, now with
+  `beforeStep` (run re-read, gate re-opened, every step), `pending` (a crashed job's calls answered
+  first via `resumeOf`), `pauseOnConfirmation` and `offer`; it waits for the writer on a confirmation,
+  40 steps or the token cap, and `continueBackgroundRun` queues the reply. The panel draws
+  `run-card.tsx` (polled every 2 s), re-reads the run's chat while live and replies from its composer;
+  `ask()` 409s a turn there. **Test changes:** the catalogue test learns the built Phase 4 rows;
+  `assistant-host.test.tsx`'s agent-actions mock gains the three run actions. **Follow-ups:** the E2E
+  walks are unrun (no `E2E_*` here, and a run needs a deployed worker with `ANTHROPIC_API_KEY`); a
+  script proposal a run makes waits for review, so a later step planned on the same script goes
+  stale once the first is applied - 4.5 chains its batches for that.
 - [ ] 4.5 Story-to-script pipeline. Add the story_to_script tool. It starts a background run with the stages below; each stage produces Zod-validated output and resumes independently.
   (A) Expand the story into genre, tone, format, target length, the protagonist's want and need, stakes, setting and stated assumptions. Stop at a checkpoint for approval.
   (B) One proposal creating characters (origin agent) with their cue spellings and voice notes, and locations with their slugline spellings.

@@ -21,14 +21,24 @@ export const RATE_LIMITS: Readonly<Record<RateLimitBucket, number>> = {
 }
 
 /**
- * **D14's third limit**, recorded here and not yet enforced: two concurrent
- * agent runs per project. It is a count of live `agent_runs` rows rather than
- * a window; the table exists since `0034` (roadmap task 2.1), and the count
- * lands with background runs (roadmap Phase 4), when a second live run on one
- * project becomes possible. Per project rather than per user because it protects the document,
- * not the bill.
+ * **D14's third limit**: two concurrent agent runs per project. It is a count
+ * of live background runs - `queued` or `running` - rather than a window,
+ * enforced since roadmap task 4.4 when a run starts and when a waiting one is
+ * continued (`startBackgroundRun`, `continueBackgroundRun`, under a
+ * per-project advisory lock). An interactive turn is not counted: it lasts a
+ * minute and the writer is watching it. A run waiting for the writer holds
+ * nothing and is not counted either. Per project rather than per user because
+ * it protects the document, not the bill.
  */
 export const CONCURRENT_RUNS_PER_PROJECT = 2
+
+/**
+ * **D5**, a background run's step cap per job. An interactive turn has 12 and
+ * 60 seconds; a background run has no clock, and pauses for the writer
+ * (`waiting_for_user`) after this many steps rather than ending - their reply
+ * carries it on for as many again.
+ */
+export const BACKGROUND_MAX_STEPS = 40
 
 /**
  * **D3.** A per-user daily token cap, so a run cannot cost unbounded model

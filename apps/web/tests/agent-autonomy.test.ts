@@ -129,3 +129,15 @@ describe('the setting', () => {
     expect(spies.db.setAgentAutonomy).not.toHaveBeenCalled()
   })
 })
+
+describe('a direct operation answered twice (roadmap task 4.4)', () => {
+  it('runs once: a replayed call - a resumed background run`s - gets the first answer back, not a second run', async () => {
+    const sink = proposalSink(gate, RUN, 'review')
+    const op: ProposedOp = { tool: 'test_record', args: { name: 'MEERA' }, mode: 'direct', description: 'Update MEERA' }
+    const first = await sink.applyNow(op, 'toolu_direct')
+    const again = await sink.applyNow(op, 'toolu_direct')
+    expect(first.ok).toBe(true)
+    expect(again).toEqual(first)
+    expect(spies.ran).toEqual(['MEERA'])
+  })
+})

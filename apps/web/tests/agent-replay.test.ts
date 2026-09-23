@@ -4,8 +4,8 @@ import { assistantChatId, assistantMessageId, projectId } from '@folio/contracts
 import { runId } from '@folio/script'
 import { describe, expect, it } from 'vitest'
 
-import { replayOf } from '../lib/agent/replay'
-import { visibleMessages } from '../lib/assistant/result'
+import { replayOf, resumeOf } from '../lib/agent/replay'
+import { runsIn, visibleMessages } from '../lib/assistant/result'
 
 /**
  * A stored chat, replayed to the API and printed in the panel (roadmap task 2.3).
@@ -117,5 +117,59 @@ describe('visibleMessages', () => {
       ['user', 'How many scenes?'],
       ['assistant', 'Let me look.\n\nTwo.'],
     ])
+  })
+})
+
+describe('resumeOf - a background run picking up its transcript (roadmap task 4.4)', () => {
+  it('answers the calls a dead worker left unanswered, keeping them in the last model message', () => {
+    const resumed = resumeOf([row('user', 'Count the scenes.'), row('assistant', 'Let me look.', call('toolu_9'))])
+    expect(resumed.finished).toBe(false)
+    expect(resumed.pending).toEqual([{ id: 'toolu_9', name: 'list_scenes', input: {} }])
+    // Kept, where replayOf drops an unanswered call: the loop answers it next.
+    expect(resumed.messages.at(-1)).toEqual({
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'Let me look.' },
+        { type: 'tool_use', id: 'toolu_9', name: 'list_scenes', input: {} },
+      ],
+    })
+    expect(replayOf([row('user', 'Count the scenes.'), row('assistant', 'Let me look.', call('toolu_9'))]).at(-1)).toEqual({ role: 'assistant', content: 'Let me look.' })
+  })
+
+  it('picks up from a user turn - the brief, a step`s results, or the writer`s reply', () => {
+    const afterResults = resumeOf([row('user', 'Count the scenes.'), row('assistant', '', call('toolu_1')), row('user', '', result('toolu_1'))])
+    expect(afterResults).toMatchObject({ finished: false, pending: [] })
+    expect(afterResults.messages.at(-1)?.role).toBe('user')
+    expect(resumeOf([row('user', 'Draft act two.')])).toMatchObject({ finished: false, pending: [], messages: [{ role: 'user', content: 'Draft act two.' }] })
+  })
+
+  it('knows a run that had finished and only lost its status', () => {
+    expect(resumeOf([row('user', 'Count the scenes.'), row('assistant', 'There are two.')]).finished).toBe(true)
+  })
+
+  it('joins two model messages in a row into one, as the API takes it', () => {
+    const resumed = resumeOf([row('user', 'Go.'), row('assistant', 'Thinking.'), row('assistant', '', call('toolu_2'))])
+    expect(resumed.messages).toHaveLength(2)
+    expect(resumed.messages[1]).toMatchObject({ role: 'assistant', content: [{ type: 'text', text: 'Thinking.' }, { type: 'text', text: 'Let me look.' }, { type: 'tool_use', id: 'toolu_2' }] })
+  })
+})
+
+describe('runsIn - a run card, read back after a reload (roadmap task 4.4)', () => {
+  const RUN = '4d3c2b1a-0f9e-4d8c-8b7a-6f5e4d3c2b1a'
+  const CHAT = '5e4d3c2b-1a0f-4e9d-9c8b-7a6f5e4d3c2b'
+  const started: AssistantContent = [
+    { type: 'tool_result', tool_use_id: 'toolu_s', content: JSON.stringify({ done: 'Start a background run: Draft act two', proposalId: '6f5e4d3c-2b1a-4f0e-8d9c-8b7a6f5e4d3c', result: { runId: RUN, chatId: CHAT, title: 'Draft act two' } }) },
+  ]
+
+  it('finds the run a start_background_task result names, and nothing in an error or another tool`s result', () => {
+    expect(runsIn(started)).toEqual([{ runId: RUN, chatId: CHAT, title: 'Draft act two' }])
+    expect(runsIn([{ type: 'tool_result', tool_use_id: 'x', content: 'This project already has 2 background runs working.', is_error: true }])).toEqual([])
+    expect(runsIn(result('toolu_1'))).toEqual([])
+    expect(runsIn(null)).toEqual([])
+  })
+
+  it('attaches the run to the answer that started it', () => {
+    const rows = visibleMessages([row('user', 'Draft act two in the background.'), row('assistant', '', call('toolu_s')), row('user', '', started), row('assistant', 'Started it.')])
+    expect(rows.at(-1)).toMatchObject({ role: 'assistant', body: 'Started it.', runs: [{ runId: RUN, chatId: CHAT, title: 'Draft act two' }] })
   })
 })

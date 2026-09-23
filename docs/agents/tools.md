@@ -186,7 +186,7 @@ never a model name. `moveShot` exists in both `lib/production/actions.ts` and
 | `create_episode` | `createEpisode` (`lib/workspace/actions.ts`) | writer | propose | 3 |
 | `rename_episode` | `renameEpisode` | writer | propose | 3 |
 | `undo_run` | Run-level undo: restore the `before_agent_run` snapshots, replay the inverse operations | writer | confirm | 3 |
-| `start_background_task` | Enqueues an `agent_run` job | writer | direct | **4** |
+| `start_background_task` | `startBackgroundRun` (`@folio/db`): the run, its chat, its brief and an `agent_run` job, in one transaction; two live per project (D14). Built, task 4.4 | writer | direct | **4** |
 | `story_to_script` | The story pipeline | writer | confirm | **4** |
 | `script_to_production` | The production pipeline, after a total cost estimate | writer | confirm | **5** |
 | `generate_character_look` | The `character_look` generation (40) | writer | paid | 5 |

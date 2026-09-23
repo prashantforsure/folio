@@ -8,8 +8,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 
+import { continueBackgroundRunAction } from '../../../../lib/agent/actions'
+import type { RunView } from '../../../../lib/agent/runs'
 import { listAssistantChats, openAssistantChat, startAssistantChat } from '../../../../lib/assistant/actions'
-import type { ChatRow, MessageRow } from '../../../../lib/assistant/result'
+import type { ChatRow, MessageRow, RunStarted } from '../../../../lib/assistant/result'
 import type { CharacterFacts } from '../../../../lib/characters/facts'
 import { useCharacterFacts } from '../../../../lib/characters/facts-cell'
 import { citeOf } from '../../../../lib/characters/figures'
@@ -30,6 +32,8 @@ import type { CitationChip } from '../../app/project/[projectId]/_chrome/citatio
 import { CitationChips } from '../../app/project/[projectId]/_chrome/citation-chips'
 import { Orb } from '../../app/project/[projectId]/_chrome/orb'
 import { ProposalCard } from './proposal-card'
+import { RunCard, isLiveRun } from './run-card'
+import { useLivePoll } from './use-live-poll'
 
 /**
  * The assistant panel. 400px, `--sunk`, one left hairline - `docs/ui
@@ -97,6 +101,19 @@ import { ProposalCard } from './proposal-card'
  * so the server adds every scene's story time and the open findings to the
  * system block, and the drawer's scene as the Focus. The widening is per
  * route, and AGENTS.md puts each one behind a question.
+ *
+ * ## Background runs (roadmap task 4.4)
+ *
+ * A turn can hand a long task to a background run (`start_background_task`).
+ * Its card sits under the answer that started it - live from the
+ * `background_run` event, and read back from the stored tool result after a
+ * reload - and polls the run every two seconds while it works (ADR 0003 D7).
+ * **Open** shows the run's own chat, where its work and its proposals are:
+ * the chat is re-read every two seconds while the run works, the composer is
+ * off meanwhile (the run's transcript is its own, and the server refuses a
+ * turn there with a 409), and when the run waits for its starter the composer
+ * sends their reply as the run's continuation instead of a new turn. Once the
+ * run is over the chat is an ordinary one.
  */
 
 type Chip = { readonly label: string; readonly tone: 'live' | 'warn' | 'accent' | 'ok' | 'ink3'; readonly kind?: 'report' }
@@ -536,6 +553,7 @@ type Turn =
       readonly createdAt: ''
       readonly tools: readonly ToolLine[]
       readonly proposals: readonly ProposalLine[]
+      readonly runs: readonly RunStarted[]
     }
   | Report
 
@@ -591,6 +609,8 @@ export const AssistantPanel = ({
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  /** The background run the open chat belongs to, when it is one's (roadmap task 4.4). */
+  const [chatRun, setChatRun] = useState<RunView | null>(null)
   const [listOpen, setListOpen] = useState(false)
   const scroller = useRef<HTMLDivElement>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
@@ -654,6 +674,7 @@ export const AssistantPanel = ({
       setChat(null)
       setChatEpisode(null)
       setTurns([])
+      setChatRun(null)
       return
     }
     let cancelled = false
@@ -665,11 +686,13 @@ export const AssistantPanel = ({
         setChat(null)
         setChatEpisode(null)
         setTurns([])
+        setChatRun(null)
         return
       }
       setChat(result.chat)
       setChatEpisode(episode)
       setTurns(turnsOf(result.messages))
+      setChatRun(result.run ?? null)
     })
     return () => {
       cancelled = true
@@ -688,10 +711,11 @@ export const AssistantPanel = ({
     [],
   )
 
+  /** Show a chat - one from the list (the page's episode), or a background run's (the episode of the chat that started it). */
   const open = useCallback(
-    async (row: ChatRow) => {
+    async (chatId: string, about: EpisodeSlug = episode) => {
       setListOpen(false)
-      const result = await openAssistantChat(projectId, episode, row.id)
+      const result = await openAssistantChat(projectId, about, chatId)
       if (result.status !== 'ok') {
         setNotice(result.message)
         return
@@ -699,12 +723,36 @@ export const AssistantPanel = ({
       shown.current = result.chat.id
       setStoredChat(chatKey, result.chat.id)
       setChat(result.chat)
-      setChatEpisode(episode)
+      setChatEpisode(about)
       setTurns(turnsOf(result.messages))
+      setChatRun(result.run ?? null)
       setNotice(null)
     },
     [chatKey, episode, projectId, setStoredChat],
   )
+
+  /** A run card's Open: the run's own chat. */
+  const openRun = useCallback(
+    (chatId: string) => {
+      void open(chatId, chatEpisode ?? episode)
+    },
+    [chatEpisode, episode, open],
+  )
+
+  // The open chat is a background run's and the run is working: re-read the chat every two seconds (D7).
+  const runLive = chat !== null && chatRun !== null && isLiveRun(chatRun.status)
+  useLivePoll(runLive, async () => {
+    if (chat === null) return
+    const id = chat.id
+    const result = await openAssistantChat(projectId, chatEpisode ?? episode, id)
+    if (result.status !== 'ok' || shown.current !== id) return
+    setTurns(turnsOf(result.messages))
+    setChatRun(result.run ?? null)
+  })
+  /** The run waits for its starter, who is the one reading: the composer replies to it. */
+  const replying = chatRun !== null && chatRun.status === 'waiting_for_user' && chatRun.mine
+  /** The run waits, but for someone else: only its starter may reply (it acts as them). */
+  const notMine = chatRun !== null && chatRun.status === 'waiting_for_user' && !chatRun.mine
 
   const fresh = useCallback(() => {
     setListOpen(false)
@@ -713,6 +761,7 @@ export const AssistantPanel = ({
     setChat(null)
     setChatEpisode(null)
     setTurns([])
+    setChatRun(null)
     setNotice(null)
     composer.current?.focus()
   }, [chatKey, setStoredChat])
@@ -720,7 +769,25 @@ export const AssistantPanel = ({
   /** Ask. `override` is a message that did not come from the composer - the launcher's story. */
   const send = useCallback(async (override?: string) => {
     const message = (override ?? draft).trim()
-    if (message.length === 0 || busy || !connected) return
+    if (busy || runLive) return
+    // A background run waiting for its starter (roadmap task 4.4): the reply is its continuation, not a turn.
+    if (chat !== null && chatRun !== null && replying) {
+      setBusy(true)
+      setNotice(null)
+      setDraft('')
+      const stamp = new Date().toISOString()
+      const result = await continueBackgroundRunAction(projectId, chatRun.id, message)
+      setBusy(false)
+      if (result.status !== 'ok') {
+        setNotice(result.message)
+        setDraft(message)
+        return
+      }
+      setTurns((existing) => [...existing, { id: `user:${stamp}`, role: 'user', body: message.length === 0 ? 'Carry on.' : message, createdAt: stamp }])
+      setChatRun(result.run)
+      return
+    }
+    if (message.length === 0 || !connected) return
     setBusy(true)
     setNotice(null)
     let current = chat
@@ -735,6 +802,7 @@ export const AssistantPanel = ({
       }
       current = started.chat
       askEpisode = episode
+      setChatRun(null)
       shown.current = current.id
       setStoredChat(chatKey, current.id)
       setChat(current)
@@ -747,7 +815,7 @@ export const AssistantPanel = ({
     setTurns((existing) => [
       ...existing,
       { id: `user:${stamp}`, role: 'user', body: message, createdAt: stamp },
-      { id: 'pending', role: 'assistant', body: '', createdAt: '', tools: [], proposals: [] },
+      { id: 'pending', role: 'assistant', body: '', createdAt: '', tools: [], proposals: [], runs: [] },
     ])
     const controller = new AbortController()
     abort.current = controller
@@ -780,11 +848,13 @@ export const AssistantPanel = ({
       let answer = ''
       let tools: readonly ToolLine[] = []
       let proposals: readonly ProposalLine[] = []
+      let runs: readonly RunStarted[] = []
       const show = (): void => {
         const body = answer
         const lines = tools
         const made = proposals
-        setTurns((existing) => existing.map((turn) => (turn.id === 'pending' ? { ...turn, body, tools: lines, proposals: made } : turn)))
+        const started = runs
+        setTurns((existing) => existing.map((turn) => (turn.id === 'pending' ? { ...turn, body, tools: lines, proposals: made, runs: started } : turn)))
       }
       await readAgentStream(response.body, (event) => {
         switch (event.type) {
@@ -805,6 +875,13 @@ export const AssistantPanel = ({
           case 'proposal':
             if (!proposals.some((line) => line.id === event.proposalId)) {
               proposals = [...proposals, { id: event.proposalId, auto: event.auto && !event.needsConfirmation }]
+              show()
+            }
+            return
+          // A background run started (roadmap task 4.4): its card, under this answer.
+          case 'background_run':
+            if (!runs.some((run) => run.runId === event.runId)) {
+              runs = [...runs, { runId: event.runId, chatId: event.chatId, title: event.title }]
               show()
             }
             return
@@ -830,12 +907,13 @@ export const AssistantPanel = ({
       const finished = answer
       const lines = tools
       const made = proposals
+      const started = runs
       setTurns((existing) =>
         existing.flatMap((turn): Turn[] => {
           if (turn.id !== 'pending') return [turn]
           // A turn that said nothing and called nothing leaves no row behind.
           if (finished.length === 0 && lines.length === 0) return []
-          return [{ id: `assistant:${stamp}`, role: 'assistant', body: finished, createdAt: new Date().toISOString(), tools: lines, proposals: made }]
+          return [{ id: `assistant:${stamp}`, role: 'assistant', body: finished, createdAt: new Date().toISOString(), tools: lines, proposals: made, runs: started }]
         }),
       )
       setChats((existing) =>
@@ -851,7 +929,7 @@ export const AssistantPanel = ({
       abort.current = null
       setBusy(false)
     }
-  }, [busy, chat, chatEpisode, chatKey, connected, draft, episode, focus, projectId, route, router, selection, setDraft, setStoredChat, wholeProject])
+  }, [busy, chat, chatEpisode, chatKey, chatRun, connected, draft, episode, focus, projectId, replying, route, router, runLive, selection, setDraft, setStoredChat, wholeProject])
 
   // The launcher's "Start from a story" (roadmap task 3.6, ADR 0003 D15): the
   // story it was given becomes this project's first message, sent once. With
@@ -910,7 +988,7 @@ export const AssistantPanel = ({
                     className="folio-menu-item"
                     aria-current={chat?.id === row.id ? 'true' : undefined}
                     onClick={() => {
-                      void open(row)
+                      void open(row.id)
                     }}
                   >
                     <span className="min-w-0 flex-1 truncate">{row.title ?? 'Untitled chat'}</span>
@@ -1017,6 +1095,13 @@ export const AssistantPanel = ({
                     ))}
                   </div>
                 ) : null}
+                {turn.role === 'assistant' && turn.runs !== undefined && turn.runs.length > 0 ? (
+                  <div data-runs className="mt-[8px] flex flex-col gap-[8px] whitespace-normal">
+                    {turn.runs.map((run) => (
+                      <RunCard key={run.runId} projectId={projectId} runId={run.runId} title={run.title} onOpen={openRun} />
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ),
           )}
@@ -1061,6 +1146,11 @@ export const AssistantPanel = ({
       ) : null}
 
       <div className="flex-none px-[16px] pb-[16px]">
+        {chat === null || chatRun === null ? null : (
+          <div data-chat-run className="mb-[10px]">
+            <RunCard projectId={projectId} runId={chatRun.id} title={chatRun.title} run={chatRun} onChange={setChatRun} />
+          </div>
+        )}
         {notice === null ? null : (
           <p role="status" className="m-0 mb-[8px] text-12 text-live">
             {notice}
@@ -1076,8 +1166,16 @@ export const AssistantPanel = ({
             ref={composer}
             value={draft}
             rows={1}
-            disabled={!connected || busy}
-            placeholder="Ask, or @ to add context…"
+            disabled={busy || runLive || notMine || (!connected && !replying)}
+            placeholder={
+              runLive
+                ? 'The run is working. You can leave - it carries on.'
+                : replying
+                  ? 'Reply to the run, or leave it empty to carry on…'
+                  : notMine
+                    ? 'Only the person who started this run can reply to it.'
+                    : 'Ask, or @ to add context…'
+            }
             aria-label="Ask the assistant"
             onChange={(event) => {
               setDraft(event.target.value)
@@ -1112,7 +1210,7 @@ export const AssistantPanel = ({
               type="button"
               title="Send"
               aria-label="Send"
-              disabled={!connected || busy || draft.trim().length === 0}
+              disabled={busy || runLive || notMine || (replying ? false : !connected || draft.trim().length === 0)}
               onClick={() => {
                 void send()
               }}

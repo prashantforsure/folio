@@ -32,7 +32,7 @@ no Sentry yet (AGENTS.md, Tech stack: planned).
 | `frame_generation` | `apps/web/lib/worker/frame-generation.ts` | a Storyboard frame (task 4.3), queued by `requestFrame`. Draws with the `shot_frame` model, stores under `projects/<id>/shots/<shot>/`, settles: drawn = spend, failed = spend + refund, refused or cancelled = release. A job whose shot is gone fails and refunds |
 | reaper, every 10 min | `apps/web/lib/worker/reaper.ts` | closes reservations nothing else will (`listOrphanedReservations`): a generation still live with no live job is failed as "interrupted"; a reservation whose owner is over or gone is released under `release:job:<id>`. One with no job id is only logged (`folio.reaper.unkeyed_reservation`) |
 | R2 sweeper, every 6 h | `apps/web/lib/worker/sweeper.ts` | lists `projects/*/production/` objects older than a day and logs the ones no row points at (`folio.sweeper.unreferenced`). Deletes them - the asset rows first, then only the objects whose rows went - **only** with `R2_SWEEP_DELETE=true`. At most 10,000 objects a sweep; the next carries on after the last key |
-| `agent_run` | task 4.4 | not yet: stays queued |
+| `agent_run` | `apps/web/lib/worker/agent-run.ts` → `lib/agent/background.ts` | a background agent run (task 4.4). One job runs it until it is done or needs the writer: resumed from its transcript, as its starter through the actor gates re-opened before every step, stopping as `waiting_for_user` on a confirmation, after 40 steps or at the daily token cap. A cancel stops it between steps and aborts the model call in flight; a shutdown or a lost lease writes nothing (the next claim resumes it); a rate limit, an overload or a lost connection throws, so the job is retried, and the third failure leaves the run `failed` as interrupted |
 
 The worker claims only the kinds with a handler, so a queued job of any other kind
 waits rather than fails.
@@ -52,7 +52,7 @@ needs the same server block as web, because `env.ts` parses it whole:
 | `GEMINI_API_KEY` | for generations | Production generations and Storyboard frames (task 4.3). Without it a job fails with the model-not-connected reason and its credits come back - but the web app draws the buttons disabled then, so none is queued |
 | `R2_*` (all five) | for generations | where generated images and clips are stored, and what the sweeper lists (task 4.3) |
 | `R2_SWEEP_DELETE` | no, default `false` | `true` lets the sweeper delete unreferenced Production objects older than a day; anything else only logs them. Leave it off until a few sweeps' logs have been read |
-| `ANTHROPIC_API_KEY` | for agent runs | background runs and the story pipeline (tasks 4.4, 4.5) |
+| `ANTHROPIC_API_KEY` | for agent runs | background runs (task 4.4) and the story pipeline (4.5). Without it a run fails at once with that reason - the web app's composer is on when its own key is set, so the two must match |
 
 The worker reads `.env` from its working directory if one is there
 (`process.loadEnvFile`), and otherwise takes the environment it is given - which

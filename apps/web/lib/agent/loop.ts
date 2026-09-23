@@ -3,7 +3,7 @@ import type { RunId } from '@folio/script'
 import Anthropic from '@anthropic-ai/sdk'
 
 import type { GateRefusal } from '../script/actor-gate'
-import type { DirectOutcome, ProposedOp, Proposing, Tool, ToolContext, Toolset } from './registry'
+import type { DirectOutcome, ProposedOp, Proposing, Tool, ToolContext, ToolGate, Toolset } from './registry'
 import { labelOf, runTool, toolDefinitions, toolsFor } from './registry'
 
 /**
@@ -38,6 +38,18 @@ import { labelOf, runTool, toolDefinitions, toolsFor } from './registry'
  * message is stored with its content blocks, every tool result as the user
  * turn that answers it, so the next turn replays the whole exchange
  * (`replay.ts`).
+ *
+ * ## A background run is the same loop (roadmap task 4.4)
+ *
+ * Four inputs only a background run passes (`background.ts`), each inert when
+ * absent: `beforeStep` re-opens the gate and re-reads the run before every
+ * step (ADR 0003 D4 - a writer removed mid-run stops the run, a cancel stops
+ * it between steps); `pending` answers the tool calls a crashed job left
+ * unanswered, with their own ids, before the next model call - a resumed run
+ * picks up exactly where its transcript ends; `pauseOnConfirmation` stops the
+ * run once it has written a proposal only the writer can confirm, since
+ * nobody is there to click it; and `offer` leaves out the tools a run with no
+ * panel has no use for.
  */
 
 export const MAX_STEPS = 12
@@ -66,6 +78,15 @@ export type ProposalMade = {
   readonly applied?: boolean
 }
 
+/**
+ * What a background run's `beforeStep` answers: carry on, as this gate (the
+ * person's role read again) and with this sink - or stop, cancelled by the
+ * writer or refused by the gate.
+ */
+export type StepCheck =
+  | { readonly ok: true; readonly gate: ToolGate; readonly proposals: ProposalSink }
+  | { readonly ok: false; readonly reason: 'cancelled' | 'refused'; readonly message: string }
+
 /** Where a turn's proposals are written - `lib/agent/proposer.ts`; a test passes arrays. */
 export type ProposalSink = {
   readonly create: (groups: readonly ProposalGroup[]) => Promise<readonly ProposalMade[]>
@@ -78,6 +99,9 @@ export const groupsOf = (queued: readonly { readonly key: string; readonly op: P
   const alone = queued.filter((entry) => entry.op.mode === 'confirm' || entry.op.mode === 'paid')
   return [...(together.length === 0 ? [] : [{ ops: together }]), ...alone.map((entry) => ({ ops: [entry] }))]
 }
+
+/** A tool call as the loop runs one: the model's, or one a stored transcript left unanswered (`replay.ts`, `resumeOf`). */
+export type ToolCall = Pick<Anthropic.ToolUseBlock, 'id' | 'name' | 'input'>
 
 /** A model message, narrowed to the fields the loop reads. */
 export type ModelMessage = Pick<Anthropic.Message, 'content' | 'stop_reason'> & {
@@ -111,6 +135,19 @@ export type LoopInput = {
   readonly checkMembership?: () => Promise<GateRefusal | null>
   /** Where proposals go. Absent: a write tool's operation is queued and dropped (a read-only caller, a test). */
   readonly proposals?: ProposalSink
+  /**
+   * Asked before every step - a background run's gate, re-opened (ADR 0003
+   * D4). Its gate and sink replace `context.gate` and `proposals` for that
+   * step; a stop ends the loop, `aborted` for a cancel and `error` for a
+   * refusal. Absent (an interactive turn), `checkMembership` is the check.
+   */
+  readonly beforeStep?: () => Promise<StepCheck>
+  /** Tool calls the transcript left unanswered - a crashed job's - run first, with their own ids. */
+  readonly pending?: readonly ToolCall[]
+  /** Stop once a step writes a proposal that needs the writer's confirmation (a background run: nobody is there to click it). */
+  readonly pauseOnConfirmation?: boolean
+  /** Which of the turn's tools to offer. Absent: all of them. */
+  readonly offer?: (tool: Tool) => boolean
   readonly emit: (event: AgentEvent) => void
   readonly signal: AbortSignal
   /** Tokens left of today's allowance when the turn began. */
@@ -138,6 +175,10 @@ export type LoopOutcome = {
   readonly steps: number
   readonly inputTokens: number
   readonly outputTokens: number
+  /** Why `beforeStep` stopped the loop, in the writer's terms. */
+  readonly stopMessage?: string
+  /** An `error` the model's side may not repeat - a rate limit, an overload, a lost connection. A background job is retried rather than failed on one. */
+  readonly transient?: boolean
 }
 
 /** A call's tokens as the D3 meter counts them: every input token read, cached or not, and every output token. */
@@ -146,10 +187,11 @@ export const tokensOf = (usage: ModelMessage['usage']): { readonly input: number
   output: usage.output_tokens,
 })
 
-const SUMMARY_ASK: Readonly<Record<'step_cap' | 'time_cap', string>> = {
-  step_cap: `[Folio: this turn has reached its limit of ${String(MAX_STEPS)} steps. Do not call another tool. Tell the writer, briefly, what you found and what is left to do.]`,
-  time_cap: `[Folio: this turn has reached its time limit. Do not call another tool. Tell the writer, briefly, what you found and what is left to do.]`,
-}
+/** The last call's instruction at a limit. The step count is the run's own: 12 for a turn, a background run's larger one. */
+const summaryAsk = (cap: 'step_cap' | 'time_cap', maxSteps: number): string =>
+  cap === 'step_cap'
+    ? `[Folio: this turn has reached its limit of ${String(maxSteps)} steps. Do not call another tool. Tell the writer, briefly, what you found and what is left to do.]`
+    : `[Folio: this turn has reached its time limit. Do not call another tool. Tell the writer, briefly, what you found and what is left to do.]`
 
 const TOKEN_CAP_MESSAGE = "You have used today's assistant allowance. It resets at midnight UTC."
 
@@ -172,10 +214,11 @@ const writeProposals = async (
   foldedInto: ReadonlyMap<string, string>,
   results: Anthropic.ToolResultBlockParam[],
   emit: (event: AgentEvent) => void,
-): Promise<void> => {
+): Promise<boolean> => {
   const groups = groupsOf(queued)
   const proposalOf = new Map<string, string>()
   const appliedNow = new Set<string>()
+  let asks = false
   try {
     const made = await sink.create(groups)
     for (const [index, group] of groups.entries()) {
@@ -184,7 +227,10 @@ const writeProposals = async (
       for (const entry of group.ops) proposalOf.set(entry.key, proposal.proposalId)
       if (proposal.applied === true) appliedNow.add(proposal.proposalId)
       emit({ type: 'proposal', proposalId: proposal.proposalId, runId: proposal.runId, summary: proposal.summary, needsConfirmation: proposal.needsConfirmation, auto: proposal.auto })
-      if (proposal.needsConfirmation) emit({ type: 'confirm_required', id: proposal.proposalId, name: group.ops[0]?.op.tool ?? 'proposal', summary: proposal.summary, cost: null })
+      if (proposal.needsConfirmation) {
+        asks = true
+        emit({ type: 'confirm_required', id: proposal.proposalId, name: group.ops[0]?.op.tool ?? 'proposal', summary: proposal.summary, cost: null })
+      }
     }
   } catch (cause) {
     console.error({ event: 'folio.agent.proposal_failed', message: cause instanceof Error ? cause.message : String(cause) })
@@ -202,6 +248,7 @@ const writeProposals = async (
     const status = appliedNow.has(proposalId) ? { status: 'Applied at once: the writer has automatic apply on. They can undo the run.' } : {}
     results[index] = { ...block, content: JSON.stringify({ ...content, ...status, proposalId }) }
   }
+  return asks
 }
 
 export const runAgentLoop = async (input: LoopInput): Promise<LoopOutcome> => {
@@ -260,9 +307,94 @@ export const runAgentLoop = async (input: LoopInput): Promise<LoopOutcome> => {
 
   const outcome = (stopReason: AgentStopReason): LoopOutcome => ({ stopReason, text: shown, unsaved, steps, inputTokens, outputTokens })
 
+  // The gate and the sink a step runs with: the caller's, or `beforeStep`'s fresh ones.
+  let context = input.context
+  let sink = input.proposals
+  const offered = (): readonly Tool[] => {
+    const tools = toolsFor(input.route, loaded)
+    return input.offer === undefined ? tools : tools.filter(input.offer)
+  }
+  /** Before a step: a background run's gate re-opened and its run re-read. Null to carry on. */
+  const check = async (): Promise<LoopOutcome | null> => {
+    if (input.beforeStep === undefined) return null
+    const verdict = await input.beforeStep()
+    if (!verdict.ok) return { ...outcome(verdict.reason === 'cancelled' ? 'aborted' : 'error'), stopMessage: verdict.message }
+    context = { ...context, gate: verdict.gate }
+    sink = verdict.proposals
+    return null
+  }
+
+  /** Run one step's calls and write its proposals. Answers the results, and whether one needs the writer's confirmation. */
+  const runCalls = async (calls: readonly ToolCall[], tools: readonly Tool[]): Promise<{ readonly results: Anthropic.ToolResultBlockParam[]; readonly asks: boolean }> => {
+    const results: Anthropic.ToolResultBlockParam[] = []
+    // The step's writes: queued by the tools, written as proposals below.
+    const queued: { key: string; op: ProposedOp }[] = []
+    const foldedInto = new Map<string, string>()
+    const stepSink = sink
+    const proposing = (key: string): Proposing => ({
+      propose: (op) => {
+        const earlier = op.mergeKey === undefined ? undefined : queued.find((entry) => entry.op.mergeKey === op.mergeKey)
+        if (earlier !== undefined) {
+          earlier.op = op
+          foldedInto.set(key, earlier.key)
+          return
+        }
+        queued.push({ key, op })
+      },
+      earlier: (mergeKey) => queued.find((entry) => entry.op.mergeKey === mergeKey)?.op.args,
+      applyNow: async (op) => {
+        if (stepSink === undefined) return { ok: false, message: 'Changes cannot be made from here.' }
+        const done = await stepSink.applyNow(op, key)
+        // A direct operation is already applied; its card is how the writer sees it, and undoes the run.
+        if (done.ok) input.emit({ type: 'proposal', proposalId: done.proposalId, runId: context.runId, summary: op.description, needsConfirmation: false, auto: false })
+        return done
+      },
+    })
+    // One membership read per step, shared by its calls (`runTool`) - or none, when `beforeStep` has just checked.
+    let membershipRead: Promise<GateRefusal | null> | null = null
+    const membership =
+      input.beforeStep === undefined
+        ? (): Promise<GateRefusal | null> => (membershipRead ??= input.checkMembership?.() ?? Promise.resolve(null))
+        : (): Promise<GateRefusal | null> => Promise.resolve(null)
+    for (const use of calls) {
+      input.emit({ type: 'tool_started', id: use.id, name: use.name, label: labelOf(use.name, use.input, tools) })
+      const result = await runTool(use.name, use.input, { ...context, idempotencyKey: use.id, loaded, proposals: proposing(use.id), membership }, tools)
+      input.emit({
+        type: 'tool_finished',
+        id: use.id,
+        name: use.name,
+        ok: result.ok,
+        summary: result.ok ? result.summary : result.message,
+      })
+      results.push(
+        result.ok
+          ? { type: 'tool_result', tool_use_id: use.id, content: JSON.stringify(result.content) }
+          : { type: 'tool_result', tool_use_id: use.id, content: result.message, is_error: true },
+      )
+    }
+    const asks = queued.length > 0 && stepSink !== undefined ? await writeProposals(stepSink, queued, foldedInto, results, input.emit) : false
+    return { results, asks }
+  }
+
+  /** Store a step's answers as the user turn that carries them. */
+  const answer = async (results: Anthropic.ContentBlockParam[]): Promise<void> => {
+    messages.push({ role: 'user', content: results })
+    await input.recordMessage('user', '', stored(results))
+  }
+
   try {
+    // A resumed run: the calls its last job made and never answered, answered first.
+    if (input.pending !== undefined && input.pending.length > 0) {
+      const stopped = await check()
+      if (stopped !== null) return stopped
+      const { results, asks } = await runCalls(input.pending, offered())
+      await answer(results)
+      if (asks && input.pauseOnConfirmation === true) return outcome('confirmation')
+    }
     for (;;) {
-      const tools = toolsFor(input.route, loaded)
+      const stopped = await check()
+      if (stopped !== null) return stopped
+      const tools = offered()
       const message = await call(tools, true)
       messages.push({ role: 'assistant', content: message.content as Anthropic.ContentBlockParam[] })
 
@@ -273,67 +405,26 @@ export const runAgentLoop = async (input: LoopInput): Promise<LoopOutcome> => {
       const calls = message.content.filter((block): block is Anthropic.ToolUseBlock => block.type === 'tool_use')
       if (message.stop_reason !== 'tool_use' || calls.length === 0) return outcome('end_turn')
 
-      const results: Anthropic.ToolResultBlockParam[] = []
-      // The step's writes: queued by the tools, written as proposals below.
-      const queued: { key: string; op: ProposedOp }[] = []
-      const foldedInto = new Map<string, string>()
-      const proposing = (key: string): Proposing => ({
-        propose: (op) => {
-          const earlier = op.mergeKey === undefined ? undefined : queued.find((entry) => entry.op.mergeKey === op.mergeKey)
-          if (earlier !== undefined) {
-            earlier.op = op
-            foldedInto.set(key, earlier.key)
-            return
-          }
-          queued.push({ key, op })
-        },
-        earlier: (mergeKey) => queued.find((entry) => entry.op.mergeKey === mergeKey)?.op.args,
-        applyNow: async (op) => {
-          if (input.proposals === undefined) return { ok: false, message: 'Changes cannot be made from here.' }
-          const done = await input.proposals.applyNow(op, key)
-          // A direct operation is already applied; its card is how the writer sees it, and undoes the run.
-          if (done.ok) input.emit({ type: 'proposal', proposalId: done.proposalId, runId: input.context.runId, summary: op.description, needsConfirmation: false, auto: false })
-          return done
-        },
-      })
-      // One membership read per step, shared by its calls (`runTool`).
-      let membershipRead: Promise<GateRefusal | null> | null = null
-      const membership = (): Promise<GateRefusal | null> => (membershipRead ??= input.checkMembership?.() ?? Promise.resolve(null))
-      for (const use of calls) {
-        input.emit({ type: 'tool_started', id: use.id, name: use.name, label: labelOf(use.name, use.input, tools) })
-        const result = await runTool(use.name, use.input, { ...input.context, idempotencyKey: use.id, loaded, proposals: proposing(use.id), membership }, tools)
-        input.emit({
-          type: 'tool_finished',
-          id: use.id,
-          name: use.name,
-          ok: result.ok,
-          summary: result.ok ? result.summary : result.message,
-        })
-        results.push(
-          result.ok
-            ? { type: 'tool_result', tool_use_id: use.id, content: JSON.stringify(result.content) }
-            : { type: 'tool_result', tool_use_id: use.id, content: result.message, is_error: true },
-        )
-      }
-      if (queued.length > 0 && input.proposals !== undefined) await writeProposals(input.proposals, queued, foldedInto, results, input.emit)
+      const { results, asks } = await runCalls(calls, tools)
 
       if (inputTokens + outputTokens >= input.tokenBudget) {
-        messages.push({ role: 'user', content: results })
-        await input.recordMessage('user', '', stored(results))
+        await answer(results)
         input.emit({ type: 'error', message: TOKEN_CAP_MESSAGE })
         return outcome('token_cap')
       }
+      if (asks && input.pauseOnConfirmation === true) {
+        await answer(results)
+        return outcome('confirmation')
+      }
       const cap = steps >= maxSteps ? 'step_cap' : now() - started >= maxMs ? 'time_cap' : null
       if (cap === null) {
-        messages.push({ role: 'user', content: results })
-        await input.recordMessage('user', '', stored(results))
+        await answer(results)
         continue
       }
 
       // A limit: answer the calls, ask for a summary, and allow no more tools.
-      const closing: Anthropic.ContentBlockParam[] = [...results, { type: 'text', text: SUMMARY_ASK[cap] }]
-      messages.push({ role: 'user', content: closing })
-      await input.recordMessage('user', '', stored(closing))
+      const closing: Anthropic.ContentBlockParam[] = [...results, { type: 'text', text: summaryAsk(cap, maxSteps) }]
+      await answer(closing)
       const summary = await call(tools, false)
       if (summary.stop_reason === 'refusal') say(REFUSAL_NOTE)
       return outcome(cap)
@@ -345,6 +436,7 @@ export const runAgentLoop = async (input: LoopInput): Promise<LoopOutcome> => {
     const message = cause instanceof Anthropic.APIError ? `The assistant could not answer (${String(cause.status)}).` : 'The assistant could not answer.'
     input.emit({ type: 'error', message })
     const note = shown.length === 0 ? message : `\n\n[${message}]`
-    return { ...outcome('error'), text: shown + note, unsaved: unsaved + note }
+    const transient = cause instanceof Anthropic.APIConnectionError || (cause instanceof Anthropic.APIError && (cause.status === 429 || (cause.status ?? 0) >= 500))
+    return { ...outcome('error'), text: shown + note, unsaved: unsaved + note, transient }
   }
 }

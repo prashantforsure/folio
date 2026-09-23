@@ -22,6 +22,7 @@ const spies = vi.hoisted(() => ({
   listRecentProjects: vi.fn(),
   startStoryProject: vi.fn(),
   push: vi.fn(),
+  continueRun: vi.fn(),
 }))
 
 vi.mock('../lib/assistant/actions', () => ({
@@ -35,6 +36,10 @@ vi.mock('../lib/agent/actions', () => ({
   readProposalCard: vi.fn(),
   rejectProposal: vi.fn(),
   undoRun: vi.fn(),
+  // A background run's card and its reply (roadmap task 4.4).
+  readBackgroundRunView: vi.fn(),
+  cancelBackgroundRunAction: vi.fn(),
+  continueBackgroundRunAction: (...args: readonly unknown[]) => spies.continueRun(...args),
 }))
 vi.mock('../lib/projects/actions', () => ({
   listRecentProjects: () => spies.listRecentProjects(),
@@ -231,5 +236,91 @@ describe('inside a project', () => {
     expect(useSession.getState().assistantOpen).toBe(true)
     fireEvent.keyDown(window, { key: 'j', ctrlKey: true })
     expect(useSession.getState().assistantOpen).toBe(false)
+  })
+})
+
+describe('a background run`s own chat (roadmap task 4.4)', () => {
+  const RUN = '3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0a98'
+  const runView = (over: Record<string, unknown> = {}) => ({
+    id: RUN,
+    chatId: CHAT,
+    title: 'Draft act two',
+    status: 'running',
+    note: null,
+    steps: 2,
+    proposals: { pending: 0, applied: 0, toConfirm: 0 },
+    mine: true,
+    startedAt: '2026-09-23T10:00:00.000Z',
+    finishedAt: null,
+    ...over,
+  })
+  const runChat = (run: ReturnType<typeof runView>) => ({
+    status: 'ok',
+    chat: { id: CHAT, title: 'Draft act two', updatedAt: '2026-09-23T10:00:00.000Z' },
+    messages: [{ id: 'm1', role: 'user', body: 'Draft act two.', createdAt: '2026-09-23T10:00:00.000Z' }],
+    run,
+  })
+  const flush = async (ms = 0): Promise<void> => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    useSession.setState({ assistantChats: { [assistantChatKey(PROJECT_A, 'ep_001')]: CHAT } })
+    act(() => {
+      publishAssistantProject(inside(PROJECT_A))
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('turns the composer off while the run works, re-reads the chat every two seconds, and sends the reply as the run`s continuation', async () => {
+    spies.openAssistantChat.mockResolvedValueOnce(runChat(runView())).mockResolvedValue(runChat(runView({ status: 'waiting_for_user', note: 'Waiting for you to confirm a proposal.' })))
+    spies.continueRun.mockResolvedValue({ status: 'ok', run: runView({ status: 'queued' }) })
+    host()
+    await flush()
+    const composer = screen.getByLabelText('Ask the assistant') as HTMLTextAreaElement
+    expect(composer.disabled).toBe(true)
+    expect(composer.placeholder).toMatch(/The run is working/u)
+    expect(document.querySelector('[data-chat-run] [data-run-card]')?.getAttribute('data-run-status')).toBe('running')
+
+    await flush(2_000)
+    expect(spies.openAssistantChat).toHaveBeenCalledTimes(2)
+    // Waiting for its starter, who is reading: the composer replies to the run.
+    expect(composer.disabled).toBe(false)
+    expect(composer.placeholder).toMatch(/Reply to the run/u)
+    expect(screen.getByText('Waiting for you to confirm a proposal.')).toBeTruthy()
+
+    fireEvent.change(composer, { target: { value: 'Go on to act three.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await flush()
+    expect(spies.continueRun).toHaveBeenCalledWith(PROJECT_A, RUN, 'Go on to act three.')
+    expect(screen.getByText('Go on to act three.')).toBeTruthy()
+    // Queued again: working, so the composer is off until it waits or ends.
+    expect(composer.disabled).toBe(true)
+  })
+
+  it('does not let anyone but its starter reply - the run acts as them', async () => {
+    spies.openAssistantChat.mockResolvedValue(runChat(runView({ status: 'waiting_for_user', mine: false })))
+    host()
+    await flush()
+    const composer = screen.getByLabelText('Ask the assistant') as HTMLTextAreaElement
+    expect(composer.disabled).toBe(true)
+    expect(composer.placeholder).toMatch(/Only the person who started this run/u)
+  })
+
+  it('is an ordinary chat once the run is over', async () => {
+    spies.openAssistantChat.mockResolvedValue(runChat(runView({ status: 'succeeded' })))
+    host()
+    await flush()
+    const composer = screen.getByLabelText('Ask the assistant') as HTMLTextAreaElement
+    expect(composer.disabled).toBe(false)
+    expect(composer.placeholder).toBe('Ask, or @ to add context…')
+    await flush(10_000)
+    expect(spies.openAssistantChat).toHaveBeenCalledTimes(1)
   })
 })

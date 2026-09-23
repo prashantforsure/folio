@@ -44,3 +44,14 @@ describe('readAgentStream', () => {
     expect(seen).toEqual(['text', 'tool_started', 'refresh'])
   })
 })
+
+describe('a background run started in the turn (roadmap task 4.4)', () => {
+  it('reads the `background_run` line the run card is drawn from, and a background run`s stop reason', () => {
+    const decoder = ndjsonDecoder()
+    const run = { type: 'background_run', runId: '3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0a98', chatId: '0b8e2d4c-1a3f-4e5d-8c7b-9a6f5e4d3c21', title: 'Draft act two' }
+    const done = { type: 'done', runId: '3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0a98', status: 'waiting_for_user', stopReason: 'confirmation' }
+    expect(decoder.push(`${JSON.stringify(run)}\n${JSON.stringify(done)}\n`)).toEqual([run, done])
+    // A run id that is not one is not an event.
+    expect(decoder.push(`${JSON.stringify({ ...run, runId: 'nope' })}\n`)).toEqual([])
+  })
+})
