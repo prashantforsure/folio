@@ -11,6 +11,7 @@ import type { ProposalCard as Card, ProposalCardOp } from '../../../../lib/agent
 import { hrefOfTarget } from '../../../../lib/agent/navigate'
 import { asRoute } from '../../../../lib/routes'
 import { DiffHunks } from './diff-hunks'
+import { RunCard } from './run-card'
 
 /**
  * One proposal in the panel (roadmap task 3.3, ADR 0003 **D1**).
@@ -74,11 +75,14 @@ export const ProposalCard = ({
   projectId,
   proposalId,
   auto = false,
+  onOpenRun,
 }: {
   readonly projectId: string
   readonly proposalId: string
   /** The writer's autonomy is `auto` and the proposal arrived in this turn: apply it on first read. */
   readonly auto?: boolean
+  /** Open a background run's chat - for a run this proposal started once confirmed (`story_to_script`, roadmap task 4.5). */
+  readonly onOpenRun?: (chatId: string) => void
 }) => {
   const router = useRouter()
   const [card, setCard] = useState<Card | null>(null)
@@ -241,6 +245,10 @@ export const ProposalCard = ({
               <div className="pl-[12px]">
                 <DiffHunks view={op.diff} />
               </div>
+            )}
+            {/* A run the writer's confirmation started: its card, here - a direct run's comes with its own event. */}
+            {op.run === null || op.mode !== 'confirm' ? null : (
+              <RunCard projectId={projectId} runId={op.run.runId} title={op.run.title} {...(onOpenRun === undefined ? {} : { onOpen: onOpenRun })} />
             )}
           </li>
         ))}

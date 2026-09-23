@@ -55,6 +55,12 @@ holds locked pages and the colours.
 - **Golden page maps are a contract; there is no `-u`.** On a mismatch
   [golden-page-map.test.ts](src/golden-page-map.test.ts) prints the full replacement JSON and
   fails. Paste it into [testing/golden/](src/testing/golden/) and commit it as its own change.
+- **`draft-check.ts` is the story pipeline's net** (roadmap task 4.5): `checkDraft` repairs a cue or a
+  heading's set to its bound spelling (same key as derivation, `canonicalKey`; a unique `scoreMatch`
+  `likely` is repaired too), rejects the rest, drops mentions of records that do not exist;
+  `unresolvedCues` is the count the pipeline reports and its test asserts is zero;
+  `canonicalScreenplay` is a node list as a stored copy reads back - digest it, not the builder's
+  shape, when a base must match the stored script later.
 - **Revision colours live here, not in `packages/ui`** — tokens can be themed, and a themed salmon
   page is a wrong page. `nextRevisionColour('green')` refuses.
 

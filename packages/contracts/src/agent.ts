@@ -11,6 +11,7 @@ import {
   UserIdSchema,
 } from './ids'
 import { TimestampSchema } from './primitives'
+import { StoryToScriptInputSchema } from './story'
 
 /**
  * The agent copilot's wire shapes - ADR 0003, roadmap Phase 2.
@@ -160,8 +161,8 @@ export const BackgroundTaskInputSchema = z.object({
 
 export type BackgroundTaskInput = z.infer<typeof BackgroundTaskInputSchema>
 
-/** The kinds of background run: a task the model handed itself. The story pipeline (task 4.5) adds its own. */
-export const BackgroundRunInputSchema = z.discriminatedUnion('kind', [BackgroundTaskInputSchema])
+/** The kinds of background run: a task the model handed itself, and the story pipeline (roadmap task 4.5). */
+export const BackgroundRunInputSchema = z.discriminatedUnion('kind', [BackgroundTaskInputSchema, StoryToScriptInputSchema])
 
 export type BackgroundRunInput = z.infer<typeof BackgroundRunInputSchema>
 

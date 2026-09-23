@@ -209,6 +209,13 @@ authored / derived-cache / measurement. Touching `episodes` needs
   `settleBackgroundRun` (the latter writes only a run still `running`, so a cancel is never
   overwritten), `readBackgroundRun`, `readChatRun`, `countRunSteps`. All of it **exercised against
   dev in a rolled-back transaction** on 2026-09-23, over `0030`–`0037`.
+- **`0038`** (the story pipeline, roadmap task 4.5) adds `story_stage`, `story_stage_status` and
+  `agent_run_stages` - a story-to-script run's output, one row per (run, stage), cascading with the run
+  and the project, member-only RLS hand-written on the `0034`/`0035` pattern. Generated, renamed,
+  `db:check` clean; **not applied**. `repositories/agent-run-stages.ts`: `readRunStages`,
+  `saveRunStage` (one upsert), `setRunStageStatus`. Exercised against dev in a rolled-back
+  transaction on 2026-09-24 over `0030`–`0038`: RLS and policy present, the upsert keeps one row per
+  stage, the rows go with their run.
   **Traps found there:** a value added by `ALTER TYPE ... ADD VALUE` cannot be used in the same
   transaction (`unsafe use of new value`) - `0036` never uses its two as literals, and neither may a
   later migration applied in the same `db:migrate` run (drizzle runs the batch as one transaction);

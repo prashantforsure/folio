@@ -109,4 +109,58 @@ export const startBackgroundTaskTool: WriteTool = {
   },
 }
 
-export const RUN_WRITE_TOOLS: readonly WriteTool[] = [startBackgroundTaskTool]
+/**
+ * `story_to_script` - the story pipeline (roadmap task 4.5): a background run
+ * that expands the story, proposes its characters, locations and outline,
+ * breaks it into scenes and drafts them, stopping for the writer at every
+ * checkpoint (`lib/agent/story/pipeline.ts`). **Confirm** mode (`tools.md`):
+ * it is a long run that writes a great deal, so the writer says yes on its
+ * card before it starts; the run's card then sits under that one. It runs in
+ * the episode the turn is on, and counts against D14's two.
+ */
+export const storyToScriptTool = defineWriteTool({
+  name: 'story_to_script',
+  description:
+    "Turn a story - even a single line - into a draft script, in the background: expand it, propose its characters, locations and outline, break it into scenes, then draft them in batches, stopping for the writer at each step. Use it when the writer hands you a story to write up. Pass the story in the writer's own words. The writer confirms before it starts.",
+  toolset: 'script',
+  minimumRole: ROLE.authoredEdit,
+  mode: 'confirm',
+  input: z.object({
+    title: z.string().trim().min(1).max(120).describe("A short name for the run: the story's title."),
+    story: z.string().trim().min(1).max(20_000).describe("The story, in the writer's words."),
+  }),
+  label: () => 'Proposing a draft from the story',
+  prepare: (_ctx, input) => Promise.resolve({ ok: true as const, args: { title: input.title, story: input.story } }),
+  executor: {
+    args: z.object({ title: z.string(), story: z.string() }),
+    describe: (args) => `Draft a script from the story "${args.title}", in the background, stopping for you at each step`,
+    target: () => ({ type: 'agent_run', id: null }),
+    capture: () => Promise.resolve(null),
+    run: async (ctx, args) => {
+      const started = await startBackgroundRun(ctx.gate.scope, {
+        episodeId: ctx.gate.episode.id,
+        title: args.title,
+        brief: `Draft a script from this story:
+
+${args.story}`,
+        input: { kind: 'story_to_script', title: args.title, story: args.story },
+        limit: CONCURRENT_RUNS_PER_PROJECT,
+      })
+      if (started.status === 'busy') {
+        return { ok: false, message: `This project already has ${String(started.live)} background runs working, which is the limit. Wait for one to finish, or cancel one.` }
+      }
+      return { ok: true, result: { runId: started.runId, chatId: started.chatId, title: args.title }, undo: { runId: started.runId } }
+    },
+    invert: async (ctx, _args, undo) => {
+      const prior = z.object({ runId: RunIdSchema }).safeParse(undo)
+      if (!prior.success) return { kind: 'skipped', reason: 'There is no run to stop.' }
+      const cancelled = await cancelBackgroundRun(ctx.gate.scope, prior.data.runId as RunId)
+      return cancelled.status === 'cancelled'
+        ? { kind: 'undone', note: 'The story run was cancelled.' }
+        : { kind: 'skipped', reason: 'The story run had already finished. Undo its own run to take back what it proposed.' }
+    },
+    preview: (_ctx, args) => Promise.resolve({ changes: [{ field: 'Draft from the story', before: null, after: args.title }] }),
+  },
+})
+
+export const RUN_WRITE_TOOLS: readonly WriteTool[] = [startBackgroundTaskTool, storyToScriptTool]

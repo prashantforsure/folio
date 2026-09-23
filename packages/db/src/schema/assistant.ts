@@ -1,4 +1,4 @@
-import { AGENT_OP_MODES, AGENT_OP_STATUSES, AGENT_PROPOSAL_STATUSES, AGENT_RUN_MODES, AGENT_RUN_STATUSES, ASSISTANT_ROLES } from '@folio/contracts'
+import { AGENT_OP_MODES, AGENT_OP_STATUSES, AGENT_PROPOSAL_STATUSES, AGENT_RUN_MODES, AGENT_RUN_STATUSES, ASSISTANT_ROLES, STORY_STAGES, STORY_STAGE_STATUSES } from '@folio/contracts'
 import { sql } from 'drizzle-orm'
 import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
@@ -235,4 +235,37 @@ export const agentProposalOps = pgTable(
     index('agent_proposal_ops_project_idx').on(table.projectId),
     check('agent_proposal_ops_seq_nonnegative', sql`${table.seq} >= 0`),
   ],
+)
+
+export const storyStageEnum = pgEnum('story_stage', STORY_STAGES)
+
+export const storyStageStatusEnum = pgEnum('story_stage_status', STORY_STAGE_STATUSES)
+
+/**
+ * `agent_run_stages` - what a story-to-script run has made so far, a row per
+ * stage (roadmap task 4.5, migration `0038`). WRITTEN BY THE RUN: the
+ * stage's output, parsed with its contract (`StageOutputSchemas`) before it
+ * lands, so a paused or crashed run picks up at the stage it reached rather
+ * than asking the model again for what it already has. `status` is where the
+ * stage stands with the writer: `ready`, `waiting` (a checkpoint, or
+ * proposals to apply) or `approved`.
+ *
+ * Not the script, and never read as it: the draft is proposals until the
+ * writer applies them, and the script is the node list.
+ */
+export const agentRunStages = pgTable(
+  'agent_run_stages',
+  {
+    id: idColumn(),
+    projectId: projectIdColumn().references(() => projects.id, { onDelete: 'cascade' }),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => agentRuns.id, { onDelete: 'cascade' }),
+    stage: storyStageEnum('stage').notNull(),
+    status: storyStageStatusEnum('status').notNull().default('ready'),
+    output: jsonb('output').notNull(),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [uniqueIndex('agent_run_stages_run_stage_key').on(table.runId, table.stage), index('agent_run_stages_project_idx').on(table.projectId)],
 )

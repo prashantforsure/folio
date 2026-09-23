@@ -241,12 +241,12 @@ describe('the registry against docs/agents/tools.md', () => {
   }))
   const phaseTwo = rows.filter((row) => row.phase.startsWith('2'))
   // Phase 4's rows land one task at a time (roadmap tasks 4.4 and 4.5).
-  const PHASE_FOUR_BUILT = ['start_background_task']
+  const PHASE_FOUR_BUILT = ['start_background_task', 'story_to_script']
   const built = rows.filter((row) => row.phase.startsWith('2') || row.phase.startsWith('3') || (row.phase === '**4**' && PHASE_FOUR_BUILT.includes(row.name)))
 
   it('registers every Phase 2 and Phase 3 tool the catalogue lists, the Phase 4 ones built so far, and nothing it does not', () => {
     expect(phaseTwo.length).toBe(17)
-    expect(built.length).toBe(57)
+    expect(built.length).toBe(58)
     expect(registeredTools().map((tool) => tool.name).sort()).toEqual(built.map((row) => row.name).sort())
   })
 

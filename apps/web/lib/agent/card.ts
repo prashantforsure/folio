@@ -1,6 +1,7 @@
 import type { AgentOpMode, AgentOpStatus, AgentProposalStatus, AgentProposalWithOps, NavigateTarget } from '@folio/contracts'
-import { needsConfirmation } from '@folio/contracts'
+import { AssistantChatIdSchema, RunIdSchema, needsConfirmation } from '@folio/contracts'
 import { readBalance } from '@folio/db'
+import { z } from 'zod'
 
 import type { DiffView, RecordChange } from './diff-view'
 import { executorFor } from './executors'
@@ -31,6 +32,8 @@ export type ProposalCardOp = {
   readonly changes: readonly RecordChange[]
   readonly diff: DiffView | null
   readonly open: NavigateTarget | null
+  /** A background run the operation started once applied (roadmap tasks 4.4, 4.5) - the card draws the run's under it. */
+  readonly run: { readonly runId: string; readonly chatId: string; readonly title: string } | null
 }
 
 export type ProposalCard = {
@@ -48,6 +51,15 @@ export type ProposalCard = {
   readonly ops: readonly ProposalCardOp[]
   /** The documents it edits - the panel checks which are open in an editor (D10 path A). */
   readonly documents: readonly string[]
+}
+
+const StartedRunSchema = z.object({ runId: RunIdSchema, chatId: AssistantChatIdSchema, title: z.string() })
+
+/** The run an applied operation's result names, if it started one. */
+const runOf = (status: AgentOpStatus, result: unknown): ProposalCardOp['run'] => {
+  if (status !== 'applied') return null
+  const parsed = StartedRunSchema.safeParse(result)
+  return parsed.success ? parsed.data : null
 }
 
 const failureOf = (result: unknown): string | null =>
@@ -72,6 +84,7 @@ export const buildProposalCard = async (gate: ToolGate, { proposal, ops }: Agent
       changes: preview.changes ?? [],
       diff: preview.diff ?? null,
       open: open !== null && open.ok ? open.target : null,
+      run: runOf(op.status, op.result),
     })
   }
   const asks = proposal.needsConfirmation || ops.some((op) => needsConfirmation(op.mode))

@@ -23,6 +23,7 @@ const spies = vi.hoisted(() => ({
   finishEditorApply: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
+  readRun: vi.fn(),
 }))
 
 vi.mock('../lib/agent/actions', () => ({
@@ -31,6 +32,9 @@ vi.mock('../lib/agent/actions', () => ({
   rejectProposal: (...args: readonly unknown[]) => spies.rejectProposal(...args),
   undoRun: (...args: readonly unknown[]) => spies.undoRun(...args),
   finishEditorApply: (...args: readonly unknown[]) => spies.finishEditorApply(...args),
+  // The run a confirmed story_to_script started (roadmap task 4.5).
+  readBackgroundRunView: (...args: readonly unknown[]) => spies.readRun(...args),
+  cancelBackgroundRunAction: vi.fn(),
 }))
 const router = { push: (...args: readonly unknown[]) => spies.push(...args), refresh: () => spies.refresh() }
 vi.mock('next/navigation', () => ({ useRouter: () => router }))
@@ -55,6 +59,8 @@ const op = (over: Record<string, unknown> = {}) => ({
   changes: [{ field: 'Role', before: 'A nurse', after: 'A night-shift nurse' }],
   diff: null,
   open: { kind: 'record', projectId: PROJECT, entity: 'character', id: '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d' },
+  // A background run the operation started once applied (roadmap task 4.5); none here.
+  run: null,
   ...over,
 })
 
@@ -198,6 +204,26 @@ describe('ProposalCard', () => {
     await mount()
     fireEvent.click(screen.getByRole('button', { name: 'Open' }))
     expect(spies.push).toHaveBeenCalledWith(`/app/project/${PROJECT}/characters/9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d`)
+  })
+
+  it('draws the run a confirmed operation started under it, and opens its chat (roadmap task 4.5)', async () => {
+    const started = { runId: '4d3c2b1a-0f9e-4d8c-8b7a-6f5e4d3c2b1a', chatId: '5e4d3c2b-1a0f-4e9d-9c8b-7a6f5e4d3c2b', title: 'Night Ward' }
+    spies.readProposalCard.mockResolvedValue({ status: 'ok', card: card({ status: 'applied', ops: [op({ tool: 'story_to_script', mode: 'confirm', status: 'applied', changes: [], run: started })] }) })
+    spies.readRun.mockResolvedValue({ status: 'ok', run: { id: started.runId, chatId: started.chatId, title: started.title, status: 'waiting_for_user', note: 'Waiting for you to read the story as I expanded it.', steps: 0, proposals: { pending: 0, applied: 0, toConfirm: 0 }, mine: true, startedAt: null, finishedAt: null } })
+    const opened: string[] = []
+    render(<ProposalCard projectId={PROJECT} proposalId={PROPOSAL} onOpenRun={(chatId) => opened.push(chatId)} />)
+    expect(await screen.findByText('Waiting for you to read the story as I expanded it.')).toBeTruthy()
+    expect(spies.readRun).toHaveBeenCalledWith(PROJECT, started.runId)
+    fireEvent.click(screen.getByRole('button', { name: 'Open to reply' }))
+    expect(opened).toEqual([started.chatId])
+  })
+
+  it('draws no run card for a direct operation - its run has its own, from the stream', async () => {
+    const started = { runId: '4d3c2b1a-0f9e-4d8c-8b7a-6f5e4d3c2b1a', chatId: '5e4d3c2b-1a0f-4e9d-9c8b-7a6f5e4d3c2b', title: 'Draft act two' }
+    spies.readProposalCard.mockResolvedValue({ status: 'ok', card: card({ status: 'applied', ops: [op({ tool: 'start_background_task', mode: 'direct', status: 'applied', changes: [], run: started })] }) })
+    render(<ProposalCard projectId={PROJECT} proposalId={PROPOSAL} />)
+    await screen.findByText('applied')
+    expect(document.querySelector('[data-run-card]')).toBeNull()
   })
 
   it('undoes the run after a confirmation, and says what could not be undone', async () => {

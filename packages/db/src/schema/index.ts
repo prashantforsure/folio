@@ -71,6 +71,8 @@
  *   agent_proposals              a reviewable group of agent changes: status, summary, the base it was planned
  *                                against (0035, ADR 0003 D1); a pending intention, never read as the script
  *   agent_proposal_ops           one tool call of a proposal, in order: args, mode, idempotency key, result, undo (0035)
+ *   agent_run_stages             a story-to-script run's output, one row per stage (0038, roadmap task 4.5); written by
+ *                                the run, each stage parsed with its contract; proposals until applied, never the script
  *   research_collections         a named, coloured folder of sources; dropped by the repository when its last source leaves (0019)
  *   research_sources             an article, document, image set, interview or recording brought in from outside the script, with its text
  *   research_clips               a highlighted line of a source

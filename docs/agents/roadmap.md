@@ -483,7 +483,7 @@ card says so).
   walks are unrun (no `E2E_*` here, and a run needs a deployed worker with `ANTHROPIC_API_KEY`); a
   script proposal a run makes waits for review, so a later step planned on the same script goes
   stale once the first is applied - 4.5 chains its batches for that.
-- [ ] 4.5 Story-to-script pipeline. Add the story_to_script tool. It starts a background run with the stages below; each stage produces Zod-validated output and resumes independently.
+- [x] 4.5 Story-to-script pipeline. Add the story_to_script tool. It starts a background run with the stages below; each stage produces Zod-validated output and resumes independently.
   (A) Expand the story into genre, tone, format, target length, the protagonist's want and need, stakes, setting and stated assumptions. Stop at a checkpoint for approval.
   (B) One proposal creating characters (origin agent) with their cue spellings and voice notes, and locations with their slugline spellings.
   (C) An outline proposal, with acts as h1 blocks and beats as beat blocks. Then a checkpoint.
@@ -491,6 +491,17 @@ card says so).
   (E) Draft scene by scene. Each call gets the rules in docs/agents/craft.md, the scene's beat, the characters' voice notes, the bound cue and slugline spellings, and the end of the previous scene. A critic call then scores the draft against docs/agents/craft.md, followed by one rewrite if any score is below the threshold. Scenes land as script proposals in batches of about five, with agent provenance.
   (F) Re-derive once, compute page counts, run the continuity check, and propose story days and threads.
   Reject any drafted cue or slugline that doesn't exactly match a bound spelling, and any mention id that doesn't exist, and repair it before proposing. Test with a mocked model producing fixed outputs, asserting zero unresolved cues after stage F.
+
+  **Done 2026-09-24.** `story_to_script` (confirm) starts a background run that `lib/agent/story/pipeline.ts`
+  carries through A-F, each stage's output Zod-checked and stored in `agent_run_stages` (`0038`) so it
+  resumes by stage; every model call is a forced tool call retried once; cues are an enum of bound
+  spellings and headings are written from the bound slugline, then held by `checkDraft`
+  (`packages/script`); batches are chained on `canonicalScreenplay` digests. `tests/story-pipeline.test.ts`
+  walks a line to a draft with zero unresolved cues. **Choices flagged:** voice notes go in the bio (no
+  voice column); an episode with no script or outline gets an empty document; F is two proposals
+  (a thread's id exists only once created); an empty reply approves a checkpoint, words re-ask it.
+  **Test changes:** the catalogue test adds the row; the card fixture gains `run: null`.
+  **Follow-ups:** the one-line-story check against a live model and worker is not run (no deployment).
 
 Phase 4 is done when every box is ticked, the worker is deployed to staging, and a thin one-line story produces a complete, reviewable draft.
 

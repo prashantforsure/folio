@@ -447,3 +447,5 @@ export { CUE_ACTION_LINES, proposePlacements, timeCuesOf } from './time-cues'
 
 export type { DescriptionName, DescriptionPart, DescriptionPartKind } from './description'
 export { dialogueOf, mentionedCharacters, parseDescription, partsText } from './description'
+export { boundSpellingFor, canonicalScreenplay, checkDraft, unresolvedCues } from './draft-check'
+export type { BoundSpellings, DraftCheck, DraftIssue } from './draft-check'

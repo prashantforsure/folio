@@ -32,6 +32,7 @@ import { runAgentLoop } from './loop'
 import { proposalSink } from './proposer'
 import type { Tool } from './registry'
 import { resumeOf } from './replay'
+import { runStoryJob } from './story/pipeline'
 import './tools'
 
 /**
@@ -90,8 +91,8 @@ export const INTERRUPTED = 'Interrupted: the run stopped three times without fin
 
 const PayloadSchema = z.object({ runId: RunIdSchema })
 
-/** The tools a run with no panel has no use for: the client tools, and starting another background run from inside one. */
-export const offeredInBackground = (tool: Tool): boolean => tool.mode !== 'client' && tool.name !== 'start_background_task'
+/** The tools a run with no panel has no use for: the client tools, and starting another background run (or the story pipeline) from inside one. */
+export const offeredInBackground = (tool: Tool): boolean => tool.mode !== 'client' && tool.name !== 'start_background_task' && tool.name !== 'story_to_script'
 
 /** Why the run waits for the writer, as the run card says it. */
 const WAITING: Readonly<Partial<Record<AgentStopReason, string>>> = {
@@ -143,11 +144,16 @@ export const runBackgroundJob = async (job: ClaimedJob, signal: AbortSignal, dep
   }
   if (tokenBudget <= 0) return settle('waiting_for_user', WAITING.token_cap ?? null)
 
+  // The story pipeline (roadmap task 4.5) runs its stages; a task runs the loop.
+  if (input.data.kind === 'story_to_script') {
+    return runStoryJob({ scope, runId, chatId, episode, open, client: deps.client, signal, autonomy, tokenBudget, say, settle }, input.data)
+  }
+  const task = input.data
+
   const resume = resumeOf(await listMessages(scope, chatId))
   if (resume.finished) return settle('succeeded', null)
 
   const [labels, records] = await Promise.all([readMentionLabels(scope), listCharacterRecords(scope)])
-  const task = input.data
   const system = [
     ...(await turnSystem(first, { labels, records }, {
       scope: task.scope,

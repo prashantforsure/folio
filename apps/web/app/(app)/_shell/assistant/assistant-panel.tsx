@@ -1091,7 +1091,7 @@ export const AssistantPanel = ({
                 {turn.role === 'assistant' && turn.proposals !== undefined && turn.proposals.length > 0 ? (
                   <div data-proposals className="mt-[8px] flex flex-col gap-[8px] whitespace-normal">
                     {turn.proposals.map((proposal) => (
-                      <ProposalCard key={proposal.id} projectId={projectId} proposalId={proposal.id} auto={proposal.auto} />
+                      <ProposalCard key={proposal.id} projectId={projectId} proposalId={proposal.id} auto={proposal.auto} onOpenRun={openRun} />
                     ))}
                   </div>
                 ) : null}

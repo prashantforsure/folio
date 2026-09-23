@@ -443,6 +443,16 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   (`waiting_for_user`) on a confirmation, after 40 steps or at the daily token cap, and their reply is
   its next job. Two live (`queued` or `running`) per project. The panel polls it every 2 s; only its
   starter replies, its starter or an owner cancels (`lib/agent/background.ts`, `runs.ts`).
+  **Shipped 2026-09-24** (roadmap task 4.5): **the story pipeline**. `story_to_script` (confirm)
+  starts a background run that expands the story (a checkpoint), proposes the characters and
+  locations as one proposal and the outline as another (a checkpoint), lists the scenes (a
+  checkpoint), drafts each scene against the craft rules with a critic pass and one rewrite, and
+  proposes them in chained batches of five; once the writer has applied them it re-derives,
+  measures, checks continuity and proposes story days, synopses and threads. Each stage's output
+  is stored (`agent_run_stages`, `0038`) so the run resumes stage by stage. The model never writes
+  a cue or a heading: it names a bound character or a bible location, code writes the bound
+  spelling, and `checkDraft` (`packages/script`) repairs or refuses the rest
+  (`lib/agent/story/`).
 - Lifecycle: **Brief → Plan → Run → Review → Commit.** One run produces one revision entry.
 - **Every write returns a proposal, never a mutation.** Proposals are anchored to node ids and
   rendered as hunks against current node state. **Narrowed 2026-09-23** (the copilot pass): this

@@ -134,6 +134,18 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `lib/agent/actions.ts`. **Trap:** the `lib/*/server.ts` modules the tools reach import React's
   `cache`; in the worker it is React 19's passthrough (no memoisation), which is fine - do not reach
   for `react-dom` or anything Next from there (`tests/worker-import-graph.test.ts`).
+- **The story pipeline** (roadmap task 4.5): `story_to_script` (`tools/writes-runs.ts`, confirm,
+  script toolset) starts a background run of kind `story_to_script`; `background.ts` hands its jobs to
+  `lib/agent/story/pipeline.ts`. Stages A-F store their Zod-checked output in `agent_run_stages`
+  (`0038`, `StageOutputSchemas` in `@folio/contracts` `story.ts`) and stop at the checkpoints; a reply
+  left empty approves, words re-ask that stage with them (`notesOf`). Every model call is a forced tool
+  call parsed with the stage's schema, retried once (`structured.ts`); the prompts are `prompts.ts`. The
+  draft's cues are an enum of bound cue spellings and its headings are written by code from the
+  bound slugline (`script.ts`), then held by `checkDraft`. Scene batches are **chained**: each is
+  planned on the script as the earlier, still-unapplied ones leave it, its base digest taken over
+  `canonicalScreenplay` (the stored-copy form), so applied in order each finds its base; one that goes
+  stale is planned again on the next reply. Proposal keys are deterministic, so a replayed job finds
+  what it made. The confirm card draws the run's card under it once applied (`card.ts` `run`).
 - **What a workspace computes, the server can read** (roadmap task 2.4): `readContinuity`
   (`lib/timeline/server.ts`, over `continuityOf` in `view.ts`), `readPageCount` (`lib/script/page-count.ts`
   - the stored measurement when its digest matches, else `measure()`; asian refuses), `readProjectList`

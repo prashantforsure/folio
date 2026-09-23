@@ -73,13 +73,14 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 - `packages/script` — the pure core, **no dependencies, keep it that way**: node model,
   operations, Fountain and FDX both ways, derivation, pagination, the draft diff, and one read
   module per derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `continuity.ts`,
-  `time-cues.ts`, `sets.ts`, `props.ts`, `rename.ts`, `sides.ts`, `description.ts`). `props.ts` is the odd one: a prop is
+  `time-cues.ts`, `sets.ts`, `props.ts`, `rename.ts`, `sides.ts`, `description.ts`), and
+  `draft-check.ts`, which holds an agent draft to the bound spellings (the story pipeline). `props.ts` is the odd one: a prop is
   **authored**, so it reads the script back as *evidence* for records the caller hands it and
   never proposes one.
 - `packages/contracts` — Zod boundary schemas; `production.ts` holds `MODEL_REGISTRY`, the only
   place a **generation** model is named. The model that reads and drafts is
   `apps/web/lib/assistant/model.ts` — two registries, two owners, neither an environment
-  variable (ADR 0003 D12). `packages/db` — Drizzle schema, forward-only migrations `0000`–`0037`
+  variable (ADR 0003 D12). `packages/db` — Drizzle schema, forward-only migrations `0000`–`0038`
   (which are applied to dev is tracked in its `CLAUDE.md`), project-scoped repositories, the
   Production dev seed. `packages/ui` — tokens as CSS custom properties, the inline SVG icon set, a
   few small components.
