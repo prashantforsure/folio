@@ -114,6 +114,9 @@ const gate = {
   scope: {},
   project: { id: PROJECT },
   episode: { id: EPISODE_ID, slug: 'ep_001' },
+  // A real gate always carries the caller's role, and the cores check it again (roadmap task 4.2).
+  // Missing, it now fails closed (`meetsRole`, pre-deploy fixes 2026-09-24) - it used to pass as above owner.
+  role: 'writer',
 }
 
 /** A real PNG header, with `arrayBuffer` watched. Reading it is the defect. */
