@@ -14,6 +14,7 @@
     "build": "turbo run build",
     "test:e2e": "turbo run test:e2e",
     "eval": "pnpm --filter web eval",
+    "eval:limits": "pnpm --filter web eval:limits",
     "lint:root": "eslint eslint.config.mjs"
   },
   "devDependencies": {

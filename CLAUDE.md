@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Only what applies to every task lives here. `packages/script`, `packages/db` and `apps/web` each
 have a `CLAUDE.md` that loads when you work there. `docs/` holds the ADRs, `docs/production/`
 (the v12 Production spec), `docs/agents/` (the copilot: `integration-plan.md`, `roadmap.md`,
-`craft.md`, `tools.md` and `worker.md`) and `docs/remainingroadmap.md`: the route history
+`craft.md`, `tools.md`, `worker.md`, and `README.md` for running it) and `docs/remainingroadmap.md`: the route history
 (`docs/build-decisions.md`) and the first Production doc set were deleted on 2026-09-22. A route's
 spec is now the route as built plus its paragraph in `apps/web/CLAUDE.md`; the reasoning behind an
 older ruling is git history (`git log -S'<phrase>'`, or `git show e733475^:docs/build-decisions.md`

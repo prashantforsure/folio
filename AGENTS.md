@@ -36,7 +36,8 @@ actions, the same gates and the same records, driven by a model instead of a cur
 
 **Every write it makes is reviewable.** Script, outline and record edits arrive as proposals —
 hunks against current node state, or before/after values where a record has no hunk — and anything
-with no diffable form asks for explicit confirmation instead. *The AI agent* below is the binding
+with no diffable form asks for explicit confirmation instead. Every paid step (images, looks,
+plates, shoots) names its cost against the balance and asks on its own before a credit moves. *The AI agent* below is the binding
 rule set; where the copilot changed a rule, the change is dated in place.
 
 The plan is [docs/agents/integration-plan.md](docs/agents/integration-plan.md), which carries these
@@ -47,6 +48,8 @@ rulings and its own five build phases. The decisions are
 builds any of it. The craft rules the agent writes to are
 [docs/agents/craft.md](docs/agents/craft.md), and every tool it may call is
 [docs/agents/tools.md](docs/agents/tools.md) — a tool that is not in that file does not exist.
+Running it — environment, the worker, costs, limits, troubleshooting — is
+[docs/agents/README.md](docs/agents/README.md).
 
 ---
 

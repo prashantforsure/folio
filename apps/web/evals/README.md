@@ -57,3 +57,21 @@ Needs Node 22.12 or later, as the web tests do.
   `/app/projects` when you are done.
 - **No worker job is ever queued.** The harness runs the jobs in its own
   process, so a worker on the same database never picks one up.
+
+## The limits under load
+
+`pnpm eval:limits` (`limits.eval.ts`, roadmap task 5.6) fires more concurrent
+requests than each D3/D14 limit allows and counts what got through. The limits
+checked are:
+
+- the assistant and generate rate limits;
+- the two-live-runs cap;
+- the run credit budget;
+- the daily token meter.
+
+It calls no model and spends no credits. It needs only the database and
+`EVAL_USER_EMAIL`. It writes `evals/reports/limits-<time>.md`, and trashes its
+scratch project when it is done. The window it fills is the eval account's, on
+that scratch project only.
+
+Both evals share `vitest.config.mts`. It is `.mts` so Vite loads it as ESM.

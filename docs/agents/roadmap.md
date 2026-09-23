@@ -567,6 +567,21 @@ Phase 4 is done when every box is ticked, the worker is deployed to staging, and
   judge, quotes kept only if code finds them) score it; `report.ts` writes
   `evals/reports/*.md` (git-ignored). `pnpm eval` runs it on its own vitest config, never `pnpm
   test`. **Not run:** no `ANTHROPIC_API_KEY` or eval account here - it stops with that sentence.
-- [ ] 5.6 Hardening. Add Playwright specs for: the panel persisting across navigation, a cited answer, applying and undoing a character creation, a script edit applied in the open editor, a background run with a checkpoint, and a paid confirmation. Verify the rate limits and caps under load. Write docs/agents/README.md covering env vars, worker deployment, costs and troubleshooting, and confirm AGENTS.md's "What we are building" section still describes the shipped system accurately.
+- [x] 5.6 Hardening. Add Playwright specs for: the panel persisting across navigation, a cited answer, applying and undoing a character creation, a script edit applied in the open editor, a background run with a checkpoint, and a paid confirmation. Verify the rate limits and caps under load. Write docs/agents/README.md covering env vars, worker deployment, costs and troubleshooting, and confirm AGENTS.md's "What we are building" section still describes the shipped system accurately.
+
+  **Done 2026-09-24.** `apps/web/e2e/copilot.spec.ts` walks the six paths. **Unrun:** there are no
+  `E2E_*` credentials here, so all six skip. Walks 2 to 6 also need a model key, walk 5 a worker,
+  and walk 6 `GEMINI_API_KEY` and `R2_*`; each skips with its reason. `pnpm eval:limits`
+  (`evals/limits.eval.ts`) ran against dev on 2026-09-24. Every limit admitted exactly its number:
+  - assistant requests: 60 of 100;
+  - generations: 30 of 45;
+  - background runs: 2 of 6;
+  - 40-credit spends against a 400-credit grant: 10 of 20, with spent equal to granted;
+  - token increments: 20 of 20 landed.
+
+  It found one gap: the daily token cap is a per-turn snapshot, so parallel turns can overshoot it.
+  It is recorded as a known limit, not fixed. `docs/agents/README.md` covers the environment, the
+  worker, costs, limits and troubleshooting. AGENTS.md's *What we are building* still holds; I added
+  the paid-confirmation rule and a pointer to the README. The eval config is now `.mts`.
 
 Phase 5 is done when every box is ticked, and a story can go all the way to storyboards and video, with every paid step confirmed.

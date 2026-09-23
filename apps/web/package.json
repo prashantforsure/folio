@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "eval": "vitest run --config evals/vitest.config.ts",
+    "eval": "vitest run --config evals/vitest.config.mts evals/story-to-script.eval.ts",
+    "eval:limits": "vitest run --config evals/vitest.config.mts evals/limits.eval.ts",
     "check:secrets": "node scripts/assert-no-server-secrets.mjs"
   },
   "dependencies": {
