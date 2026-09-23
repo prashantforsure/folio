@@ -272,6 +272,48 @@ export const enqueueJob = async (
   return row.id as JobId
 }
 
+/** A job still queued, as the one-off stale-job sweep lists it (`apps/worker/scripts/cancel-stale-jobs.ts`). */
+export type QueuedJob = {
+  readonly id: JobId
+  readonly projectId: ProjectId
+  readonly kind: JobKind
+  readonly cost: number
+  readonly createdBy: UserId | null
+  /** Full-precision text, as Postgres prints it. */
+  readonly createdAt: string
+}
+
+/**
+ * Every job still `queued` that was queued before `before`, oldest first, across
+ * projects - read-only. For the pre-deploy sweep: jobs queued while no worker
+ * ran would otherwise all start (and spend) the moment one does. What to do
+ * with each is the caller's: cancelling one goes through its project's scope.
+ */
+export const listQueuedJobsBefore = async (db: FolioDatabase, before: Date): Promise<readonly QueuedJob[]> => {
+  const rows = await db.execute<{
+    readonly id: string
+    readonly project_id: string
+    readonly kind: JobKind
+    readonly cost: number
+    readonly created_by: string | null
+    readonly created_at: string
+  }>(sql`
+    select ${jobs.id} as id, ${jobs.projectId} as project_id, ${jobs.kind} as kind, ${jobs.cost} as cost,
+           ${jobs.createdBy} as created_by, ${jobs.createdAt}::text as created_at
+    from ${jobs}
+    where ${jobs.status} = 'queued' and ${jobs.createdAt} < ${before.toISOString()}::timestamptz
+    order by ${jobs.createdAt}
+  `)
+  return rows.map((row) => ({
+    id: row.id as JobId,
+    projectId: brandProjectId(row.project_id),
+    kind: row.kind,
+    cost: row.cost,
+    createdBy: row.created_by === null ? null : (row.created_by as UserId),
+    createdAt: row.created_at,
+  }))
+}
+
 /** One round trip that proves the database answers - the health endpoint's check. */
 export const pingDatabase = async (db: FolioDatabase): Promise<void> => {
   await db.execute(sql`select 1`)

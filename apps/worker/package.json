@@ -9,7 +9,8 @@
     "dev": "node scripts/build.mjs && node dist/main.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "cancel-stale-jobs": "node scripts/run.mjs scripts/cancel-stale-jobs.ts"
   },
   "dependencies": {
     "@folio/contracts": "workspace:*",

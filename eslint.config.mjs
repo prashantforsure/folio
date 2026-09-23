@@ -407,6 +407,16 @@ export default tseslint.config(
       ],
     },
   },
+  // `apps/worker/scripts/run.mjs` launches the worker's one-off scripts
+  // (pre-deploy fixes, 2026-09-24): `process.argv`, `process.execPath` and
+  // `process.exit`, never `process.env`. So it gets the two globals and keeps
+  // every rule, the `process.env` ban included - unlike the block above.
+  {
+    files: ['apps/worker/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly' },
+    },
+  },
 
   // Test files reach for globals the source may not.
   {

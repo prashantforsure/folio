@@ -71,6 +71,27 @@ Run it with Node 22.12 or later, like web. Migration `0036` must be applied to
 the database it points at: without it the claim fails on the missing columns,
 `/health` turns `503`, and nothing is written.
 
+## One-off scripts
+
+`scripts/run.mjs` bundles one of the worker's TypeScript scripts with the
+worker's own esbuild options (`scripts/bundle-options.mjs`) into
+`dist/scripts/<name>.mjs` and runs it with the same Node and environment. Give
+it the env file the way you give the worker one:
+
+```bash
+node --env-file=apps/web/.env apps/worker/scripts/run.mjs scripts/<name>.ts [arguments]
+```
+
+- **`cancel-stale-jobs.ts --before <date> [--confirm]`** - run once, before
+  the worker's first deploy. Jobs queued while no worker ran would all start
+  (and spend) the moment one does. It lists every job still `queued` from
+  before the date; only with `--confirm` does it cancel each `frame_generation`
+  one through `cancelJob`, which releases its credit reservation. Other kinds
+  are listed and left, with the cancel that settles them (a generation's, a
+  run's) named - `cancelJob` would leave their rows queued. Without `--confirm`
+  it writes nothing. On dev, 2026-09-24, the dry run listed 13 frame jobs from
+  2026-09-11 to 09-17, 52 credits reserved.
+
 ## Deploy to a container host
 
 The image is built from the **repository root**, because the worker bundles four
