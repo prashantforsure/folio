@@ -29,6 +29,7 @@ import {
 } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
+import { insertedOrExisting, onIdempotencyKeyConflict } from './idempotency'
 import { stamp } from './mapping'
 
 /**
@@ -109,6 +110,7 @@ export const listStoryThreads = async (scope: ProjectScope): Promise<readonly St
 export const createStoryThread = async (
   scope: ProjectScope,
   edit: StoryThreadEdit,
+  idempotencyKey: string | null = null,
 ): Promise<StoryThreadId> => {
   const next = dbOf(scope)
     .select({ value: sql<number>`coalesce(max(${storyThreads.position}) + 1, 0)` })
@@ -121,10 +123,23 @@ export const createStoryThread = async (
       name: edit.name,
       colour: edit.colour,
       position: sql`(${next})`,
+      idempotencyKey,
     })
+    .onConflictDoNothing(onIdempotencyKeyConflict(storyThreads))
     .returning({ id: storyThreads.id })
-  const row = rows[0]
-  if (row === undefined) throw new Error('Folio: inserting a story thread returned no row.')
+  const row = await insertedOrExisting(
+    rows,
+    idempotencyKey,
+    async () => {
+      const found = await dbOf(scope)
+        .select({ id: storyThreads.id })
+        .from(storyThreads)
+        .where(scoped(scope, storyThreads, eq(storyThreads.idempotencyKey, idempotencyKey ?? '')))
+        .limit(1)
+      return found[0] ?? null
+    },
+    'story thread',
+  )
   return brandStoryThreadId(row.id)
 }
 

@@ -23,6 +23,8 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { cutExcerpts } from '../scenes/excerpt'
+import { ROLE } from '../auth/roles'
+import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
 import { isRefusal, openProject } from '../script/gate'
 import type { DeletedResult, PlacedResult, SavedResult, SceneLinesResult, ThreadCreatedResult, UnplacedResult } from './result'
 
@@ -31,8 +33,9 @@ import type { DeletedResult, PlacedResult, SavedResult, SceneLinesResult, Thread
  *
  * Every one goes gate -> repository -> result, through the project-scoped
  * gate in `lib/script/gate.ts`: identity, membership, scope, project.
- * Membership, not role - unchanged from every earlier phase and flagged
- * again.
+ * Every write is `ROLE.authoredEdit` (a thread, a placement, a verdict),
+ * except deleting a thread, which is `ROLE.entityOperation` because it
+ * reaches every scene; `readSceneLines` is `ROLE.read` (ADR 0003 D2).
  *
  * ## Nothing here re-derives, and nothing here writes a node
  *
@@ -87,7 +90,7 @@ export const saveStoryTime = async (projectId: string, rawSceneId: string, rawEd
   if (!edit.success) {
     return { status: 'error', message: edit.error.issues[0]?.message ?? UNREADABLE }
   }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const written = await writeStoryTime(gate.scope, sceneNodeId, edit.data)
@@ -100,7 +103,7 @@ export const saveStoryTime = async (projectId: string, rawSceneId: string, rawEd
 export const placeScenes = async (projectId: string, rawPlacements: unknown): Promise<PlacedResult> => {
   const placements = PlacementsSchema.safeParse(rawPlacements)
   if (!placements.success) return { status: 'error', message: UNREADABLE }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const landed = await placeScenesNow(gate.scope, placements.data)
@@ -112,7 +115,7 @@ export const placeScenes = async (projectId: string, rawPlacements: unknown): Pr
 export const unplaceScenes = async (projectId: string, rawPlacements: unknown): Promise<UnplacedResult> => {
   const placements = PlacementsSchema.safeParse(rawPlacements)
   if (!placements.success) return { status: 'error', message: UNREADABLE }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const scenes = await unplaceScenesNow(gate.scope, placements.data)
@@ -124,13 +127,15 @@ export const unplaceScenes = async (projectId: string, rawPlacements: unknown): 
 // Threads
 // ---------------------------------------------------------------------------
 
-export const createThread = async (projectId: string, rawEdit: unknown): Promise<ThreadCreatedResult> => {
+export const createThread = async (projectId: string, rawEdit: unknown, rawKey: unknown = null): Promise<ThreadCreatedResult> => {
   const edit = StoryThreadEditSchema.safeParse(rawEdit)
   if (!edit.success) return { status: 'error', message: THREAD_SHAPE }
-  const gate = await openProject(projectId)
+  const key = idempotencyKeyOf(rawKey)
+  if (!key.ok) return { status: 'error', message: BAD_IDEMPOTENCY_KEY }
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
-  const id = await createStoryThread(gate.scope, edit.data)
+  const id = await createStoryThread(gate.scope, edit.data, key.key)
   revalidatePath(timelinePath(gate.project.id))
   return { status: 'created', id }
 }
@@ -140,7 +145,7 @@ export const saveThread = async (projectId: string, rawId: string, rawEdit: unkn
   const edit = StoryThreadEditSchema.safeParse(rawEdit)
   if (id === null) return { status: 'error', message: REFUSED_THREAD }
   if (!edit.success) return { status: 'error', message: THREAD_SHAPE }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const written = await updateStoryThread(gate.scope, id, edit.data)
@@ -152,7 +157,7 @@ export const saveThread = async (projectId: string, rawId: string, rawEdit: unkn
 export const deleteThread = async (projectId: string, rawId: string): Promise<DeletedResult> => {
   const id = parseThreadId(rawId)
   if (id === null) return { status: 'error', message: REFUSED_THREAD }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const deleted = await deleteStoryThread(gate.scope, id)
@@ -165,7 +170,7 @@ export const deleteThread = async (projectId: string, rawId: string): Promise<De
 export const orderThreads = async (projectId: string, rawIds: unknown): Promise<SavedResult> => {
   const ids = ThreadOrderSchema.safeParse(rawIds)
   if (!ids.success) return { status: 'error', message: UNREADABLE }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const written = await orderStoryThreads(gate.scope, ids.data)
@@ -180,7 +185,7 @@ export const setSceneThreads = async (projectId: string, rawSceneId: string, raw
   const ids = SceneThreadsSchema.safeParse(rawIds)
   if (sceneNodeId === null) return { status: 'error', message: REFUSED_SCENE }
   if (!ids.success) return { status: 'error', message: UNREADABLE }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const written = await writeSceneThreads(gate.scope, sceneNodeId, ids.data)
@@ -197,7 +202,7 @@ export const setSceneThreads = async (projectId: string, rawSceneId: string, raw
 export const markDeliberate = async (projectId: string, rawVerdict: unknown): Promise<SavedResult> => {
   const verdict = FindingVerdictSchema.safeParse(rawVerdict)
   if (!verdict.success) return { status: 'error', message: UNREADABLE }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   await markFindingDeliberate(gate.scope, verdict.data)
@@ -209,7 +214,7 @@ export const markDeliberate = async (projectId: string, rawVerdict: unknown): Pr
 export const reopenFinding = async (projectId: string, rawKey: unknown): Promise<SavedResult> => {
   const key = z.string().min(1).max(200).safeParse(rawKey)
   if (!key.success) return { status: 'error', message: UNREADABLE }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   await reopenFindingNow(gate.scope, key.data)
@@ -231,7 +236,7 @@ export const reopenFinding = async (projectId: string, rawKey: unknown): Promise
 export const readSceneLines = async (projectId: string, rawSceneId: string): Promise<SceneLinesResult> => {
   const sceneNodeId = parseSceneId(rawSceneId)
   if (sceneNodeId === null) return { status: 'error', message: REFUSED_SCENE }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.read)
   if (isRefusal(gate)) return gate
 
   const scenes = await listTimelineScenes(gate.scope, gate.project.format)

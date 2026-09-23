@@ -69,6 +69,8 @@
  *   research_sources             an article, document, image set, interview or recording brought in from outside the script, with its text
  *   research_clips               a highlighted line of a source
  *   research_clip_filings        clip to character, location or scene - the scene by its heading node's id, no key, as `shots` does
+ *   rate_limits                  one fixed-window counter per user, project and bucket (0033, ADR 0003 D14);
+ *                                written by the request it is counting, read by nothing else
  *
  * ## DERIVED CACHE - reproducible by re-running `derive` over the node list
  *
@@ -145,3 +147,4 @@ export * from './timeline'
 export * from './share'
 export * from './assistant'
 export * from './research'
+export * from './limits'

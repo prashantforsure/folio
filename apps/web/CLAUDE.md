@@ -12,6 +12,12 @@ paragraph below and the route as built - the v2 design package was deleted by th
 route record) was deleted on 2026-09-22; the built routes and `packages/ui/src/tokens/` are the
 pattern, and Production alone has a spec on disk (`docs/production/`).
 
+- **Roles are enforced, since 2026-09-23** (ADR 0003 D2, roadmap task 1.2): `lib/auth/roles.ts`
+  is the matrix - `reader` < `writer` < `owner`, one row per family of action - and every gate
+  takes the minimum role its caller needs (`openProject`, `openEpisode`, `openEpisodeWith` in
+  `lib/script/gate.ts`; `openForActor` in `lib/projects/actions.ts`). A member whose role falls
+  short gets "Your role on this project doesn't allow that", never the not-found refusal a
+  stranger gets. A new action passes a `ROLE.*` capability, never a bare role.
 - **State:** Google OAuth **and** email + password (AGENTS.md Constraints was rewritten for
   this), session in Server Components, route protection in two places. Two
   shells under one boundary: [app/(app)/layout.tsx](app/(app)/layout.tsx) is `requireUser()` and
@@ -20,8 +26,8 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   plus three redirects) and reads the two live numbers it prints;
   [app/(app)/app/project/[projectId]/layout.tsx](app/(app)/app/project/[projectId]/layout.tsx)
   draws the workspace shell through `_chrome/project-shell.tsx` (56px rail, the assistant panel), and `_chrome/writing-layout.tsx` the 236px sidebar, 60px header and
-  main-surface card for the four writing routes. All nine workspace routes have bodies (root
-  `CLAUDE.md`, Repository map).
+  main-surface card for the four writing routes. All **ten** workspace routes have bodies
+  (`WORKSPACE_ROUTE_COUNT`, `lib/workspace/routes.ts`; root `CLAUDE.md`, Repository map).
 - **The account routes (2026-09-22, the client's `handoff-account-v2/` - supplied with the brief,
   never committed; the routes as built and this paragraph are the spec):** the shell is
   `_shell/home-sidebar.tsx` (the workspace header with a disabled switcher, `home-nav.ts`'s four
@@ -48,8 +54,9 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   schedule), the plan tiers carry no prices (nothing is wired to Dodo), the editor and
   notification toggles are disabled with the reason on each (no per-person store; no mail
   provider), Collaborators has no invite field (an invite is a project's share link) and no
-  permission table (roles are enforced nowhere - open decision 16), and there is no device list
-  (Supabase does not expose one user's sessions; `Sign out everywhere` is `scope: 'global'`).
+  permission table (a role is granted by the share link that invited somebody, not edited here),
+  and there is no device list (Supabase does not expose one user's sessions; `Sign out everywhere`
+  is `scope: 'global'`).
   Traps: the dialogs are native `<dialog>` elements with `showModal()`, not the workspace's
   portal `Modal`, so Escape, the backdrop and the focus trap are the browser's; `useDismiss` moved
   to `lib/chrome/use-dismiss.ts` and the workspace path re-exports it; and **a `'use server'`
@@ -77,7 +84,8 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   second static tree under `project/[projectId]/(film)/` — Next has no optional segment — and
   each page canonicalises the URL for the project's type.
 - **The Script route since the redesign:** `_script/script-workspace.tsx` is the body inside the
-  surface card - toolbar (title menu, `⋯` actions menu), banners, the scrolling column. Threads
+  surface card - toolbar (title menu, `⋯` actions menu with Import, `Export as .fdx`,
+  `Export as .fountain` and Undo), banners, the scrolling column. Threads
   are widget hosts in the editor DOM that React portals cards into (`_script/comments/`); the
   `+` handle's menu inserts blocks or opens a thread composer; the `⠿` handle node-selects and
   ProseMirror's own drag moves the block (`clipboard.ts` keeps its id on a move). Page breaks

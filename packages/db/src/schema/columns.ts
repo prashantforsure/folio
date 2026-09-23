@@ -64,5 +64,30 @@ export const timestampColumn = (name: string) =>
  * Flagged: the design handoff's Appendix A sketches this as `order: number`.
  * The appendix is a sketch and says the contract wins where they differ, but
  * nobody has ruled this one specifically.
+ *
+ * **The column is `COLLATE "C"` in the database and cannot say so here.**
+ * Drizzle's `text()` builder has no collation, so migration `0032` sets it
+ * (and `0006` set `shots.order_key` by hand before it). The collation is not a
+ * detail: under a locale collation this column is not a byte string and the
+ * order it returns is not the order the keys encode - `../order.ts` records
+ * the incident. `db:generate` sees no diff, because there is nothing here for
+ * it to diff against; a table that adds an order key needs the `COLLATE "C"`
+ * written into its migration by hand.
  */
 export const orderKeyColumn = () => text('order_key').notNull()
+
+/**
+ * The key that makes a create idempotent, and the index that enforces it.
+ *
+ * Nullable, because every create the UI makes carries no key and must keep
+ * working: a person clicking `＋ New character` twice means two characters, and
+ * `NULL` is not equal to `NULL`, so a partial unique index leaves them alone.
+ * A caller that *can* be retried - the agent, whose `tool_use` id is the key
+ * (ADR 0003 **D13**) - passes one, and the second insert with that key hits the
+ * index instead of creating a second row.
+ *
+ * Per project rather than globally, for `credit_ledger`'s reason
+ * (`schema/credits.ts`): two projects reconciling the same upstream id is
+ * legitimate, and a global key would make the second one vanish.
+ */
+export const idempotencyKeyColumn = () => text('idempotency_key')

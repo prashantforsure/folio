@@ -3,11 +3,30 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Only what applies to every task lives here. `packages/script`, `packages/db` and `apps/web` each
-have a `CLAUDE.md` that loads when you work there. `docs/` holds the ADRs and `docs/production/`
-(the v12 Production spec) and nothing else: the route history (`docs/build-decisions.md`) and the
-first Production doc set were deleted on 2026-09-22. A route's spec is now the route as built plus
-its paragraph in `apps/web/CLAUDE.md`; the reasoning behind an older ruling is git history
-(`git log -S'<phrase>'`, or `git show e733475^:docs/build-decisions.md` for the deleted file).
+have a `CLAUDE.md` that loads when you work there. `docs/` holds the ADRs, `docs/production/`
+(the v12 Production spec), `docs/agents/` (the copilot: `integration-plan.md`, `roadmap.md`,
+`craft.md` and `tools.md`) and `docs/remainingroadmap.md`: the route history
+(`docs/build-decisions.md`) and the first Production doc set were deleted on 2026-09-22. A route's
+spec is now the route as built plus its paragraph in `apps/web/CLAUDE.md`; the reasoning behind an
+older ruling is git history (`git log -S'<phrase>'`, or `git show e733475^:docs/build-decisions.md`
+for the deleted file).
+
+**Before proposing new work, read `docs/remainingroadmap.md`.** It is the standing list of what
+looks unfinished but is deliberately cut (do not rebuild it), what is a known defect (don't mistake
+it for a green-field feature), and what is blocked on an open decision rather than engineering
+time. It is dated 2026-09-22 and describes the state as of that pass, not a live feed.
+
+**We are building an AI copilot** in an app-wide side panel that can do anything a user can do,
+through reviewable proposals — from reading and navigating to drafting a full script and carrying
+it through storyboards to video. **For any copilot work, read
+[docs/adr/0003-agent-copilot.md](docs/adr/0003-agent-copilot.md) and
+[docs/agents/roadmap.md](docs/agents/roadmap.md) first** — the decisions D1 to D19, and the task
+list whose working rules bind the session.
+[docs/agents/integration-plan.md](docs/agents/integration-plan.md) is the plan,
+[docs/agents/craft.md](docs/agents/craft.md) the rules the agent writes to, and
+[docs/agents/tools.md](docs/agents/tools.md) every tool it may call.
+AGENTS.md's *What we are building* is the short version, and every rule the copilot
+changed is dated **2026-09-23** in place there.
 
 **The script is a typed node list and the only hand-authored artefact.** Scenes, characters,
 locations, page counts and shot lists are derived views. Nearly every real bug here is some other
@@ -42,6 +61,7 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 | build or change a route, or touch UI | its paragraph in [apps/web/CLAUDE.md](apps/web/CLAUDE.md); `packages/ui/src/tokens/` and the built routes are the pattern |
 | touch Production | [docs/production/production.md](docs/production/production.md) is the spec; the "Implementation" table in [docs/production/README.md](docs/production/README.md) says where each piece lives and lists every deviation |
 | answer something the spec leaves open | the open decisions table in AGENTS.md — the only live list |
+| build any part of the AI copilot | [docs/adr/0003-agent-copilot.md](docs/adr/0003-agent-copilot.md) and [docs/agents/roadmap.md](docs/agents/roadmap.md) **first**, then [the plan](docs/agents/integration-plan.md), [craft.md](docs/agents/craft.md) and [tools.md](docs/agents/tools.md); AGENTS.md's *The AI agent* is the binding rule set |
 | change node identity or the id shape | [ADR 0001](docs/adr/0001-node-identity.md) — both rulings are reversible |
 | touch `episodes` or join on one | [ADR 0002](docs/adr/0002-episode-identity.md) — `ep_NNN` is a slug over an opaque key |
 | add a table, or ask what may write one | [packages/db/src/schema/index.ts](packages/db/src/schema/index.ts) — every table classified |
@@ -53,11 +73,13 @@ your change touches. `grep -n '^##' AGENTS.md` gives the line numbers.
 - `packages/script` — the pure core, **no dependencies, keep it that way**: node model,
   operations, Fountain and FDX both ways, derivation, pagination, the draft diff, and one read
   module per derived route (`beats.ts`, `shots.ts`, `timeline.ts`, `continuity.ts`,
-  `time-cues.ts`, `sets.ts`, `props.ts`, `rename.ts`). `props.ts` is the odd one: a prop is
+  `time-cues.ts`, `sets.ts`, `props.ts`, `rename.ts`, `sides.ts`, `description.ts`). `props.ts` is the odd one: a prop is
   **authored**, so it reads the script back as *evidence* for records the caller hands it and
   never proposes one.
 - `packages/contracts` — Zod boundary schemas; `production.ts` holds `MODEL_REGISTRY`, the only
-  place a model is named. `packages/db` — Drizzle schema, forward-only migrations `0000`–`0029`
+  place a **generation** model is named. The model that reads and drafts is
+  `apps/web/lib/assistant/model.ts` — two registries, two owners, neither an environment
+  variable (ADR 0003 D12). `packages/db` — Drizzle schema, forward-only migrations `0000`–`0030`
   (which are applied to dev is tracked in its `CLAUDE.md`), project-scoped repositories, the
   Production dev seed. `packages/ui` — tokens as CSS custom properties, the inline SVG icon set, a
   few small components.
@@ -92,7 +114,8 @@ Facts easy to get wrong (history in git):
   `lib/characters/graph.ts` stays, tested, partly unread. `✦ Generate` is drawn disabled.
 - **Locations reads the script back as evidence** at request time (`packages/script/src/sets.ts`),
   never stored. **Timeline** never reads a slugline as a date: `time-cues.ts` *proposes*, the
-  writer accepts; `✦ Suggest placements` is not built (open decision 13).
+  writer accepts; `✦ Suggest placements` is still not built, though its blocker is gone (open
+  decision 13 closed by ADR 0003 D3).
 - **Both editors are Tiptap 3**; the document lives in the editor, never React state. Boundary
   files: `lib/script/pm-model.ts`, `lib/outline/pm-model.ts`. Approved `apps/web` deps:
   `@tiptap/{core,pm,react,suggestion}`, `@floating-ui/dom`, `@anthropic-ai/sdk`,

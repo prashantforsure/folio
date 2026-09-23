@@ -329,8 +329,12 @@ export const NoteTargetSchema = z.enum(NOTE_TARGETS)
  * credits and cost). The sheet and the reel are the spec's (§6: "storyboard
  * sheet 40 cr, shoot a reel 375 cr"); the rest the spec is silent on and
  * the client ruled (2026-09-22): a frame reuses the Storyboard's 4, a scene
- * image is one image like the sheet, text-only jobs are free pending
- * AGENTS.md open decision 13.
+ * image is one image like the sheet, and text-only jobs are free. That last
+ * one was provisional "pending AGENTS.md open decision 13"; the decision is
+ * closed - ADR 0003 **D3**, 2026-09-23 - and it closed the way this table
+ * already guessed, so the provisional zero is the real one. Conversation turns
+ * are not charged either; tokens are recorded per run instead, which is what
+ * makes the decision reversible with data.
  */
 export const GENERATION_COSTS: Readonly<Record<GenerationJob, number>> = {
   ai_shotlist: 0,

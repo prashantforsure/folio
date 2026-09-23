@@ -6,6 +6,7 @@ import {
   ScreenplayNodeSchema,
   ScriptFormatSchema,
   ThreadIdSchema,
+  ThreadNodeKindSchema,
   TitlePageInputSchema,
 } from '@folio/contracts'
 import {
@@ -43,6 +44,7 @@ import {
   importFinalDraft,
   parseFountain,
   serialiseFinalDraft,
+  serialiseFountain,
   text,
   typed,
 } from '@folio/script'
@@ -53,11 +55,13 @@ import { isPaginationControl, paginationFromControl } from '../state/project-pre
 import { digestOf } from './digest'
 import { readFdx, writeFdx } from './fdx-adapter'
 import { cachedRows, forgetRows, rememberRows, rowsAfterWrite } from './row-cache'
+import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisode, openEpisodeWith } from './gate'
 import type { EpisodeGate } from './gate'
 import type { ThreadNodeKind, ThreadView } from './panel'
 import { initialsOf, whenLabel } from './panel'
 import type {
+  ExportFountainResult,
   ExportScriptResult,
   ImportScriptResult,
   MentionTargetResult,
@@ -71,6 +75,7 @@ import {
   deriveSpeculatively,
   measure,
   measureAndDerive,
+  nodeDigest,
   readDerivationReads,
   statsFor,
 } from './server'
@@ -127,6 +132,18 @@ const SaveScriptInputSchema = z.object({
   derive: z.boolean(),
   /** `digestOf([record, paged])` of the record the client drew for this list, if it computed one. */
   recordDigest: z.string().nullable(),
+  /**
+   * The `nodeDigest` of the stored list this save was planned against, for a
+   * caller that wants a compare-and-swap rather than last-write-wins.
+   *
+   * Absent - which is every save the editor makes - and behaviour is exactly
+   * what it was: the write lands and a `conflict` rides back on the result.
+   * Present and disagreeing with the stored list, and **nothing is written**.
+   * ADR 0003 **D10**: an agent's operations planned against a document that
+   * has since changed describe a document that no longer exists, so the
+   * proposal goes stale and is re-planned rather than force-applied.
+   */
+  expectedDigest: z.string().min(1).optional(),
 })
 
 export type SaveScriptInput = z.input<typeof SaveScriptInputSchema>
@@ -182,7 +199,7 @@ export const saveScript = async (raw: SaveScriptInput): Promise<SaveScriptResult
       input.derive ? readDerivationReads(scope) : Promise.resolve(null),
     ])
     return { document, freshRows, labels, reads }
-  })
+  }, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
   const { scope, project, episode } = gate
   const { document, freshRows, labels, reads } = gate.extra
@@ -228,6 +245,15 @@ export const saveScript = async (raw: SaveScriptInput): Promise<SaveScriptResult
     document.updatedAt === input.baseUpdatedAt
       ? null
       : { expected: input.baseUpdatedAt, found: document.updatedAt }
+
+  // The compare-and-swap, before the plan is built and long before it is
+  // written. `baseUpdatedAt` above is a *report* - the write lands either way,
+  // which is last-write-wins with a banner and is right for two people typing.
+  // This is a *condition*, and it is what a caller that cannot see the
+  // document needs instead.
+  if (input.expectedDigest !== undefined && nodeDigest(stored.value.map((entry) => entry.node)) !== input.expectedDigest) {
+    return { status: 'stale', conflict: conflict ?? { expected: input.baseUpdatedAt, found: document.updatedAt } }
+  }
 
   // Every id that leaves the list gets its tombstone in the same statement
   // as its delete. What it was merged into is the client's to say - it saw
@@ -297,7 +323,7 @@ export const createBlankScript = async (
   projectId: string,
   episode: string,
 ): Promise<SimpleResult> => {
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
   const { scope, project } = gate
 
@@ -338,7 +364,7 @@ export const importScript = async (
   _previous: ImportScriptResult,
   formData: FormData,
 ): Promise<ImportScriptResult> => {
-  const gate = await openEpisode(formData.get('projectId'), formData.get('episode'))
+  const gate = await openEpisode(formData.get('projectId'), formData.get('episode'), ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
   const { scope, project, episode } = gate
 
@@ -431,7 +457,7 @@ export const setPagination = async (
   control: string,
 ): Promise<SimpleResult> => {
   if (!isPaginationControl(control)) return { status: 'error', message: 'Unknown pagination control.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
   await setProjectPagination(gate.scope, paginationFromControl(control))
   return { status: 'done' }
@@ -444,7 +470,7 @@ export const setFormat = async (
 ): Promise<SimpleResult> => {
   const parsed = ScriptFormatSchema.safeParse(format)
   if (!parsed.success) return { status: 'error', message: 'Unknown format.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
   await setProjectFormat(gate.scope, parsed.data)
   return { status: 'done' }
@@ -463,7 +489,7 @@ export const setFormat = async (
  * on "your export is ready" never comes up. Not an agent-writable surface.
  */
 export const exportScriptFdx = async (projectId: string, episode: string): Promise<ExportScriptResult> => {
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.export)
   if (isRefusal(gate)) return gate
   const { scope, episode: current } = gate
   const document = await readDocumentByKind(scope, current.id, 'screenplay')
@@ -493,6 +519,57 @@ export const exportScriptFdx = async (projectId: string, episode: string): Promi
   }
 }
 
+/**
+ * The same export, as Fountain.
+ *
+ * `serialiseFountain` is a pure function in `packages/script` and has been
+ * since the Fountain pass; nothing called it. The Script route's menu offered
+ * `.fdx` alone, and account settings told writers Fountain export lived "in
+ * the Outline route's the menu", where what actually lives is a *Markdown*
+ * export of the outline - a different document in a different format. This is
+ * the action that makes that sentence true, and the sentence is corrected in
+ * the same change.
+ *
+ * ## The comments are stripped here, not by the serialiser
+ *
+ * AGENTS.md, Export: "Comments never enter an export. Notes never enter an
+ * export." `serialiseFountain` writes a `comment` node as a Fountain note,
+ * `[[like this]]`, and it is right to - its promise is that parsing its output
+ * returns the same nodes, and a serialiser that dropped blocks could not keep
+ * it. The rule is about *exports*, so it is applied at the export, and the
+ * pure function is left exact. `omitted` is how many went.
+ *
+ * `forced` is the serialiser's own report: how many blocks it had to write
+ * with an explicit marker so that parsing its output returns the same nodes.
+ * That is its round-trip promise being kept, not a loss - which is why it is
+ * reported under its own name rather than counted as an omission.
+ */
+export const exportScriptFountain = async (projectId: string, episode: string): Promise<ExportFountainResult> => {
+  const gate = await openEpisode(projectId, episode, ROLE.export)
+  if (isRefusal(gate)) return gate
+  const { scope, episode: current } = gate
+  const document = await readDocumentByKind(scope, current.id, 'screenplay')
+  if (document === null) return { status: 'error', message: 'There is no script to export yet.' }
+  const read = await readScreenplayNodes(scope, document.id)
+  if (!read.ok) {
+    return { status: 'error', message: `The stored script would not read (${read.error.at || 'node'}: ${read.error.reason.kind}).` }
+  }
+  const nodes = read.value.map((entry) => entry.node)
+  const exportable = nodes.filter((node) => node.type !== 'comment')
+  const serialised = serialiseFountain(exportable)
+  const stem = current.title
+    .trim()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-|-$/gu, '')
+  return {
+    status: 'exported',
+    filename: `${stem === '' ? current.slug : stem}.fountain`,
+    text: serialised.text,
+    omitted: nodes.length - exportable.length,
+    forced: serialised.unrepresentable.length,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The cover
 // ---------------------------------------------------------------------------
@@ -504,7 +581,7 @@ export const saveTitlePage = async (
 ): Promise<TitlePageResult> => {
   const parsed = TitlePageInputSchema.safeParse(raw)
   if (!parsed.success) return { status: 'error', message: 'The cover did not read.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
   const titlePage = await writeTitlePage(gate.scope, gate.episode.id, parsed.data)
   return { status: 'saved', titlePage }
@@ -527,7 +604,7 @@ export const createMention = async (
   }
   const parsedName = MentionNameSchema.safeParse(name)
   if (!parsedName.success) return { status: 'error', message: 'Give the record a name.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
   // A character binds its name's spelling as its first alias, as `createCharacter`
   // does, so a cue typed later resolves to it instead of proposing it.
@@ -569,10 +646,15 @@ const threadViewOf = async (gate: EpisodeGate, threadId: ThreadId, nodeId: strin
 /**
  * Open a thread on a node. From the block's `+` handle - creation did not
  * exist before the redesign. The Script passes `script_node`, the Outline
- * `outline_block` (`lib/script/panel.ts`, `ThreadNodeKind`): both are node
+ * `outline_block` (`ThreadNodeKindSchema`, `@folio/contracts`): both are node
  * ids in the same table, and the anchor kind is what `loadScript` /
  * `loadOutline` filter their threads by, so a kind that lied would draw the
  * card on neither route.
+ *
+ * `kind` is parsed rather than trusted. A `ThreadNodeKind` parameter is a
+ * TypeScript constraint and nothing else: a server action is an endpoint, and
+ * an invocation that is not this app's React can put any string there. The
+ * default stays `script_node`, so every existing caller reads the same.
  */
 export const openThreadOnNode = async (
   projectId: string,
@@ -582,14 +664,22 @@ export const openThreadOnNode = async (
   kind: ThreadNodeKind = 'script_node',
 ): Promise<ThreadResult> => {
   const id = NodeIdSchema.safeParse(nodeId)
+  const anchor = ThreadNodeKindSchema.safeParse(kind)
   const parsedBody = BodySchema.safeParse(body)
-  if (!id.success || !parsedBody.success) return { status: 'error', message: 'Write a comment first.' }
-  const gate = await openEpisode(projectId, episode)
+  if (!id.success || !anchor.success || !parsedBody.success) {
+    return { status: 'error', message: 'Write a comment first.' }
+  }
+  const gate = await openEpisode(projectId, episode, ROLE.comment)
   if (isRefusal(gate)) return gate
-  const thread = await openThread(gate.scope, { kind, nodeId: id.data }, parsedBody.data)
+  const thread = await openThread(gate.scope, { kind: anchor.data, nodeId: id.data }, parsedBody.data)
   return { status: 'ok', thread: await threadViewOf(gate, thread.id, id.data as string, thread.state) }
 }
 
+/**
+ * Reply to a thread. `nodeId` is parsed for the same reason `kind` is above:
+ * it is echoed straight back into the `ThreadView` the client draws the card
+ * from, so an unvalidated value crosses the boundary in both directions.
+ */
 export const replyThread = async (
   projectId: string,
   episode: string,
@@ -598,12 +688,15 @@ export const replyThread = async (
   body: string,
 ): Promise<ThreadResult> => {
   const id = ThreadIdSchema.safeParse(threadId)
+  const node = NodeIdSchema.safeParse(nodeId)
   const parsedBody = BodySchema.safeParse(body)
-  if (!id.success || !parsedBody.success) return { status: 'error', message: 'Write a reply first.' }
-  const gate = await openEpisode(projectId, episode)
+  if (!id.success || !node.success || !parsedBody.success) {
+    return { status: 'error', message: 'Write a reply first.' }
+  }
+  const gate = await openEpisode(projectId, episode, ROLE.comment)
   if (isRefusal(gate)) return gate
   await replyToThread(gate.scope, id.data as ThreadId, parsedBody.data)
-  return { status: 'ok', thread: await threadViewOf(gate, id.data as ThreadId, nodeId, 'open') }
+  return { status: 'ok', thread: await threadViewOf(gate, id.data as ThreadId, node.data as string, 'open') }
 }
 
 export const resolveThread = async (
@@ -613,7 +706,7 @@ export const resolveThread = async (
 ): Promise<SimpleResult> => {
   const id = ThreadIdSchema.safeParse(threadId)
   if (!id.success) return { status: 'error', message: 'That thread could not be found.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.comment)
   if (isRefusal(gate)) return gate
   await setThreadState(gate.scope, id.data as ThreadId, 'resolved')
   return { status: 'done' }

@@ -3,7 +3,15 @@ import { CAMERA_ANGLES, SHOT_MOVEMENTS, SHOT_SIZES } from '@folio/script'
 import { sql } from 'drizzle-orm'
 import { check, index, integer, jsonb, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
-import { createdAtColumn, idColumn, orderKeyColumn, projectIdColumn, timestampColumn, updatedAtColumn } from './columns'
+import {
+  createdAtColumn,
+  idColumn,
+  idempotencyKeyColumn,
+  orderKeyColumn,
+  projectIdColumn,
+  timestampColumn,
+  updatedAtColumn,
+} from './columns'
 import { creditLedger } from './credits'
 import { projects, users } from './tenancy'
 
@@ -106,9 +114,15 @@ export const shots = pgTable(
     frameUploadUrl: text('frame_upload_url'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
+    /** Null for a person clicking a button; set by a caller that can be retried (ADR 0003 D13). */
+    idempotencyKey: idempotencyKeyColumn(),
   },
   (table) => [
-    /** The board's read: every shot of a scene, in order. */
+
+    /** A retried create lands once. Partial, so the null every UI create carries is free. */
+    uniqueIndex('shots_idempotency_key')
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`idempotency_key is not null`),    /** The board's read: every shot of a scene, in order. */
     index('shots_project_scene_order_idx').on(table.projectId, table.sceneNodeId, table.orderKey),
     check(
       'shots_lens_and_duration_sane',

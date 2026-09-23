@@ -82,10 +82,17 @@ episodes without touching a foreign key.
 
 It also keeps AGENTS.md's requirement intact where it is actually observable:
 the URL still reads `/project/:id/ep_001/script`, the reserved-name validation
-still works — `ep_NNN` collides with none of `characters`, `locations`,
-`timeline`, `bible`, `research`, `insights`, `production`, `settings`, `assets`
-— and `EpisodeSlugSchema` in `@folio/contracts` enforces the shape. Nothing a
-user sees changes.
+still works — `ep_NNN` collides with none of the reserved project segments — and
+`EpisodeSlugSchema` in `@folio/contracts` enforces the shape. Nothing a user
+sees changes.
+
+That list has moved since, and `RESERVED_PROJECT_SEGMENTS` in
+[`packages/contracts/src/ids.ts`](../../packages/contracts/src/ids.ts) is the one
+that binds, not the nine names written here: `bible` came out when the route was
+cut (2026-09-15, its tables dropped in `0015`) and `props` was **appended** when
+that route was built. The argument is unaffected — no `ep_NNN` collides with any
+spelling a route segment can take — but a name must be reserved the day its route
+exists, or it competes with an episode slug for the segment.
 
 ## What would make this wrong
 

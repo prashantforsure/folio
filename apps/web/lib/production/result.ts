@@ -33,11 +33,20 @@ export type PreferencesResult = { readonly status: 'saved'; readonly preferences
 
 export type UploadResult = { readonly status: 'saved'; readonly asset: Asset } | Failure
 
-/** A generate button's answer: the row is created and running, the balance was short, or the model / storage is not connected. */
+/**
+ * A generate button's answer: the row is created and running, the balance was
+ * short, the model / storage is not connected, or this caller has made as many
+ * generations this hour as ADR 0003 **D14** allows.
+ *
+ * `rate-limited` carries the seconds rather than only a sentence, so a caller
+ * that retries by itself has a number to wait for and a person is told when to
+ * come back. It is the only refusal here that will stop being true on its own.
+ */
 export type GenerationResult =
   | { readonly status: 'queued'; readonly generation: Generation }
   | { readonly status: 'insufficient'; readonly available: number; readonly cost: number }
   | { readonly status: 'disconnected'; readonly message: string }
+  | { readonly status: 'rate-limited'; readonly message: string; readonly retryAfterSeconds: number }
   | Failure
 
 /** `Start shooting`: the spec's 422 - the failing readiness flags, in step order. */

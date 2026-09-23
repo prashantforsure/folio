@@ -36,6 +36,7 @@ import {
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { jsonb } from '../sql-json'
+import { onIdempotencyKeyConflict } from './idempotency'
 import { stamp, stampOrNull } from './mapping'
 
 /**
@@ -484,6 +485,12 @@ export const countAcceptedShots = async (scope: ProjectScope, screenplayDocument
  * neighbours, one statement for however many rows. The caller has checked
  * the scene is this episode's.
  */
+/**
+ * `idempotencyKey` covers **one** shot, for `insertReelShots`' reason
+ * (`repositories/production.ts`): the board adds shots one at a time, and the
+ * batch caller is `proposeShotsForScene`, which mints its rows from a pass
+ * over a scene rather than from a call that can be retried.
+ */
 export const insertShots = async (
   scope: ProjectScope,
   sceneNodeId: NodeId,
@@ -491,8 +498,12 @@ export const insertShots = async (
   origin: ShotOrigin,
   state: ShotState,
   neighbours: { readonly before: OrderKey | null; readonly after: OrderKey | null },
+  idempotencyKey: string | null = null,
 ): Promise<readonly Shot[]> => {
   if (specs.length === 0) return []
+  if (idempotencyKey !== null && specs.length !== 1) {
+    throw new Error('Folio: an idempotency key covers one shot, not a batch.')
+  }
   const keys = spread(neighbours.before, neighbours.after, specs.length)
   const rows = await dbOf(scope)
     .insert(shots)
@@ -509,9 +520,21 @@ export const insertShots = async (
         description: jsonb(spec.description),
         origin,
         state,
+        idempotencyKey,
       })),
     )
+    .onConflictDoNothing(onIdempotencyKeyConflict(shots))
     .returning()
+  if (rows.length === 0 && idempotencyKey !== null) {
+    const found = await dbOf(scope)
+      .select()
+      .from(shots)
+      .where(scoped(scope, shots, eq(shots.idempotencyKey, idempotencyKey)))
+      .limit(1)
+    const already = found[0]
+    if (already === undefined) throw new Error('Folio: a shot with that idempotency key was written and is no longer there.')
+    return [shotFromRow(already)]
+  }
   return rows.map(shotFromRow)
 }
 

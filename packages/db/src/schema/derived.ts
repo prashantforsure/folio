@@ -26,6 +26,7 @@ import { assets } from './assets'
 import {
   createdAtColumn,
   idColumn,
+  idempotencyKeyColumn,
   projectIdColumn,
   timestampColumn,
   updatedAtColumn,
@@ -179,9 +180,15 @@ export const characters = pgTable(
     canvasY: integer('canvas_y'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
+    /** Null for a person clicking a button; set by a caller that can be retried (ADR 0003 D13). */
+    idempotencyKey: idempotencyKeyColumn(),
   },
   (table) => [
-    index('characters_project_idx').on(table.projectId),
+
+    /** A retried create lands once. Partial, so the null every UI create carries is free. */
+    uniqueIndex('characters_idempotency_key')
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`idempotency_key is not null`),    index('characters_project_idx').on(table.projectId),
     check('characters_name_not_empty', sql`length(btrim(${table.name})) > 0`),
     check('characters_not_merged_into_self', sql`${table.mergedInto} IS DISTINCT FROM ${table.id}`),
     check('characters_color_known', sql`${table.color} = any(${sql.raw(`ARRAY[${CHARACTER_COLOR_IDS.map((id) => `'${id}'`).join(', ')}]::text[]`)})`),
@@ -479,9 +486,15 @@ export const locations = pgTable(
     photoKey: text('photo_key'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
+    /** Null for a person clicking a button; set by a caller that can be retried (ADR 0003 D13). */
+    idempotencyKey: idempotencyKeyColumn(),
   },
   (table) => [
-    index('locations_project_idx').on(table.projectId),
+
+    /** A retried create lands once. Partial, so the null every UI create carries is free. */
+    uniqueIndex('locations_idempotency_key')
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`idempotency_key is not null`),    index('locations_project_idx').on(table.projectId),
     index('locations_parent_idx').on(table.parentId),
     check('locations_name_not_empty', sql`length(btrim(${table.name})) > 0`),
     check('locations_not_own_parent', sql`${table.parentId} IS DISTINCT FROM ${table.id}`),
@@ -583,11 +596,15 @@ export const locationSluglineTallies = pgTable(
  * scene record needs, and it means moving a scene up the script does not detach
  * its synopsis." It also spends no entropy - 220 scenes cost zero ids.
  *
- * There is deliberately no `ON DELETE CASCADE` from `nodes`. A heading that
+ * There is deliberately **no foreign key to `nodes` at all**. A heading that
  * leaves the script must not take the synopsis with it: `derive` marks the
- * scene `absent` and the record is kept, the same rule as a character. The
- * reference is therefore `ON DELETE SET NULL` on a *separate* nullable column
- * and the primary key stands alone - see `sceneNodeRef` below.
+ * scene `absent` and the record is kept, the same rule as a character. An
+ * earlier draft of this comment promised a nullable `sceneNodeRef` column
+ * beside the key, carrying the reference under `ON DELETE SET NULL`; **that
+ * column was never built**, and it was not needed - the key is a plain `uuid`
+ * with no reference, which is the same shape `reels.scene_node_id` and
+ * `shots.scene_node_id` use for the same reason, and a heading that leaves by
+ * undo and comes back finds its row waiting.
  *
  * `beats` and `threads` are opaque strings: neither was a table when the
  * column was declared, and they are carried so a re-derive cannot drop them.

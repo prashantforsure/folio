@@ -27,6 +27,29 @@ days.
 
 ---
 
+## What we are building
+
+Folio is getting an **AI copilot in an app-wide side panel** — one assistant that can do anything
+a user can do, from reading and navigating the workspace to drafting a full script from a story and
+carrying it through storyboards to video. It is not a second product surface: it is the same
+actions, the same gates and the same records, driven by a model instead of a cursor.
+
+**Every write it makes is reviewable.** Script, outline and record edits arrive as proposals —
+hunks against current node state, or before/after values where a record has no hunk — and anything
+with no diffable form asks for explicit confirmation instead. *The AI agent* below is the binding
+rule set; where the copilot changed a rule, the change is dated in place.
+
+The plan is [docs/agents/integration-plan.md](docs/agents/integration-plan.md), which carries these
+rulings and its own five build phases. The decisions are
+[ADR 0003](docs/adr/0003-agent-copilot.md) — its D1, D2 and D3 close open decisions 2, 16 and
+13 below, and D8 closes 10 — and the task list is
+[docs/agents/roadmap.md](docs/agents/roadmap.md), whose working rules bind every session that
+builds any of it. The craft rules the agent writes to are
+[docs/agents/craft.md](docs/agents/craft.md), and every tool it may call is
+[docs/agents/tools.md](docs/agents/tools.md) — a tool that is not in that file does not exist.
+
+---
+
 ## Tech stack
 
 | Layer | Choice | Notes |
@@ -39,25 +62,25 @@ days.
 | Styling | Tailwind + CSS variables | Tokens as variables; theming via `data-theme` |
 | Editor | Tiptap 3 on ProseMirror | Typed nodes only, never React state. **Pagination is ours, not the editor's** |
 | Client state | URL first, then React state | Zustand only for the agent window rect and session flags |
-| Server state | TanStack Query | Only where Server Components don't fit |
+| Server state | TanStack Query | **Planned, not installed.** Reads are Server Components + `cache()` + `router.refresh()` today; this is where it would go if they stop fitting |
 | Validation | Zod, in `packages/contracts` | Every API boundary, shared by web and worker |
 | Database | Supabase Postgres | Plain Postgres underneath |
 | ORM | Drizzle | Session pooler for the worker, transaction pooler for requests |
 | Migrations | drizzle-kit, forward-only | Owned in the repo |
 | Auth | Supabase Auth — Google OAuth **and** email + password | `auth.users` is identity; `users`/`memberships` are ours. Confirmation and reset mail goes through Supabase's built-in sender; see Constraints |
 | Tenancy | Project-scoped repositories **plus** RLS as defence in depth | Server uses the service-role key, which bypasses RLS |
-| Storage | Supabase Storage | Signed URLs for everything |
-| Jobs | BullMQ + Redis on a long-running Railway service | Not yet: `apps/worker` is a stub and Production's generations (2026-09-22) run inside `web` — `after()` and a 3 s poll — until the worker exists |
+| Storage | Cloudflare R2 over its S3 API, signed with `aws4fetch` | `apps/web/lib/storage/r2.ts` is the one module. Callers store the object **key** and compose the URL at read, from a **public** origin. **Signed read URLs are intended and not built** — anything uploaded or generated is readable by anyone holding the URL |
+| Jobs | A worker over the Postgres `jobs` table | **Superseded 2026-09-23** (the copilot pass): BullMQ and Redis are **out** — the worker is built in **roadmap Phase 4** on the table that already exists, because a queue we own is one fewer dependency and the ledger is transactional beside it. Until then `apps/worker` is a stub and Production's generations run inside `web` — `after()` and a 3 s poll |
 | Payments | Dodo Payments | Merchant of record; webhooks reconciled idempotently |
-| AI — assistant | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17), `/locations` and `/timeline` (2026-09-18); on `/production` it carries that route's chips (2026-09-22). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) were removed with the route's fourth pass (2026-09-20); their caps stay in `lib/assistant/model.ts` for the next action of that shape. Tool use and proposals are still its next life |
-| AI — generation | Google Gemini over `fetch`, no SDK (client ruling, 2026-09-22) | Production only: `apps/web/lib/production/pipeline/gemini.ts`, keyed by `GEMINI_API_KEY`. The model ids are `MODEL_REGISTRY` in `packages/contracts/src/production.ts` and nowhere else; the writer sees tiers. Veo is not on the free tier — a shoot the key cannot make fails and refunds |
-| PDF | `pdf-lib` or `pdfkit` on our own layout engine | |
+| AI — assistant | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17), `/locations` and `/timeline` (2026-09-18); on `/production` it carries that route's chips (2026-09-22). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) were removed with the route's fourth pass (2026-09-20); their caps stay in `lib/assistant/model.ts` for the next action of that shape. **Updated 2026-09-23** (the copilot pass): it stays read-only until **roadmap Phase 3**, and writes through proposals from there — tool use and the proposal surface are that phase's work, not a later ambition |
+| AI — generation | Google Gemini over `fetch`, no SDK (client ruling, 2026-09-22) | Production only: `apps/web/lib/production/pipeline/gemini.ts`, keyed by `GEMINI_API_KEY`. The image and video model ids are `MODEL_REGISTRY` in `packages/contracts/src/production.ts` and nowhere else; the writer sees tiers. The model that *reads and drafts* is a different decision with a different owner and lives in `apps/web/lib/assistant/model.ts` (ADR 0003 D12). Veo is not on the free tier — a shoot the key cannot make fails and refunds |
+| PDF | `pdf-lib` on our own layout engine | **Chosen, not installed** — there is no PDF engine, and `Export PDF` is drawn disabled saying so. ADR 0003 pre-approves `pdf-lib` and `@pdf-lib/fontkit`, and nothing else |
 | FDX | `fast-xml-parser` + custom mapping | |
 | Fountain | Custom, in `packages/script` | |
 | Fonts | Self-hosted Geist, Geist Mono, Courier Prime | Courier Prime version-pinned - it is the *measured* face (the engine, the cover, the export). Geist is chrome **and** the script body, Geist Mono the counts and refs (the v2 redesign, ruled 2026-09-16, replacing Inter) |
 | Tests | Vitest · fast-check · Testing Library · Playwright | |
-| Errors / analytics / logs | Sentry · PostHog · pino | |
-| Deploy | Railway — `web`, `worker`, `redis` | Private networking between services |
+| Errors / analytics / logs | Sentry · PostHog · pino | **Planned, not installed.** Failure paths are `console.error`-and-swallow today, and `lib/auth/session.ts` says so at the point it swallows one |
+| Deploy | — | **Not deployed yet**, and no manifest of any kind is in the repo. The web host is unchanged; the worker is a **separate container**; **no Redis** — see the Jobs row |
 
 ### Adding a dependency requires approval. Every time.
 
@@ -66,6 +89,11 @@ Stop and ask. Name the package, what it does, what it replaces, and its maintena
 This is stricter than normal because the **Deliberately not using** list below is a set of design
 decisions, not an oversight — and the most tempting additions are precisely the ones that would
 silently destroy the product.
+
+**Ruled 2026-09-23** (the copilot pass): the rule is unchanged, and ADR 0003 pre-approves exactly
+two packages — `pdf-lib` and `@pdf-lib/fontkit`, for the PDF engine. Nothing else is pre-approved
+by it, and the copilot work is expected to need no other dependency: the worker runs on the
+Postgres `jobs` table and tool use comes from the `@anthropic-ai/sdk` already installed.
 
 **Deliberately not using — do not add these:**
 
@@ -150,20 +178,20 @@ Stop and ask before you:
 | # | Question | Blocks |
 | --- | --- | --- |
 | 1 | ~~Which node id survives a split, and what happens on merge and paste~~ **Ruled, by delegation: [ADR 0001](docs/adr/0001-node-identity.md)** — each position is reversible; Q3's id-shape ruling is the one flagged for a human look | — |
-| 2 | The numeric thresholds separating review tiers 1 / 2 / 3 | The whole agent review flow |
+| 2 | ~~The numeric thresholds separating review tiers 1 / 2 / 3~~ **Ruled 2026-09-23: ADR 0003 D1** (the copilot pass) — the review flow could not be specified around an open number | — |
 | 3 | Whether rename rewrites unlinked prose mentions in action, or only cues, sluglines and `@mentions` | Rename blast radius |
 | 4 | ~~The `?lens=` value shape — `lens/<id>` as written, or just `<id>`~~ Moot: Insights was removed with the v2 redesign (2026-09-16). Reopens if a report route returns | — |
 | 5 | ~~Whether `/production` is project- or episode-scoped~~ **Ruled: episode-scoped** (the workspace shell pass; the v12 route keeps it, `docs/production/README.md`) | — |
 | 6 | ~~Whether `/build` and `/search` are cut or merely undesigned~~ **Ruled: cut** (the workspace shell pass) | — |
 | 7 | Where project settings `transfer`, `keys` and `episodes` went | Settings |
 | 15 | What duplicating a project copies — `@mention`s are bound to character and location ids, so a copied node list points at the original's records; and what becomes of its notes, revisions and its append-only ledger. The control is drawn on the Projects route and refuses in words (`lib/projects/actions.ts`) | `Duplicate`, on a card and in the bulk bar |
-| 16 | Whether a role means anything. `memberships.role` is stored, shown in account settings, and **enforced nowhere** — any member may write anything in a project they belong to. Named here rather than in a comment, because every action written since has had to decide not to check it | Every server action's gate; the Collaborators section's permission table |
+| 16 | ~~Whether a role means anything~~ **Ruled 2026-09-23: ADR 0003 D2** (the copilot pass), and **implemented the same day** (roadmap task 1.2) — an agent's permissions cannot be "whatever the user can do" while that sentence means "anything". The matrix is one table, `apps/web/lib/auth/roles.ts`, applied by the gates in `apps/web/lib/script/gate.ts` and `lib/projects/actions.ts` to every server action and to `ask()` | — |
 | 8 | Sheet width for `format: asian` — A4 is ~794px, not 816px | Pagination engine |
 | 9 | The `/app/filmmaking` ADR | Anything past a project list. The list is `/app/projects` since 2026-09-22; `/app/filmmaking` redirects to it and a filmmaking project still opens there |
-| 10 | Whether `SCENE_xxx` is a node id or the derived scene record's id. ADR 0001 ruled the latter, in a separate id space — but `packages/script`'s `SceneRecord.id` is implemented as the heading node's own id, so the ADR and the code contradict each other | `?selected=`, any URL naming a scene |
+| 10 | ~~Whether `SCENE_xxx` is a node id or the derived scene record's id~~ **Ruled 2026-09-23: ADR 0003 D8** (the copilot pass) — a scene's identity is its **heading node id**, which is what `packages/script` and six tables always did. [ADR 0001](docs/adr/0001-node-identity.md) Ruling 3 is amended to match, the `scene_` prefix is retired, and the ADR and the code no longer contradict each other | — |
 | 11 | The revision colour sequence past green (`nextRevisionColour` refuses at green) | Issuing a sixth revision |
 | 12 | Locked-page numbering past the last lock — a judgement call is implemented (the sequence continues unprotected), not ruled | Export, revision compare |
-| 13 | Whether an assistant message costs credits, and how much. The panel is real and read-only (2026-09-16) and writes no ledger row; the Characters drawer's `Draft from the script` and `Check for contradictions` (2026-09-18) took the same standing until the route's fourth pass removed them (2026-09-20) | Charging the assistant; "cost named before it is spent" on its send button; a rate limit on it |
+| 13 | ~~Whether an assistant message costs credits, and how much~~ **Ruled 2026-09-23: ADR 0003 D3** (the copilot pass) — an agent that calls a model many times per task made this urgent. The panel wrote no ledger row from 2026-09-16 until this ruling | — |
 | 14 | The Production feature set's escalations — the credit unit and margin, refund on cancel-while-running, the costs the v12 spec does not price (shot frame 4, scene image 40, AI shotlist 0, propose 0 are provisional), the stale rules. The D-1 … D-21 list went with the first doc set (deleted with `docs/build-decisions.md`, 2026-09-22); the v12 pass took provisional answers, each listed under "Implementation" in `docs/production/README.md` | Changing a cost, a refund rule or a stale rule in `apps/web/lib/production/` or `packages/contracts/src/production.ts` |
 
 ---
@@ -174,18 +202,25 @@ Stop and ask before you:
 apps/web/                    Next.js app. UI and server actions only — no logic that belongs in packages/script.
   app/(app)/                 Signed-in shell: the 238px account sidebar, theme, the account menu. Everything user-facing lives under /app.
   app/(app)/app/(home)/      The account routes: new, projects (+ three redirects), trash, settings.
-  app/(app)/project/         Project workspace: rail, writing sidebar and header, the assistant panel, the ten routes.
+  app/(app)/app/project/     Project workspace: rail, writing sidebar and header, the assistant panel, the ten routes.
   lib/                       Web-only glue: auth session, server action helpers, query client. Not domain logic.
-apps/worker/                 BullMQ consumers. Long-running. Generation, export, agent runs. Never a serverless fn.
-                             Still the one-constant stub; Production runs its jobs in web (after() + polling) until it exists.
+apps/worker/                 A worker over the Postgres jobs table. Long-running. Generation, export, agent runs.
+                             Never a serverless fn, and NO Redis and NO BullMQ (superseded 2026-09-23, the copilot
+                             pass): it is built in roadmap Phase 4 on the table that already exists.
+                             Still the one-constant stub; Production runs its jobs in web (after() + polling) until then.
 apps/sync/                   Deferred. Do not create this directory until realtime is actually scheduled.
 packages/script/             PURE. Node model, parser, derivation, pagination, Fountain. No React, no DB, no I/O.
 packages/ui/                 Primitives, tokens, theme. Presentational only — no data fetching, no domain knowledge.
 packages/db/                 Drizzle schema, forward-only migrations, project-scoped repositories, the dev seed. The only place SQL lives.
 packages/contracts/          Zod schemas shared by web and worker. Types flow from here; do not redeclare them downstream.
-                             production.ts holds MODEL_REGISTRY — the only place a model is named.
-docs/                        adr/ and production/ (the v12 spec: production.md, the runnable mockup, its data and runtime).
-                             Nothing else: build-decisions.md and the design bundles are deleted; their reasoning is git history.
+                             production.ts holds MODEL_REGISTRY — the only place a *generation*
+                             model is named. The assistant's is apps/web/lib/assistant/model.ts
+                             (ADR 0003 D12: two registries, two owners, neither an env var).
+docs/                        adr/, production/ (the v12 spec: production.md, the runnable mockup, its data and runtime),
+                             agents/ (the copilot: integration-plan.md, and roadmap.md once written) and
+                             remainingroadmap.md (defects, open-decision impact, unbuilt surface, as of 2026-09-22 -
+                             read it before proposing new work, it names what's already known). build-decisions.md and
+                             the design bundles are deleted; their reasoning is git history.
 ```
 
 `packages/script` importing anything framework- or database-shaped is a **lint error, not a code
@@ -277,7 +312,12 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   written before that route existed - and keep ids to the `ep_NNN` shape. Static-first precedence
   saves this tree by accident; do not rely on it.
 - `projectType: 'film'` **hides** the episode segment. The database still stores one episode row.
-  The router special-cases the shape; the schema never does.
+  The router special-cases the shape; the schema never does. So there are **two URL shapes for the
+  same ten routes** — series `/app/project/:projectId/:episodeId/<route>`, film
+  `/app/project/:projectId/<route>` — and the film half is a **duplicated static tree** under
+  `(film)/`, because Next has no optional segment. **Build every workspace URL through
+  `apps/web/lib/workspace/hrefs.ts`**, which holds the shape distinction; `enterEpisodeRoute`
+  canonicalises a URL for the project's type. A concatenated path 404s on half the projects.
 - Rail order is fixed (the v2 design's "Rail", retired 2026-09-20 - the order stands): Writing · Characters · Locations ·
   **Props** · Timeline · Research · Production. Writing stays lit across all four writing routes. Insights
   was removed with the v2 redesign (2026-09-16); its name stays reserved. **Props** was added by
@@ -371,7 +411,9 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   README's; in flow at ≥1200px, over the content below), `⌘J` toggles it, and it persists across
   route changes. It is not a route. Today it is a **read-only chat** over the episode's script
   (`apps/web/lib/assistant/`, `assistant_chats` / `assistant_messages`, migration `0016`): it
-  reads, it answers, it writes nothing. On `/characters` it reads the whole project and, with a
+  reads, it answers, it writes nothing. **Updated 2026-09-23** (the copilot pass): it stays
+  read-only **until roadmap Phase 3**, and from there it writes — through the proposals above,
+  never directly — because the panel is the copilot's surface and there is no second one. On `/characters` it reads the whole project and, with a
   record open, a Focus block for it (ruled 2026-09-17); on `/locations` the location records
   beside the cast (2026-09-18); on `/timeline` every scene's story time, its threads and the
   continuity check's open findings, with the drawer's scene as the Focus (the Timeline rebuild,
@@ -382,7 +424,11 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   comes next. The lifecycle below is where it goes next.
 - Lifecycle: **Brief → Plan → Run → Review → Commit.** One run produces one revision entry.
 - **Every write returns a proposal, never a mutation.** Proposals are anchored to node ids and
-  rendered as hunks against current node state.
+  rendered as hunks against current node state. **Narrowed 2026-09-23** (the copilot pass): this
+  binds writes to the **script, the outline and the records** — hunks, or before/after values
+  where a record has no hunk. An action with **no diffable form** (an upload, a generation, a
+  canvas move) takes **explicit confirmation** instead, because a diff of it would be theatre.
+  Confirmation is not a weaker proposal: it still names what will happen before it happens.
 - **The approved plan is the allowlist.** A run may only write the surfaces its plan declared,
   enforced server-side. Client-side checks are decoration.
 - **Locks are objects, not prose**: node, cast, outcome, heading, range. A plan that cannot
@@ -401,7 +447,9 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 - **Every lens note cites its sources. A note that cannot cite one is not rendered.**
 - **A report never calls a model.** Reports are arithmetic over the node list and derived
   entities. Asking a model to count is slower, costs money, and is less accurate than the code it
-  replaced.
+  replaced. **Clarified 2026-09-23** (the copilot pass): the agent may *call* a report tool and
+  phrase what comes back in its own words — **the numbers always come from code**, never from the
+  model, and an answer that states a count the code did not produce is a bug.
 
 ### Jobs, credits and cost
 
@@ -430,6 +478,22 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 - **Every query goes through a project-scoped repository.** The server uses the service-role key,
   which bypasses RLS entirely — RLS is a safety net, not the mechanism.
 - **The service-role key must never reach the browser.** Same for Dodo keys.
+- **Every server action opens with a gate, and there are four** — `openEpisode`,
+  `openEpisodeWith` (which runs one extra read inside the same `Promise.all`) and `openProject`
+  in [`apps/web/lib/script/gate.ts`](apps/web/lib/script/gate.ts), plus `requireUser` in
+  `lib/auth/session.ts` for the account routes and page loaders. The order is **parse → identity
+  → membership → scope**, and a non-member and a non-existent project get the *same* refusal, so
+  there is no existence oracle. A gate returns a `ProjectScope` or a refusal; it never throws.
+  **`openProjectForRequest` checks nothing about the actor** — the scope guarantees a query
+  cannot cross projects, not that the caller was entitled to this one. The gate is the only
+  entitlement check, which is why a repository call that skips it skips authorisation entirely.
+- **Every table is AUTHORED, DERIVED CACHE or MEASUREMENT, and the class decides who may write
+  it.** The list is
+  [`packages/db/src/schema/index.ts`](packages/db/src/schema/index.ts), which classifies all of
+  them. It is structural, not a convention: the derivation writer holds a handle that reaches only
+  the derived tables, so clobbering a synopsis is not a mistake to avoid — it is a query that does
+  not compile. A page number may live only on a measurement record. Authored data hanging off a
+  derived row must survive a full re-derive; see *Derivation* and the exception tables.
 
 ### Export
 
@@ -446,7 +510,8 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
 Zod schemas are `XSchema`, with `type X = z.infer<typeof XSchema>`.
 
 **Naming.** `camelCase` for values, `PascalCase` for types and components, `snake_case` for
-database columns. Episode ids are `ep_NNN`. Scene ids: open decision 10.
+database columns. Episode ids are `ep_NNN`. A scene's id **is** its heading node id, with no
+prefix — [ADR 0003](docs/adr/0003-agent-copilot.md) D8.
 
 **Imports.** Workspace packages by name — `@folio/script`, `@folio/ui`, `@folio/db`,
 `@folio/contracts`. Never reach across a package boundary with a relative path. No default
@@ -516,9 +581,10 @@ share a file.
 
 | Surface | Reason | Rule |
 | --- | --- | --- |
-| Research | Source material must stay trustworthy | Read-only |
+| Research | Source material must stay trustworthy | Read-only. **Reaffirmed 2026-09-23** (the copilot pass) *over* the integration plan's tool catalogue: `add_source`, `clip_line` and `send_clip` come out of it — a model that can edit the evidence cannot be used to check itself |
 | ~~Bible~~ | Route cut 2026-09-15; its tables dropped in `0015` | — |
-| Settings, people, billing, keys, export | Not creative surfaces | Never |
+| Settings, people, billing, keys | Not creative surfaces | Never |
+| Export | **Ruled 2026-09-23** (the copilot pass): a download is a read, and refusing it made the agent less useful than the UI beside it | **Allowed, read-only**, and only for the **requesting user** — it produces a file they could have clicked for themselves, and writes nothing |
 
 ### Every route ships both states — no exceptions
 
@@ -555,10 +621,15 @@ There is no case where an empty state is optional. A new project is entirely emp
   Bible's five tables and three enums were dropped outright in migration `0015` — nothing was
   left reading them once the rail badge stopped calling into `bible.ts`.
 - **No realtime collaboration.** Last-write-wins with a conflict banner. Loro CRDT and
-  `apps/sync` are deferred; do not scaffold them.
-- **`/app/filmmaking` is a project list and a creation entry point. Stop there.** It needs an ADR
-  first. A project with no Writing section is a generation surface with no script behind it, and
-  "the screenplay is the source of truth" stops holding.
+  `apps/sync` are deferred; do not scaffold them. **Reaffirmed 2026-09-23** (the copilot pass):
+  an agent's script edits apply **in the writer's own open editor**, or through a
+  **compare-and-swap** on save — so the copilot needs no realtime either, and the race where an
+  agent and a writer both hold the whole node list is closed by the CAS, not by a CRDT.
+- **`/app/filmmaking` is a redirect, nothing more.** Since the account-routes pass (2026-09-22) it
+  has no page of its own — `app/(app)/app/(home)/filmmaking/page.tsx` is a one-line `redirect('/app/projects')`.
+  `film`-type projects are a filter chip on `/app/projects`, not a separate list. Do not rebuild a
+  project list, a creation flow or anything else under this path — open decision 9 (an ADR) blocks
+  going past the redirect at all. The same applies to `/app/recents` and `/app/screenwriting`.
 - **Project `/settings` is a stub.** No design exists. **Account `/app/settings` is built**
   (2026-09-22) and is a different route: profile, plan and credits, editor defaults,
   notifications, collaborators, integrations, security. Half of it is drawn disabled with the
@@ -622,8 +693,13 @@ pnpm --filter web test:e2e
 pnpm --filter @folio/db seed:production -- --user <email>   # a dev project in every Production state, for the walk
 ```
 
-The E2E smoke test walks all ten routes in both themes and both states. It is not optional
-coverage — it is the thing that catches a route shipped without its empty state.
+The signed-in walks are **one Playwright spec per route** — `apps/web/e2e/*-route.spec.ts`, ten of
+them — and each **self-skips** without `E2E_EMAIL` / `E2E_PASSWORD`, so a green run proves nothing
+unless they were set. They are not optional coverage: they are the thing that catches a route
+shipped without its empty state, and no server action has a unit test anywhere.
+
+`e2e/smoke.spec.ts` is **not** that walk and says so in its own header — it is signed-out route
+protection and the theme, with nobody logged in.
 
 ---
 

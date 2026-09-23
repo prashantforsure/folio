@@ -6,6 +6,7 @@ import { asc, eq, inArray, sql } from 'drizzle-orm'
 import { propAliases, props, reelShots, reels, scenes } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
+import { insertedOrExisting, onIdempotencyKeyConflict } from './idempotency'
 import { stamp } from './mapping'
 
 /**
@@ -152,13 +153,30 @@ export const countPropSceneSetups = async (scope: ProjectScope): Promise<Readonl
 // Writes - the record
 // ---------------------------------------------------------------------------
 
-export const createPropRecord = async (scope: ProjectScope, name: string, category: string | null): Promise<PropId> => {
+export const createPropRecord = async (
+  scope: ProjectScope,
+  name: string,
+  category: string | null,
+  idempotencyKey: string | null = null,
+): Promise<PropId> => {
   const rows = await dbOf(scope)
     .insert(props)
-    .values({ ...tenant(scope), name, category })
+    .values({ ...tenant(scope), name, category, idempotencyKey })
+    .onConflictDoNothing(onIdempotencyKeyConflict(props))
     .returning({ id: props.id })
-  const row = rows[0]
-  if (row === undefined) throw new Error('Folio: inserting a prop returned no row.')
+  const row = await insertedOrExisting(
+    rows,
+    idempotencyKey,
+    async () => {
+      const found = await dbOf(scope)
+        .select({ id: props.id })
+        .from(props)
+        .where(scoped(scope, props, eq(props.idempotencyKey, idempotencyKey ?? '')))
+        .limit(1)
+      return found[0] ?? null
+    },
+    'prop',
+  )
   return brandPropId(row.id)
 }
 

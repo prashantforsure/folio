@@ -15,7 +15,9 @@ import {
 import type { DocumentId, NodeId, OutlineNode } from '@folio/script'
 import { z } from 'zod'
 
+import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisodeWith } from '../script/gate'
+import { nodeDigest } from '../script/server'
 import type { SaveOutlineResult } from './result'
 
 /**
@@ -70,6 +72,13 @@ const SaveOutlineInputSchema = z.object({
   nodes: z.array(OutlineNodeSchema).max(5_000),
   retirements: z.array(RetirementSchema),
   snapshot: z.boolean(),
+  /**
+   * The `nodeDigest` of the stored list this save was planned against. Absent
+   * on every save the editor makes, and then nothing changes; present and
+   * disagreeing, and nothing is written (ADR 0003 **D10**). The Script route's
+   * field, the same function, for the same reason.
+   */
+  expectedDigest: z.string().min(1).optional(),
 })
 
 export type SaveOutlineInput = z.input<typeof SaveOutlineInputSchema>
@@ -92,7 +101,7 @@ export const saveOutline = async (raw: SaveOutlineInput): Promise<SaveOutlineRes
     if (documentId === null) return { document: null, rows: [] }
     const [document, rows] = await Promise.all([readDocumentById(scope, documentId), readNodeRows(scope, documentId)])
     return { document, rows }
-  })
+  }, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
   const { scope, episode } = gate
   let { document, rows } = gate.extra
@@ -129,6 +138,16 @@ export const saveOutline = async (raw: SaveOutlineInput): Promise<SaveOutlineRes
     documentId === null || target.updatedAt === input.baseUpdatedAt
       ? null
       : { expected: input.baseUpdatedAt, found: target.updatedAt }
+
+  // The compare-and-swap. The stored list is digested as it reads, not as the
+  // rows arrived, so the comparison is over the same shape the caller hashed.
+  if (input.expectedDigest !== undefined) {
+    const storedNodes = parseOutlineRows(rows)
+    const digest = storedNodes.ok ? nodeDigest(storedNodes.value.map((entry) => entry.node)) : null
+    if (digest !== input.expectedDigest) {
+      return { status: 'stale', conflict: conflict ?? { expected: input.baseUpdatedAt, found: target.updatedAt } }
+    }
+  }
 
   const plan = planNodeWrite(rows, next)
   const mergedInto = new Map(input.retirements.map((entry) => [entry.nodeId, entry.mergedInto]))

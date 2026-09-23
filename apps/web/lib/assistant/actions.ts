@@ -4,6 +4,7 @@ import type { AssistantChatId } from '@folio/contracts'
 import { AssistantChatIdSchema } from '@folio/contracts'
 import { createChat, deleteChat, listChats, listMessages, readChat } from '@folio/db'
 
+import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisode } from '../script/gate'
 import type { ChatResult, ChatsResult, SimpleAssistantResult } from './result'
 import { chatRowOf, messageRowOf } from './result'
@@ -18,14 +19,14 @@ import { chatRowOf, messageRowOf } from './result'
  */
 
 export const listAssistantChats = async (projectId: string, episode: string): Promise<ChatsResult> => {
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.assistant)
   if (isRefusal(gate)) return gate
   const chats = await listChats(gate.scope, gate.episode.id)
   return { status: 'ok', chats: chats.map(chatRowOf) }
 }
 
 export const startAssistantChat = async (projectId: string, episode: string): Promise<ChatResult> => {
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.assistant)
   if (isRefusal(gate)) return gate
   const chat = await createChat(gate.scope, gate.episode.id)
   return { status: 'ok', chat: chatRowOf(chat), messages: [] }
@@ -38,7 +39,7 @@ export const openAssistantChat = async (
 ): Promise<ChatResult> => {
   const id = AssistantChatIdSchema.safeParse(chatId)
   if (!id.success) return { status: 'error', message: 'That chat could not be found.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.assistant)
   if (isRefusal(gate)) return gate
   const chat = await readChat(gate.scope, id.data as AssistantChatId)
   if (chat === null || chat.episodeId !== gate.episode.id) {
@@ -48,6 +49,17 @@ export const openAssistantChat = async (
   return { status: 'ok', chat: chatRowOf(chat), messages: messages.map(messageRowOf) }
 }
 
+/**
+ * Delete a chat of **this** episode.
+ *
+ * The scope alone is not enough here. It proves the row is this project's,
+ * which the header's promise is not - a chat is about one episode's script,
+ * and a project has many episodes. `openAssistantChat` has always read the
+ * row back and compared `episodeId`; this did not, so a member could delete a
+ * chat belonging to a sibling episode by passing its id (the id is in no page
+ * that draws another episode, but an id is not a secret and a server action is
+ * a public endpoint). Same check, same refusal, same words.
+ */
 export const deleteAssistantChat = async (
   projectId: string,
   episode: string,
@@ -55,8 +67,12 @@ export const deleteAssistantChat = async (
 ): Promise<SimpleAssistantResult> => {
   const id = AssistantChatIdSchema.safeParse(chatId)
   if (!id.success) return { status: 'error', message: 'That chat could not be found.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.assistant)
   if (isRefusal(gate)) return gate
-  await deleteChat(gate.scope, id.data as AssistantChatId)
+  const chat = await readChat(gate.scope, id.data as AssistantChatId)
+  if (chat === null || chat.episodeId !== gate.episode.id) {
+    return { status: 'error', message: 'That chat could not be found.' }
+  }
+  await deleteChat(gate.scope, chat.id)
   return { status: 'done' }
 }

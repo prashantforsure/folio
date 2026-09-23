@@ -2,7 +2,13 @@ import { CONTINUITY_KINDS, STORY_THREAD_COLOURS } from '@folio/contracts'
 import { sql } from 'drizzle-orm'
 import { check, index, integer, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
-import { createdAtColumn, idColumn, projectIdColumn, updatedAtColumn } from './columns'
+import {
+  createdAtColumn,
+  idColumn,
+  idempotencyKeyColumn,
+  projectIdColumn,
+  updatedAtColumn,
+} from './columns'
 import { projects } from './tenancy'
 
 /**
@@ -45,9 +51,15 @@ export const storyThreads = pgTable(
     position: integer('position').notNull().default(0),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
+    /** Null for a person clicking a button; set by a caller that can be retried (ADR 0003 D13). */
+    idempotencyKey: idempotencyKeyColumn(),
   },
   (table) => [
-    index('story_threads_project_position_idx').on(table.projectId, table.position),
+
+    /** A retried create lands once. Partial, so the null every UI create carries is free. */
+    uniqueIndex('story_threads_idempotency_key')
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`idempotency_key is not null`),    index('story_threads_project_position_idx').on(table.projectId, table.position),
     check('story_threads_name_not_empty', sql`length(btrim(${table.name})) > 0`),
     check('story_threads_position_not_negative', sql`${table.position} >= 0`),
   ],

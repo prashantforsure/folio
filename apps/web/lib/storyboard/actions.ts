@@ -34,6 +34,8 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import type { EpisodeGate } from '../script/gate'
+import { ROLE } from '../auth/roles'
+import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
 import { isRefusal, openEpisode } from '../script/gate'
 import { IMAGE_EXTENSION, readImage } from '../storage/image'
 import { deleteObject, keyOfPublicUrl, publicUrl, putObject, storageAvailable } from '../storage/r2'
@@ -71,7 +73,9 @@ import { cutScene } from './scene-cut'
  * row points at it, the previous object deleted after. The row stores the
  * URL, so the delete goes back through `keyOfPublicUrl`.
  *
- * Membership, not role, as everywhere. The gate is the Script route's.
+ * The gate is the Script route's. Every write here is `ROLE.productionEdit`
+ * except the two frame jobs, which are `ROLE.paidGeneration` - both a
+ * writer's under ADR 0003 D2.
  */
 
 const workspacePath = (projectId: string): string => `/app/project/${projectId}`
@@ -116,7 +120,7 @@ export const proposeShotsForScene = async (
   episode: string,
   rawSceneNodeId: string,
 ): Promise<SceneShotsResult> => {
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const { scope } = gate
 
@@ -173,10 +177,13 @@ export const addShot = async (
   episode: string,
   rawSceneNodeId: string,
   rawEdit: unknown,
+  rawKey: unknown = null,
 ): Promise<SceneShotsResult> => {
   const edit = ShotEditSchema.safeParse(rawEdit)
   if (!edit.success) return { status: 'error', message: 'A shot is a size, a movement, an angle, a lens, a duration and a description.' }
-  const gate = await openEpisode(projectId, episode)
+  const key = idempotencyKeyOf(rawKey)
+  if (!key.ok) return { status: 'error', message: BAD_IDEMPOTENCY_KEY }
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const { scope } = gate
 
@@ -184,10 +191,15 @@ export const addShot = async (
   if (!isScene(scene)) return scene
   const existing = await listSceneShots(scope, scene.sceneNodeId)
   const last = existing[existing.length - 1]
-  await insertShots(scope, scene.sceneNodeId, [edit.data], 'typed', 'accepted', {
-    before: last?.orderKey ?? null,
-    after: null,
-  })
+  await insertShots(
+    scope,
+    scene.sceneNodeId,
+    [edit.data],
+    'typed',
+    'accepted',
+    { before: last?.orderKey ?? null, after: null },
+    key.key,
+  )
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return sceneResult(scope, scene)
 }
@@ -204,7 +216,7 @@ export const saveShot = async (
   if (!id.success || !edit.success) {
     return { status: 'error', message: 'A shot is a size, a movement, an angle, a lens, a duration and a description.' }
   }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const { scope } = gate
 
@@ -247,7 +259,7 @@ export const placeShotOnCanvas = async (
   const id = ShotIdSchema.safeParse(rawShotId)
   const position = CanvasPositionSchema.safeParse(rawPosition)
   if (!id.success || !position.success) return { status: 'error', message: 'A card goes at a whole x and y.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
 
   const written = await placeShotOnCanvasRow(gate.scope, id.data, position.data)
@@ -265,11 +277,11 @@ const NO_FRAME_STORAGE = 'Frame storage is not set up on this server yet.'
 export const uploadFrame = async (projectId: string, episode: string, rawShotId: string, form: FormData): Promise<ShotResult> => {
   const id = ShotIdSchema.safeParse(rawShotId)
   if (!id.success) return { status: 'error', message: NOT_A_SHOT }
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
+  if (isRefusal(gate)) return gate
   if (!storageAvailable()) return { status: 'refused', message: NO_FRAME_STORAGE }
   const image = await readImage(form.get('frame'), FRAME_UPLOAD_MAX_BYTES, 'frame')
   if (!image.ok) return { status: image.status, message: image.message }
-  const gate = await openEpisode(projectId, episode)
-  if (isRefusal(gate)) return gate
   const { scope } = gate
 
   const before = await readShot(scope, id.data)
@@ -296,7 +308,7 @@ export const uploadFrame = async (projectId: string, episode: string, rawShotId:
 export const clearFrame = async (projectId: string, episode: string, rawShotId: string): Promise<ShotResult> => {
   const id = ShotIdSchema.safeParse(rawShotId)
   if (!id.success) return { status: 'error', message: NOT_A_SHOT }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const { scope } = gate
 
@@ -316,7 +328,7 @@ export const clearFrame = async (projectId: string, episode: string, rawShotId: 
 export const acceptShots = async (projectId: string, episode: string, raw: unknown): Promise<SceneShotsResult> => {
   const input = SceneAndShotsSchema.safeParse(raw)
   if (!input.success) return { status: 'error', message: 'Accept names a scene and its proposals.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const { scope } = gate
 
@@ -331,7 +343,7 @@ export const acceptShots = async (projectId: string, episode: string, raw: unkno
 export const discardShots = async (projectId: string, episode: string, raw: unknown): Promise<SceneShotsResult> => {
   const input = SceneAndShotsSchema.safeParse(raw)
   if (!input.success) return { status: 'error', message: 'Discard names a scene and its shots.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const { scope } = gate
 
@@ -355,7 +367,7 @@ export const moveShot = async (
   if (!id.success || (direction !== 'up' && direction !== 'down')) {
     return { status: 'error', message: 'Move a shot up or down.' }
   }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const { scope } = gate
 
@@ -394,7 +406,7 @@ export const placeShot = async (
   const id = ShotIdSchema.safeParse(rawShotId)
   const index = z.int().min(0).max(10_000).safeParse(rawIndex)
   if (!id.success || !index.success) return { status: 'error', message: 'Place a shot at a position in its scene.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const { scope } = gate
 
@@ -433,7 +445,7 @@ export const placeShot = async (
 export const requestFrame = async (projectId: string, episode: string, rawShotId: string): Promise<FrameResult> => {
   const id = ShotIdSchema.safeParse(rawShotId)
   if (!id.success) return { status: 'error', message: NOT_A_SHOT }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
   return { status: 'refused', message: 'Needs a frame-drawing worker - not built yet.' }
 }
@@ -442,7 +454,7 @@ export const requestFrame = async (projectId: string, episode: string, rawShotId
 export const cancelFrame = async (projectId: string, episode: string, rawJobId: string): Promise<CancelResult> => {
   const id = JobIdSchema.safeParse(rawJobId)
   if (!id.success) return { status: 'error', message: 'That job could not be found.' }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
 
   const outcome = await cancelJob(gate.scope, id.data)

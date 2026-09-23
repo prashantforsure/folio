@@ -18,6 +18,7 @@ import {
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { jsonb } from '../sql-json'
+import { insertedOrExisting, onIdempotencyKeyConflict } from './idempotency'
 import { stamp } from './mapping'
 
 /**
@@ -324,13 +325,26 @@ export const createLocationRecord = async (
   scope: ProjectScope,
   name: string,
   parentId: LocationId | null,
+  idempotencyKey: string | null = null,
 ): Promise<LocationId> => {
   const rows = await dbOf(scope)
     .insert(locations)
-    .values({ ...tenant(scope), name, parentId })
+    .values({ ...tenant(scope), name, parentId, idempotencyKey })
+    .onConflictDoNothing(onIdempotencyKeyConflict(locations))
     .returning({ id: locations.id })
-  const row = rows[0]
-  if (row === undefined) throw new Error('Folio: inserting a location returned no row.')
+  const row = await insertedOrExisting(
+    rows,
+    idempotencyKey,
+    async () => {
+      const found = await dbOf(scope)
+        .select({ id: locations.id })
+        .from(locations)
+        .where(scoped(scope, locations, eq(locations.idempotencyKey, idempotencyKey ?? '')))
+        .limit(1)
+      return found[0] ?? null
+    },
+    'location',
+  )
   return brandLocationId(row.id)
 }
 

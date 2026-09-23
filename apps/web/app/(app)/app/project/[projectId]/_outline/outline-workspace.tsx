@@ -302,6 +302,14 @@ export const OutlineWorkspace = ({ projectId, episode, episodeTitle, outlineStat
               ...current,
             ])
           }
+        } else if (result.status === 'stale') {
+          // Unreachable from here: this editor never sends `expectedDigest`,
+          // because it *is* the open editor and last-write-wins with a banner
+          // is the ruling for two people typing (AGENTS.md, no realtime). The
+          // branch exists because the result type has the case, and a client
+          // that silently ignored a write that did not happen is the failure
+          // the compare-and-swap was added to prevent.
+          setSaveState({ kind: 'error', message: 'The outline changed under this edit. Reload to continue.' })
         } else if (result.status === 'ids-unusable') {
           setSaveState({ kind: 'error', message: `${String(result.ids.length)} id(s) were already used. Reload to continue.` })
         } else {

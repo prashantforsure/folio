@@ -1,10 +1,11 @@
 import { PROP_STATUSES } from '@folio/contracts'
 import { sql } from 'drizzle-orm'
-import { check, index, pgEnum, pgTable, primaryKey, text, uuid } from 'drizzle-orm/pg-core'
+import { check, index, pgEnum, pgTable, primaryKey, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 import {
   createdAtColumn,
   idColumn,
+  idempotencyKeyColumn,
   projectIdColumn,
   timestampColumn,
   updatedAtColumn,
@@ -93,9 +94,15 @@ export const props = pgTable(
     mergedInto: uuid('merged_into'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
+    /** Null for a person clicking a button; set by a caller that can be retried (ADR 0003 D13). */
+    idempotencyKey: idempotencyKeyColumn(),
   },
   (table) => [
-    index('props_project_idx').on(table.projectId),
+
+    /** A retried create lands once. Partial, so the null every UI create carries is free. */
+    uniqueIndex('props_idempotency_key')
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`idempotency_key is not null`),    index('props_project_idx').on(table.projectId),
     check('props_name_not_empty', sql`length(btrim(${table.name})) > 0`),
     check('props_not_merged_into_self', sql`${table.mergedInto} IS DISTINCT FROM ${table.id}`),
   ],

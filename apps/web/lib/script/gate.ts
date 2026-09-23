@@ -9,6 +9,7 @@ import {
 } from '@folio/db'
 import type { ProjectScope } from '@folio/db'
 
+import { ROLE, ROLE_REFUSED, meetsRole } from '../auth/roles'
 import { currentIdentity } from '../auth/session'
 
 /**
@@ -22,10 +23,12 @@ import { currentIdentity } from '../auth/session'
  * message for both. The existence of somebody else's project is not theirs
  * to learn.
  *
- * Membership, not role. `memberships.role` is stored and enforced nowhere
- * (`docs/build-decisions.md`); deciding here that a `reader` may not write a
- * script would be the first line of a capability model nobody has specified.
- * Flagged in the phase report, not solved in a commit.
+ * Membership **and role**, since 2026-09-23. Every gate takes the minimum
+ * role the action needs - `ROLE.read` by default, which every member holds -
+ * and refuses a member whose role does not reach it with a message of its own
+ * (`lib/auth/roles.ts`, ADR 0003 **D2**). The table there is the decision; this
+ * file is the one place it is applied, so a request from the browser and a
+ * request from the agent are refused identically.
  *
  * ## The three reads run at once
  *
@@ -50,6 +53,12 @@ export type EpisodeGate = {
   readonly scope: ProjectScope<'transaction'>
   readonly project: Project
   readonly episode: Episode
+  /**
+   * The caller's own role, for an action whose refusal depends on more than
+   * the gate could know - and for the tool registry, which needs the role it
+   * is acting under without re-reading the membership row.
+   */
+  readonly role: MembershipRole
 }
 
 export type GateRefusal = { readonly status: 'refused'; readonly message: string }
@@ -58,6 +67,9 @@ export const REFUSED: GateRefusal = {
   status: 'refused',
   message: 'That script could not be found.',
 }
+
+/** A member whose role does not reach what the action asked for. */
+export const ROLE_REFUSAL: GateRefusal = { status: 'refused', message: ROLE_REFUSED }
 
 /** `null` when the two segments do not even parse. Nothing has been read. */
 export const parseGateInput = (
@@ -85,6 +97,7 @@ export const openEpisodeWith = async <T>(
   rawProjectId: unknown,
   rawEpisode: unknown,
   alongside: (scope: ProjectScope<'transaction'>) => Promise<T>,
+  minimum: MembershipRole = ROLE.read,
 ): Promise<(EpisodeGate & { readonly extra: T }) | GateRefusal> => {
   const input = parseGateInput(rawProjectId, rawEpisode)
   if (input === null) return REFUSED
@@ -104,18 +117,22 @@ export const openEpisodeWith = async <T>(
   if (membership === null) return REFUSED
   if (project === null || project.kind !== 'screenwriting') return REFUSED
   if (episode === null) return REFUSED
+  // Role last: a stranger learns nothing about the project, and a member is
+  // told the truth about their own role rather than that the script is gone.
+  if (!meetsRole(membership.role, minimum)) return ROLE_REFUSAL
 
-  return { actor, scope, project, episode, extra }
+  return { actor, scope, project, episode, role: membership.role, extra }
 }
 
 export const openEpisode = async (
   rawProjectId: unknown,
   rawEpisode: unknown,
+  minimum: MembershipRole = ROLE.read,
 ): Promise<EpisodeGate | GateRefusal> => {
-  const gate = await openEpisodeWith(rawProjectId, rawEpisode, () => Promise.resolve(undefined))
+  const gate = await openEpisodeWith(rawProjectId, rawEpisode, () => Promise.resolve(undefined), minimum)
   if (isRefusal(gate)) return gate
-  const { actor, scope, project, episode } = gate
-  return { actor, scope, project, episode }
+  const { actor, scope, project, episode, role } = gate
+  return { actor, scope, project, episode, role }
 }
 
 export const isRefusal = <T extends EpisodeGate | ProjectGate>(value: T | GateRefusal): value is GateRefusal =>
@@ -136,17 +153,17 @@ export type ProjectGate = {
   readonly scope: ProjectScope<'transaction'>
   readonly project: Project
   /**
-   * The caller's own role. Membership, not role, is still the gate for
-   * everything the scope reads or writes - `memberships.role` is enforced
-   * nowhere in general, and deciding that broadly is open decision 16, not
-   * this file's to resolve. Carried here so the one place that already
-   * distinguishes roles (issuing and revoking share links, defect 0.5) does
-   * not have to re-read the membership row to do it.
+   * The caller's own role, already checked against this gate's minimum. Carried
+   * because an action may refuse further on it - `issueShareLink` did so before
+   * D2 and still does - and because the tool registry acts under it.
    */
   readonly role: MembershipRole
 }
 
-export const openProject = async (rawProjectId: unknown): Promise<ProjectGate | GateRefusal> => {
+export const openProject = async (
+  rawProjectId: unknown,
+  minimum: MembershipRole = ROLE.read,
+): Promise<ProjectGate | GateRefusal> => {
   const parsedId = ProjectIdSchema.safeParse(typeof rawProjectId === 'string' ? rawProjectId : '')
   if (!parsedId.success) return REFUSED
 
@@ -162,5 +179,6 @@ export const openProject = async (rawProjectId: unknown): Promise<ProjectGate | 
   ])
   if (membership === null) return REFUSED
   if (project === null || project.kind !== 'screenwriting') return REFUSED
+  if (!meetsRole(membership.role, minimum)) return ROLE_REFUSAL
   return { actor, scope, project, role: membership.role }
 }

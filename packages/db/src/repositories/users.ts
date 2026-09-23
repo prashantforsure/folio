@@ -195,7 +195,8 @@ const lastEditedAt = sql<Date>`greatest(
  *   members    `memberships` joined to `users`, one JSON list per project in
  *              the order people joined - the Team column and the `Shared` mark.
  *   preview    the first `PREVIEW_LINES` blocks of the opening episode's
- *              screenplay (`nodes`, in `order_key` order), type and content -
+ *              screenplay (`nodes`, in `order_key` order, `COLLATE "C"` like
+ *              every other read of that column - `../order.ts` says why), type and content -
  *              the card's page thumbnail. Empty when there is no script. A
  *              mention run carries a record id, not text, so the names are
  *              read afterwards in one statement per entity kind and printed in
@@ -232,7 +233,7 @@ export const listProjectsFor = async (
       >`(select coalesce(json_agg(json_build_object('id', m.user_id, 'displayName', u.display_name, 'avatarUrl', u.avatar_url, 'role', m.role) order by m.created_at asc), '[]'::json) from memberships m join users u on u.id = m.user_id where m.project_id = ${projects.id})`,
       preview: sql<
         readonly PreviewJson[]
-      >`(select coalesce(json_agg(json_build_object('type', n.type, 'content', n.content) order by n.order_key asc), '[]'::json) from (select ${nodes.type}, ${nodes.content}, ${nodes.orderKey} from ${nodes} join ${documents} on ${documents.id} = ${nodes.documentId} where ${documents.projectId} = ${projects.id} and ${documents.kind} = 'screenplay' and ${documents.episodeId} = (select ${episodes.id} from ${episodes} where ${episodes.projectId} = ${projects.id} order by ${episodes.ordinal} asc limit 1) order by ${nodes.orderKey} asc limit ${PREVIEW_LINES}) n)`,
+      >`(select coalesce(json_agg(json_build_object('type', n.type, 'content', n.content) order by n.order_key COLLATE "C" asc), '[]'::json) from (select ${nodes.type}, ${nodes.content}, ${nodes.orderKey} from ${nodes} join ${documents} on ${documents.id} = ${nodes.documentId} where ${documents.projectId} = ${projects.id} and ${documents.kind} = 'screenplay' and ${documents.episodeId} = (select ${episodes.id} from ${episodes} where ${episodes.projectId} = ${projects.id} order by ${episodes.ordinal} asc limit 1) order by ${nodes.orderKey} COLLATE "C" asc limit ${PREVIEW_LINES}) n)`,
     })
     .from(memberships)
     .innerJoin(projects, eq(projects.id, memberships.projectId))

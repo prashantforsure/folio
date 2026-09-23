@@ -314,3 +314,14 @@ export const parseEpisodeSegment = (raw: string): EpisodeSegmentResult => {
   if (!parsed.success) return { ok: false, reason: 'shape', segment: raw }
   return { ok: true, slug: parsed.data }
 }
+
+/**
+ * The key that makes a create safe to retry.
+ *
+ * Not a uuid: the API's `tool_use` id is the key (ADR 0003 **D13**) and that
+ * is an opaque string of the provider's choosing, so the schema checks a shape
+ * a column can hold rather than a format nobody controls. Bounded because it
+ * is indexed, and trimmed because whitespace either side of an id is a
+ * different key for the same call.
+ */
+export const IdempotencyKeySchema = z.string().trim().min(1).max(200)

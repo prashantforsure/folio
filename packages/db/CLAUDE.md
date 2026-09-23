@@ -18,8 +18,22 @@ authored / derived-cache / measurement. Touching `episodes` needs
   and **throws at module scope in a browser** — correct for a file holding the service-role key.
   The two public `NEXT_PUBLIC_SUPABASE_*` values therefore live in `apps/web/lib/env/public.ts`,
   not here.
-- **Migrations `0000`–`0029` are applied to the dev Supabase project** and are forward-only;
-  `0030` is written and checked but **not yet applied**.
+- **Migrations `0000`–`0029` are applied to the dev Supabase project** and are forward-only.
+  **`0030`, `0031` and `0032` are NOT applied** — measured, not assumed, on **2026-09-23** by
+  reading the database: `drizzle.__drizzle_migrations` holds 30 rows (`0000`–`0029`), `props` and
+  `prop_aliases` do not exist, and `scenes.prop` / `reel_shots.prop` are still there, which `0030`
+  drops. The same read found `nodes.order_key` on the **database default collation**
+  (`en_US.UTF-8`) and `shots.order_key` already `C`, which is exactly the split `0032` closes.
+  `0030` matters more than the usual pending migration because **it drops two columns**. The check
+  is three read-only queries and is worth re-running rather than trusting this paragraph:
+
+  ```sql
+  select count(*) from drizzle.__drizzle_migrations;                 -- 30 = 0000..0029
+  select table_name from information_schema.tables
+    where table_schema = 'public' and table_name in ('props', 'prop_aliases');
+  select table_name, collation_name from information_schema.columns
+    where table_schema = 'public' and column_name = 'order_key';
+  ```
   (`0017` and `0018` went in one `db:migrate` run on 2026-09-16: drizzle-kit applies every
   pending journal entry, there is no one-at-a-time; `0019` followed in its own run.)
   `0000` was reordered once, before it had ever run anywhere (the shell routes pass, git
@@ -108,8 +122,37 @@ authored / derived-cache / measurement. Touching `episodes` needs
   prompt "is `prop_id` `prop` renamed?" and exit without a TTY, so `0029` -> an intermediate
   snapshot with the two `prop` columns absent -> the schema). The two old columns are dropped at
   the foot of the file, after their replacements exist. RLS block hand-written on the `0022`
-  pattern. `db:check` clean. **NOT applied to dev** by the pass that wrote it - run
-  `db:migrate`, or the direct migrator if it fails silently.
+  pattern. `db:check` clean. **Not applied to dev by the pass that wrote it, and its state since is
+  UNKNOWN** (see the top of this list) - run `db:migrate`, or the direct migrator if it fails
+  silently, and check first: it drops two columns.
+  `0031` (the copilot's foundations, roadmap task 1.3) adds a nullable `idempotency_key` and a
+  **partial** unique index on `(project_id, idempotency_key)` to nine tables - `characters`,
+  `locations`, `props`, `research_sources`, `story_threads`, `reels`, `reel_shots`, `shots`,
+  `episodes`. `credit_ledger`'s pattern, one step further: the ledger takes a unique violation as
+  success, and these read the conflicting row back and return it, so a retried create answers with
+  what the first call made. Nullable and partial because every UI create passes no key and two
+  clicks must still mean two records; `NULL` is never equal to `NULL`, so those rows never
+  collide. The conflict clause names the index (`onIdempotencyKeyConflict`,
+  `repositories/idempotency.ts`) rather than being bare - an untargeted one would swallow a
+  duplicate episode slug too. Purely additive, `db:check` clean, **not applied to dev**.
+  `0032` (the copilot's foundations, roadmap task 1.4) is a **custom** migration - drizzle's
+  `text()` cannot express a collation - putting `COLLATE "C"` on `nodes.order_key`, restating it on
+  `shots.order_key` (`0006` set that one by hand), and dropping and recreating
+  `nodes_document_order_key` around the `ALTER` so the index a reader cares about is visibly
+  rebuilt. ADR 0003 **D9** and the incident at `src/order.ts:64-85`: the read-side half shipped
+  with that incident (`byOrderKey`), and this is the half it named. Measured before writing it:
+  `nodes.order_key` is on the database default (`en_US.UTF-8`) on dev today, so the misordering is
+  live. No value changes; `db:check` and `db:generate` see no diff either way.
+  `0033` (the copilot's foundations, roadmap task 1.7) adds `rate_limit_bucket`
+  (`assistant | generate`) and `rate_limits` - one fixed-window counter keyed
+  `(project_id, user_id, bucket, window_start)`, ADR 0003 **D14**. AUTHORED by
+  the request it counts. Postgres and not Redis for D6's reasons: a second
+  store is a dependency decision, and a fixed window is a counting query.
+  `window_start` is `date_trunc('hour', now())` and part of the key, so a new
+  hour is a new row rather than a reset and two web processes with different
+  clocks agree on the window. D14's third limit - two concurrent agent runs -
+  is not here: it counts live `agent_runs` rows, not a window. RLS block
+  hand-written on the `0022` pattern; **not applied to dev**.
 - **`src/seed/production.ts` is the one seed** (`pnpm --filter @folio/db seed:production -- --user <email>`,
   launched by `scripts/seed-production.mjs` through drizzle-kit's own `tsx`): a "Monsoon Line" series
   in every state the v12 mockup draws; a re-run bins the previous one of that title and writes a
@@ -122,6 +165,14 @@ authored / derived-cache / measurement. Touching `episodes` needs
   when none is set. The only reader is `apps/web/lib/storage/r2.ts`. And `assistantEnv` -
   `ANTHROPIC_API_KEY`, optional, `null` when unset; the only reader is
   `apps/web/lib/assistant/server.ts`.
+- **Round trips are the cost model, and this package is where they are spent.** The dev database
+  is a Supabase pooler at roughly 400 ms with **`prepare: false`** ([client.ts](src/client.ts)), so
+  a parameterised statement costs **two round trips and cannot be pipelined**. The cost of a query
+  path is its **statement count, not its row count**: fold work into an existing statement, or
+  defer it. A sequential `await` added to a read here is ~400 ms on somebody's page —
+  `readProductionEpisode` has three such layers and is why `revalidatePath` had to be banned on
+  that route. `apps/web/CLAUDE.md` says the same thing for the save path, but that file does not
+  load when you are working in here.
 - **The ledger's `settled` excludes `reserve` / `release`.** A reservation is closed by a `spend`
   or a `release`; `0007` corrected the `credit_balances` view that double-counted a held one.
 

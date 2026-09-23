@@ -9,9 +9,10 @@ import { ask } from '../../../lib/assistant/server'
  * `text/plain` chunks of the answer, nothing else, so the client needs no
  * event parser - what it reads is what it shows.
  *
- * The gate is inside `ask()`: identity, membership, the chat's episode. The
- * proxy protects `/app`, not `/api`, so nothing here is reachable without
- * the gate refusing first.
+ * The gate is inside `ask()`: identity, membership, the role (`ROLE.assistant`,
+ * a reader's) and the chat's episode. The proxy protects `/app`, not `/api`,
+ * so nothing here is reachable without the gate refusing first. The rate limit
+ * is inside `ask()` too, and comes back as a real `429` with a `Retry-After`.
  */
 export const runtime = 'nodejs'
 
@@ -25,6 +26,14 @@ export const POST = async (request: Request): Promise<Response> => {
     return Response.json({ message: 'Write a question first.' }, { status: 400 })
   }
   const outcome = await ask(body, request.signal)
+  if (outcome.status === 'rate-limited') {
+    // A real `Retry-After`, in seconds, which is what the header is for. The
+    // panel reads the body; anything else in front of this reads the header.
+    return Response.json(
+      { message: outcome.message, retryAfterSeconds: outcome.retryAfterSeconds },
+      { status: 429, headers: { 'Retry-After': String(outcome.retryAfterSeconds) } },
+    )
+  }
   if (outcome.status !== 'streaming') {
     return Response.json({ message: outcome.message }, { status: outcome.code })
   }

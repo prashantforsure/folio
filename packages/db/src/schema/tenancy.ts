@@ -21,6 +21,7 @@ import {
 import {
   createdAtColumn,
   idColumn,
+  idempotencyKeyColumn,
   projectIdColumn,
   timestampColumn,
   updatedAtColumn,
@@ -158,8 +159,9 @@ export const users = pgTable('users', {
  * records why `measurements.page_mode` could never be it - that column is an
  * input echoed onto a result, and a project with two measurements has two
  * values. **Ruled by the client, 2026-09-11: two columns here**, per project
- * rather than per episode, writable by any member - `memberships.role` is
- * still enforced nowhere, which is flagged, not fixed, by this phase.
+ * rather than per episode. Writable by a writer or an owner since ADR 0003
+ * **D2** was implemented (2026-09-23); the column takes whoever the action's
+ * gate let through, and the gate is where the role is decided.
  */
 export const projects = pgTable(
   'projects',
@@ -271,9 +273,15 @@ export const episodes = pgTable(
     revisionColour: revisionColourEnum('revision_colour').notNull().default('white'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
+    /** Null for a person clicking a button; set by a caller that can be retried (ADR 0003 D13). */
+    idempotencyKey: idempotencyKeyColumn(),
   },
   (table) => [
-    uniqueIndex('episodes_project_slug_key').on(table.projectId, table.slug),
+
+    /** A retried create lands once. Partial, so the null every UI create carries is free. */
+    uniqueIndex('episodes_idempotency_key')
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`idempotency_key is not null`),    uniqueIndex('episodes_project_slug_key').on(table.projectId, table.slug),
     uniqueIndex('episodes_project_ordinal_key').on(table.projectId, table.ordinal),
     check('episodes_slug_shape', sql`${table.slug} ~ '^ep_[0-9]{3,}$'`),
     check('episodes_ordinal_positive', sql`${table.ordinal} >= 1`),

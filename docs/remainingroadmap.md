@@ -1,15 +1,26 @@
 # Remaining roadmap
 
-**Status as of 2026-09-22: roughly 70% of the scoped app is built** — nine workspace routes, four
+**Status as of 2026-09-22: roughly 70% of the scoped app is built** — ten workspace routes, four
 account routes, the script core, Production v12. What is left is not evenly distributed, and it is
 disproportionately the unglamorous part: jobs, money, mail, export and verification.
+
+> **Re-checked against the code on 2026-09-23** (the guidance audit). This is still the 2026-09-22
+> pass, not a live feed. Where an entry has since been fixed or ruled, a dated **✓ FIXED** or
+> **✓ RULED** line sits under it with the evidence — nothing has been removed, because what was
+> wrong is worth keeping visible. Anything without such a line was re-verified as still true.
 
 Destination assumed throughout: **a paid product with real customers.** That is why *don't lose
 their work* and *don't take their money wrongly* come before feature completeness.
 
-> **Props is excluded from this document — it is in progress.** It is the tenth route,
+> **Props was excluded from this document — it was in progress.** It is the tenth route,
 > `/app/project/:projectId/props`, project-wide, authored records with script evidence read at
-> request time, and it becomes the authoritative surface for Production's prop field.
+> request time, and it is the authoritative surface for Production's prop field.
+>
+> **✓ BUILT 2026-09-23 (verified):** the route ships — `lib/props/actions.ts` (9 actions),
+> `_props/`, `lib/props/{server,view}.ts`, `packages/script/src/props.ts`, migration `0030`,
+> `e2e/props-route.spec.ts`, `tests/props-view.test.ts`, and its spec paragraph in
+> `apps/web/CLAUDE.md`. Counts below that say "nine routes" have been corrected to ten;
+> the effort table has not been re-weighted.
 
 Three kinds of work are mixed together below and should not be confused:
 
@@ -42,6 +53,11 @@ wiped script.
 is documented at `:188-210` with exactly this scenario and has **zero callers**. Wire the
 `ids-unusable` branch to it and retry the save.
 
+**✓ FIXED 2026-09-23 (verified).** It is wired. `apps/web/lib/script/actions.ts:31` imports
+`reviveNodeIds` and `:259` calls it; `:251` carries the argument for why reviving a tombstoned id
+is not reuse under ADR 0001. The regression test the entry asks for is still worth adding —
+`tests/script-identity.test.ts:98-112` still asserts only the ProseMirror half.
+
 `apps/web/tests/script-identity.test.ts:98-112` asserts the id returns *in ProseMirror state* and
 never saves — it passes while the bug ships.
 
@@ -52,12 +68,20 @@ A parenthetical opens as `()` with the caret **between** the parens, so the `atE
 through to `tr.split` and produces `(soft` plus a new parenthetical holding `)`. The writer cannot
 leave a parenthetical with Enter and never gets the Dialogue `ENTER_TRANSITION` promises.
 
+**✓ FIXED 2026-09-23 (verified).** `commands.ts:118-122` adds `atParenClose` and ORs it into
+`atEnd`: the reachable position is immediately before the `)`, and that is what Enter now treats as
+the end, so the block leaves for Dialogue.
+
 ### 0.3 Import over an existing draft silently does nothing
 
 `content` is a creation-time option and `useEditor`'s dep array is `[extensions]`
 (`_script/editor/tiptap-editor.tsx:150-215`). Same `documentId` means no re-create and no
 `setContent`. Then the mount-only refs at `_script/script-workspace.tsx:328-334` send a stale
 `baseUpdatedAt` and just-tombstoned ids, landing in 0.1's dead end.
+
+**✓ FIXED 2026-09-23 (verified).** `_script/editor/tiptap-editor.tsx:226-234` is an effect that
+acknowledges the editor instance stays put across an import and calls
+`editor.commands.setContent(content, { emitUpdate: true })` itself.
 
 ### 0.4 Storyboard "Draw frame" takes credits and delivers nothing
 
@@ -66,11 +90,21 @@ leave a parenthetical with Enter and never gets the Dialogue `ENTER_TRANSITION` 
 watches a spinner forever, and the credits are gone. Either give it the same treatment or draw the
 button disabled with the reason, as Characters' `✦ Generate` already is.
 
+**✓ FIXED 2026-09-23 (verified)** — the second way. `requestFrame` now **refuses by design until
+the worker exists**: `lib/storyboard/actions.ts:433-439` returns
+`{ status: 'refused', message: 'Needs a frame-drawing worker - not built yet.' }` after the gate and
+**before anything is reserved**, and the header at `:421-432` says so. The button carries the same
+reason (`DRAW_FRAME_DISABLED`). No credits move. `queueFrameGeneration` in `@folio/db` is what
+resumes this once the Phase 3 worker exists.
+
 ### 0.5 Share links escalate to write access
 
 `apps/web/app/share/[token]/page.tsx:30-56` writes a membership with `link.role`, and roles are
 enforced nowhere — so a **`reader` who follows a share link can write everything a writer can**,
 including issuing further share links. Full enforcement is open decision 16; close *this path* now.
+
+**✓ DONE 2026-09-23** — and not by closing that one path: full enforcement landed (roadmap task
+1.2, `apps/web/lib/auth/roles.ts`), so the membership the link writes now means what it says.
 
 ### 0.6 Stuck generations hold credits forever
 
@@ -83,21 +117,29 @@ with no terminal condition. The diagnostic that would surface it,
 **Also in this phase:** commit the account-routes pass — 61 paths and migration `0029`, already
 applied to dev, currently untracked.
 
+**✓ DONE 2026-09-23 (verified).** Committed in `3b0c2f2` / `b807d1a` ("home pages"); the working
+tree is clean but for this audit's own doc edits.
+
 ---
 
 ## Phase 1 — The decisions session
 
-Twelve rows are open in `AGENTS.md:148-167`. The repo's own rule is **escalate, do not resolve** —
-bring options and consequences, not a recommendation. Ranked by what they unblock:
+Twelve rows were open in the open-decisions table (now `AGENTS.md:150-190`). The repo's own rule is
+**escalate, do not resolve** — bring options and consequences, not a recommendation. Ranked by what
+they unblock:
+
+**✓ RULED 2026-09-23** (the copilot pass): **2**, **13** and **16** are closed by **ADR 0003** —
+D1 the review-tier thresholds, D3 whether an assistant message costs credits, D2 whether a role
+means anything. **Nine remain open.** The rows below are kept as written, each marked.
 
 | # | Decision | Why it matters now |
 | --- | --- | --- |
-| **16** | Does a role mean anything | `memberships.role` is stored, shown in settings and **enforced nowhere**. Twelve action modules say so in comments and ship anyway. Blocks Phase 2 entirely. |
+| ~~**16**~~ | ~~Does a role mean anything~~ **✓ RULED — ADR 0003 D2, and BUILT 2026-09-23** | The matrix is `apps/web/lib/auth/roles.ts`; every gate takes a minimum role and every action names the capability it needs. Phase 2's role-enforcement row below is done. |
 | **14** | Production costs, refunds, stale rules | Shot frame 4, scene image 40, AI shotlist 0, propose 0 were **picked, not ruled**. Real money is priced against them today. |
 | **10** | Is `SCENE_xxx` a node id or a record id | ADR 0001 and `packages/script` **contradict each other**. It currently blocks scene deep-linking in both Timeline and Storyboard — a user cannot link to a scene. |
-| **13** | Does an assistant message cost credits | Blocks charging the assistant and Timeline's `✦ Suggest placements`. |
+| ~~**13**~~ | ~~Does an assistant message cost credits~~ **✓ RULED — ADR 0003 D3** | Unblocks charging the assistant and Timeline's `✦ Suggest placements`. Neither is built. |
 | **15** | What `Duplicate` copies | The control is drawn on the Projects route and refuses in words. |
-| **2** | Review-tier thresholds | Blocks the whole agent review flow. |
+| ~~**2**~~ | ~~Review-tier thresholds~~ **✓ RULED — ADR 0003 D1** | Unblocks the agent review flow, which is Phase 6 / the copilot roadmap. |
 | **3** | Rename blast radius | Whether rename rewrites unlinked prose mentions. |
 | **7** | Where project settings went | `/settings` is a stub route with no design. |
 | **8** | Sheet width for `format: asian` | The engine refuses; the refusal is drawn where the sheet would be. |
@@ -124,6 +166,12 @@ Follows decision 16. Twelve action modules to update; they already name the gap 
 work is mechanical once ruled — the hard part was the decision. Note
 `apps/web/lib/projects/actions.ts:344` is currently the *only* place a role is checked at all.
 
+**✓ RULED 2026-09-23 — ADR 0003 D2. ✓ BUILT 2026-09-23 — roadmap task 1.2.** The matrix is one
+table (`apps/web/lib/auth/roles.ts`), the gates take a minimum role, and every action module names
+the capability it needs; the two hand-written checks that existed before are now that gate's.
+`apps/web/tests/role-gates.test.ts` drives the real gate with a mocked membership row, one write
+per module.
+
 ### Credit correctness
 - **Over-reservation race**, acknowledged and shipped at
   `packages/db/src/repositories/storyboard.ts:68-72` — two clicks on the last four credits can both
@@ -140,11 +188,14 @@ Sentry are not installed yet", and failure paths are `console.error`-and-swallow
 would not have known any of Phase 0 was happening. Needs a dependency approval.
 
 ### Run the E2E walks
-Nine signed-in walks exist and self-skip without `E2E_EMAIL`/`E2E_PASSWORD`. Only `shell-*.png`
-artifacts exist in `test-results/` — **the other seven, Production's included, appear never to have
-run.** No server action has a unit test anywhere, so these walks are the action layer's only
-coverage. `apps/web/e2e/smoke.spec.ts:5` says so itself: *"This is not the smoke test AGENTS.md
-asks for."*
+**Ten** signed-in walks exist — one per route — and each self-skips without
+`E2E_EMAIL`/`E2E_PASSWORD`, so a green run proves nothing unless they were set. No server action has
+a unit test anywhere, so these walks are the action layer's only coverage.
+`apps/web/e2e/smoke.spec.ts:5` says so itself: *"This is not the smoke test AGENTS.md asks for."*
+
+**Re-checked 2026-09-23:** `test-results/` is now **empty**, so it no longer shows which walks have
+run — in either direction. Whether they have been run since is **UNKNOWN**; treat them as unrun
+until somebody watches a pass go green.
 
 ---
 
@@ -161,7 +212,12 @@ A generation therefore lives only as long as the serverless invocation. No retry
 dead-letter, no resume across instances. A Veo shoot costing 375 credits that loses its invocation
 is simply gone.
 
-Needs a dependency approval (BullMQ + Redis; `REDIS_URL` is already in `.env.example:157`).
+~~Needs a dependency approval (BullMQ + Redis; `REDIS_URL` is already in `.env.example:157`).~~
+
+**✓ RULED 2026-09-23** (the copilot pass): **no BullMQ and no Redis.** The worker is built on the
+**Postgres `jobs` table that already exists** — one fewer dependency, and the credit ledger is
+transactional beside it. It is **roadmap Phase 4** of `docs/agents/roadmap.md`. `REDIS_URL` was
+therefore dead and **came out of `.env.example` on 2026-09-23** (roadmap task 1.8).
 
 **Unblocks, in order:** reliable Production runs (fixes 0.6 properly) · the Storyboard frame job
 (0.4 properly) · Characters' `✦ Generate`, disabled with the literal reason
@@ -189,7 +245,8 @@ currently disabled on the constant `NO_MAIL = 'There is no mail provider, so not
 - receipts, password reset, job-completion notices — *nothing notifies asynchronously today;
   job completion is in-app only*
 
-`AGENTS.md:524-541` flags this as both a dependency decision **and** a product decision.
+AGENTS.md's *No transactional email provider* constraint (now `:533-550`) flags this as both a
+dependency decision **and** a product decision.
 
 ---
 
@@ -211,10 +268,19 @@ The assistant is a **read-only chat** today: it reads, it answers, it writes not
 lifecycle specified in `AGENTS.md` — Brief → Plan → Run → Review → Commit, tool use, proposals,
 allowlist enforcement, locks, parser parity — is entirely unbuilt.
 
-Blocked on decision **2** (the review-tier thresholds) and **13** (whether a message costs credits).
-The two Characters drawer model actions that were the first steps past the chat were removed in the
-route's fourth pass (2026-09-20); their caps stay in `lib/assistant/model.ts` for the next action of
-that shape.
+~~Blocked on decision **2** (the review-tier thresholds) and **13** (whether a message costs
+credits).~~ The two Characters drawer model actions that were the first steps past the chat were
+removed in the route's fourth pass (2026-09-20); their caps stay in `lib/assistant/model.ts` for the
+next action of that shape.
+
+**✓ UNBLOCKED 2026-09-23.** Both are ruled — ADR 0003 **D1** and **D3** — and this phase has become
+**the copilot**, which is larger than this entry: an app-wide side panel that can do anything a user
+can do, through reviewable proposals. It has its own plan and its own phases; see
+[`docs/agents/integration-plan.md`](agents/integration-plan.md) and `docs/agents/roadmap.md`. The rules
+it changed are dated **2026-09-23** in AGENTS.md — notably: proposals **narrowed** to script,
+outline and records, with explicit confirmation for anything with no diffable form; **export** off
+the agent's "never" list, read-only; **Research stays read-only**; **no realtime** still, because
+agent edits apply in the writer's open editor or through a compare-and-swap.
 
 This is the largest remaining feature and the most differentiating. It sits last among the
 substantive phases because nothing above it is optional.
@@ -266,8 +332,10 @@ are the cost model**.
   route.
 - `apps/web/app/share/[token]/page.tsx:47-56` — 4+ strictly sequential awaits (~3 s) on a cold
   first visit. That is a new collaborator's very first impression of the product.
-- `packages/db/CLAUDE.md` **never mentions round trips or `prepare: false` at all**, so a maintainer
-  working only in that package gets no warning about the cost model. Worth closing.
+- ~~`packages/db/CLAUDE.md` **never mentions round trips or `prepare: false` at all**, so a
+  maintainer working only in that package gets no warning about the cost model. Worth closing.~~
+  **✓ CLOSED 2026-09-23** (the guidance audit): that file now carries the cost model — statement
+  count, not row count — with the ∼400 ms pooler and `prepare: false` named.
 
 ### Dead weight
 - `apps/web/lib/characters/graph.ts` is ~70% unread — `circleLayout`, the whole
@@ -295,8 +363,8 @@ Rough effort weighting, for planning rather than precision:
 | Area | Share | Done |
 | --- | --- | --- |
 | `packages/script` core — node model, operations, Fountain/FDX, pagination, derivation | ~15% | ~95% |
-| Nine workspace routes | ~30% | ~90% |
-| DB schema, repositories, 30 migrations | ~8% | ~95% |
+| Ten workspace routes | ~30% | ~90% |
+| DB schema, repositories, 31 migrations (`0000`–`0030`) | ~8% | ~95% |
 | Auth, shell, chrome, account routes | ~10% | ~90% |
 | Production v12 | ~12% | ~85% |
 | The agent's full lifecycle | ~8% | ~20% |

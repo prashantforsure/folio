@@ -6,6 +6,7 @@ import { commentThreads, documents, episodes, memberships, nodes, projects, scen
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { mintEpisodeSlug } from './episode-slug'
+import { insertedOrExisting, onIdempotencyKeyConflict } from './idempotency'
 import { stamp, stampOrNull } from './mapping'
 
 /**
@@ -145,8 +146,9 @@ export const setProjectLogline = async (scope: ProjectScope, logline: string | n
  * AGENTS.md's exception table puts `pageMode` + `liveRepaginate` per project,
  * not in the URL, and `apps/web/lib/state/project-preferences.ts` says why a
  * per-person store would be the wrong fix: two writers on one script must not
- * disagree about how many pages it is. Any member may write it - roles are
- * enforced nowhere yet, which is the server action's problem to flag.
+ * disagree about how many pages it is. Which members may write it is the
+ * server action's to say, and since 2026-09-23 it says so: `setPagination`
+ * asks the gate for `ROLE.authoredEdit` (ADR 0003 D2).
  */
 export const setProjectPagination = async (
   scope: ProjectScope,
@@ -263,6 +265,7 @@ export const readEpisode = async (
 export const appendEpisode = async (
   scope: ProjectScope,
   title: string,
+  idempotencyKey: string | null = null,
 ): Promise<Episode> => {
   const db = dbOf(scope)
   const existing = await db
@@ -278,12 +281,23 @@ export const appendEpisode = async (
       slug: mintEpisodeSlug(next),
       ordinal: next,
       title,
+      idempotencyKey,
     })
+    .onConflictDoNothing(onIdempotencyKeyConflict(episodes))
     .returning()
-  const row = inserted[0]
-  if (row === undefined) {
-    throw new Error('Folio: inserting an episode returned no row. This is a bug in the repository.')
-  }
+  const row = await insertedOrExisting(
+    inserted,
+    idempotencyKey,
+    async () => {
+      const found = await db
+        .select()
+        .from(episodes)
+        .where(scoped(scope, episodes, eq(episodes.idempotencyKey, idempotencyKey ?? '')))
+        .limit(1)
+      return found[0] ?? null
+    },
+    'episode',
+  )
   return toEpisode(row)
 }
 

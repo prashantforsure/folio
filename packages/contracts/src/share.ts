@@ -18,10 +18,10 @@ import { TimestampSchema } from './primitives'
  * in. `writer` and `reader` only: an owner is the person who created the
  * project, and ownership is not something a link hands out. Revoking sets
  * `revokedAt`; the row stays so an opened-after-revocation attempt can say
- * "this link was revoked" rather than "not found". Nothing here is a
- * capability model - `memberships.role` is still enforced nowhere
- * (`docs/build-decisions.md`, "Open, and blocking") - it is the role the
- * membership row will carry when that model arrives.
+ * "this link was revoked" rather than "not found". The role this hands out
+ * is the one the membership row carries, and since ADR 0003 **D2** was
+ * implemented (2026-09-23) every gate enforces it: a `reader` link now grants
+ * reading and commenting, which is what it always said it did.
  *
  * The token is the URL. 32 URL-safe characters from a CSPRNG (`share.ts` in
  * `@folio/db` mints it); the schema only checks the shape so a mistyped URL

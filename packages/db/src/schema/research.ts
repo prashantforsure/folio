@@ -2,7 +2,13 @@ import { RESEARCH_COLLECTION_COLOURS, RESEARCH_FILING_KINDS, RESEARCH_SOURCE_KIN
 import { sql } from 'drizzle-orm'
 import { check, index, pgEnum, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
-import { createdAtColumn, idColumn, projectIdColumn, updatedAtColumn } from './columns'
+import {
+  createdAtColumn,
+  idColumn,
+  idempotencyKeyColumn,
+  projectIdColumn,
+  updatedAtColumn,
+} from './columns'
 import { characters, locations } from './derived'
 import { projects, users } from './tenancy'
 
@@ -80,9 +86,15 @@ export const researchSources = pgTable(
       .references(() => users.id),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
+    /** Null for a person clicking a button; set by a caller that can be retried (ADR 0003 D13). */
+    idempotencyKey: idempotencyKeyColumn(),
   },
   (table) => [
-    /** The library's read: a project's sources, newest first. */
+
+    /** A retried create lands once. Partial, so the null every UI create carries is free. */
+    uniqueIndex('research_sources_idempotency_key')
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`idempotency_key is not null`),    /** The library's read: a project's sources, newest first. */
     index('research_sources_project_created_idx').on(table.projectId, table.createdAt),
     index('research_sources_collection_idx').on(table.collectionId),
     check('research_sources_title_not_empty', sql`length(btrim(${table.title})) > 0`),

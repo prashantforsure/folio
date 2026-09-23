@@ -28,7 +28,8 @@ import { useDismiss } from '../_chrome/use-dismiss'
  *                      the revision list, read-only, under a `Revisions`
  *                      eyebrow. Ruled 2026-09-11 and unchanged: which
  *                      document is showing is component state, not the URL.
- *   the actions menu   Import, Export as .fdx, Undo; then the project row's
+ *   the actions menu   Import, Export as .fdx, Export as .fountain, Undo;
+ *                      then the project row's
  *                      Pagination (Minimal / Paged / Live) and Format
  *                      (Hollywood / Asian), decided in the workspace and drawn
  *                      here; `Colour cues` (the Characters rebuild, phase 3 -
@@ -148,6 +149,7 @@ export type ActionsMenuProps = {
   readonly stats: ScriptStats
   readonly onImport: () => void
   readonly onExport: () => void
+  readonly onExportFountain: () => void
   readonly exporting: boolean
   readonly exportNotice: string | null
   readonly onUndo: () => void
@@ -198,6 +200,7 @@ export const ActionsMenu = memo(
     stats,
     onImport,
     onExport,
+    onExportFountain,
     exporting,
     exportNotice,
     onUndo,
@@ -243,6 +246,20 @@ export const ActionsMenu = memo(
             >
               <Icon name="export" size={15} strokeWidth={1.4} className="text-ink3" />
               {exporting ? 'Exporting…' : 'Export as .fdx'}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={exporting}
+              className="folio-menu-item"
+              onMouseDown={keepCaret}
+              onClick={() => {
+                setOpen(false)
+                onExportFountain()
+              }}
+            >
+              <Icon name="export" size={15} strokeWidth={1.4} className="text-ink3" />
+              {exporting ? 'Exporting…' : 'Export as .fountain'}
             </button>
             <button type="button" role="menuitem" disabled={!canUndo} className="folio-menu-item" onMouseDown={keepCaret} onClick={onUndo}>
               <span className="w-[15px] text-center text-ink3">↩</span>

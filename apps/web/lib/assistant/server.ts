@@ -24,6 +24,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { formatSceneRef, sceneRefOf } from '../characters/figures'
 import { dayNightShort, quadrantLabel } from '../locations/view'
 import type { EpisodeGate } from '../script/gate'
+import { checkRateLimit } from '../agent/rate-limit'
+import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisodeWith } from '../script/gate'
 import { loadTimeline } from '../timeline/server'
 import { bucketFindings, findingNote, findingsAbout, findingsOf, previousFrameScene, sceneRef } from '../timeline/view'
@@ -68,6 +70,12 @@ export type AskOutcome =
   | { readonly status: 'streaming'; readonly stream: ReadableStream<Uint8Array> }
   | { readonly status: 'refused'; readonly message: string; readonly code: 401 | 404 }
   | { readonly status: 'error'; readonly message: string; readonly code: 400 | 503 }
+  /**
+   * 60 requests an hour per user per project (ADR 0003 **D14**). A real `429`
+   * with a real `Retry-After`, because that is what the status code is for and
+   * the route handler has one to send.
+   */
+  | { readonly status: 'rate-limited'; readonly message: string; readonly code: 429; readonly retryAfterSeconds: number }
 
 let client: Anthropic | null = null
 
@@ -251,9 +259,15 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
       listCharacterRecords(scope),
     ])
     return { chat, labels, records }
-  })
+  }, ROLE.assistant)
   if (isRefusal(gate)) return { status: 'refused', code: gate.message.startsWith('Sign in') ? 401 : 404, message: gate.message }
   const { scope, project, episode, extra } = gate
+
+  // After the gate, because the counter is per user per project and neither is
+  // known before it; before the model call, because a limit that counts what
+  // already happened is a report.
+  const limited = await checkRateLimit(scope, gate.actor, 'assistant')
+  if (limited !== null) return { ...limited, code: 429 }
   if (extra.chat === null || extra.chat.episodeId !== episode.id) {
     return { status: 'refused', code: 404, message: 'That chat could not be found.' }
   }

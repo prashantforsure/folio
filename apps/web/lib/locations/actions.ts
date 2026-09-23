@@ -33,7 +33,10 @@ import { canonicalKey, readSlugline, renameLocationHeadings, setSpelling } from 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+import { ROLE } from '../auth/roles'
+import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
 import { isRefusal, openProject } from '../script/gate'
+import { requestRederive } from '../script/derive-batch'
 import { rederiveProject } from '../script/server'
 import { readImage, IMAGE_EXTENSION } from '../storage/image'
 import { deleteObject, publicUrl, putObject, storageAvailable } from '../storage/r2'
@@ -60,7 +63,9 @@ import { similarKey } from './server'
  *
  * Every one goes gate -> repository -> (pipeline) -> result, through the
  * project-scoped gate in `lib/script/gate.ts`, as the Characters route's
- * do. Membership, not role; flagged again.
+ * do, with the capability each write needs beside it (ADR 0003 D2,
+ * `lib/auth/roles.ts`): a reader may take the rename preview and nothing
+ * else on this route.
  *
  * ## Which writes re-derive, and which do not
  *
@@ -98,11 +103,14 @@ import { similarKey } from './server'
  *
  * ## A photo goes through the action, not past it
  *
- * The portrait's pattern (`lib/characters/actions.ts`): the file arrives as
- * `FormData`, is read as an image by its bytes (`lib/storage/image.ts`),
- * is put under `projects/<id>/locations/<id>/`, and only then does the row
- * point at it; the old object is deleted after the row says so. No signed
- * upload URL: the client never talks to the bucket.
+ * The portrait's pattern (`lib/characters/actions.ts`): the **gate runs
+ * first**, because reading the body buffers the whole upload into memory
+ * and a stranger must not be able to make this process do that; then the
+ * file arrives as `FormData`, is read as an image by its bytes
+ * (`lib/storage/image.ts`), is put under `projects/<id>/locations/<id>/`,
+ * and only then does the row point at it; the old object is deleted after
+ * the row says so. No signed upload URL: the client never talks to the
+ * bucket.
  *
  * ## The tree is written here, by a person
  *
@@ -135,19 +143,22 @@ export const createLocation = async (
   projectId: string,
   rawName: string,
   rawParent: unknown = null,
+  rawKey: unknown = null,
 ): Promise<CreateResult> => {
   const name = TitleSchema.safeParse(rawName)
   const parent = ParentEditSchema.safeParse(rawParent ?? null)
   if (!name.success || !parent.success) return { status: 'error', message: 'A location needs a name, up to 200 characters.' }
-  const gate = await openProject(projectId)
+  const key = idempotencyKeyOf(rawKey)
+  if (!key.ok) return { status: 'error', message: BAD_IDEMPOTENCY_KEY }
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
-  const id = await createLocationRecord(gate.scope, name.data, parent.data)
+  const id = await createLocationRecord(gate.scope, name.data, parent.data, key.key)
   // The name's set text binds to the new record, so a heading typed later
   // resolves to it rather than proposing. A set somebody else already holds
   // is left with them; the writer sees it in the queue.
   await bindSlugline(gate.scope, id, setSpelling(name.data))
-  await rederiveProject(gate.scope)
+  await requestRederive(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'created', id }
 }
@@ -156,7 +167,7 @@ export const saveLocation = async (projectId: string, rawId: string, rawEdit: un
   const id = parseId(rawId)
   const edit = LocationEditSchema.safeParse(rawEdit)
   if (id === null || !edit.success) return { status: 'error', message: 'That edit could not be read.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const written = await updateLocationRecord(gate.scope, id, edit.data)
@@ -177,7 +188,7 @@ export const renameLocation = async (projectId: string, rawId: string, rawName: 
   const id = parseId(rawId)
   const name = TitleSchema.safeParse(rawName)
   if (id === null || !name.success) return { status: 'error', message: 'A location needs a name, up to 200 characters.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
   const { scope, project } = gate
 
@@ -223,7 +234,7 @@ export const renameLocation = async (projectId: string, rawId: string, rawName: 
     }
   }
   const headings = await rewriteHeadingNodes(scope, pending)
-  await rederiveProject(scope)
+  await requestRederive(scope)
   revalidatePath(workspacePath(project.id), 'layout')
   return {
     status: 'renamed',
@@ -242,7 +253,7 @@ export const previewRename = async (projectId: string, rawId: string, rawName: s
   const id = parseId(rawId)
   const name = TitleSchema.safeParse(rawName)
   if (id === null || !name.success) return { status: 'error', message: 'A location needs a name, up to 200 characters.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.read)
   if (isRefusal(gate)) return gate
   const { scope } = gate
 
@@ -301,7 +312,7 @@ const UndoRenameSchema = z.object({
 export const undoRename = async (projectId: string, rawUndo: unknown): Promise<UndoRenameResult> => {
   const undo = UndoRenameSchema.safeParse(rawUndo)
   if (!undo.success) return { status: 'error', message: 'That rename could not be taken back.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
   const { scope, project } = gate
   const { locationId, previousName, name, restores } = undo.data
@@ -348,7 +359,7 @@ export const undoRename = async (projectId: string, rawUndo: unknown): Promise<U
   }
   skipped += wanted.size
   const headings = await rewriteHeadingNodes(scope, pending)
-  await rederiveProject(scope)
+  await requestRederive(scope)
   revalidatePath(workspacePath(project.id), 'layout')
   return { status: 'undone', headings, skipped }
 }
@@ -359,7 +370,7 @@ export const setParent = async (projectId: string, rawId: string, rawParent: unk
   const parent = ParentEditSchema.safeParse(rawParent ?? null)
   if (id === null || !parent.success) return { status: 'error', message: 'Pick a location to hang this one under.' }
   if (parent.data === id) return { status: 'error', message: 'A location cannot hang under itself.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   if (parent.data !== null) {
@@ -370,7 +381,7 @@ export const setParent = async (projectId: string, rawId: string, rawParent: unk
   }
   const written = await setLocationParent(gate.scope, id, parent.data)
   if (!written) return { status: 'error', message: REFUSED_LOCATION }
-  await rederiveProject(gate.scope)
+  await requestRederive(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'saved' }
 }
@@ -381,7 +392,7 @@ export const mergeLocations = async (projectId: string, rawLoser: string, rawWin
   if (loser === null || winner === null || loser === winner) {
     return { status: 'error', message: 'Pick a different location to merge into.' }
   }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const before = (await listLocationRecords(gate.scope)).find((entry) => entry.id === loser)
@@ -390,7 +401,7 @@ export const mergeLocations = async (projectId: string, rawLoser: string, rawWin
   // The loser's photo has no card to sit on any more. Best effort: a failed
   // delete leaves an orphan object, never a broken row.
   if (before?.photoKey !== undefined && before.photoKey !== null && storageAvailable()) await deleteObject(before.photoKey)
-  await rederiveProject(gate.scope)
+  await requestRederive(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'merged', into: winner }
 }
@@ -398,7 +409,7 @@ export const mergeLocations = async (projectId: string, rawLoser: string, rawWin
 export const deleteLocation = async (projectId: string, rawId: string): Promise<DeleteResult> => {
   const id = parseId(rawId)
   if (id === null) return { status: 'error', message: REFUSED_LOCATION }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const before = (await listLocationRecords(gate.scope)).find((entry) => entry.id === id)
@@ -411,7 +422,7 @@ export const deleteLocation = async (projectId: string, rawId: string): Promise<
     }
   }
   if (before?.photoKey !== undefined && before.photoKey !== null && storageAvailable()) await deleteObject(before.photoKey)
-  await rederiveProject(gate.scope)
+  await requestRederive(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'deleted' }
 }
@@ -427,11 +438,11 @@ export const deleteLocation = async (projectId: string, rawId: string): Promise<
 export const uploadLocationPhoto = async (projectId: string, rawId: string, form: FormData): Promise<PhotoResult> => {
   const id = parseId(rawId)
   if (id === null) return { status: 'error', message: REFUSED_LOCATION }
+  const gate = await openProject(projectId, ROLE.authoredEdit)
+  if (isRefusal(gate)) return gate
   if (!storageAvailable()) return { status: 'refused', message: 'Photo storage is not set up on this server yet.' }
   const image = await readImage(form.get('photo'), LOCATION_PHOTO_MAX_BYTES, 'photo')
   if (!image.ok) return { status: image.status, message: image.message }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
 
   const key = `projects/${gate.project.id}/locations/${id}/photo-${crypto.randomUUID()}.${IMAGE_EXTENSION[image.type]}`
   const put = await putObject(key, image.bytes, image.type)
@@ -449,7 +460,7 @@ export const uploadLocationPhoto = async (projectId: string, rawId: string, form
 export const removeLocationPhoto = async (projectId: string, rawId: string): Promise<PhotoResult> => {
   const id = parseId(rawId)
   if (id === null) return { status: 'error', message: REFUSED_LOCATION }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const pointed = await setLocationPhotoKey(gate.scope, id, null)
@@ -471,7 +482,7 @@ export const bindSluglineAlias = async (projectId: string, rawId: string, rawSlu
   if (id === null || !slugline.success) return { status: 'error', message: 'An alias is a set text, up to 200 characters.' }
   const set = setTextOf(slugline.data)
   if (canonicalKey(set) === '') return { status: 'error', message: 'An alias needs at least one letter or digit.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const outcome = await bindSlugline(gate.scope, id, set)
@@ -484,7 +495,7 @@ export const bindSluglineAlias = async (projectId: string, rawId: string, rawSlu
       message: `${set} already resolves to ${holder?.name ?? 'another location'}. Unbind it there first, or merge.`,
     }
   }
-  if (outcome.status === 'bound') await rederiveProject(gate.scope)
+  if (outcome.status === 'bound') await requestRederive(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'bound' }
 }
@@ -493,7 +504,7 @@ export const unbindSluglineAlias = async (projectId: string, rawId: string, rawS
   const id = parseId(rawId)
   const slugline = SluglineSchema.safeParse(rawSlugline)
   if (id === null || !slugline.success) return { status: 'error', message: REFUSED_LOCATION }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const outcome = await unbindSlugline(gate.scope, id, slugline.data)
@@ -501,7 +512,7 @@ export const unbindSluglineAlias = async (projectId: string, rawId: string, rawS
   if (outcome === 'last') {
     return { status: 'refused', message: 'That is the only set text bound to this record. Rename the record, or merge it, instead.' }
   }
-  await rederiveProject(gate.scope)
+  await requestRederive(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'saved' }
 }
@@ -517,7 +528,7 @@ export const moveAlias = async (projectId: string, rawId: string, rawSlugline: s
   if (id === null || !slugline.success) return { status: 'error', message: 'An alias is a set text, up to 200 characters.' }
   const set = setTextOf(slugline.data)
   if (canonicalKey(set) === '') return { status: 'error', message: 'An alias needs at least one letter or digit.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const outcome = await moveBoundSlugline(gate.scope, set, id)
@@ -530,7 +541,7 @@ export const moveAlias = async (projectId: string, rawId: string, rawSlugline: s
     }
   }
   if (outcome.status === 'already') return { status: 'moved', from: null }
-  await rederiveProject(gate.scope)
+  await requestRederive(gate.scope)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'moved', from: outcome.from }
 }
@@ -570,7 +581,7 @@ export const resolveSlugline = async (projectId: string, rawKey: string, rawChoi
   const key = z.string().min(1).max(400).safeParse(rawKey)
   const choice = SluglineChoiceSchema.safeParse(rawChoice)
   if (!key.success || !choice.success) return { status: 'error', message: 'That decision could not be read.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
   const { scope, project } = gate
 
@@ -599,7 +610,7 @@ export const resolveSlugline = async (projectId: string, rawKey: string, rawChoi
   }
   await recordResolveDecisions(scope, subject, [{ verdict: 'accepted', target: chosen }])
 
-  const pass = await rederiveProject(scope)
+  const pass = await requestRederive(scope)
   if (!pass.ok) return { status: 'error', message: `The script could not be re-derived (${pass.error.kind}).` }
   revalidatePath(workspacePath(project.id), 'layout')
   return { status: 'resolved', pending: await pendingCount(scope) }
@@ -617,7 +628,7 @@ export const resolveStructure = async (projectId: string, rawKey: string, rawCho
   const key = z.string().min(1).max(400).safeParse(rawKey)
   const choice = StructureChoiceSchema.safeParse(rawChoice)
   if (!key.success || !choice.success) return { status: 'error', message: 'That decision could not be read.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
   const { scope, project } = gate
 
@@ -655,7 +666,7 @@ export const resolveStructure = async (projectId: string, rawKey: string, rawCho
     await recordResolveDecisions(scope, subject, [{ verdict: 'accepted', target }])
   }
 
-  const pass = await rederiveProject(scope)
+  const pass = await requestRederive(scope)
   if (!pass.ok) return { status: 'error', message: `The script could not be re-derived (${pass.error.kind}).` }
   revalidatePath(workspacePath(project.id), 'layout')
   return { status: 'resolved', pending: await pendingCount(scope) }
@@ -681,7 +692,7 @@ export const revokeDecision = async (projectId: string, rawKey: string, rawUndo:
   const key = z.string().min(1).max(400).safeParse(rawKey)
   const undo = UndoSchema.safeParse(rawUndo)
   if (!key.success || !undo.success) return { status: 'error', message: 'That decision could not be read.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
   const { scope, project } = gate
 
@@ -723,7 +734,7 @@ export const revokeDecision = async (projectId: string, rawKey: string, rawUndo:
     await deleteResolveDecisions(scope, key.data, null)
   }
 
-  const pass = await rederiveProject(scope)
+  const pass = await requestRederive(scope)
   if (!pass.ok) return { status: 'error', message: `The script could not be re-derived (${pass.error.kind}).` }
   revalidatePath(workspacePath(project.id), 'layout')
   return { status: 'resolved', pending: await pendingCount(scope) }
@@ -747,7 +758,7 @@ export const decideSimilar = async (projectId: string, rawId: string, rawChoice:
   const choice = SimilarChoiceSchema.safeParse(rawChoice)
   if (id === null || !choice.success) return { status: 'error', message: 'That decision could not be read.' }
   if (choice.data.kind === 'merge') return mergeLocations(projectId, id, choice.data.into)
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
   await recordDecisionByKey(gate.scope, similarKey(id, choice.data.other), 'rejected', { kind: 'location', id: choice.data.other })
   revalidatePath(workspacePath(gate.project.id), 'layout')
@@ -756,7 +767,7 @@ export const decideSimilar = async (projectId: string, rawId: string, rawChoice:
 
 /** The empty state's "Derive N locations": a pass, awaited, project-wide. */
 export const deriveLocationsNow = async (projectId: string): Promise<DeriveResult> => {
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.derive)
   if (isRefusal(gate)) return gate
   const pass = await rederiveProject(gate.scope)
   if (!pass.ok) return { status: 'error', message: `The script could not be derived (${pass.error.kind}).` }

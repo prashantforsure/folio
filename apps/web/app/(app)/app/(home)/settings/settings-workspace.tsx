@@ -423,7 +423,7 @@ const Integrations = () => (
       <App
         mark="FN"
         name="Fountain"
-        desc="Import .fountain, and export the script as Fountain from the Outline route's ⋯ menu."
+        desc="Import .fountain, and export the script as Fountain from the Script route's ⋯ menu."
         state="Built in"
       />
       <App mark="DR" name="Google Drive" desc="Mirror published revisions into a production folder." />

@@ -61,6 +61,7 @@ import {
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { jsonb } from '../sql-json'
+import { insertedOrExisting, onIdempotencyKeyConflict } from './idempotency'
 import { stamp, stampOrNull } from './mapping'
 
 /**
@@ -714,7 +715,12 @@ const renumberReel = async (db: Db, scope: ProjectScope, reelId: ReelId): Promis
 // Reels
 // ---------------------------------------------------------------------------
 
-export const insertReel = async (scope: ProjectScope, sceneNodeId: NodeId, name?: string): Promise<ReelRecord> => {
+export const insertReel = async (
+  scope: ProjectScope,
+  sceneNodeId: NodeId,
+  name?: string,
+  idempotencyKey: string | null = null,
+): Promise<ReelRecord> => {
   return dbOf(scope).transaction(async (tx) => {
     const existing = await tx
       .select({ position: reels.position, count: sql<number>`count(*) over ()::int` })
@@ -730,11 +736,27 @@ export const insertReel = async (scope: ProjectScope, sceneNodeId: NodeId, name?
         sceneNodeId: sceneNodeId as string,
         name: name ?? `Reel ${String((last?.count ?? 0) + 1)}`,
         position: positionBetween(last?.position ?? null, null),
+        idempotencyKey,
       })
+      .onConflictDoNothing(onIdempotencyKeyConflict(reels))
       .returning()
-    const row = rows[0]
-    if (row === undefined) throw new Error('Folio: inserting a reel returned no row.')
-    await logActivity(tx, scope, 'reel.add', 'reel', row.id, { sceneNodeId })
+    const repeated = rows[0] === undefined
+    const row = await insertedOrExisting(
+      rows,
+      idempotencyKey,
+      async () => {
+        const found = await tx
+          .select()
+          .from(reels)
+          .where(scoped(scope, reels, eq(reels.idempotencyKey, idempotencyKey ?? '')))
+          .limit(1)
+        return found[0] ?? null
+      },
+      'reel',
+    )
+    // A repeat is not a second act: the activity log records what happened,
+    // and what happened the second time is nothing.
+    if (!repeated) await logActivity(tx, scope, 'reel.add', 'reel', row.id, { sceneNodeId })
     return reelFromRow(row, [], null, null)
   })
 }
@@ -824,6 +846,69 @@ export const readReel = async (scope: ProjectScope, reelId: ReelId): Promise<Ree
 }
 
 // ---------------------------------------------------------------------------
+// Which of these are this episode's
+// ---------------------------------------------------------------------------
+
+/**
+ * The two checks an episode-scoped write runs before it touches a reel or a
+ * shot by id.
+ *
+ * The scope proves a row is **this project's** and stops there. Production is
+ * episode-scoped, a project has many episodes, and neither `reels` nor
+ * `reel_shots` carries an `episode_id` - a reel hangs on a scene heading node,
+ * and the node's document is what names the episode. So the chain is
+ * `reel → nodes → documents`, and it is joined here rather than read in three
+ * round trips, in one statement whatever the size of the list: the bulk bar
+ * sends up to 200 shot ids and 200 queries on the dev pooler is several
+ * minutes.
+ *
+ * **The join is the node list, not `scene_derivations`.** `readSceneHeader`
+ * (the Storyboard's check) goes through the derived table because it returns a
+ * scene to draw; this returns nothing but an answer to "is this mine", and an
+ * authorization decision must not depend on a cache being fresh. The node list
+ * is the authority (AGENTS.md - the script is the only hand-authored artefact,
+ * and every other surface that becomes authoritative is a bug).
+ *
+ * Soft-deleted rows are absent, so a deleted reel is not a reel you may edit.
+ */
+export const readReelIdsInEpisode = async (
+  scope: ProjectScope,
+  episodeId: EpisodeId,
+  reelIds: readonly ReelId[],
+): Promise<ReadonlySet<ReelId>> => {
+  if (reelIds.length === 0) return new Set()
+  const rows = await dbOf(scope)
+    .select({ id: reels.id })
+    .from(reels)
+    .innerJoin(nodes, eq(nodes.id, reels.sceneNodeId))
+    .innerJoin(
+      documents,
+      and(eq(documents.id, nodes.documentId), eq(documents.episodeId, episodeId), eq(documents.kind, 'screenplay')),
+    )
+    .where(scoped(scope, reels, inArray(reels.id, reelIds), isNull(reels.deletedAt)))
+  return new Set(rows.map((row) => row.id as ReelId))
+}
+
+export const readShotIdsInEpisode = async (
+  scope: ProjectScope,
+  episodeId: EpisodeId,
+  shotIds: readonly ReelShotId[],
+): Promise<ReadonlySet<ReelShotId>> => {
+  if (shotIds.length === 0) return new Set()
+  const rows = await dbOf(scope)
+    .select({ id: reelShots.id })
+    .from(reelShots)
+    .innerJoin(reels, and(eq(reels.id, reelShots.reelId), isNull(reels.deletedAt)))
+    .innerJoin(nodes, eq(nodes.id, reels.sceneNodeId))
+    .innerJoin(
+      documents,
+      and(eq(documents.id, nodes.documentId), eq(documents.episodeId, episodeId), eq(documents.kind, 'screenplay')),
+    )
+    .where(scoped(scope, reelShots, inArray(reelShots.id, shotIds), isNull(reelShots.deletedAt)))
+  return new Set(rows.map((row) => row.id as ReelShotId))
+}
+
+// ---------------------------------------------------------------------------
 // Shots
 // ---------------------------------------------------------------------------
 
@@ -887,8 +972,23 @@ const writeAutoCharacters = async (db: Db, scope: ProjectScope, shotId: ReelShot
     .onConflictDoNothing()
 }
 
-export const insertReelShots = async (scope: ProjectScope, reelId: ReelId, seeds: readonly ShotSeed[]): Promise<readonly ReelShotRecord[]> => {
+/**
+ * `idempotencyKey` covers **one** shot, because that is the only call a retry
+ * can repeat: the route adds shots one at a time (`addShot`), and the batch
+ * callers are the shotlist and the proposal, which mint their rows once from a
+ * pass over the script. A key with a batch is a caller error rather than an
+ * outcome, so it throws.
+ */
+export const insertReelShots = async (
+  scope: ProjectScope,
+  reelId: ReelId,
+  seeds: readonly ShotSeed[],
+  idempotencyKey: string | null = null,
+): Promise<readonly ReelShotRecord[]> => {
   if (seeds.length === 0) return []
+  if (idempotencyKey !== null && seeds.length !== 1) {
+    throw new Error('Folio: an idempotency key covers one shot, not a batch.')
+  }
   return dbOf(scope).transaction(async (tx) => {
     const last = await tx
       .select({ position: reelShots.position, number: reelShots.number })
@@ -920,10 +1020,26 @@ export const insertReelShots = async (scope: ProjectScope, reelId: ReelId, seeds
             proposed: seed.proposed ?? false,
             frameState: seed.frameState ?? (seed.description.trim().length > 0 ? 'ready' : 'empty'),
             createdBy: scope.actor,
+            idempotencyKey,
           }
         }),
       )
+      .onConflictDoNothing(onIdempotencyKeyConflict(reelShots))
       .returning()
+    if (rows.length === 0 && idempotencyKey !== null) {
+      // This key has been used: the shot it made is the answer, and none of
+      // the writes below are repeated - the parts are already written, the
+      // reel is already stale, and the activity log records acts, not calls.
+      const found = await tx
+        .select()
+        .from(reelShots)
+        .where(scoped(scope, reelShots, eq(reelShots.idempotencyKey, idempotencyKey)))
+        .limit(1)
+      const already = found[0]
+      if (already === undefined) throw new Error('Folio: a shot with that idempotency key was written and is no longer there.')
+      const id = already.id as ReelShotId
+      return [shotFromRow(already, await readParts(tx, scope, id), await readCharacters(tx, scope, id))]
+    }
     for (const [index, row] of rows.entries()) {
       const parts = seeds[index]?.parts ?? []
       await writeParts(tx, scope, row.id as ReelShotId, parts)

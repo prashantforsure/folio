@@ -5,7 +5,7 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 
-import { APP_HOME, SIGN_IN, asRoute } from '../routes'
+import { APP_HOME, SIGN_IN, asRoute, safeNextParam } from '../routes'
 import { failure, sent } from './result'
 import type { AuthResult } from './result'
 import { supabaseServer } from './server'
@@ -39,6 +39,19 @@ import { supabaseServer } from './server'
  * address with no account return the same sentence - and the reset request
  * always reports success. Supabase's own errors are more specific than that;
  * `describe()` is the one place that flattening happens.
+ *
+ * ## `next` is validated here, not only where the form is drawn
+ *
+ * `safeNextParam` runs on every `next` this file reads. It used to run only
+ * when the sign-in and sign-up pages *rendered* the hidden input, which
+ * protects nothing: a form field is whatever the request body says it is, and
+ * a POST carrying `next=https://evil.example` or `next=//evil.example` reached
+ * `redirect()` unchecked. The guard belongs where the value is followed, and
+ * `lib/routes.ts` says so in as many words - "an unchecked redirect target on
+ * a page reached from a genuine confirmation email is the most convincing
+ * phishing step this app could offer". An empty or hostile value becomes
+ * `/app`, so the `|| APP_HOME` fallback these three lines used to carry is now
+ * the guard's own answer.
  */
 
 const EmailSchema = z.email('That does not look like an email address.')
@@ -114,7 +127,7 @@ export const signInWithGoogle = async (
   formData: FormData,
 ): Promise<AuthResult> => {
   const supabase = await supabaseServer()
-  const next = field(formData, 'next') || APP_HOME
+  const next = safeNextParam(field(formData, 'next'))
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: await callbackUrl(next), skipBrowserRedirect: true },
@@ -147,7 +160,7 @@ export const signInWithPassword = async (
     return failure('form', describe(error))
   }
 
-  redirect(asRoute(field(formData, 'next') || APP_HOME))
+  redirect(asRoute(safeNextParam(field(formData, 'next'))))
 }
 
 /**
@@ -175,7 +188,7 @@ export const signUpWithPassword = async (
   }
 
   const supabase = await supabaseServer()
-  const next = field(formData, 'next') || APP_HOME
+  const next = safeNextParam(field(formData, 'next'))
   const { data, error } = await supabase.auth.signUp({
     email: email.data,
     password: password.data,

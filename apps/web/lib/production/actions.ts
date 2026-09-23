@@ -1,6 +1,6 @@
 'use server'
 
-import type { Asset, AssetId, CameraMotion, Reel, ReelShot, ShotType } from '@folio/contracts'
+import type { Asset, AssetId, CameraMotion, NoteInput, Reel, ReelShot, ShotType } from '@folio/contracts'
 import {
   BulkPatchSchema,
   MoveShotSchema,
@@ -34,7 +34,9 @@ import {
   readDocumentByKind,
   readReel,
   readReelIdOfShot,
+  readReelIdsInEpisode,
   readSceneHeader,
+  readShotIdsInEpisode,
   readScreenplayNodes,
   retimeShot as retimeShotRow,
   saveViewPreferences as saveViewPreferencesRow,
@@ -47,7 +49,10 @@ import {
 import type { CharacterId, DescriptionPart, NodeId, ShotSpec } from '@folio/script'
 import { boundCueMap, parseDescription, proposeShots as proposeShotSpecs } from '@folio/script'
 
+import { ROLE } from '../auth/roles'
+import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
 import { isRefusal, openEpisode } from '../script/gate'
+import type { EpisodeGate } from '../script/gate'
 import { IMAGE_EXTENSION, readImage } from '../storage/image'
 import { publicUrl, putObject, storageAvailable } from '../storage/r2'
 import { cutScene } from '../storyboard/scene-cut'
@@ -76,7 +81,22 @@ import { readCastAndPlaces } from './server'
  *
  * Every action: zod first, then the gate (`openEpisode` - identity,
  * membership, the episode), then one repository call. Results are
- * discriminated (`result.ts`). Membership, not role, as everywhere.
+ * discriminated (`result.ts`). Every write is `ROLE.productionEdit` - a
+ * writer's, under ADR 0003 D2 - except the view preferences, which are the
+ * reader's own arrangement of their own route.
+ *
+ * ## The gate proves the project; the episode is proved per row
+ *
+ * The scope makes every statement this file runs tenant-safe, and that is
+ * where its guarantee ends: it says a reel is **this project's**, not that it
+ * is **this episode's**. Production is episode-scoped and a project has many
+ * episodes, so an action that takes a reel or a shot id also asks
+ * `readReelIdsInEpisode` / `readShotIdsInEpisode` (`@folio/db`) whether the id
+ * belongs to the episode the gate opened - one statement, whatever the length
+ * of the list. Without it, an id from a sibling episode was accepted and
+ * written; a shot id is not a secret, and a server action is a public
+ * endpoint. The refusals are the ones already written here, `NOT_A_REEL` and
+ * `NOT_A_SHOT`: "not in this episode" is what they have always said.
  *
  * ## Round trips are counted
  *
@@ -165,7 +185,7 @@ const partsOf = async (scope: ProjectScope, description: string): Promise<readon
 export const saveSettings = async (projectId: string, episode: string, raw: unknown): Promise<SettingsResult> => {
   const input = SettingsInputSchema.safeParse(raw)
   if (!input.success) return error('The settings did not read. Pick one option in each group.')
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const written = await upsertEpisodeSettings(gate.scope, gate.episode.id, input.data)
   return written
@@ -175,13 +195,20 @@ export const saveSettings = async (projectId: string, episode: string, raw: unkn
 // Reels
 // ---------------------------------------------------------------------------
 
-export const addReel = async (projectId: string, episode: string, rawSceneNodeId: unknown): Promise<ReelResult> => {
+export const addReel = async (
+  projectId: string,
+  episode: string,
+  rawSceneNodeId: unknown,
+  rawKey: unknown = null,
+): Promise<ReelResult> => {
   const sceneNodeId = NodeIdSchema.safeParse(rawSceneNodeId)
   if (!sceneNodeId.success) return error(NOT_A_SCENE)
-  const gate = await openEpisode(projectId, episode)
+  const key = idempotencyKeyOf(rawKey)
+  if (!key.ok) return error(BAD_IDEMPOTENCY_KEY)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   if ((await readSceneHeader(gate.scope, gate.episode.id, sceneNodeId.data)) === null) return error(NOT_A_SCENE)
-  const reel = await insertReel(gate.scope, sceneNodeId.data)
+  const reel = await insertReel(gate.scope, sceneNodeId.data, undefined, key.key)
   return { status: 'saved', reel: reelView(reel, new Map()) }
 }
 
@@ -191,7 +218,7 @@ export const patchReel = async (projectId: string, episode: string, rawReelId: u
   const patch = ReelPatchSchema.safeParse(raw)
   if (!reelId.success) return error(NOT_A_REEL)
   if (!patch.success) return error('A reel takes a name and one of the four clip lengths.')
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const written = await patchReelRow(gate.scope, reelId.data, patch.data)
   if (written.status === 'no-reel') return error(NOT_A_REEL)
@@ -201,7 +228,7 @@ export const patchReel = async (projectId: string, episode: string, rawReelId: u
 export const deleteReel = async (projectId: string, episode: string, rawReelId: unknown): Promise<DeleteReelResult> => {
   const reelId = ReelIdSchema.safeParse(rawReelId)
   if (!reelId.success) return error(NOT_A_REEL)
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const result = await softDeleteReel(gate.scope, reelId.data)
   if (result.status === 'no-reel') return error(NOT_A_REEL)
@@ -214,14 +241,23 @@ export const deleteReel = async (projectId: string, episode: string, rawReelId: 
 // ---------------------------------------------------------------------------
 
 /** `POST /reels/:id/shots` - one empty shot at the end of the reel. */
-export const addShot = async (projectId: string, episode: string, raw: unknown): Promise<ShotResult> => {
+export const addShot = async (projectId: string, episode: string, raw: unknown, rawKey: unknown = null): Promise<ShotResult> => {
   const input = NewShotSchema.safeParse(raw)
   if (!input.success) return error(NOT_A_REEL)
-  const gate = await openEpisode(projectId, episode)
+  const key = idempotencyKeyOf(rawKey)
+  if (!key.ok) return error(BAD_IDEMPOTENCY_KEY)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
+  const mine = await readReelIdsInEpisode(gate.scope, gate.episode.id, [input.data.reelId])
+  if (!mine.has(input.data.reelId)) return error(NOT_A_REEL)
   const description = input.data.description ?? ''
   const parts = description.length === 0 ? [] : await partsOf(gate.scope, description)
-  const [shot] = await insertReelShots(gate.scope, input.data.reelId, [{ description, parts, durationS: input.data.durationS ?? null }])
+  const [shot] = await insertReelShots(
+    gate.scope,
+    input.data.reelId,
+    [{ description, parts, durationS: input.data.durationS ?? null }],
+    key.key,
+  )
   if (shot === undefined) return error(NOT_A_REEL)
   return { status: 'saved', shot: shotView(shot, new Map()) }
 }
@@ -232,8 +268,10 @@ export const patchShot = async (projectId: string, episode: string, rawShotId: u
   const patch = ShotPatchSchema.safeParse(raw)
   if (!shotId.success) return error(NOT_A_SHOT)
   if (!patch.success) return error('That edit did not read. Reload the page.')
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
+  const mine = await readShotIdsInEpisode(gate.scope, gate.episode.id, [shotId.data])
+  if (!mine.has(shotId.data)) return error(NOT_A_SHOT)
   const parts = patch.data.description === undefined ? null : await partsOf(gate.scope, patch.data.description)
   const written = await patchShotRow(gate.scope, shotId.data, patch.data, parts)
   if (written.status === 'no-shot') return error(NOT_A_SHOT)
@@ -244,8 +282,13 @@ export const patchShot = async (projectId: string, episode: string, rawShotId: u
 export const bulkPatchShots = async (projectId: string, episode: string, raw: unknown): Promise<BulkResult> => {
   const input = BulkPatchSchema.safeParse(raw)
   if (!input.success) return error('Pick at least one shot and one change.')
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
+  // Distinct, because the schema does not dedupe and a repeated id would
+  // otherwise refuse a selection that is entirely this episode's.
+  const asked = new Set(input.data.ids)
+  const mine = await readShotIdsInEpisode(gate.scope, gate.episode.id, [...asked])
+  if (mine.size !== asked.size) return error(NOT_A_SHOT)
   const changed = await bulkPatchShotRows(gate.scope, input.data)
   return { status: 'saved', changed }
 }
@@ -254,7 +297,7 @@ export const bulkPatchShots = async (projectId: string, episode: string, raw: un
 export const moveShot = async (projectId: string, episode: string, raw: unknown): Promise<MovedResult> => {
   const input = MoveShotSchema.safeParse(raw)
   if (!input.success) return error(NOT_A_SHOT)
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const moved = await moveReelShot(gate.scope, input.data.shotId, input.data.reelId, input.data.beforeId)
   if (moved.status === 'no-shot') return error(NOT_A_SHOT)
@@ -266,7 +309,7 @@ export const moveShot = async (projectId: string, episode: string, raw: unknown)
 export const retimeShot = async (projectId: string, episode: string, raw: unknown): Promise<ReelResult> => {
   const input = RetimeShotSchema.safeParse(raw)
   if (!input.success) return error('A shot is between 1 and 15 seconds.')
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const reelId = await readReelIdOfShot(gate.scope, input.data.shotId)
   if (reelId === null) return error(NOT_A_SHOT)
@@ -283,7 +326,7 @@ export const retimeShot = async (projectId: string, episode: string, raw: unknow
 export const deleteShot = async (projectId: string, episode: string, rawShotId: unknown): Promise<ReelResult> => {
   const shotId = ReelShotIdSchema.safeParse(rawShotId)
   if (!shotId.success) return error(NOT_A_SHOT)
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const reel = await softDeleteShot(gate.scope, shotId.data)
   if (reel === null) return error(NOT_A_SHOT)
@@ -345,7 +388,7 @@ export const proposeShots = async (projectId: string, episode: string, rawSceneN
   if (!sceneNodeId.success) return error(NOT_A_SCENE)
   const reelId = rawReelId === null ? null : ReelIdSchema.safeParse(rawReelId)
   if (reelId !== null && !reelId.success) return error(NOT_A_REEL)
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   const { scope } = gate
   const [scene, document, present] = await Promise.all([
@@ -392,19 +435,43 @@ export const proposeShots = async (projectId: string, episode: string, rawSceneN
 export const setSceneSetup = async (projectId: string, episode: string, raw: unknown): Promise<SavedResult> => {
   const patch = SceneSetupPatchSchema.safeParse(raw)
   if (!patch.success) return error(NOT_A_SCENE)
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   if ((await readSceneHeader(gate.scope, gate.episode.id, patch.data.sceneNodeId)) === null) return error(NOT_A_SCENE)
   await setSceneSetupRow(gate.scope, patch.data)
   return { status: 'saved' }
 }
 
+/**
+ * Is the thing this note is about a thing of this episode?
+ *
+ * `notes` stores `(target_type, target_id)` and has no foreign key - the three
+ * targets live in three tables, one of which (`scene`) is not a table at all
+ * but a heading node. So the check is per kind, and it is a check the insert
+ * cannot make: `appendNote` is a bare insert, and a note on an id that is not
+ * this episode's was written happily, tenant-correct and dangling, readable by
+ * nobody and deleted by nothing.
+ */
+const noteTargetExists = async (gate: EpisodeGate, input: NoteInput): Promise<boolean> => {
+  if (input.targetType === 'scene') {
+    const sceneNodeId = NodeIdSchema.safeParse(input.targetId)
+    return sceneNodeId.success && (await readSceneHeader(gate.scope, gate.episode.id, sceneNodeId.data)) !== null
+  }
+  if (input.targetType === 'reel') {
+    const reelId = ReelIdSchema.safeParse(input.targetId)
+    return reelId.success && (await readReelIdsInEpisode(gate.scope, gate.episode.id, [reelId.data])).size === 1
+  }
+  const shotId = ReelShotIdSchema.safeParse(input.targetId)
+  return shotId.success && (await readShotIdsInEpisode(gate.scope, gate.episode.id, [shotId.data])).size === 1
+}
+
 /** The notes popover's `Save note` / `Remove` (an empty body). */
 export const saveNote = async (projectId: string, episode: string, raw: unknown): Promise<SavedResult> => {
   const input = NoteInputSchema.safeParse(raw)
   if (!input.success) return error('A note names what it is about.')
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
+  if (!(await noteTargetExists(gate, input.data))) return error('A note names what it is about.')
   await appendNote(gate.scope, input.data.targetType, input.data.targetId, input.data.body)
   return { status: 'saved' }
 }
@@ -413,7 +480,7 @@ export const saveNote = async (projectId: string, episode: string, raw: unknown)
 export const saveViewPreferences = async (projectId: string, episode: string, raw: unknown): Promise<PreferencesResult> => {
   const patch = ViewPreferencesPatchSchema.safeParse(raw)
   if (!patch.success) return error('Those view options did not read.')
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.preference)
   if (isRefusal(gate)) return gate
   const preferences = await saveViewPreferencesRow(gate.scope, gate.episode.id, patch.data)
   return { status: 'saved', preferences }
@@ -451,7 +518,7 @@ export const uploadSceneImage = async (projectId: string, episode: string, rawSc
   const sceneNodeId = NodeIdSchema.safeParse(rawSceneNodeId)
   if (!sceneNodeId.success) return error(NOT_A_SCENE)
   if (!storageAvailable()) return { status: 'refused', message: STORAGE_OFF }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
   if ((await readSceneHeader(gate.scope, gate.episode.id, sceneNodeId.data)) === null) return error(NOT_A_SCENE)
   const stored = await storeImage(gate.scope, gate.project.id, 'still', form, 'image')
@@ -465,8 +532,10 @@ export const uploadReference = async (projectId: string, episode: string, rawSho
   const shotId = ReelShotIdSchema.safeParse(rawShotId)
   if (!shotId.success) return error(NOT_A_SHOT)
   if (!storageAvailable()) return { status: 'refused', message: STORAGE_OFF }
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.productionEdit)
   if (isRefusal(gate)) return gate
+  const mine = await readShotIdsInEpisode(gate.scope, gate.episode.id, [shotId.data])
+  if (!mine.has(shotId.data)) return error(NOT_A_SHOT)
   const stored = await storeImage(gate.scope, gate.project.id, 'reference', form, 'image')
   if (!stored.ok) return stored.failure
   const pointed = await addShotReference(gate.scope, shotId.data, stored.asset.id)

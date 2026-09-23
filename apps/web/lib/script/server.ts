@@ -105,8 +105,17 @@ const wordCount = (nodes: readonly ScreenplayNode[]): number =>
     return total + (text === '' ? 0 : text.split(/\s+/u).length)
   }, 0)
 
-/** A stable hash of the list a measurement was computed from. */
-export const nodeDigest = (nodes: readonly ScreenplayNode[]): string =>
+/**
+ * A stable hash of the list a measurement was computed from, and of the list a
+ * compare-and-swap save is writing over (ADR 0003 **D10**).
+ *
+ * `readonly unknown[]` rather than `ScreenplayNode[]` because the outline's
+ * save needs the same digest over its own node type, and two digest functions
+ * would be two answers to "has this list changed" - which is the whole
+ * question the CAS asks. It is `measurements.node_digest`'s function; what it
+ * hashes is whatever list it is given.
+ */
+export const nodeDigest = (nodes: readonly unknown[]): string =>
   createHash('sha256').update(JSON.stringify(nodes)).digest('hex')
 
 /** What the engine needs beside the nodes, read once per request. */

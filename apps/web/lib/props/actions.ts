@@ -17,6 +17,8 @@ import type { PropId } from '@folio/script'
 import { canonicalKey } from '@folio/script'
 import { revalidatePath } from 'next/cache'
 
+import { ROLE } from '../auth/roles'
+import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
 import { isRefusal, openProject } from '../script/gate'
 import { IMAGE_EXTENSION, readImage } from '../storage/image'
 import { deleteObject, publicUrl, putObject, storageAvailable } from '../storage/r2'
@@ -28,10 +30,9 @@ import { REFUSED_NAME, REFUSED_PROP } from './result'
  *
  * Every one goes Zod parse -> gate -> repository -> revalidate -> result,
  * through the project-scoped gate in `lib/script/gate.ts`, as the
- * Characters and Locations routes' do. **Membership, not role** - AGENTS.md
- * open decision 16 is still open and `memberships.role` is enforced
- * nowhere, so this route decides not to check it like every action written
- * since. Flagged again rather than quietly resolved.
+ * Characters and Locations routes' do, and every write here is a writer's
+ * (ADR 0003 D2): `ROLE.entityOperation` for the record and its aliases,
+ * `ROLE.authoredEdit` for a field or a photo.
  *
  * ## Nothing here re-derives, and that is the point
  *
@@ -54,10 +55,11 @@ import { REFUSED_NAME, REFUSED_PROP } from './result'
  * ## A photo goes through the action, not past it
  *
  * `lib/characters/actions.ts`'s ordering verbatim, which the Locations
- * route also copies: `storageAvailable()` first, then the byte cap, then
- * the MIME sniffed **from the bytes** rather than trusted from the form,
- * then `putObject`, then the row is pointed at the new key - and only then
- * is the old object deleted. Nothing is deleted before the row says the
+ * route also copies: the **gate first** - nothing reads the body on behalf
+ * of somebody who is not a member - then `storageAvailable()`, then the
+ * byte cap, then the MIME sniffed **from the bytes** rather than trusted
+ * from the form, then `putObject`, then the row is pointed at the new key -
+ * and only then is the old object deleted. Nothing is deleted before the row says the
  * new one is the photo, so a failure leaves an orphan rather than a record
  * with no picture. No signed upload URL: the client never talks to the
  * bucket.
@@ -83,15 +85,22 @@ const parseId = (raw: unknown): PropId | null => {
  * can never be "taken" - two props may both answer to the same spelling -
  * so this cannot half-fail.
  */
-export const createProp = async (projectId: string, rawName: string, rawCategory: unknown = null): Promise<CreateResult> => {
+export const createProp = async (
+  projectId: string,
+  rawName: string,
+  rawCategory: unknown = null,
+  rawKey: unknown = null,
+): Promise<CreateResult> => {
   const name = TitleSchema.safeParse(rawName)
   const category = PropEditSchema.shape.category.safeParse(rawCategory ?? null)
   if (!name.success || !category.success) return { status: 'error', message: REFUSED_NAME }
-  const gate = await openProject(projectId)
+  const key = idempotencyKeyOf(rawKey)
+  if (!key.ok) return { status: 'error', message: BAD_IDEMPOTENCY_KEY }
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const trimmed = category.data ?? null
-  const id = await createPropRecord(gate.scope, name.data, trimmed === '' ? null : trimmed)
+  const id = await createPropRecord(gate.scope, name.data, trimmed === '' ? null : trimmed, key.key)
   await bindPropAlias(gate.scope, id, name.data)
   revalidatePath(workspacePath(gate.project.id), 'layout')
   return { status: 'created', id }
@@ -101,7 +110,7 @@ export const saveProp = async (projectId: string, rawId: string, rawEdit: unknow
   const id = parseId(rawId)
   const edit = PropEditSchema.safeParse(rawEdit)
   if (id === null || !edit.success) return { status: 'error', message: 'That edit could not be read.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const written = await updatePropRecord(gate.scope, id, edit.data)
@@ -120,7 +129,7 @@ export const renameProp = async (projectId: string, rawId: string, rawName: stri
   const id = parseId(rawId)
   const name = TitleSchema.safeParse(rawName)
   if (id === null || !name.success) return { status: 'error', message: REFUSED_NAME }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const [records, aliases] = await Promise.all([listPropRecords(gate.scope), listPropAliases(gate.scope)])
@@ -146,7 +155,7 @@ export const mergeProps = async (projectId: string, rawLoser: string, rawWinner:
   const loser = parseId(rawLoser)
   const winner = parseId(rawWinner)
   if (loser === null || winner === null) return { status: 'error', message: REFUSED_PROP }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const outcome = await mergePropRecords(gate.scope, loser, winner)
@@ -169,7 +178,7 @@ export const mergeProps = async (projectId: string, rawLoser: string, rawWinner:
 export const deleteProp = async (projectId: string, rawId: string): Promise<DeleteResult> => {
   const id = parseId(rawId)
   if (id === null) return { status: 'error', message: REFUSED_PROP }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const before = (await listPropRecords(gate.scope)).find((entry) => entry.id === id)
@@ -188,11 +197,11 @@ export const deleteProp = async (projectId: string, rawId: string): Promise<Dele
 export const uploadPropPhoto = async (projectId: string, rawId: string, form: FormData): Promise<PhotoResult> => {
   const id = parseId(rawId)
   if (id === null) return { status: 'error', message: REFUSED_PROP }
+  const gate = await openProject(projectId, ROLE.authoredEdit)
+  if (isRefusal(gate)) return gate
   if (!storageAvailable()) return { status: 'refused', message: 'Photo storage is not set up on this server yet.' }
   const image = await readImage(form.get('photo'), PROP_PHOTO_MAX_BYTES, 'photo')
   if (!image.ok) return { status: image.status, message: image.message }
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return gate
 
   const key = `projects/${gate.project.id}/props/${id}/photo-${crypto.randomUUID()}.${IMAGE_EXTENSION[image.type]}`
   const put = await putObject(key, image.bytes, image.type)
@@ -210,7 +219,7 @@ export const uploadPropPhoto = async (projectId: string, rawId: string, form: Fo
 export const removePropPhoto = async (projectId: string, rawId: string): Promise<PhotoResult> => {
   const id = parseId(rawId)
   if (id === null) return { status: 'error', message: REFUSED_PROP }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const pointed = await setPropPhotoKey(gate.scope, id, null)
@@ -236,7 +245,7 @@ export const bindAlias = async (projectId: string, rawId: string, rawAlias: stri
   const id = parseId(rawId)
   const alias = PropAliasSchema.safeParse(rawAlias)
   if (id === null || !alias.success) return { status: 'error', message: 'A spelling is one line, up to 200 characters.' }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const outcome = await bindPropAlias(gate.scope, id, alias.data)
@@ -251,7 +260,7 @@ export const unbindAlias = async (projectId: string, rawId: string, rawAlias: st
   const id = parseId(rawId)
   const alias = PropAliasSchema.safeParse(rawAlias)
   if (id === null || !alias.success) return { status: 'error', message: REFUSED_PROP }
-  const gate = await openProject(projectId)
+  const gate = await openProject(projectId, ROLE.entityOperation)
   if (isRefusal(gate)) return gate
 
   const outcome = await unbindPropAlias(gate.scope, id, alias.data)

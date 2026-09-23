@@ -17,7 +17,14 @@ import {
 } from 'drizzle-orm/pg-core'
 
 import { assets } from './assets'
-import { createdAtColumn, idColumn, projectIdColumn, timestampColumn, updatedAtColumn } from './columns'
+import {
+  createdAtColumn,
+  idColumn,
+  idempotencyKeyColumn,
+  projectIdColumn,
+  timestampColumn,
+  updatedAtColumn,
+} from './columns'
 import { characters, locations } from './derived'
 import {
   aspectRatioEnum,
@@ -166,9 +173,15 @@ export const reels = pgTable(
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
     deletedAt: timestampColumn('deleted_at'),
+    /** Null for a person clicking a button; set by a caller that can be retried (ADR 0003 D13). */
+    idempotencyKey: idempotencyKeyColumn(),
   },
   (table) => [
-    index('reels_project_scene_position_idx').on(table.projectId, table.sceneNodeId, table.position),
+
+    /** A retried create lands once. Partial, so the null every UI create carries is free. */
+    uniqueIndex('reels_idempotency_key')
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`idempotency_key is not null`),    index('reels_project_scene_position_idx').on(table.projectId, table.sceneNodeId, table.position),
     check('reels_name_not_empty', sql`length(btrim(${table.name})) > 0`),
     check(
       'reels_clip_length_allowed',
@@ -227,9 +240,15 @@ export const reelShots = pgTable(
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
     deletedAt: timestampColumn('deleted_at'),
+    /** Null for a person clicking a button; set by a caller that can be retried (ADR 0003 D13). */
+    idempotencyKey: idempotencyKeyColumn(),
   },
   (table) => [
-    /** The spec's `unique (reel_id, number)` - over the live rows, so a deleted shot's number is free again. */
+
+    /** A retried create lands once. Partial, so the null every UI create carries is free. */
+    uniqueIndex('reel_shots_idempotency_key')
+      .on(table.projectId, table.idempotencyKey)
+      .where(sql`idempotency_key is not null`),    /** The spec's `unique (reel_id, number)` - over the live rows, so a deleted shot's number is free again. */
     uniqueIndex('reel_shots_reel_number_key')
       .on(table.reelId, table.number)
       .where(sql`${table.deletedAt} IS NULL`),

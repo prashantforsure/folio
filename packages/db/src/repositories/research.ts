@@ -35,6 +35,7 @@ import {
 } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
+import { insertedOrExisting, onIdempotencyKeyConflict } from './idempotency'
 import { stamp } from './mapping'
 
 /**
@@ -337,7 +338,11 @@ const pruneCollections = async (tx: Tx, scope: ProjectScope): Promise<void> => {
 
 export type SourceWriteResult = { readonly ok: true; readonly id: ResearchSourceId } | { readonly ok: false; readonly reason: 'collection' | 'missing' }
 
-export const createResearchSource = async (scope: ProjectScope, edit: ResearchSourceEdit): Promise<SourceWriteResult> => {
+export const createResearchSource = async (
+  scope: ProjectScope,
+  edit: ResearchSourceEdit,
+  idempotencyKey: string | null = null,
+): Promise<SourceWriteResult> => {
   const actor = scope.actor
   if (actor === null) throw new Error('Folio: adding a research source needs an actor.')
   return dbOf(scope).transaction(async (tx) => {
@@ -354,10 +359,23 @@ export const createResearchSource = async (scope: ProjectScope, edit: ResearchSo
         note: edit.note,
         body: edit.body,
         createdBy: actor,
+        idempotencyKey,
       })
+      .onConflictDoNothing(onIdempotencyKeyConflict(researchSources))
       .returning({ id: researchSources.id })
-    const row = inserted[0]
-    if (row === undefined) throw new Error('Folio: inserting a research source returned no row.')
+    const row = await insertedOrExisting(
+      inserted,
+      idempotencyKey,
+      async () => {
+        const found = await tx
+          .select({ id: researchSources.id })
+          .from(researchSources)
+          .where(scoped(scope, researchSources, eq(researchSources.idempotencyKey, idempotencyKey ?? '')))
+          .limit(1)
+        return found[0] ?? null
+      },
+      'research source',
+    )
     return { ok: true, id: brandSourceId(row.id) }
   })
 }

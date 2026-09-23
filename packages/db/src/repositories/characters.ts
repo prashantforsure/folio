@@ -42,6 +42,7 @@ import {
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { jsonb } from '../sql-json'
+import { insertedOrExisting, onIdempotencyKeyConflict } from './idempotency'
 import { stamp } from './mapping'
 
 /**
@@ -557,13 +558,26 @@ export const createCharacterRecord = async (
   name: string,
   edit: CharacterProfileEdit,
   origin: Extract<CharacterOrigin, 'hand' | 'agent'> = 'hand',
+  idempotencyKey: string | null = null,
 ): Promise<CharacterId> => {
   const rows = await dbOf(scope)
     .insert(characters)
-    .values({ ...tenant(scope), name, origin, ...profileColumns(edit) })
+    .values({ ...tenant(scope), name, origin, idempotencyKey, ...profileColumns(edit) })
+    .onConflictDoNothing(onIdempotencyKeyConflict(characters))
     .returning({ id: characters.id })
-  const row = rows[0]
-  if (row === undefined) throw new Error('Folio: inserting a character returned no row.')
+  const row = await insertedOrExisting(
+    rows,
+    idempotencyKey,
+    async () => {
+      const found = await dbOf(scope)
+        .select({ id: characters.id })
+        .from(characters)
+        .where(scoped(scope, characters, eq(characters.idempotencyKey, idempotencyKey ?? '')))
+        .limit(1)
+      return found[0] ?? null
+    },
+    'character',
+  )
   return brandCharacterId(row.id)
 }
 

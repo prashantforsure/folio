@@ -193,6 +193,22 @@ export type ThreadAnchorKind = (typeof THREAD_ANCHOR_KINDS)[number]
 export const ThreadAnchorKindSchema = z.enum(THREAD_ANCHOR_KINDS)
 
 /**
+ * The two anchors an **editor** can open a thread on, taken out of the four
+ * rather than typed out again - a fifth anchor kind is added in one place.
+ *
+ * A `beat` is an older Outline anchor that still loads and is never written
+ * now, and a `storyboard_shot` is a shot rather than a node, so neither is a
+ * kind a block's `+` handle may send. The narrowing matters because the
+ * anchor kind is what `loadScript` and `loadOutline` filter their threads by:
+ * a thread opened under a kind neither route asks for is a comment drawn
+ * nowhere, written by a caller who passed a string the type system had
+ * already decided could not arrive.
+ */
+export const ThreadNodeKindSchema = ThreadAnchorKindSchema.extract(['script_node', 'outline_block'])
+
+export type ThreadNodeKind = z.infer<typeof ThreadNodeKindSchema>
+
+/**
  * The design README describes Notes as "an inbox of open/mine/resolved
  * comments". `mine` is a filter over the author, not a state, so the states are
  * two.
@@ -351,3 +367,21 @@ export const JobStatusSchema = z.enum(JOB_STATUSES)
 /** A job that will not change again. */
 export const isTerminalJobStatus = (status: JobStatus): boolean =>
   status === 'finished' || status === 'failed' || status === 'blocked' || status === 'cancelled'
+
+/**
+ * The two things a fixed window counts - ADR 0003 **D14**.
+ *
+ * A model can call a tool in a loop, which makes it the first thing in this
+ * product that generates load without a human clicking. The limits ship with
+ * it rather than after the first incident: **60** assistant requests per user
+ * per project per hour, **30** generate actions on the same terms.
+ *
+ * The third limit D14 names - two concurrent agent runs per project - is not
+ * here, because it is not a window. It is a count of live rows in `agent_runs`
+ * and it arrives with that table.
+ */
+export const RATE_LIMIT_BUCKETS = ['assistant', 'generate'] as const
+
+export type RateLimitBucket = (typeof RATE_LIMIT_BUCKETS)[number]
+
+export const RateLimitBucketSchema = z.enum(RATE_LIMIT_BUCKETS)

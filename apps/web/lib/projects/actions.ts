@@ -1,7 +1,7 @@
 'use server'
 
 import { CreateProjectInputSchema, LoglineSchema, ProjectIdSchema, TitleSchema } from '@folio/contracts'
-import type { ProjectId, UserId } from '@folio/contracts'
+import type { MembershipRole, ProjectId, UserId } from '@folio/contracts'
 import {
   createProjectFor,
   openProjectForRequest,
@@ -16,6 +16,7 @@ import {
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+import { ROLE, ROLE_REFUSED, meetsRole } from '../auth/roles'
 import { requireUser } from '../auth/session'
 import { importScript } from '../script/actions'
 import { IMPORT_IDLE } from '../script/result'
@@ -127,18 +128,27 @@ export const createProject = async (
 // ---------------------------------------------------------------------------
 
 /**
- * The membership gate, once, for the actions that take a project id from a
- * form. Returns the scope or the refusal a caller hands straight back.
+ * The membership **and role** gate, once, for the actions that take a project
+ * id from a form. Returns the scope or the refusal a caller hands straight
+ * back.
  *
- * The message is the same whether the project does not exist or is somebody
- * else's, and deliberately so: a different message for each would answer the
- * question "does this id exist" for anybody who asks.
+ * The not-found message is the same whether the project does not exist or is
+ * somebody else's, and deliberately so: a different message for each would
+ * answer the question "does this id exist" for anybody who asks. A member
+ * whose role is too low gets a different message, because they can already see
+ * the project and telling them it is gone would be a lie - the same split
+ * `lib/script/gate.ts` makes.
+ *
+ * Every caller here is `ROLE.projectAdmin`: renaming, archiving, trashing,
+ * restoring and purging are what ADR 0003 **D2** puts behind `owner`, being
+ * changes to the container rather than to the work.
  */
 const openForActor = async (
   raw: string,
   returnTo: string,
+  minimum: MembershipRole,
 ): Promise<
-  | { readonly ok: true; readonly projectId: ProjectId; readonly actor: UserId }
+  | { readonly ok: true; readonly projectId: ProjectId; readonly actor: UserId; readonly role: MembershipRole }
   | { readonly ok: false; readonly result: ProjectActionResult }
 > => {
   const user = await requireUser(returnTo)
@@ -147,7 +157,8 @@ const openForActor = async (
   const db = await transactionDatabase()
   const membership = await readMembershipFor(db, user.id, parsed.data)
   if (membership === null) return { ok: false, result: failure('form', 'That project could not be found.') }
-  return { ok: true, projectId: parsed.data, actor: user.id }
+  if (!meetsRole(membership.role, minimum)) return { ok: false, result: failure('form', ROLE_REFUSED) }
+  return { ok: true, projectId: parsed.data, actor: user.id, role: membership.role }
 }
 
 /**
@@ -159,10 +170,9 @@ const openForActor = async (
  * showed. An empty box *does* clear it: the column is nullable and the card
  * leaves the line out rather than printing an empty paragraph.
  *
- * Membership, not role, is the gate - the same reading as `restoreProject`
- * below: `memberships.role` is enforced nowhere yet, and deciding here that
- * only an owner may rename would be the first line of a capability model
- * nobody has specified.
+ * **Owner only**, with every other write on this route: renaming a project
+ * and setting its logline are changes to the container rather than to the
+ * work, which is the line ADR 0003 **D2** draws between writer and owner.
  */
 export const editProject = async (
   _previous: ProjectActionResult,
@@ -178,7 +188,7 @@ export const editProject = async (
     return failure('logline', 'That is longer than a logline. Keep it to a sentence or two.')
   }
 
-  const gate = await openForActor(field(formData, 'projectId'), '/app/projects')
+  const gate = await openForActor(field(formData, 'projectId'), '/app/projects', ROLE.projectAdmin)
   if (!gate.ok) return gate.result
 
   const scope = await openProjectForRequest(gate.projectId, gate.actor)
@@ -207,7 +217,7 @@ export const archiveProjects = async (
   if (ids.length === 0) return failure('form', 'Nothing was selected.')
 
   for (const id of ids) {
-    const gate = await openForActor(id, '/app/projects')
+    const gate = await openForActor(id, '/app/projects', ROLE.projectAdmin)
     if (!gate.ok) return gate.result
     const scope = await openProjectForRequest(gate.projectId, gate.actor)
     await setProjectArchived(scope, archived)
@@ -235,7 +245,7 @@ export const trashProjects = async (
   if (ids.length === 0) return failure('form', 'Nothing was selected.')
 
   for (const id of ids) {
-    const gate = await openForActor(id, '/app/projects')
+    const gate = await openForActor(id, '/app/projects', ROLE.projectAdmin)
     if (!gate.ok) return gate.result
     const scope = await openProjectForRequest(gate.projectId, gate.actor)
     await trashProjectRow(scope)
@@ -284,28 +294,19 @@ export const duplicateProjects = async (
 }
 
 /**
- * Bring a project back from the trash.
- *
- * Membership, not role, is the gate. `memberships.role` is stored and read by
- * nothing (`docs/build-decisions.md`, "Membership roles are stored and
- * enforced nowhere"), and deciding here that only an owner may restore would
- * be the first line of a capability model nobody has specified. Flagged in the
- * phase report; the row is one condition away from `owner` if that is ruled.
+ * Bring a project back from the trash. **Owner only** since ADR 0003 **D2** -
+ * taking a project out of the trash is a change to the container, and the row
+ * that was "one condition away from `owner` if that is ruled" is now that
+ * condition, through the same gate as the rest of the route.
  */
 export const restoreProject = async (
   _previous: ProjectActionResult,
   formData: FormData,
 ): Promise<ProjectActionResult> => {
-  const user = await requireUser('/app/trash')
+  const gate = await openForActor(field(formData, 'projectId'), '/app/trash', ROLE.projectAdmin)
+  if (!gate.ok) return gate.result
 
-  const projectId = ProjectIdSchema.safeParse(field(formData, 'projectId'))
-  if (!projectId.success) return failure('form', 'That project could not be found.')
-
-  const db = await transactionDatabase()
-  const membership = await readMembershipFor(db, user.id, projectId.data)
-  if (membership === null) return failure('form', 'That project could not be found.')
-
-  const scope = await openProjectForRequest(projectId.data, user.id)
+  const scope = await openProjectForRequest(gate.projectId, gate.actor)
   await restoreProjectRow(scope)
 
   revalidatePath('/app', 'layout')
@@ -326,24 +327,16 @@ export const restoreProject = async (
  * history cannot be hard-deleted and would need a tombstone instead; not
  * recoverable. Every one of those is a decision, which is why none is here.
  *
- * The role check *is* here, because it is part of what is being proposed and
- * a reviewer should see the shape of the gate rather than imagine it.
+ * The role check is the route's own gate now (ADR 0003 **D2**): purge is
+ * `ROLE.projectAdmin`, like everything else here, rather than the one
+ * hand-written `role !== 'owner'` it used to be.
  */
 export const purgeProject = async (
   _previous: ProjectActionResult,
   formData: FormData,
 ): Promise<ProjectActionResult> => {
-  const user = await requireUser('/app/trash')
-
-  const projectId = ProjectIdSchema.safeParse(field(formData, 'projectId'))
-  if (!projectId.success) return failure('form', 'That project could not be found.')
-
-  const db = await transactionDatabase()
-  const membership = await readMembershipFor(db, user.id, projectId.data)
-  if (membership === null) return failure('form', 'That project could not be found.')
-  if (membership.role !== 'owner') {
-    return failure('form', 'Only the project’s owner can delete it forever.')
-  }
+  const gate = await openForActor(field(formData, 'projectId'), '/app/trash', ROLE.projectAdmin)
+  if (!gate.ok) return gate.result
 
   return failure(
     'form',

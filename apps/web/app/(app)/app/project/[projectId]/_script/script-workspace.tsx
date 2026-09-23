@@ -17,7 +17,7 @@ import type { Editor } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 
-import { createMention, exportScriptFdx, saveScript, setFormat, setPagination } from '../../../../../../lib/script/actions'
+import { createMention, exportScriptFdx, exportScriptFountain, saveScript, setFormat, setPagination } from '../../../../../../lib/script/actions'
 import type { IdentityLog } from '../../../../../../lib/script/identity'
 import { newIdentityLog, retirementsSince } from '../../../../../../lib/script/identity'
 import type { LabelFor } from '../../../../../../lib/script/inline'
@@ -515,6 +515,14 @@ export const ScriptWorkspace = ({
           setLabels((existing) => (JSON.stringify(existing) === JSON.stringify(result.labels) ? existing : result.labels))
           setConflict(result.conflict)
           setSaveState({ kind: 'saved', at: Date.now() })
+        } else if (result.status === 'stale') {
+          // Unreachable from here: this editor never sends `expectedDigest`,
+          // because it *is* the open editor and last-write-wins with a banner
+          // is the ruling for two people typing (AGENTS.md, no realtime). The
+          // branch exists because the result type has the case, and a client
+          // that silently ignored a write that did not happen is the failure
+          // the compare-and-swap was added to prevent.
+          setSaveState({ kind: 'error', message: 'The script changed under this edit. Reload to continue.' })
         } else if (result.status === 'ids-unusable') {
           setSaveState({ kind: 'error', message: `${String(result.ids.length)} id(s) were already used. Reload to continue.` })
         } else {
@@ -801,6 +809,44 @@ export const ScriptWorkspace = ({
         setExporting(false)
       })
   }, [draft, episode, exporting, projectId])
+  /**
+   * The same flush-then-download, as Fountain. A separate callback rather than
+   * a parameter on the first: the two results are different shapes - one is
+   * XML with four kinds of caveat, the other is text with two - and folding
+   * them together would mean a union at every line that reads one.
+   */
+  const onExportFountain = useCallback(() => {
+    if (draft === null || exporting) return
+    setExporting(true)
+    setExportNotice(null)
+    const flush = saveTimer.current === null && !inFlight.current ? Promise.resolve() : saveRef.current(false)
+    void flush
+      .then(() => exportScriptFountain(projectId, episode))
+      .then((result) => {
+        if (result.status !== 'exported') {
+          setExportNotice(result.message)
+          return
+        }
+        const url = URL.createObjectURL(new Blob([result.text], { type: 'text/plain;charset=utf-8' }))
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = result.filename
+        anchor.click()
+        URL.revokeObjectURL(url)
+        const plural = (count: number, noun: string): string => `${String(count)} ${noun}${count === 1 ? '' : 's'}`
+        const notes: string[] = []
+        if (result.omitted > 0) notes.push(`${plural(result.omitted, 'note')} left out`)
+        if (result.forced > 0) notes.push(`${plural(result.forced, 'block')} written with an explicit marker`)
+        setExportNotice(notes.length === 0 ? `Exported ${result.filename}.` : `Exported ${result.filename} · ${notes.join(' · ')}.`)
+      })
+      .catch((cause: unknown) => {
+        setExportNotice(cause instanceof Error ? cause.message : 'The export did not reach the server.')
+      })
+      .finally(() => {
+        setExporting(false)
+      })
+  }, [draft, episode, exporting, projectId])
+
   const onUndo = useCallback(() => {
     editorRef.current?.commands.undo()
   }, [])
@@ -892,6 +938,7 @@ export const ScriptWorkspace = ({
           stats={stats}
           onImport={onImport}
           onExport={onExport}
+          onExportFountain={onExportFountain}
           exporting={exporting}
           exportNotice={exportNotice}
           onUndo={onUndo}

@@ -4,7 +4,10 @@ import { TitleSchema } from '@folio/contracts'
 import { appendEpisode, deleteEpisode as remove, listEpisodes, renameEpisode as rename } from '@folio/db'
 import { revalidatePath } from 'next/cache'
 
-import { isRefusal, openEpisode, openProject } from '../script/gate'
+import { ROLE } from '../auth/roles'
+import { BAD_IDEMPOTENCY_KEY, idempotencyKeyOf } from '../idempotency'
+import { REFUSED, isRefusal, openEpisode, openProject } from '../script/gate'
+import type { GateRefusal } from '../script/gate'
 import { defaultEpisodeTitle } from './format'
 import { episodeRouteHref } from './hrefs'
 import type { EpisodeActionResult } from './result'
@@ -15,10 +18,11 @@ import type { EpisodeActionResult } from './result'
  * sidebar's title row) and `Delete episode…` (the header menu's confirm).
  *
  * Same gate as every other action (`lib/script/gate.ts`): identity, then
- * membership, then a scope. Membership, not role - `memberships.role` is
- * read by nothing yet (`docs/build-decisions.md`), and deciding here that
- * only an owner may add or rename an episode would be the first line of a
- * capability model nobody has specified.
+ * membership, then the role. The split here is ADR 0003 **D2**'s own line -
+ * creating and renaming an episode is a writer's (`ROLE.episodeCreate`),
+ * deleting one is the owner's (`ROLE.episodeDelete`), because an episode is a
+ * container of work and taking it away is a different kind of act from
+ * filling it.
  *
  * **A film refuses to add.** AGENTS.md, Routing: a film has exactly one
  * episode row, and the router hides the segment. A second row would give the
@@ -48,14 +52,35 @@ import type { EpisodeActionResult } from './result'
 
 const NOT_FOUND = 'That project could not be found.'
 
+/**
+ * A gate refusal as this route's result.
+ *
+ * Every refusal used to become `NOT_FOUND`, which was already wrong for "Sign
+ * in to keep writing" and became worse with roles: a member told their episode
+ * does not exist, when what happened is that their role does not reach
+ * `ROLE.episodeDelete`, will look for the episode. Only the gate's own
+ * not-found wording is replaced - and only to say "project" where the shared
+ * gate says "script", because this popover is about neither.
+ */
+const refusalOf = (gate: GateRefusal): EpisodeActionResult => ({
+  status: 'error',
+  message: gate.message === REFUSED.message ? NOT_FOUND : gate.message,
+})
+
 const parseTitle = (raw: unknown): string | null => {
   const parsed = TitleSchema.safeParse(typeof raw === 'string' ? raw : '')
   return parsed.success ? parsed.data : null
 }
 
-export const createEpisode = async (projectId: string, title: string | null): Promise<EpisodeActionResult> => {
-  const gate = await openProject(projectId)
-  if (isRefusal(gate)) return { status: 'error', message: gate.status === 'refused' ? NOT_FOUND : gate.message }
+export const createEpisode = async (
+  projectId: string,
+  title: string | null,
+  rawKey: unknown = null,
+): Promise<EpisodeActionResult> => {
+  const key = idempotencyKeyOf(rawKey)
+  if (!key.ok) return { status: 'error', message: BAD_IDEMPOTENCY_KEY }
+  const gate = await openProject(projectId, ROLE.episodeCreate)
+  if (isRefusal(gate)) return refusalOf(gate)
   if (gate.project.projectType === 'film') {
     return { status: 'error', message: 'A film is one document. It has one episode and cannot take another.' }
   }
@@ -66,7 +91,7 @@ export const createEpisode = async (projectId: string, title: string | null): Pr
   const named = title === null || title.trim().length === 0 ? defaultEpisodeTitle(next) : parseTitle(title)
   if (named === null) return { status: 'error', message: 'A name is up to 200 characters.' }
 
-  const episode = await appendEpisode(gate.scope, named)
+  const episode = await appendEpisode(gate.scope, named, key.key)
   revalidatePath(`/app/project/${gate.project.id}`, 'layout')
   return {
     status: 'done',
@@ -79,8 +104,8 @@ export const renameEpisode = async (projectId: string, episodeSlug: string, titl
   const named = parseTitle(title)
   if (named === null) return { status: 'error', message: 'Give the episode a name - up to 200 characters.' }
 
-  const gate = await openEpisode(projectId, episodeSlug)
-  if (isRefusal(gate)) return { status: 'error', message: gate.status === 'refused' ? NOT_FOUND : gate.message }
+  const gate = await openEpisode(projectId, episodeSlug, ROLE.episodeCreate)
+  if (isRefusal(gate)) return refusalOf(gate)
 
   if (named !== gate.episode.title) await rename(gate.scope, gate.episode.id, named)
   revalidatePath(`/app/project/${gate.project.id}`, 'layout')
@@ -93,8 +118,8 @@ export const renameEpisode = async (projectId: string, episodeSlug: string, titl
 }
 
 export const deleteEpisode = async (projectId: string, episodeSlug: string): Promise<EpisodeActionResult> => {
-  const gate = await openEpisode(projectId, episodeSlug)
-  if (isRefusal(gate)) return { status: 'error', message: gate.status === 'refused' ? NOT_FOUND : gate.message }
+  const gate = await openEpisode(projectId, episodeSlug, ROLE.episodeDelete)
+  if (isRefusal(gate)) return refusalOf(gate)
   if (gate.project.projectType === 'film') {
     return { status: 'error', message: 'A film is one document. Its episode is the film; trash the project instead.' }
   }

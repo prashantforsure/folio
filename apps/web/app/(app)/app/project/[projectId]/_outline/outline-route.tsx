@@ -1,4 +1,4 @@
-import { listComments, listMemberProfiles } from '@folio/db'
+import { listCommentsFor, listMemberProfiles } from '@folio/db'
 import { notFound } from 'next/navigation'
 
 import { loadOutline } from '../../../../../../lib/outline/server'
@@ -40,27 +40,28 @@ export const OutlineRoute = async ({
   if (load.state === 'draft') {
     const members = await listMemberProfiles(scope)
     const nameOf = (userId: string): string => members.find((member) => member.userId === userId)?.displayName ?? 'Someone'
-    const threads: ThreadView[] = await Promise.all(
-      load.threads.map(async (thread): Promise<ThreadView> => {
-        const comments = await listComments(scope, thread.id)
+    // One statement for every thread's comments, not one per thread: over the
+    // transaction pooler each is two round trips and they cannot be pipelined.
+    const commentsByThread = await listCommentsFor(
+      scope,
+      load.threads.map((thread) => thread.id),
+    )
+    const threads: ThreadView[] = load.threads.map((thread): ThreadView => ({
+      id: thread.id,
+      nodeId: thread.anchor.kind === 'storyboard_shot' ? '' : (thread.anchor.nodeId as string),
+      state: thread.state,
+      turns: (commentsByThread.get(thread.id) ?? []).map((comment) => {
+        const who = nameOf(comment.authorId)
         return {
-          id: thread.id,
-          nodeId: thread.anchor.kind === 'storyboard_shot' ? '' : (thread.anchor.nodeId as string),
-          state: thread.state,
-          turns: comments.map((comment) => {
-            const who = nameOf(comment.authorId)
-            return {
-              id: comment.id,
-              who,
-              initials: initialsOf(who),
-              when: whenLabel(comment.createdAt),
-              body: comment.body,
-              mine: comment.authorId === user.id,
-            }
-          }),
+          id: comment.id,
+          who,
+          initials: initialsOf(who),
+          when: whenLabel(comment.createdAt),
+          body: comment.body,
+          mine: comment.authorId === user.id,
         }
       }),
-    )
+    }))
     const drafts: RevisionRow[] = load.versions
       .filter((version) => version.reason === 'manual')
       .map((version): RevisionRow => ({

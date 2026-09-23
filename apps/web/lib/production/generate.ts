@@ -16,6 +16,8 @@ import type { InlineContent } from '@folio/script'
 import { after } from 'next/server'
 import { z } from 'zod'
 
+import { checkRateLimit } from '../agent/rate-limit'
+import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisode } from '../script/gate'
 import type { EpisodeGate } from '../script/gate'
 import { storageAvailable } from '../storage/r2'
@@ -43,6 +45,16 @@ import { composeScenes, readCastAndPlaces } from './server'
  * `GENERATION_COSTS[job]`, and the same number is what `createGeneration`
  * reserves. "Reserve then execute": the balance is checked in the insert's
  * `WHERE`, never inside the run.
+ *
+ * ## The rate limit, and the one action exempt from it
+ *
+ * The five actions that *start* work take `checkRateLimit(scope, actor,
+ * 'generate')` after the gate - 30 an hour per user per project, ADR 0003
+ * **D14**. **`cancelGeneration` does not**, and that is deliberate rather than
+ * an oversight: it starts nothing, and refusing it is refusing somebody the
+ * stop button on work that is already running and already holding credits. A
+ * caller can only reach a cancel refusal by having made thirty generations in
+ * the hour, which is exactly the person who most needs to stop one.
  */
 
 const NOT_A_REEL = 'That reel is not in this episode. Reload the page.'
@@ -136,8 +148,10 @@ export const generateSheet = async (projectId: string, episode: string, rawReelI
   if (!reelId.success) return error(NOT_A_REEL)
   const off = connected('storyboard_sheet')
   if (off !== null) return off
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
+  const limited = await checkRateLimit(gate.scope, gate.actor, 'generate')
+  if (limited !== null) return limited
   const g = await ground(gate)
   if (isFailure(g)) return g
   const found = findReel(g.scenes, reelId.data)
@@ -153,8 +167,10 @@ export const generateSceneImage = async (projectId: string, episode: string, raw
   if (!sceneNodeId.success) return error(NOT_A_SCENE)
   const off = connected('scene_image')
   if (off !== null) return off
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
+  const limited = await checkRateLimit(gate.scope, gate.actor, 'generate')
+  if (limited !== null) return limited
   const g = await ground(gate)
   if (isFailure(g)) return g
   const scene = g.scenes.find((candidate) => candidate.sceneNodeId === sceneNodeId.data)
@@ -171,8 +187,10 @@ export const generateFrames = async (projectId: string, episode: string, raw: un
   if (!ids.success) return error('Pick at least one shot.')
   const off = connected('shot_frame')
   if (off !== null) return off
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
+  const limited = await checkRateLimit(gate.scope, gate.actor, 'generate')
+  if (limited !== null) return limited
   const g = await ground(gate)
   if (isFailure(g)) return g
   let last: GenerationResult | null = null
@@ -197,8 +215,10 @@ export const generateFrames = async (projectId: string, episode: string, raw: un
 export const aiShotlist = async (projectId: string, episode: string, rawReelId: unknown): Promise<GenerationResult> => {
   const reelId = ReelIdSchema.safeParse(rawReelId)
   if (!reelId.success) return error(NOT_A_REEL)
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
+  const limited = await checkRateLimit(gate.scope, gate.actor, 'generate')
+  if (limited !== null) return limited
   const g = await ground(gate)
   if (isFailure(g)) return g
   const found = findReel(g.scenes, reelId.data)
@@ -230,8 +250,10 @@ export const shootReel = async (projectId: string, episode: string, rawReelId: u
   if (!reelId.success) return error(NOT_A_REEL)
   const off = connected('shoot_reel')
   if (off !== null) return off
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
+  const limited = await checkRateLimit(gate.scope, gate.actor, 'generate')
+  if (limited !== null) return limited
   const g = await ground(gate)
   if (isFailure(g)) return g
   const found = findReel(g.scenes, reelId.data)
@@ -245,7 +267,7 @@ export const shootReel = async (projectId: string, episode: string, rawReelId: u
 export const cancelGeneration = async (projectId: string, episode: string, rawId: unknown): Promise<CancelResult> => {
   const id = ProductionGenerationIdSchema.safeParse(rawId)
   if (!id.success) return error('That generation is not in this episode.')
-  const gate = await openEpisode(projectId, episode)
+  const gate = await openEpisode(projectId, episode, ROLE.paidGeneration)
   if (isRefusal(gate)) return gate
   const result = await cancelGenerationRow(gate.scope, id.data)
   if (result.status === 'no-generation') return error('That generation is not in this episode.')

@@ -23,5 +23,10 @@ export type SaveOutlineResult =
       readonly acts: number
     }
   | { readonly status: 'ids-unusable'; readonly ids: readonly NodeId[] }
+  /**
+   * The save carried an `expectedDigest` and the stored list has moved since.
+   * **Nothing was written.** The Script route's `stale`, for the same reason.
+   */
+  | { readonly status: 'stale'; readonly conflict: SaveConflict }
   | { readonly status: 'invalid'; readonly message: string }
   | { readonly status: 'refused'; readonly message: string }

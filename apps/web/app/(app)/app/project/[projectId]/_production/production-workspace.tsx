@@ -143,7 +143,15 @@ export const ProductionWorkspace = ({ projectId, episode, load }: ProductionWork
 
   const failed = useCallback(
     (result: { readonly status: string; readonly message?: string }): boolean => {
-      if (result.status === 'refused' || result.status === 'error' || result.status === 'busy') {
+      // `rate-limited` is here rather than in `spent` because it is a refusal
+      // like the others - and because a status this helper does not name is a
+      // click that does nothing at all, which is worse than any message.
+      if (
+        result.status === 'refused' ||
+        result.status === 'error' ||
+        result.status === 'busy' ||
+        result.status === 'rate-limited'
+      ) {
         tell(result.message ?? 'That did not save.')
         return true
       }

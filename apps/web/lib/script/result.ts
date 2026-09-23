@@ -46,6 +46,12 @@ export type SaveScriptResult =
     }
   /** Ids the client minted that are tombstoned or already in use. Re-mint and retry. */
   | { readonly status: 'ids-unusable'; readonly ids: readonly NodeId[] }
+  /**
+   * The save carried an `expectedDigest` and the stored list has moved since.
+   * **Nothing was written.** Distinct from `saved` with a `conflict`, which
+   * means the opposite - the write landed over somebody else's.
+   */
+  | { readonly status: 'stale'; readonly conflict: SaveConflict }
   /** The payload did not read as a node list. Nothing was written. */
   | { readonly status: 'invalid'; readonly message: string }
   | { readonly status: 'refused'; readonly message: string }
@@ -75,6 +81,25 @@ export type ExportScriptResult =
       readonly subtitlesAsGeneral: number
       readonly unresolvedMentions: number
       readonly emptyBlocks: number
+    }
+  | { readonly status: 'error'; readonly message: string }
+  | { readonly status: 'refused'; readonly message: string }
+
+/**
+ * Fountain out. Plain text rather than XML, and a different set of caveats -
+ * `serialiseFountain` reports what it had to force, not what it dropped,
+ * because its promise is a round trip: parse what it writes and the same nodes
+ * come back.
+ */
+export type ExportFountainResult =
+  | {
+      readonly status: 'exported'
+      readonly filename: string
+      readonly text: string
+      /** Comment nodes, which never enter an export (AGENTS.md, Export). */
+      readonly omitted: number
+      /** Blocks the serialiser had to force so the parser reads them back as the same type. */
+      readonly forced: number
     }
   | { readonly status: 'error'; readonly message: string }
   | { readonly status: 'refused'; readonly message: string }

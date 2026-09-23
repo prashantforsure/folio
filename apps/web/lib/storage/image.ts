@@ -49,6 +49,13 @@ export type ImageCheck =
  * Read a form entry as an image: a `File`, not empty, under `maxBytes`, and
  * one of the three formats by its bytes. `noun` names it in the messages -
  * `A portrait is…`, `A photo is…`.
+ *
+ * **Call this after the gate, never before.** `arrayBuffer()` pulls the whole
+ * upload into this process's memory, and the size cap below cannot prevent
+ * that - by the time it is checked, the body has already been accepted. An
+ * upload action that read the file first let anyone who is not signed in make
+ * the server buffer the entire action body limit per request. Every caller
+ * gates first (AGENT_READINESS_REPORT.md 3.4.3, finding 11).
  */
 export const readImage = async (entry: FormDataEntryValue | null, maxBytes: number, noun: string): Promise<ImageCheck> => {
   if (!(entry instanceof File)) return { ok: false, status: 'error', message: 'Pick an image to upload.' }

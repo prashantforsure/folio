@@ -1,7 +1,7 @@
 import type { Thread, ThreadAnchor, ThreadComment, ThreadId, UserId } from '@folio/contracts'
 import { projectId as brandProjectId, threadId as brandThreadId } from '@folio/contracts'
 import type { NodeId } from '@folio/script'
-import { asc, eq, isNull } from 'drizzle-orm'
+import { asc, eq, inArray, isNull } from 'drizzle-orm'
 
 import { commentThreads, threadComments } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
@@ -180,6 +180,37 @@ export const listComments = async (
     .where(scoped(scope, threadComments, eq(threadComments.threadId, threadId)))
     .orderBy(asc(threadComments.createdAt))
   return rows.map(toComment)
+}
+
+/**
+ * The comments of many threads, in one statement, grouped by thread.
+ *
+ * The routes that draw a document's threads were calling `listComments` once
+ * per thread inside a `Promise.all`: on the dev pooler a parameterised
+ * statement is two round trips and cannot be pipelined
+ * (`client.ts`), so a script with forty comment threads paid eighty of them on
+ * a page load. This is one, whatever the count. A thread with no comments is
+ * absent from the map rather than present and empty - the caller reads it with
+ * `?? []`, and an empty entry would be a row that does not exist.
+ */
+export const listCommentsFor = async (
+  scope: ProjectScope,
+  threadIds: readonly ThreadId[],
+): Promise<ReadonlyMap<ThreadId, readonly ThreadComment[]>> => {
+  if (threadIds.length === 0) return new Map()
+  const rows = await dbOf(scope)
+    .select()
+    .from(threadComments)
+    .where(scoped(scope, threadComments, inArray(threadComments.threadId, threadIds)))
+    .orderBy(asc(threadComments.createdAt))
+  const byThread = new Map<ThreadId, ThreadComment[]>()
+  for (const row of rows) {
+    const key = row.threadId as ThreadId
+    const held = byThread.get(key)
+    if (held === undefined) byThread.set(key, [toComment(row)])
+    else held.push(toComment(row))
+  }
+  return byThread
 }
 
 /**

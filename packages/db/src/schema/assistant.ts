@@ -24,10 +24,13 @@ import { episodes, projects, users } from './tenancy'
  *
  * ## Not the ledger
  *
- * No cost column. Whether a message costs credits is undecided (AGENTS.md
- * open decision 13, added with this table); a chat writes no ledger row and
- * reserves nothing. When it does, the entry links here by `chat_id` the way a
- * generation links to its job.
+ * No cost column, and now by ruling rather than by omission: ADR 0003 **D3**
+ * (2026-09-23) closed AGENTS.md open decision 13 - conversation turns are
+ * **not charged** at launch, and what is recorded per run is tokens, on
+ * `agent_runs`. A chat writes no ledger row and reserves nothing. If turns
+ * are ever priced, the entry links here by `chat_id` the way a generation
+ * links to its job, and the token counts to price them with are already
+ * there.
  */
 
 export const assistantRoleEnum = pgEnum('assistant_role', ASSISTANT_ROLES)

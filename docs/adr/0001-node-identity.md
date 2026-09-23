@@ -18,8 +18,8 @@
 > consequential one to revisit is Q3, which fixes a column shape in
 > `packages/db`.
 >
-> AGENTS.md's *Open decisions* table still lists row 1 as open. It has not been
-> edited — amending the contract is a separate call.
+> AGENTS.md's *Open decisions* table listed row 1 as open when this was written.
+> **It has since been amended** — row 1 is struck there and points here.
 
 ## Context
 
@@ -213,6 +213,13 @@ context weighed it.** The one most worth a human look is 5.
    says the id survives a type change. The contradiction identified in the
    section above resolves this way or not at all.
 
+   > **Amended 2026-09-23 — [ADR 0003](./0003-agent-copilot.md) D8.** A scene's
+   > identity **is** its heading node id. There is no second id space, and the
+   > `SCENE_xxx` / `scene_xxx` prefixed form is retired. The objection above
+   > survives intact, because it was an objection to the **prefix** and not to
+   > sharing the id: with no prefix there is nothing to change when a heading is
+   > retyped. See *Amendment, 2026-09-23* at the end of this file.
+
 4. **Record-id prefixes are lower case**: `scene_…`, `ep_…`, `chr_…`, `loc_…`.
    One rule across every id space, matching the `ep_NNN` that AGENTS.md already
    fixes in lower case, so the route spec's `SCENE_xxx` becomes `scene_xxx`.
@@ -248,8 +255,18 @@ within a document when they are absent and mints across documents**, delete
 **globally unique, opaque, no type prefix** — with `SCENE_xxx` read as the
 derived scene record's id, in a different id space from node ids.
 
-That set is internally consistent and each piece is testable. It is a
-recommendation and not a decision, and none of it is in the codebase.
+That set is internally consistent and each piece is testable. It was offered as a
+recommendation and not a decision.
+
+**It was adopted whole, and it is implemented.** The header comment of
+[`packages/script/src/operations.ts`](../../packages/script/src/operations.ts)
+names each rule at the point it is enforced: split keeps the head's id and
+re-points anchors past the split at the tail through a `split` event; merge
+keeps the first id and retires the second with a `merged` event carrying the
+offset shift; paste preserves an id when the clipboard came from this document
+and the id is currently absent, and mints otherwise; delete tombstones and an id
+is never reused; reorder and type change preserve every id. None of the seven
+operations mints an id, and none of them throws.
 
 ## Consequences
 
@@ -263,9 +280,13 @@ recommendation and not a decision, and none of it is in the codebase.
 - **Two id spaces, not one.** `scene_…` addresses a derived scene record and
   appears in URLs; a node id is opaque and appears in no URL. Anything that
   reads a scene id out of a route must not hand it to a node lookup.
-- **Episode identity is unresolved in the schema.** Ruling 5 says `ep_NNN` is a
-  slug over a separate key. Nothing in the repo implements either yet, so the
-  cost of reversing it is currently zero and rises the moment a migration lands.
+- **Episode identity is settled.** Ruling 5 said `ep_NNN` is a slug over a
+  separate key; [ADR 0002](./0002-episode-identity.md) took that question on its
+  own and `packages/db` implements it — `episodes` carries `id` (an opaque
+  uuid, the key), `slug` (`ep_NNN`, shape-checked, what the router reads) and
+  `ordinal`, with a unique index on each within a project. Migration `0000`
+  landed it, so **reversing it is no longer free**: it is a data migration now,
+  not a schema edit.
 - **Import is unblocked.** Fountain and FDX both ship taking `freshIds` from the
   caller, so neither had to wait for any of this.
 
@@ -280,3 +301,48 @@ anchor. The failure mode this decision has to avoid is a system that, having
 lost an id at a split, starts anchoring comments by text offset or by matching
 prose. That is the classic case of another surface quietly becoming
 authoritative, and it is what makes this worth an ADR rather than a commit.
+
+---
+
+## Amendment, 2026-09-23 — Ruling 3, and the id spaces
+
+[ADR 0003](./0003-agent-copilot.md) **D8** rules that **a scene's identity is its
+heading node id**. This amends **Ruling 3** above, which said `SCENE_xxx` was the
+derived scene record's id "in a different id space". It also closes AGENTS.md
+open decision 10, which existed because this ADR and the code disagreed.
+
+**The code was right, and Ruling 3's reasoning survives.** Ruling 3 objected to a
+**type prefix** on a node id: a prefix would have to change when a Scene node is
+retyped to Action, and AGENTS.md says an id survives a type change. That
+objection is answered completely by dropping the prefix rather than by inventing
+a second id space. The id is opaque — **Ruling 1 is untouched** — and retyping a
+heading changes no id at all: the scene record simply stops existing, which is
+what `derive` already does.
+
+**What the code has always done.** `SceneRecord.id` is the heading node's own id
+(`packages/script/src/entities.ts:332-336`, which gives the reason: a node id
+already survives splits, merges, type changes and reorders, "which is exactly the
+lifetime a scene record needs", and 220 scenes cost zero entropy). `scenes` is
+keyed by `scene_node_id` as its primary key — "it is the **heading node's id**,
+not a minted one" (`packages/db/src/schema/derived.ts:580-583`). Five more tables
+key a scene the same way, and Production's v12 schema names this open decision
+while doing it (`packages/db/src/schema/production.ts:66-69`).
+
+**What changes in this file:**
+
+- **Ruling 3** now reads: the scene record's id *is* the heading node's id.
+  `SCENE_xxx` and `scene_xxx` address nothing.
+- **Ruling 4** is unaffected for `ep_…`, `chr_…` and `loc_…`. Its `scene_…`
+  example is void — there is no scene prefix to lower-case.
+- The Consequences bullet **"Two id spaces, not one"** no longer holds. There is
+  one id space. A scene id appearing in a URL *is* a node id, and the warning
+  that "anything that reads a scene id out of a route must not hand it to a node
+  lookup" is reversed: that is now exactly what it is for.
+- Nothing else is amended. Split, merge, paste, delete and type change are
+  unchanged, and `packages/script` still codifies no id format.
+
+**Why this direction.** Minting a separate scene id now would mean spending an id
+for every scene in every script that already exists, to be the join key for a
+join that already works, and migrating six tables to use it. The contradiction
+was between a ruling and its implementation; it resolves toward the one that has
+rows.

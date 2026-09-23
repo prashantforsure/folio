@@ -1,3 +1,5 @@
+import type { ThreadNodeKind as ContractThreadNodeKind } from '@folio/contracts'
+
 /**
  * What the Script route's threads and revisions look like once the server
  * has shaped them.
@@ -44,8 +46,13 @@ export type ThreadView = {
  * Script's blocks are `script_node`; the Outline's are `outline_block`
  * (since its v2 pass, 2026-09-16 - its older `beat` anchors still load).
  * `storyboard_shot` is a shot, not a node, and no editor opens one.
+ *
+ * Re-exported from `@folio/contracts` rather than written out a second time:
+ * the action parses `kind` with `ThreadNodeKindSchema`, and a type that said
+ * one thing while the parse said another is the drift the boundary schema
+ * exists to prevent.
  */
-export type ThreadNodeKind = 'script_node' | 'outline_block'
+export type ThreadNodeKind = ContractThreadNodeKind
 
 export type ThreadCard = {
   readonly id: string

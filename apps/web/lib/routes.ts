@@ -16,14 +16,17 @@ import type { Route } from 'next'
  *
  * ## The assertion is not the safety; `safeNext` is
  *
- * What actually protects this is validation, in two places, both of which run
+ * What actually protects this is validation, in three places, all of which run
  * before anything reaches here:
  *
- *   - `safeNextParam()` in `app/(auth)/_form/shell.tsx`, before the value is
- *     put into a hidden input, and
- *   - `safeNext()` in `app/auth/callback/route.ts`, before it is followed.
+ *   - `safeNextParam()` in `app/(auth)/sign-in/page.tsx` and `sign-up/page.tsx`,
+ *     before the value is put into a hidden input,
+ *   - `safeNextParam()` in `lib/auth/actions.ts`, on the way back out of the
+ *     form - the hidden input is a suggestion and the request body is what
+ *     arrives, so the render-time check protects nothing on its own, and
+ *   - `safeNextParam()` in `app/auth/callback/route.ts`, before it is followed.
  *
- * Both require a single leading slash and reject a second, so `//evil.example`
+ * All three require a single leading slash and reject a second, so `//evil.example`
  * and `https://evil.example` are both refused. That double slash is the case
  * that is easy to miss: a browser reads `//host` as protocol-relative, and a
  * naive `startsWith('/')` waves it through. An unchecked redirect target on a
@@ -41,11 +44,12 @@ export const asRoute = (path: string): Route => path as Route
 /**
  * `next` out of `searchParams`, made safe before it reaches a hidden input.
  *
- * Same rule as `safeNext()` in the callback route: one leading slash and not
- * two, so neither `//evil.example` nor an absolute URL survives. It is applied
- * in both places on purpose - this one stops a hostile value being planted in
- * the form, and that one stops it being followed. Either alone leaves a path
- * where the other is not consulted.
+ * One leading slash and not two, so neither `//evil.example` nor an absolute
+ * URL survives. It is applied at each of the three points above on purpose -
+ * rendering the form, reading the submitted field, and following the callback.
+ * Any one alone leaves a path where the others are not consulted, and the
+ * render-time one is the weakest of the three: nothing obliges a request to
+ * carry the value that was drawn.
  *
  * It lives here rather than beside the forms because it is pure, and because a
  * redirect guard that sits in a file full of JSX is a redirect guard nobody

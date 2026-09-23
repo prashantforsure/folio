@@ -5,6 +5,7 @@ import { writeSceneSynopsis } from '@folio/db'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisode } from '../script/gate'
 import type { SynopsisResult } from './result'
 
@@ -19,8 +20,8 @@ import type { SynopsisResult } from './result'
  *
  * The gate is the Script route's (`gate.ts`): identity, membership, scope,
  * project, episode - the same order, the same refusal for a stranger and a
- * missing project. Membership, not role: `memberships.role` is enforced
- * nowhere yet (`docs/build-decisions.md`), and this is not the place to start.
+ * missing project - and the role, `ROLE.authoredEdit`: a synopsis is an
+ * authored field, so it is a writer's (ADR 0003 D2).
  *
  * There is no create, delete or reorder here, and there will not be. Scenes
  * come from headings, through derivation, and the Script route is where a
@@ -44,7 +45,7 @@ export const saveSynopsis = async (raw: SaveSynopsisInput): Promise<SynopsisResu
     return { status: 'error', message: `A synopsis is text up to ${String(SYNOPSIS_MAX)} characters.` }
   }
   const input = parsed.data
-  const gate = await openEpisode(input.projectId, input.episode)
+  const gate = await openEpisode(input.projectId, input.episode, ROLE.authoredEdit)
   if (isRefusal(gate)) return gate
 
   const written = await writeSceneSynopsis(gate.scope, input.sceneNodeId, input.synopsis)
