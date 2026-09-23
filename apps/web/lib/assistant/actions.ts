@@ -4,7 +4,7 @@ import type { AssistantChatId } from '@folio/contracts'
 import { AssistantChatIdSchema } from '@folio/contracts'
 import { countRunSteps, createChat, deleteChat, listChats, listMessages, listRunProposals, readBackgroundRun, readChat, readChatRun } from '@folio/db'
 
-import { runViewOf } from '../agent/runs'
+import { runViewOf, storyCheckpointOf } from '../agent/runs'
 import { ROLE } from '../auth/roles'
 import { isRefusal, openEpisode } from '../script/gate'
 import type { ChatResult, ChatsResult, SimpleAssistantResult } from './result'
@@ -52,7 +52,14 @@ export const openAssistantChat = async (
   const view =
     run === null
       ? null
-      : runViewOf(run.run, run.input, await listRunProposals(gate.scope, run.run.id), await countRunSteps(gate.scope, run.run.id), gate.actor)
+      : runViewOf(
+          run.run,
+          run.input,
+          await listRunProposals(gate.scope, run.run.id),
+          await countRunSteps(gate.scope, run.run.id),
+          gate.actor,
+          await storyCheckpointOf(gate.scope, run.run, run.input),
+        )
   return { status: 'ok', chat: chatRowOf(chat), messages: visibleMessages(messages), run: view }
 }
 

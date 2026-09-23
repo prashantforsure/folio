@@ -1,11 +1,11 @@
-import type { AgentRun, AgentRunMode, AgentRunStatus, AssistantChatId, AssistantMessageId, BackgroundRunInput, EpisodeId, UserId } from '@folio/contracts'
+import type { AgentRun, AgentRunMode, AgentRunStatus, AssistantChatId, AssistantMessageId, BackgroundRunInput, EpisodeId, StoryCheckpoint, UserId } from '@folio/contracts'
 import { assistantChatId, assistantMessageId, episodeId as brandEpisodeId, projectId as brandProjectId } from '@folio/contracts'
 import type { RunId } from '@folio/script'
 import { runId as brandRunId } from '@folio/script'
 import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm'
 
 import type { FolioDatabase } from '../client'
-import { agentRuns, assistantChats, assistantMessages, jobs } from '../schema'
+import { agentRunStages, agentRuns, assistantChats, assistantMessages, jobs } from '../schema'
 import { dbOf, scoped, tenant } from '../scope'
 import type { ProjectScope } from '../scope'
 import { stamp } from './mapping'
@@ -246,6 +246,8 @@ export type ContinueBackgroundRunResult =
   | { readonly status: 'busy'; readonly live: number }
   /** Only a run waiting for the writer takes a reply. */
   | { readonly status: 'not-waiting'; readonly current: AgentRunStatus }
+  /** An approval, and the stage it names is not waiting at its checkpoint - nothing was written. */
+  | { readonly status: 'no-checkpoint' }
   | { readonly status: 'no-run' }
 
 /**
@@ -253,7 +255,14 @@ export type ContinueBackgroundRunResult =
  * appended to the run's chat, the run queued again, and a new `agent_run` job.
  * The worker resumes from the transcript, which now ends with the reply.
  */
-export const continueBackgroundRun = async (scope: ProjectScope, id: RunId, reply: string, limit: number): Promise<ContinueBackgroundRunResult> =>
+export const continueBackgroundRun = async (
+  scope: ProjectScope,
+  id: RunId,
+  reply: string,
+  limit: number,
+  /** A story checkpoint the writer approved: moved from `waiting` to `approved` in this transaction, or nothing is written. */
+  approve: StoryCheckpoint | null = null,
+): Promise<ContinueBackgroundRunResult> =>
   dbOf(scope).transaction(async (tx) => {
     const rows = await tx
       .select()
@@ -266,6 +275,15 @@ export const continueBackgroundRun = async (scope: ProjectScope, id: RunId, repl
     if (row.status !== 'waiting_for_user') return { status: 'not-waiting', current: row.status }
     const live = await liveBackgroundRuns(tx, scope)
     if (live >= limit) return { status: 'busy', live }
+    // Approved with the job that carries on from it, so an approval that could not queue approves nothing.
+    if (approve !== null) {
+      const approved = await tx
+        .update(agentRunStages)
+        .set({ status: 'approved', updatedAt: new Date() })
+        .where(scoped(scope, agentRunStages, eq(agentRunStages.runId, row.id), eq(agentRunStages.stage, approve), eq(agentRunStages.status, 'waiting')))
+        .returning({ stage: agentRunStages.stage })
+      if (approved.length === 0) return { status: 'no-checkpoint' }
+    }
     await tx.insert(assistantMessages).values({ ...tenant(scope), chatId: row.chatId, role: 'user', body: reply, runId: row.id })
     await tx.update(assistantChats).set({ updatedAt: new Date() }).where(scoped(scope, assistantChats, eq(assistantChats.id, row.chatId)))
     await tx.update(agentRuns).set({ status: 'queued', error: null, updatedAt: new Date() }).where(scoped(scope, agentRuns, eq(agentRuns.id, row.id)))

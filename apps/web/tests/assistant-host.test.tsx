@@ -39,6 +39,7 @@ vi.mock('../lib/agent/actions', () => ({
   // A background run's card and its reply (roadmap task 4.4).
   readBackgroundRunView: vi.fn(),
   cancelBackgroundRunAction: vi.fn(),
+  approveBackgroundRunAction: vi.fn(),
   continueBackgroundRunAction: (...args: readonly unknown[]) => spies.continueRun(...args),
 }))
 vi.mock('../lib/projects/actions', () => ({
@@ -250,6 +251,7 @@ describe('a background run`s own chat (roadmap task 4.4)', () => {
     steps: 2,
     proposals: { pending: 0, applied: 0, toConfirm: 0 },
     mine: true,
+    checkpoint: null,
     startedAt: '2026-09-23T10:00:00.000Z',
     finishedAt: null,
     ...over,
@@ -302,6 +304,26 @@ describe('a background run`s own chat (roadmap task 4.4)', () => {
     expect(screen.getByText('Go on to act three.')).toBeTruthy()
     // Queued again: working, so the composer is off until it waits or ends.
     expect(composer.disabled).toBe(true)
+  })
+
+  it('sends nothing on an empty reply at a story checkpoint, and offers Approve on the card', async () => {
+    spies.openAssistantChat.mockResolvedValue(runChat(runView({ status: 'waiting_for_user', checkpoint: 'expand' })))
+    host()
+    await flush()
+    const composer = screen.getByLabelText('Ask the assistant') as HTMLTextAreaElement
+    expect(composer.disabled).toBe(false)
+    expect(composer.placeholder).toMatch(/press Approve/u)
+    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.keyDown(composer, { key: 'Enter' })
+    await flush()
+    expect(spies.continueRun).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-chat-run] [data-run-approve]')).not.toBeNull()
+    // Words still go: they ask the stage again.
+    spies.continueRun.mockResolvedValue({ status: 'ok', run: runView({ status: 'queued' }) })
+    fireEvent.change(composer, { target: { value: 'Make it a comedy.' } })
+    fireEvent.keyDown(composer, { key: 'Enter' })
+    await flush()
+    expect(spies.continueRun).toHaveBeenCalledWith(PROJECT_A, RUN, 'Make it a comedy.')
   })
 
   it('does not let anyone but its starter reply - the run acts as them', async () => {

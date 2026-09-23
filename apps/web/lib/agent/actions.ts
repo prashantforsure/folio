@@ -14,7 +14,7 @@ import type { ApplyOutcome, UndoOutcome } from './apply'
 import { applyProposalWith, finishEditorApplyWith, rejectProposalWith, undoRunWith } from './apply'
 import type { ProposalCard } from './card'
 import type { RunActionResult, RunViewResult } from './runs'
-import { cancelRunWith, continueRunWith, readRunViewWith } from './runs'
+import { approveRunWith, cancelRunWith, continueRunWith, readRunViewWith } from './runs'
 import { buildProposalCard } from './card'
 import './tools'
 import type { ToolGate } from './registry'
@@ -125,7 +125,7 @@ export const readProposalCard = async (
 }
 
 // ---------------------------------------------------------------------------
-// Background runs (roadmap task 4.4): the run card's poll and its two buttons
+// Background runs (roadmap task 4.4): the run card's poll and its buttons
 // ---------------------------------------------------------------------------
 
 /** The run card's figures, polled every two seconds while the run is live (D7). */
@@ -147,4 +147,11 @@ export const continueBackgroundRunAction = async (projectId: string, runId: stri
   const gate = await openProject(projectId, ROLE.read)
   if (isRefusal(gate)) return gate
   return continueRunWith(gate, runId, reply)
+}
+
+/** Approve the story checkpoint a run waits at - its starter's; the only way a checkpoint moves on. */
+export const approveBackgroundRunAction = async (projectId: string, runId: string): Promise<RunActionResult> => {
+  const gate = await openProject(projectId, ROLE.read)
+  if (isRefusal(gate)) return gate
+  return approveRunWith(gate, runId)
 }

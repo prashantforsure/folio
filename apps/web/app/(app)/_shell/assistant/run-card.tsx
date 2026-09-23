@@ -3,7 +3,7 @@
 import type { AgentRunStatus } from '@folio/contracts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { cancelBackgroundRunAction, readBackgroundRunView } from '../../../../lib/agent/actions'
+import { approveBackgroundRunAction, cancelBackgroundRunAction, readBackgroundRunView } from '../../../../lib/agent/actions'
 import type { RunView } from '../../../../lib/agent/runs'
 import { useLivePoll } from './use-live-poll'
 
@@ -15,8 +15,9 @@ import { useLivePoll } from './use-live-poll'
  * `queued` or `running` (`useLivePoll`) - never pushed, as D7 rules - and
  * stops polling the moment it is not. It shows where the run is, how many
  * steps it has taken, what it has proposed and what waits on the writer; its
- * buttons are **Open** (the run's chat, where its work and its proposals are)
- * and **Cancel**, the starter's or an owner's.
+ * buttons are **Approve** (at a story checkpoint, the starter's - the only way
+ * one moves on; an empty reply does nothing), **Open** (the run's chat, where
+ * its work and its proposals are) and **Cancel**, the starter's or an owner's.
  *
  * `run` seeds it when the caller already read the run (the run's own chat
  * does, on every poll), so the card draws at once and does not poll twice.
@@ -97,9 +98,10 @@ export const RunCard = ({
   // The caller polls a seeded card's run; an unseeded one polls itself while live.
   useLivePoll(seeded === null && run !== null && isLiveRun(run.status), read)
 
-  const cancel = async (): Promise<void> => {
+  const runAction = async (action: typeof cancelBackgroundRunAction): Promise<void> => {
     setBusy(true)
-    const result = await cancelBackgroundRunAction(projectId, runId)
+    setNotice(null)
+    const result = await action(projectId, runId)
     setBusy(false)
     if (result.status !== 'ok') {
       setNotice(result.message)
@@ -110,6 +112,7 @@ export const RunCard = ({
   }
 
   const stoppable = run !== null && (isLiveRun(run.status) || run.status === 'waiting_for_user')
+  const approvable = run !== null && run.status === 'waiting_for_user' && run.mine && run.checkpoint !== null
   return (
     <div data-run-card data-run-status={run?.status ?? 'loading'} className="flex flex-col gap-[6px] whitespace-normal rounded-[12px] border border-line bg-s1 px-[12px] py-[10px]">
       <span className="flex items-center gap-[8px]">
@@ -134,6 +137,19 @@ export const RunCard = ({
       )}
       {(onOpen === undefined || run?.chatId == null) && !stoppable ? null : (
         <span className="flex gap-[6px]">
+          {approvable ? (
+            <button
+              type="button"
+              data-run-approve
+              disabled={busy}
+              onClick={() => {
+                void runAction(approveBackgroundRunAction)
+              }}
+              className="folio-solid-button rounded-[8px] px-[10px] py-[4px] text-12"
+            >
+              Approve
+            </button>
+          ) : null}
           {onOpen === undefined || run?.chatId == null ? null : (
             <button
               type="button"
@@ -152,7 +168,7 @@ export const RunCard = ({
               data-run-cancel
               disabled={busy}
               onClick={() => {
-                void cancel()
+                void runAction(cancelBackgroundRunAction)
               }}
               className="folio-ghost-button rounded-[8px] px-[10px] py-[4px] text-12 text-ink2"
             >

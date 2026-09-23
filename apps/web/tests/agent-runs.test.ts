@@ -29,7 +29,7 @@ const spies = vi.hoisted(() => ({
 
 vi.mock('@folio/db', async (actual) => {
   const real = await actual<Record<string, unknown>>()
-  const names = ['startBackgroundRun', 'cancelBackgroundRun', 'continueBackgroundRun', 'readBackgroundRun', 'listRunProposals', 'countRunSteps', 'readMembershipFor', 'transactionDatabase']
+  const names = ['startBackgroundRun', 'cancelBackgroundRun', 'continueBackgroundRun', 'readBackgroundRun', 'readRunStages', 'listRunProposals', 'countRunSteps', 'readMembershipFor', 'transactionDatabase']
   for (const name of names) spies.db[name] = vi.fn()
   return { ...real, ...Object.fromEntries(names.map((name) => [name, (...args: readonly unknown[]) => spies.db[name]?.(...args)])) }
 })
@@ -37,7 +37,7 @@ vi.mock('../lib/agent/rate-limit', () => ({ checkRateLimit: (...args: readonly u
 
 const { startBackgroundTaskTool } = await import('../lib/agent/tools/writes-runs')
 const { runTool } = await import('../lib/agent/registry')
-const { cancelRunWith, continueRunWith, continuationNote, readRunViewWith, DEFAULT_REPLY } = await import('../lib/agent/runs')
+const { approveRunWith, cancelRunWith, continueRunWith, continuationNote, readRunViewWith, APPROVE_REPLY, CHECKPOINT_NEEDS_WORDS, DEFAULT_REPLY } = await import('../lib/agent/runs')
 const { CONCURRENT_RUNS_PER_PROJECT } = await import('../lib/agent/limits')
 
 const db = (name: string): Mock<(...args: readonly unknown[]) => unknown> => {
@@ -237,5 +237,69 @@ describe('replying to a run that waits', () => {
     expect((await continueRunWith(gate(), RUN, 'Go')).status).toBe('rate-limited')
     db('continueBackgroundRun').mockResolvedValue({ status: 'busy', live: 2 })
     expect(await continueRunWith(gate(), RUN, 'Go')).toMatchObject({ status: 'refused', message: expect.stringContaining('2 background runs working') })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Story checkpoints (pre-deploy fixes, 2026-09-24): only Approve carries one on
+// ---------------------------------------------------------------------------
+
+const STORY = { kind: 'story_to_script', title: 'Night Ward', story: 'A nurse counts seven beds on a ward of six.' }
+
+/** The stages as stored: `waiting` is the checkpoint the run stopped at. */
+const stages = (entries: Record<string, 'ready' | 'waiting' | 'approved'>) => new Map(Object.entries(entries).map(([stage, status]) => [stage, { stage, status, output: {} }]))
+
+describe('a story run waiting at a checkpoint', () => {
+  beforeEach(() => {
+    db('readBackgroundRun').mockResolvedValue({ run: run({ status: 'waiting_for_user' }), input: STORY })
+    db('readRunStages').mockResolvedValue(stages({ expand: 'approved', bible: 'ready', outline: 'waiting' }))
+    db('listRunProposals').mockResolvedValue([])
+    db('continueBackgroundRun').mockResolvedValue({ status: 'queued' })
+  })
+
+  it('names the checkpoint on the run view, and none for a run waiting on proposals', async () => {
+    expect(await readRunViewWith(gate(), RUN)).toMatchObject({ status: 'ok', run: { checkpoint: 'outline' } })
+    // The bible or the batches wait on proposals: the draft stage is `waiting`, no checkpoint is.
+    db('readRunStages').mockResolvedValue(stages({ expand: 'approved', outline: 'approved', scenes: 'approved', draft: 'waiting' }))
+    expect(await readRunViewWith(gate(), RUN)).toMatchObject({ status: 'ok', run: { checkpoint: null } })
+    // A task run has no stages to read.
+    db('readBackgroundRun').mockResolvedValue({ run: run({ status: 'waiting_for_user' }), input: INPUT })
+    db('readRunStages').mockClear()
+    expect(await readRunViewWith(gate(), RUN)).toMatchObject({ status: 'ok', run: { checkpoint: null } })
+    expect(db('readRunStages')).not.toHaveBeenCalled()
+  })
+
+  it('does nothing with an empty reply - it is not an approval', async () => {
+    expect(await continueRunWith(gate(), RUN, '   ')).toEqual({ status: 'refused', message: CHECKPOINT_NEEDS_WORDS })
+    expect(await continueRunWith(gate(), RUN, undefined)).toEqual({ status: 'refused', message: CHECKPOINT_NEEDS_WORDS })
+    expect(db('continueBackgroundRun')).not.toHaveBeenCalled()
+    expect(spies.checkRateLimit).not.toHaveBeenCalled()
+  })
+
+  it('sends a reply with words on, approving nothing, so the stage is asked again', async () => {
+    expect((await continueRunWith(gate(), RUN, 'Make Ravi older.')).status).toBe('ok')
+    expect(db('continueBackgroundRun')).toHaveBeenCalledWith(SCOPE, RUN, 'Make Ravi older.', CONCURRENT_RUNS_PER_PROJECT)
+  })
+
+  it('approves the checkpoint it waits at, in the transaction that queues its next job', async () => {
+    expect((await approveRunWith(gate(), RUN)).status).toBe('ok')
+    expect(db('continueBackgroundRun')).toHaveBeenCalledWith(SCOPE, RUN, APPROVE_REPLY, CONCURRENT_RUNS_PER_PROJECT, 'outline')
+    expect(spies.checkRateLimit).toHaveBeenCalledWith(SCOPE, WRITER, 'assistant')
+  })
+
+  it('lets only the starter approve, and only at a checkpoint', async () => {
+    expect(await approveRunWith(gate('owner', OTHER), RUN)).toEqual({ status: 'refused', message: 'Only the person who started this run can approve it. It acts as them.' })
+    db('readRunStages').mockResolvedValue(stages({ expand: 'approved', outline: 'approved', scenes: 'approved', draft: 'waiting' }))
+    expect(await approveRunWith(gate(), RUN)).toEqual({ status: 'refused', message: 'This run is not waiting at a checkpoint.' })
+    db('readBackgroundRun').mockResolvedValue({ run: run({ status: 'running' }), input: STORY })
+    expect(await approveRunWith(gate(), RUN)).toEqual({ status: 'refused', message: 'This run is not waiting at a checkpoint.' })
+    expect(db('continueBackgroundRun')).not.toHaveBeenCalled()
+  })
+
+  it('refuses when the stage moved on before the approval landed, and when the project is busy', async () => {
+    db('continueBackgroundRun').mockResolvedValueOnce({ status: 'no-checkpoint' })
+    expect(await approveRunWith(gate(), RUN)).toEqual({ status: 'refused', message: 'This run is not waiting at a checkpoint.' })
+    db('continueBackgroundRun').mockResolvedValueOnce({ status: 'busy', live: 2 })
+    expect(await approveRunWith(gate(), RUN)).toMatchObject({ status: 'refused', message: expect.stringContaining('2 background runs working') })
   })
 })

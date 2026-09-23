@@ -751,6 +751,8 @@ export const AssistantPanel = ({
   })
   /** The run waits for its starter, who is the one reading: the composer replies to it. */
   const replying = chatRun !== null && chatRun.status === 'waiting_for_user' && chatRun.mine
+  /** It waits at a story checkpoint: only the card's Approve carries on, so an empty reply sends nothing. */
+  const atCheckpoint = replying && chatRun.checkpoint !== null
   /** The run waits, but for someone else: only its starter may reply (it acts as them). */
   const notMine = chatRun !== null && chatRun.status === 'waiting_for_user' && !chatRun.mine
 
@@ -772,6 +774,8 @@ export const AssistantPanel = ({
     if (busy || runLive) return
     // A background run waiting for its starter (roadmap task 4.4): the reply is its continuation, not a turn.
     if (chat !== null && chatRun !== null && replying) {
+      // An empty reply at a checkpoint is not an approval: nothing happens.
+      if (message.length === 0 && chatRun.checkpoint !== null) return
       setBusy(true)
       setNotice(null)
       setDraft('')
@@ -1170,11 +1174,13 @@ export const AssistantPanel = ({
             placeholder={
               runLive
                 ? 'The run is working. You can leave - it carries on.'
-                : replying
-                  ? 'Reply to the run, or leave it empty to carry on…'
-                  : notMine
-                    ? 'Only the person who started this run can reply to it.'
-                    : 'Ask, or @ to add context…'
+                : atCheckpoint
+                  ? 'Say what to change, or press Approve on the run…'
+                  : replying
+                    ? 'Reply to the run, or leave it empty to carry on…'
+                    : notMine
+                      ? 'Only the person who started this run can reply to it.'
+                      : 'Ask, or @ to add context…'
             }
             aria-label="Ask the assistant"
             onChange={(event) => {
@@ -1210,7 +1216,7 @@ export const AssistantPanel = ({
               type="button"
               title="Send"
               aria-label="Send"
-              disabled={busy || runLive || notMine || (replying ? false : !connected || draft.trim().length === 0)}
+              disabled={busy || runLive || notMine || (replying && !atCheckpoint ? false : (!connected && !replying) || draft.trim().length === 0)}
               onClick={() => {
                 void send()
               }}

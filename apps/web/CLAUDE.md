@@ -137,8 +137,10 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
 - **The story pipeline** (roadmap task 4.5): `story_to_script` (`tools/writes-runs.ts`, confirm,
   script toolset) starts a background run of kind `story_to_script`; `background.ts` hands its jobs to
   `lib/agent/story/pipeline.ts`. Stages A-F store their Zod-checked output in `agent_run_stages`
-  (`0038`, `StageOutputSchemas` in `@folio/contracts` `story.ts`) and stop at the checkpoints; a reply
-  left empty approves, words re-ask that stage with them (`notesOf`). Every model call is a forced tool
+  (`0038`, `StageOutputSchemas` in `@folio/contracts` `story.ts`) and stop at the checkpoints (A, C, D:
+  `STORY_CHECKPOINTS`). Only the run card's **Approve** carries one on - `approveRunWith` marks the stage
+  `approved` in the transaction that queues the next job, and the pipeline reads it from the stage; an
+  empty reply does nothing, words re-ask that stage with them (`notesOf`). Every model call is a forced tool
   call parsed with the stage's schema, retried once (`structured.ts`); the prompts are `prompts.ts`. The
   draft's cues are an enum of bound cue spellings and its headings are written by code from the
   bound slugline (`script.ts`), then held by `checkDraft`. Scene batches are **chained**: each is

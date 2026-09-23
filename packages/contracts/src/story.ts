@@ -34,6 +34,16 @@ export type StoryStage = (typeof STORY_STAGES)[number]
 export const StoryStageSchema = z.enum(STORY_STAGES)
 
 /**
+ * The stages that stop for the writer's approval - A, C and D. Only the run
+ * card's **Approve** moves one on (pre-deploy fixes, 2026-09-24): a reply with
+ * words asks the stage again with them, and an empty reply does nothing. The
+ * other stops (the bible, the batches, F) wait on proposals, not on approval.
+ */
+export const STORY_CHECKPOINTS = ['expand', 'outline', 'scenes'] as const satisfies readonly StoryStage[]
+
+export type StoryCheckpoint = (typeof STORY_CHECKPOINTS)[number]
+
+/**
  * Where a stage is. `ready`: its output is stored. `waiting`: it stopped for
  * the writer (a checkpoint, or proposals to apply). `approved`: the writer
  * carried on from its checkpoint.

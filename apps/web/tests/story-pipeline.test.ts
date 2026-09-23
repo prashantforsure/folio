@@ -281,6 +281,18 @@ const reply = (words = '[Folio: since the run paused, nothing was asked.]\n\nCar
   world.messages.push({ role: 'user', body: words })
 }
 
+/**
+ * The writer presses Approve at the checkpoint the run waits at, as `approveRunWith` does: the stage moves from
+ * `waiting` to `approved` in the transaction that records the reply and queues the next job.
+ */
+const approve = (): void => {
+  const waiting = ['expand', 'outline', 'scenes'].find((stage) => world.stages.get(stage)?.status === 'waiting')
+  const row = waiting === undefined ? undefined : world.stages.get(waiting)
+  if (row === undefined) throw new Error('no checkpoint is waiting')
+  row.status = 'approved'
+  world.messages.push({ role: 'user', body: 'Approved.' })
+}
+
 const staleOrApplied = { stale: 0 }
 
 /** The writer applies a proposal, the way apply does: a document edit only on the script it was planned on. */
@@ -372,7 +384,7 @@ describe('story_to_script, a line to a draft', () => {
     expect(world.messages.at(-1)?.body).toContain('A night nurse has one shift')
 
     // B and C: one proposal of records, one of the outline; stopped again.
-    reply()
+    approve()
     await job()
     expect(stageStatus('expand')).toBe('approved')
     expect(world.note).toBe(STORY_WAITING.outline)
@@ -386,12 +398,12 @@ describe('story_to_script, a line to a draft', () => {
     expect((outlineDoc?.nodes as OutlineNode[]).map((node) => node.type)).toEqual(['h1', 'beat', 'beat'])
 
     // D: the scene list, stopped again.
-    reply()
+    approve()
     await job()
     expect(world.note).toBe(STORY_WAITING.scenes)
 
     // E: seven scenes, drafted, critiqued, in two chained batches - all proposed before the writer applies one.
-    reply()
+    approve()
     await job()
     expect(world.note).toBe(STORY_WAITING.draft)
     const batches = pendingOf('propose_script_edit')
@@ -457,7 +469,7 @@ describe('story_to_script, a line to a draft', () => {
 
   it('proposes each character with their voice note apart from the bio, and drafts from the note the record holds', async () => {
     await job()
-    reply()
+    approve()
     await job()
     const [bible] = pendingOf('create_character')
     const meera = world.proposals.get(bible ?? '')?.ops.find((op) => op.tool === 'create_character' && (op.args as Record<string, unknown>)['name'] === 'MEERA')
@@ -473,9 +485,9 @@ describe('story_to_script, a line to a draft', () => {
     if (record !== undefined) record.notes = { voice: 'Clipped; counts under her breath.' }
     const ravi = world.characters.find((entry) => entry.name === 'RAVI')
     if (ravi !== undefined) ravi.notes = {}
-    reply()
+    approve()
     await job()
-    reply()
+    approve()
     await job()
 
     // Stage E: the note as the record holds it, not as stage B wrote it.
@@ -485,15 +497,37 @@ describe('story_to_script, a line to a draft', () => {
     expect(first?.prompt).not.toContain('Talks around things')
   })
 
+  it('does nothing with an empty reply at a checkpoint: no model call, no approval, the same wait', async () => {
+    await job()
+    const asked = calls.length
+    reply()
+    expect(await job()).toEqual({ status: 'finished' })
+    expect(calls).toHaveLength(asked)
+    expect(stageStatus('expand')).toBe('waiting')
+    expect(stageStatus('bible')).toBeUndefined()
+    expect(world.runStatus).toBe('waiting_for_user')
+    expect(world.note).toBe(STORY_WAITING.expand)
+    // A code-written note and nothing after it is no more an approval than silence.
+    reply('[Folio: since the run paused, "Rename ARJUN" was applied.]')
+    await job()
+    expect(calls).toHaveLength(asked)
+    expect(stageStatus('expand')).toBe('waiting')
+    // Approve is.
+    approve()
+    await job()
+    expect(stageStatus('expand')).toBe('approved')
+    expect(world.note).toBe(STORY_WAITING.outline)
+  })
+
   it('waits for the characters and locations before drafting a word', async () => {
     await job()
-    reply()
+    approve()
     await job()
     // The outline is applied, the bible left waiting.
     apply(pendingOf('propose_outline_edit')[0] ?? '')
-    reply()
+    approve()
     await job()
-    reply()
+    approve()
     await job()
     expect(world.note).toBe(STORY_WAITING.bible)
     expect(calls.filter((call) => call.name === 'submit_scene')).toHaveLength(0)
@@ -506,7 +540,7 @@ describe('story_to_script, a line to a draft', () => {
         apply(pendingOf('create_character')[0] ?? '')
         apply(pendingOf('propose_outline_edit')[0] ?? '')
       }
-      reply()
+      approve()
     }
     await job()
     const [first, second] = pendingOf('propose_script_edit')
@@ -529,8 +563,10 @@ describe('story_to_script, a line to a draft', () => {
 })
 
 describe('notesOf', () => {
-  it('reads an empty reply or "Carry on." as approval, and anything else as the writer`s notes, without the code-written note', () => {
+  it('finds no words in an empty reply, "Carry on." or "Approved.", and the writer`s notes in anything else, without the code-written note', () => {
     expect(notesOf('Carry on.')).toBeNull()
+    expect(notesOf('Approved.')).toBeNull()
+    expect(notesOf('')).toBeNull()
     expect(notesOf('[Folio: since the run paused, "Rename ARJUN" was applied.]\n\nCarry on.')).toBeNull()
     expect(notesOf('[Folio: since the run paused, x.]\n\nMake Ravi older.')).toBe('Make Ravi older.')
   })

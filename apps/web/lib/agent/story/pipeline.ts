@@ -10,6 +10,7 @@ import type {
   StoryBrief,
   StoryOutline,
   StorySceneList,
+  StoryCheckpoint,
   StoryStage,
   StoryToScriptInput,
 } from '@folio/contracts'
@@ -46,7 +47,6 @@ import {
   readProposalOpByKey,
   readRunStages,
   saveRunStage,
-  setRunStageStatus,
 } from '@folio/db'
 import type { BoundSpellings, DocumentId, NodeId, RunId, ScreenplayNode, ScriptOp } from '@folio/script'
 import { boundSpellingFor, cueSpelling, setSpelling, unresolvedCues } from '@folio/script'
@@ -65,7 +65,7 @@ import { describeEdit } from '../document-ops'
 import type { ModelClient, ProposalSink } from '../loop'
 import { proposalSink } from '../proposer'
 import type { ProposedOp } from '../registry'
-import { DEFAULT_REPLY } from '../runs'
+import { APPROVE_REPLY, DEFAULT_REPLY } from '../runs'
 import { PIPELINE_SYSTEM, biblePrompt, briefText, critiquePrompt, draftPrompt, expandPrompt, outlinePrompt, rewritePrompt, sceneListText, scenesPrompt, timePrompt } from './prompts'
 import type { SceneBrief } from './prompts'
 import type { Spend, Structured } from './structured'
@@ -90,9 +90,13 @@ import { BATCH_SIZE, bibleOps, holdScene, nodesOf, outlineBlockCount, outlineOp,
  *   F  re-derived once, measured, checked; story days, synopses and threads
  *      proposed → once applied, the scenes put on their threads
  *
- * At a checkpoint the writer's reply decides: an empty one (`Carry on.`)
- * approves the stage; words send it back to the model with them, and it stops
- * there again. Every stage's output is parsed with its contract before it is
+ * At a checkpoint only the run card's **Approve** carries on: it marks the
+ * stage `approved` in the transaction that queues the next job
+ * (`approveRunWith`), and this reads the approval from the stage, never from
+ * the chat. A reply with words sends the stage back to the model with them, and
+ * it stops there again; a job that finds the stage still waiting and no words
+ * does nothing and waits again (pre-deploy fixes, 2026-09-24 - an empty reply
+ * used to approve). Every stage's output is parsed with its contract before it is
  * stored, so a stage resumes on its own: a crash, a shutdown or a pause picks
  * up at the stage it reached, and a batch already proposed is found by its
  * idempotency key rather than drafted twice.
@@ -123,9 +127,9 @@ export type StoryJob = {
 
 /** What the run card says while the run waits on the writer at each stop. */
 export const STORY_WAITING: Readonly<Record<'expand' | 'outline' | 'scenes' | 'bible' | 'draft' | 'finish', string>> = {
-  expand: 'Waiting for you to read the story as I expanded it.',
-  outline: 'Waiting for you to review the characters, locations and outline.',
-  scenes: 'Waiting for you to review the scene list.',
+  expand: 'Waiting for you to approve the story as I expanded it, or say what to change.',
+  outline: 'Waiting for you to review the characters, locations and outline, and approve the outline.',
+  scenes: 'Waiting for you to approve the scene list, or say what to change.',
   bible: 'Waiting for you to apply the characters and locations - the draft binds to them.',
   draft: 'Waiting for you to apply the scene batches.',
   finish: 'Waiting for you to apply the story days, synopses and threads.',
@@ -138,10 +142,10 @@ class Halt extends Error {
   }
 }
 
-/** The writer's words in a reply, the code-written note before them taken off; null for a plain "carry on". */
+/** The writer's words in a reply, the code-written note before them taken off; null when there are none - which at a checkpoint decides nothing. */
 export const notesOf = (body: string): string | null => {
   const words = body.replace(/^\[Folio:[^\]]*\]\s*/u, '').trim()
-  return words.length === 0 || words === DEFAULT_REPLY ? null : words
+  return words.length === 0 || words === DEFAULT_REPLY || words === APPROVE_REPLY ? null : words
 }
 
 const settled = (status: AgentProposalStatus): boolean => status !== 'pending'
@@ -192,6 +196,9 @@ export const runStoryJob = async (job: StoryJob, input: StoryToScriptInput): Pro
     return job.settle('waiting_for_user', waiting)
   }
 
+  /** A checkpoint still waiting, and no words to ask it again with: nothing is written, nothing asked - it waits for Approve. */
+  const undecided = (stage: StoryCheckpoint): Promise<JobOutcome> => job.settle('waiting_for_user', STORY_WAITING[stage])
+
   const stages = await readRunStages(scope, runId)
   const stored = <S extends StoryStage>(stage: S): { readonly status: string; readonly output: z.infer<(typeof StageOutputSchemas)[S]> } | null => {
     const row = stages.get(stage)
@@ -213,13 +220,9 @@ export const runStoryJob = async (job: StoryJob, input: StoryToScriptInput): Pro
     const a = stored('expand')
     if (a === null || a.status === 'waiting') {
       const notes = a === null ? null : await reply()
-      if (a !== null && notes === null) {
-        await setRunStageStatus(scope, runId, 'expand', 'approved')
-        brief = a.output.brief
-      } else {
-        brief = await ask('submit_story', 'The story, expanded.', StoryBriefSchema, expandPrompt(input.story, gate.project, notes, a === null ? null : briefText(a.output.brief)))
-        return await pause('expand', { brief }, `Here is the story as I read it.\n\n${briefText(brief)}\n\nReply with anything to change, or leave it empty to carry on to the characters and the outline.`, STORY_WAITING.expand)
-      }
+      if (a !== null && notes === null) return await undecided('expand')
+      brief = await ask('submit_story', 'The story, expanded.', StoryBriefSchema, expandPrompt(input.story, gate.project, notes, a === null ? null : briefText(a.output.brief)))
+      return await pause('expand', { brief }, `Here is the story as I read it.\n\n${briefText(brief)}\n\nReply with anything to change, or press Approve to carry on to the characters and the outline.`, STORY_WAITING.expand)
     } else brief = a.output.brief
 
     // ------------------------------------------------------------------ B
@@ -241,23 +244,19 @@ export const runStoryJob = async (job: StoryJob, input: StoryToScriptInput): Pro
     const c = stored('outline')
     if (c === null || c.status === 'waiting') {
       const notes = c === null ? null : await reply()
-      if (c !== null && notes === null) {
-        await setRunStageStatus(scope, runId, 'outline', 'approved')
-        outline = c.output.outline
-      } else {
-        gate = await step()
-        outline = await ask('submit_outline', 'The outline: acts and their beats.', StoryOutlineSchema, outlinePrompt(brief, bible, notes, c === null ? null : JSON.stringify(c.output.outline)))
-        // A revised outline replaces the one still waiting for review.
-        if (c?.output.proposalId != null) await withdraw(gate, c.output.proposalId as AgentProposalId)
-        const proposalId = await proposeOutline(gate, outline, `story:${runId}:outline:after:${c?.output.proposalId ?? 'none'}`)
-        const beats = outline.acts.reduce((total, act) => total + act.beats.length, 0)
-        return await pause(
-          'outline',
-          { outline, proposalId },
-          `I proposed ${String(bible.characters.length)} characters and ${String(bible.locations.length)} locations, and an outline of ${String(outline.acts.length)} ${outline.acts.length === 1 ? 'act' : 'acts'} and ${String(beats)} beats. Apply the characters and locations before the draft - its cues and headings bind to them. Reply with changes to the outline, or leave it empty to carry on to the scene list.`,
-          STORY_WAITING.outline,
-        )
-      }
+      if (c !== null && notes === null) return await undecided('outline')
+      gate = await step()
+      outline = await ask('submit_outline', 'The outline: acts and their beats.', StoryOutlineSchema, outlinePrompt(brief, bible, notes, c === null ? null : JSON.stringify(c.output.outline)))
+      // A revised outline replaces the one still waiting for review.
+      if (c?.output.proposalId != null) await withdraw(gate, c.output.proposalId as AgentProposalId)
+      const proposalId = await proposeOutline(gate, outline, `story:${runId}:outline:after:${c?.output.proposalId ?? 'none'}`)
+      const beats = outline.acts.reduce((total, act) => total + act.beats.length, 0)
+      return await pause(
+        'outline',
+        { outline, proposalId },
+        `I proposed ${String(bible.characters.length)} characters and ${String(bible.locations.length)} locations, and an outline of ${String(outline.acts.length)} ${outline.acts.length === 1 ? 'act' : 'acts'} and ${String(beats)} beats. Apply the characters and locations before the draft - its cues and headings bind to them. Reply with changes to the outline, or press Approve to carry on to the scene list.`,
+        STORY_WAITING.outline,
+      )
     } else outline = c.output.outline
 
     // ------------------------------------------------------------------ D
@@ -265,21 +264,17 @@ export const runStoryJob = async (job: StoryJob, input: StoryToScriptInput): Pro
     const d = stored('scenes')
     if (d === null || d.status === 'waiting') {
       const notes = d === null ? null : await reply()
-      if (d !== null && notes === null) {
-        await setRunStageStatus(scope, runId, 'scenes', 'approved')
-        list = d.output.list
-      } else {
-        gate = await step()
-        const places = nonEmpty(bible.locations.map((place) => place.name))
-        const people = nonEmpty(bible.characters.map((person) => person.name))
-        list = await ask(
-          'submit_scenes',
-          'The scene list.',
-          sceneListSchema(places, people),
-          scenesPrompt(brief, bible, outline, notes, d === null ? null : sceneListText(d.output.list)),
-        )
-        return await pause('scenes', { list }, `The scene list, ${String(list.scenes.length)} scenes:\n\n${sceneListText(list)}\n\nReply with changes, or leave it empty and I'll draft them.`, STORY_WAITING.scenes)
-      }
+      if (d !== null && notes === null) return await undecided('scenes')
+      gate = await step()
+      const places = nonEmpty(bible.locations.map((place) => place.name))
+      const people = nonEmpty(bible.characters.map((person) => person.name))
+      list = await ask(
+        'submit_scenes',
+        'The scene list.',
+        sceneListSchema(places, people),
+        scenesPrompt(brief, bible, outline, notes, d === null ? null : sceneListText(d.output.list)),
+      )
+      return await pause('scenes', { list }, `The scene list, ${String(list.scenes.length)} scenes:\n\n${sceneListText(list)}\n\nReply with changes, or press Approve and I'll draft them.`, STORY_WAITING.scenes)
     } else list = d.output.list
 
     // ------------------------------------------------------------------ E
