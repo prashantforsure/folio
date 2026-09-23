@@ -1,8 +1,12 @@
 import type { SceneRef } from '@folio/contracts'
 import type { MentionLabel, NodeId, ScreenplayNode } from '@folio/script'
 import { makeScreenplayNode, nodeId, text, typed } from '@folio/script'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
+import { CRAFT_RULES } from '../lib/agent/craft'
 import { SELECTION_LINES, buildContext, focusBlock, renderProject, renderScript, scriptSelection, sliceScenes, whereBlock } from '../lib/assistant/context'
 
 /**
@@ -135,7 +139,9 @@ describe('focusBlock', () => {
     expect(block).toContain('Wants: not written')
     expect(block).toContain('Needs: to be believed')
     expect(block).toContain('Scenes: 79 (E1 28 · E2 51) · 412 lines')
-    expect(block).toContain('You cannot write into the record yourself.')
+    // Since roadmap task 3.7 the Focus block points at the write tool instead of saying it cannot write.
+    expect(block).toContain('propose them with update_character; the writer applies it.')
+    expect(block).not.toContain('You cannot write')
     const context = buildContext({
       projectTitle: 'Harbour',
       script: { kind: 'project', episodes, index },
@@ -148,7 +154,7 @@ describe('focusBlock', () => {
   })
 })
 
-describe('the instructions, since the agent loop (roadmap task 2.6)', () => {
+describe('the instructions (roadmap task 2.6, and prompt v3 - task 3.7)', () => {
   const system = buildContext({ projectTitle: 'Buckets', script: { kind: 'episode', episodeTitle: 'Buckets', nodes: episodeOne }, labels, cast: [] }).system
 
   it('say what the tools do: read, search, navigate and export', () => {
@@ -157,9 +163,39 @@ describe('the instructions, since the agent loop (roadmap task 2.6)', () => {
     expect(system).toContain('hand them an export')
   })
 
-  it('say it cannot change anything yet, and never to claim it has', () => {
-    expect(system).toContain('What you cannot do: change anything. No tool writes')
-    expect(system).toContain('never claim to have made it')
+  it('say it acts through proposals the writer reviews and applies, and never to claim a change is made (R8, D1)', () => {
+    expect(system).toContain('Every change is a proposal: nothing changes until the writer reviews it')
+    expect(system).toContain('Never say a change is made: say it is proposed')
+    expect(system).toContain('A rename, a merge, a delete, a format change and undoing a run always ask the writer to confirm.')
+    expect(system).not.toContain('What you cannot do: change anything')
+  })
+
+  it('carry the tool policy', () => {
+    for (const rule of [
+      'Read before you write.',
+      'Never invent an id.',
+      'Preview a rename before proposing it',
+      'Create characters and locations before the script uses them',
+      'Use the bound spellings exactly',
+      'Group related changes into one proposal',
+      'Explain each proposal in a sentence or two',
+    ]) {
+      expect(system, rule).toContain(rule)
+    }
+  })
+
+  it('carry every craft rule of docs/agents/craft.md, word for word and in order', () => {
+    const craft = readFileSync(join(import.meta.dirname, '../../../docs/agents/craft.md'), 'utf8')
+    // The numbered list: a rule starts "N. " and may wrap onto indented lines.
+    const rules: string[] = []
+    for (const line of craft.split(/\r?\n/u)) {
+      const start = /^(\d+)\. (.*)$/u.exec(line)
+      if (start !== null) rules.push(start[2] ?? '')
+      else if (rules.length > 0 && /^ {3,}\S/u.test(line)) rules[rules.length - 1] = `${rules.at(-1) ?? ''} ${line.trim()}`
+      else if (rules.length > 0 && line.trim().length === 0 && rules.length >= 14) break
+    }
+    expect(rules).toEqual([...CRAFT_RULES])
+    for (const [index, rule] of CRAFT_RULES.entries()) expect(system).toContain(`${String(index + 1)}. ${rule}`)
   })
 
   it('keep citing scenes as they did, and put every number on a tool (ruling R4)', () => {

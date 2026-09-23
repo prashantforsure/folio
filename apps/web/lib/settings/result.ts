@@ -1,3 +1,5 @@
+import type { AgentAutonomy } from '@folio/contracts'
+
 /**
  * What an account-settings action hands back.
  *
@@ -31,3 +33,8 @@ export const failure = (field: SettingsField, message: string): SettingsResult =
   field,
   message,
 })
+
+/** The assistant's autonomy switch (roadmap task 3.7, ADR 0003 D1). */
+export type AutonomyResult =
+  | { readonly status: 'saved'; readonly autonomy: AgentAutonomy }
+  | { readonly status: 'error'; readonly message: string }

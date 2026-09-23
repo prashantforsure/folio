@@ -1,6 +1,7 @@
 'use server'
 
-import { transactionDatabase, upsertUser } from '@folio/db'
+import { AgentAutonomySchema } from '@folio/contracts'
+import { setAgentAutonomy, transactionDatabase, upsertUser } from '@folio/db'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
@@ -10,7 +11,7 @@ import { supabaseServer } from '../auth/server'
 import { currentIdentity, requireUser } from '../auth/session'
 import { avatarUrlFrom } from '../auth/identity'
 import { failure, saved } from './result'
-import type { SettingsResult } from './result'
+import type { AutonomyResult, SettingsResult } from './result'
 
 /**
  * What account settings may write.
@@ -157,4 +158,21 @@ export const deleteAccount = async (
       'removed at all while the ledger references it. Nothing was deleted. Sign out everywhere ' +
       'if you want the sessions ended.',
   )
+}
+
+/**
+ * The assistant's autonomy - ADR 0003 **D1**, roadmap task 3.7. `review` (the
+ * default) leaves every proposal for the writer to apply; `auto` applies one
+ * as soon as it is made. Neither lets a rename, a merge, a delete, a format
+ * change, an undo or anything that spends credits through without a click -
+ * `applyProposalWith` refuses those without a confirmation, whatever this says.
+ * The person's own row only: the id is the signed-in one, never an argument.
+ */
+export const setAssistantAutonomy = async (raw: unknown): Promise<AutonomyResult> => {
+  const user = await requireUser('/app/settings')
+  const parsed = AgentAutonomySchema.safeParse(raw)
+  if (!parsed.success) return { status: 'error', message: 'Choose review or automatic.' }
+  await setAgentAutonomy(await transactionDatabase(), user.id, parsed.data)
+  revalidatePath('/app/settings')
+  return { status: 'saved', autonomy: parsed.data }
 }

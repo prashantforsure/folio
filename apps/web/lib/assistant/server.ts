@@ -12,6 +12,7 @@ import {
   listLocationRecords,
   listMessages,
   listSceneIndex,
+  readAgentAutonomy,
   readChat,
   readDocumentByKind,
   readMentionLabels,
@@ -76,8 +77,10 @@ import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
  * ## Tools, and a run per turn
  *
  * Since roadmap task 2.3 a turn is a tool-use loop: the model may call the
- * core toolset and the route's (`lib/agent/registry.ts`), every one a read
- * until Phase 3 (AGENTS.md ruling **R8**). Each turn is an `agent_runs` row
+ * core toolset and the route's (`lib/agent/registry.ts`); since roadmap
+ * Phase 3 the writes among them propose rather than write (AGENTS.md ruling
+ * **R8**), and `proposalSink` stores the step's proposals under the
+ * writer's autonomy (`users.agent_autonomy`, ADR 0003 D1). Each turn is an `agent_runs` row
  * (`0034`): its tokens are recorded there (D3), and every message of the
  * exchange - the model's tool calls, the results that answer them - is stored
  * with its content blocks, so the next turn replays it (`lib/agent/replay.ts`).
@@ -291,7 +294,9 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
   // D3: the per-user daily token cap, summed across every project the writer
   // works in. Refused before a token is spent; a turn that crosses it midway
   // is stopped by the loop.
-  const tokenBudget = DAILY_TOKENS_PER_USER - (await tokensTodayFor(await transactionDatabase(), gate.actor))
+  const accountDb = await transactionDatabase()
+  const [used, autonomy] = await Promise.all([tokensTodayFor(accountDb, gate.actor), readAgentAutonomy(accountDb, gate.actor)])
+  const tokenBudget = DAILY_TOKENS_PER_USER - used
   if (tokenBudget <= 0) {
     return {
       status: 'rate-limited',
@@ -425,8 +430,9 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
           messages,
           route: input.route ?? null,
           context: { gate: toolGate, runId: run.id, emit },
-          // Phase 3: what a write tool proposes is written here, one proposal per step.
-          proposals: proposalSink(toolGate, run.id),
+          // Phase 3: what a write tool proposes is written here, one proposal per step,
+          // and under the writer's `auto` applied at once where D1 allows (task 3.7).
+          proposals: proposalSink(toolGate, run.id, autonomy),
           emit,
           signal,
           tokenBudget,

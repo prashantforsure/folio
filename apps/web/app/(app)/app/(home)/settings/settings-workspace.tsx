@@ -1,12 +1,13 @@
 'use client'
 
-import type { CreditBalance } from '@folio/contracts'
+import type { AgentAutonomy, CreditBalance } from '@folio/contracts'
 import type { Collaborator, LedgerLine } from '@folio/db'
 import { Avatar } from '@folio/ui'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { ShellUser } from '../../../../../lib/auth/session'
+import { setAssistantAutonomy } from '../../../../../lib/settings/actions'
 import { SECTION, SETTINGS_SECTIONS } from '../../../../../lib/settings/sections'
 import type { SettingsSection } from '../../../../../lib/settings/sections'
 import { useTheme } from '../../../../../lib/state/theme'
@@ -24,7 +25,8 @@ import { ProfileForm } from './profile-form'
  * never a fourth:
  *
  *   **live**      Profile's name; Plan & credits' balance, ledger and
- *                 per-project table; Appearance; Collaborators' member list;
+ *                 per-project table; Appearance; the assistant's autonomy
+ *                 (roadmap task 3.7, `users.agent_autonomy`); Collaborators' member list;
  *                 Integrations' two formats; Security's password change and
  *                 sign-out-everywhere.
  *   **disabled**  drawn, with the reason in its `title` and in the line under
@@ -49,6 +51,7 @@ export const SettingsWorkspace = ({
   projects,
   ledger,
   collaborators,
+  autonomy,
 }: {
   readonly user: ShellUser
   readonly credits: Pick<CreditBalance, 'settled' | 'reserved' | 'available'>
@@ -60,6 +63,8 @@ export const SettingsWorkspace = ({
   }[]
   readonly ledger: readonly LedgerLine[]
   readonly collaborators: readonly Collaborator[]
+  /** The person's copilot autonomy (ADR 0003 D1), read from their own row. */
+  readonly autonomy: AgentAutonomy
 }) => {
   const [section, setSection] = useState<SettingsSection>('profile')
   const spec = SECTION[section]
@@ -106,7 +111,7 @@ export const SettingsWorkspace = ({
 
               {section === 'profile' ? <ProfileForm user={user} /> : null}
               {section === 'plan' ? <Plan credits={credits} projects={projects} ledger={ledger} /> : null}
-              {section === 'editor' ? <EditorDefaults /> : null}
+              {section === 'editor' ? <EditorDefaults autonomy={autonomy} /> : null}
               {section === 'notifications' ? <Notifications /> : null}
               {section === 'team' ? <Collaborators collaborators={collaborators} /> : null}
               {section === 'apps' ? <Integrations /> : null}
@@ -246,10 +251,12 @@ const Plan = ({
 // Editor defaults
 // ---------------------------------------------------------------------------
 
-const EditorDefaults = () => {
+const EditorDefaults = ({ autonomy }: { readonly autonomy: AgentAutonomy }) => {
   const { theme, setTheme } = useTheme()
   return (
     <div className="flex flex-col gap-[20px]">
+      <AssistantAutonomy initial={autonomy} />
+
       <Group label="Appearance">
         <div className="flex items-center gap-[14px] rounded-card border border-line2 bg-s1 px-[15px] py-[13px]">
           <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
@@ -318,6 +325,63 @@ const EditorDefaults = () => {
         </Note>
       </Group>
     </div>
+  )
+}
+
+/**
+ * The assistant's autonomy - live (roadmap task 3.7, ADR 0003 **D1**). Off
+ * is `review`, the default: every proposal waits for the writer. On is
+ * `auto`: a proposal applies as soon as it is made. The line under the switch
+ * says what the switch never covers, because that is the part a writer needs
+ * to trust before turning it on.
+ */
+const AssistantAutonomy = ({ initial }: { readonly initial: AgentAutonomy }) => {
+  const [autonomy, setAutonomy] = useState<AgentAutonomy>(initial)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const on = autonomy === 'auto'
+  return (
+    <Group label="Assistant">
+      <div className="flex items-center gap-[14px] rounded-card border border-line2 bg-s1 px-[15px] py-[13px]">
+        <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+          <span className="text-13">Apply proposals automatically</span>
+          <span className="text-12 leading-[1.5] text-ink3">
+            Off: every change the assistant proposes waits for you to apply it. On: a proposal applies as soon as it is made, and you can still undo the run.
+          </span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label="Apply proposals automatically"
+          data-assistant-autonomy={autonomy}
+          disabled={busy}
+          onClick={() => {
+            const next: AgentAutonomy = on ? 'review' : 'auto'
+            setBusy(true)
+            setNotice(null)
+            setAutonomy(next)
+            void setAssistantAutonomy(next)
+              .then((result) => {
+                if (result.status !== 'saved') {
+                  setAutonomy(on ? 'auto' : 'review')
+                  setNotice(result.message)
+                }
+              })
+              .finally(() => {
+                setBusy(false)
+              })
+          }}
+          className="folio-switch"
+        >
+          <span className="folio-switch-knob" />
+        </button>
+      </div>
+      {notice === null ? null : <Note tone="warn">{notice}</Note>}
+      <Note>
+        Either way, a rename, a merge, a delete, a format change, undoing a run and anything that costs credits always ask you first.
+      </Note>
+    </Group>
   )
 }
 

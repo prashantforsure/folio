@@ -30,8 +30,8 @@ import { resolveTarget } from '../targets'
  * The core toolset - `docs/agents/tools.md`, *Core - always loaded*.
  *
  * Every turn offers these, whatever the route. Each is a **read**, or a
- * **client** tool the panel carries out (`navigate`): none writes anything
- * (AGENTS.md ruling **R8**, read-only until Phase 3). Counts in a result are
+ * **client** tool the panel carries out (`navigate`), except `undo_run`, which lives in
+ * `writes-episodes.ts` with the other writes. Counts in a result are
  * computed here, so the model has a number to quote rather than one to work
  * out (ruling **R4**). Where an action already answers the question
  * (`readSceneLines`), the tool calls it, and it re-checks the gate as it does

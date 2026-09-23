@@ -20,9 +20,15 @@ import type { ToolGate } from './registry'
  *
  * `applyNow` is a `direct` tool's: a one-operation proposal, applied at once.
  *
- * `auto` on what `create` returns is the writer's autonomy (D1): the panel
- * may apply the proposal without a click - never one that needs
- * confirmation, whatever the setting.
+ * ## Autonomy (roadmap task 3.7, D1)
+ *
+ * Under `review` every proposal waits. Under `auto` one that needs no
+ * confirmation applies as soon as it is made: a proposal of **records only**
+ * is applied here, in the turn; one that edits the script or the outline is
+ * returned `auto`, and the panel applies it - so a document the writer has
+ * open is still written by their editor (D10 path A), never over it. A
+ * `confirm` or `paid` operation never applies without a click, whatever the
+ * setting: `applyProposalWith` refuses it without `confirmed`.
  */
 export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy = 'review'): ProposalSink => ({
   create: async (groups) => {
@@ -51,6 +57,11 @@ export const proposalSink = (gate: ToolGate, run: RunId, autonomy: AgentAutonomy
         creditCost: null,
         ops: group.ops.map((entry) => ({ tool: entry.op.tool, args: entry.op.args, mode: entry.op.mode, idempotencyKey: entry.key })),
       })
+      if (autonomy === 'auto' && !asks && documents.size === 0) {
+        const outcome = await applyProposalWith(gate, created.proposal.id, { confirmed: false })
+        made.push({ proposalId: created.proposal.id, runId: run, summary, needsConfirmation: false, auto: false, applied: outcome.status === 'applied' })
+        continue
+      }
       made.push({ proposalId: created.proposal.id, runId: run, summary, needsConfirmation: asks, auto: autonomy === 'auto' && !asks })
     }
     return made

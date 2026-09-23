@@ -53,7 +53,8 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   refusal), the card's stage and chips are derived from what exists (no draft numbers, no
   schedule), the plan tiers carry no prices (nothing is wired to Dodo), the editor and
   notification toggles are disabled with the reason on each (no per-person store; no mail
-  provider), Collaborators has no invite field (an invite is a project's share link) and no
+  provider) - except Editor defaults' **Apply proposals automatically**, which is live since roadmap
+  task 3.7 (`users.agent_autonomy`, `setAssistantAutonomy`), Collaborators has no invite field (an invite is a project's share link) and no
   permission table (a role is granted by the share link that invited somebody, not edited here),
   and there is no device list (Supabase does not expose one user's sessions; `Sign out everywhere`
   is `scope: 'global'`).
@@ -125,7 +126,10 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   never moves with a click. The Script and Outline editors publish the selection as node ids
   (`lib/assistant/use-selection.ts`, `useEphemeral().assistantSelection`) only when the ids change;
   the server quotes a Script selection from the stored script and only counts an Outline one - the
-  outline is not in the assistant's context.
+  outline is not in the assistant's context. **Prompt v3** (roadmap task 3.7): the instructions say
+  the agent changes things through proposals the writer applies, carry a tool policy and the craft
+  rules (`lib/agent/craft.ts`, held word for word to `docs/agents/craft.md` by a test), and the
+  Focus blocks point at the write tool instead of saying it cannot write.
 - **The workspace, in one directory:** [lib/workspace/](lib/workspace/). `routes.ts` is the route
   tree and both orders (rail, episode nav); `params.ts` the sub-view params; `hrefs.ts` every
   workspace URL and the film/series shape; `context.ts` the membership gate and the `cache()`d

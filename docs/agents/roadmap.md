@@ -404,9 +404,29 @@ Phase 2 is done when every box is ticked, the Playwright specs pass, and a user 
   `createProject`), then the story is sent inside the new project. **Cannot be undone, and said so
   on the card:** comments, accepting or discarding shots, deleting a reel or shot, merges, deletes,
   `create_episode` (its inverse is owner-only and not exposed, D16).
-- [ ] 3.7 Autonomy and prompt v3. Add the autonomy setting to account settings and honour it in apply, per D1. Rewrite the system prompt: the agent can now act through proposals. Include the rules from docs/agents/craft.md. Add a tool policy: read before writing, preview renames, create characters and locations before referencing them in the script, use their bound cue and slugline spellings exactly, never invent ids, group related changes into one proposal, and explain each proposal in a sentence or two. Remove the "cannot write" lines from the focus blocks, and update AGENTS.md ruling R8's status now that writes have shipped.
+- [x] 3.7 Autonomy and prompt v3. Add the autonomy setting to account settings and honour it in apply, per D1. Rewrite the system prompt: the agent can now act through proposals. Include the rules from docs/agents/craft.md. Add a tool policy: read before writing, preview renames, create characters and locations before referencing them in the script, use their bound cue and slugline spellings exactly, never invent ids, group related changes into one proposal, and explain each proposal in a sentence or two. Remove the "cannot write" lines from the focus blocks, and update AGENTS.md ruling R8's status now that writes have shipped.
+
+  **Done 2026-09-23.** Account settings' Editor defaults has a live **Apply proposals
+  automatically** switch (`setAssistantAutonomy`, `users.agent_autonomy`); `ask()` reads it and
+  `proposalSink` honours it: under `auto` a record-only proposal applies in the turn, a script or
+  outline one is handed to the panel to apply (so the open editor still writes it), and confirm or
+  paid operations always wait for a click. The prompt says the agent acts through proposals,
+  carries the tool policy and the craft rules (`lib/agent/craft.ts`, held to `craft.md` by a test),
+  and the three Focus blocks point at the write tool. AGENTS.md's R8 status is updated in the
+  tech-stack row and *The AI agent*.
 
 Phase 3 is done when every box is ticked, and a user can ask for any allowed edit, review it as a diff, apply it, and undo the whole run.
+
+**Status, 2026-09-23.** Every box is ticked. Gates: `turbo run typecheck lint --force` 12/12,
+`apps/web` 71 files / 804 tests, `@folio/script` 35 files / 578 tests, `pnpm build` with the secret
+scan over 320 client-served files, `db:check` clean. **Migration `0035` is not applied anywhere**:
+apply `0030`-`0035` in order to staging before production (`0030` drops two columns - read it
+first). The signed-in Playwright walks were **not run** - no `E2E_*` credentials, and the proposal
+walk in `e2e/assistant-panel.spec.ts` also needs `ANTHROPIC_API_KEY`. Follow-ups: the resolve
+queue, Storyboard and Production have no read tool that returns their ids; undoing a run while the
+script is open writes on the server and the editor shows its conflict banner; comments, shot
+accept/discard, reel and shot deletes, merges, deletes and `create_episode` cannot be undone (each
+card says so).
 
 ## Phase 4: Worker, background runs, story-to-script pipeline
 

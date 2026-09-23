@@ -1,4 +1,4 @@
-import { listCollaboratorsFor, listLedgerFor, readCreditsFor, transactionDatabase } from '@folio/db'
+import { listCollaboratorsFor, listLedgerFor, readAgentAutonomy, readCreditsFor, transactionDatabase } from '@folio/db'
 
 import { requireUser } from '../../../../../lib/auth/session'
 import { readBalancesFor } from '../../../../../lib/credits/balances'
@@ -33,11 +33,12 @@ import { SettingsWorkspace } from './settings-workspace'
 const SettingsPage = async () => {
   const user = await requireUser('/app/settings')
   const db = await transactionDatabase()
-  const [credits, balances, ledger, collaborators] = await Promise.all([
+  const [credits, balances, ledger, collaborators, autonomy] = await Promise.all([
     readCreditsFor(db, user.id),
     readBalancesFor(user),
     listLedgerFor(db, user.id),
     listCollaboratorsFor(db, user.id),
+    readAgentAutonomy(db, user.id),
   ])
 
   return (
@@ -52,6 +53,7 @@ const SettingsPage = async () => {
       }))}
       ledger={ledger}
       collaborators={collaborators}
+      autonomy={autonomy}
     />
   )
 }

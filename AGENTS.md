@@ -72,7 +72,7 @@ builds any of it. The craft rules the agent writes to are
 | Storage | Cloudflare R2 over its S3 API, signed with `aws4fetch` | `apps/web/lib/storage/r2.ts` is the one module. Callers store the object **key** and compose the URL at read, from a **public** origin. **Signed read URLs are intended and not built** — anything uploaded or generated is readable by anyone holding the URL |
 | Jobs | A worker over the Postgres `jobs` table | **Superseded 2026-09-23** (the copilot pass): BullMQ and Redis are **out** — the worker is built in **roadmap Phase 4** on the table that already exists, because a queue we own is one fewer dependency and the ledger is transactional beside it. Until then `apps/worker` is a stub and Production's generations run inside `web` — `after()` and a 3 s poll |
 | Payments | Dodo Payments | Merchant of record; webhooks reconciled idempotently |
-| AI — assistant | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17), `/locations` and `/timeline` (2026-09-18); on `/production` it carries that route's chips (2026-09-22). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) were removed with the route's fourth pass (2026-09-20); their caps stay in `lib/assistant/model.ts` for the next action of that shape. **Updated 2026-09-23** (the copilot pass): it stays read-only until **roadmap Phase 3**, and writes through proposals from there — the proposal surface is that phase's work, not a later ambition. **Updated 2026-09-23** (roadmap Phase 2): the turn is a tool-use loop (`lib/agent/`) streaming `application/x-ndjson` events, with the read tools of `docs/agents/tools.md` and no write tool |
+| AI — assistant | Anthropic API, `@anthropic-ai/sdk` (pinned) | Streaming over a route handler. The assistant panel is a read-only chat over the episode's script (ruled 2026-09-16), and over the whole project on `/characters` (ruled 2026-09-17), `/locations` and `/timeline` (2026-09-18); on `/production` it carries that route's chips (2026-09-22). The Characters drawer's two model actions (`✦ Draft from the script`, `✦ Check for contradictions`, 2026-09-18) were removed with the route's fourth pass (2026-09-20); their caps stay in `lib/assistant/model.ts` for the next action of that shape. **Updated 2026-09-23** (the copilot pass): it stays read-only until **roadmap Phase 3**, and writes through proposals from there — the proposal surface is that phase's work, not a later ambition. **Updated 2026-09-23** (roadmap Phase 2): the turn is a tool-use loop (`lib/agent/`) streaming `application/x-ndjson` events, with the read tools of `docs/agents/tools.md` and no write tool. **Shipped 2026-09-23** (roadmap Phase 3, ruling R8's second half): the write tools of `tools.md` are live and every one **proposes** - `agent_proposals` / `agent_proposal_ops` (`0035`), a card the writer applies or rejects, a run undone in one step; script and outline edits land through the open editor or a compare-and-swap (ADR 0003 D10); each person's autonomy is `review` (default) or `auto`, and confirm or paid operations always ask (D1) |
 | AI — generation | Google Gemini over `fetch`, no SDK (client ruling, 2026-09-22) | Production only: `apps/web/lib/production/pipeline/gemini.ts`, keyed by `GEMINI_API_KEY`. The image and video model ids are `MODEL_REGISTRY` in `packages/contracts/src/production.ts` and nowhere else; the writer sees tiers. The model that *reads and drafts* is a different decision with a different owner and lives in `apps/web/lib/assistant/model.ts` (ADR 0003 D12). Veo is not on the free tier — a shoot the key cannot make fails and refunds |
 | PDF | `pdf-lib` on our own layout engine | **Chosen, not installed** — there is no PDF engine, and `Export PDF` is drawn disabled saying so. ADR 0003 pre-approves `pdf-lib` and `@pdf-lib/fontkit`, and nothing else |
 | FDX | `fast-xml-parser` + custom mapping | |
@@ -411,7 +411,7 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   README's; in flow at ≥1200px, over the content below), `⌘J` toggles it, and it persists across
   route changes. It is not a route. **Updated 2026-09-23** (roadmap task 2.2): it is mounted once in
   `app/(app)/layout.tsx`, so it also survives a move between projects and is hidden, never unmounted,
-  when closed; outside a project it is a launcher (ADR 0003 D15) that stores no chat. Today it is a **read-only chat** over the episode's script
+  when closed; outside a project it is a launcher (ADR 0003 D15) that stores no chat. It began as a **read-only chat** over the episode's script
   (`apps/web/lib/assistant/`, `assistant_chats` / `assistant_messages`, migration `0016`): it
   reads, it answers, it writes nothing. **Updated 2026-09-23** (roadmap Phase 2): "reads" now
   includes **read tools** - it searches, counts, reads a scene, runs the continuity check, takes the
@@ -419,7 +419,14 @@ The hardest correctness problem in the app. Get this wrong and the product is wo
   `agent_runs` (`0034`); every number it states comes from a tool (R4), and it sees the route and
   the Script or Outline selection (as node ids, read back from the stored script). **Updated 2026-09-23** (the copilot pass): it stays
   read-only **until roadmap Phase 3**, and from there it writes — through the proposals above,
-  never directly — because the panel is the copilot's surface and there is no second one. On `/characters` it reads the whole project and, with a
+  never directly — because the panel is the copilot's surface and there is no second one.
+  **Shipped 2026-09-23** (roadmap Phase 3): it writes. Every write tool queues an operation; a
+  step's operations become one proposal (a confirm-mode one stands alone), drawn as a card with
+  hunks or before/after values; applying snapshots `before_agent_run` versions with the run id,
+  runs each operation through the same action the UI calls and writes an `agent:<tool>`
+  `activity_log` row; Undo run reverses a run and proposes, rather than overwrites, whatever
+  changed since (`lib/agent/apply.ts`). Research stays read-only (R3); the prompt carries the
+  craft rules and a tool policy (`lib/assistant/context.ts`). On `/characters` it reads the whole project and, with a
   record open, a Focus block for it (ruled 2026-09-17); on `/locations` the location records
   beside the cast (2026-09-18); on `/timeline` every scene's story time, its threads and the
   continuity check's open findings, with the drawer's scene as the Focus (the Timeline rebuild,

@@ -61,6 +61,8 @@ export type ProposalMade = {
   readonly needsConfirmation: boolean
   /** The writer's autonomy lets the panel apply it at once (never with `needsConfirmation`). */
   readonly auto: boolean
+  /** Already applied by the sink under `auto` - a record-only proposal (roadmap task 3.7). */
+  readonly applied?: boolean
 }
 
 /** Where a turn's proposals are written - `lib/agent/proposer.ts`; a test passes arrays. */
@@ -166,12 +168,14 @@ const writeProposals = async (
 ): Promise<void> => {
   const groups = groupsOf(queued)
   const proposalOf = new Map<string, string>()
+  const appliedNow = new Set<string>()
   try {
     const made = await sink.create(groups)
     for (const [index, group] of groups.entries()) {
       const proposal = made[index]
       if (proposal === undefined) continue
       for (const entry of group.ops) proposalOf.set(entry.key, proposal.proposalId)
+      if (proposal.applied === true) appliedNow.add(proposal.proposalId)
       emit({ type: 'proposal', proposalId: proposal.proposalId, runId: proposal.runId, summary: proposal.summary, needsConfirmation: proposal.needsConfirmation, auto: proposal.auto })
       if (proposal.needsConfirmation) emit({ type: 'confirm_required', id: proposal.proposalId, name: group.ops[0]?.op.tool ?? 'proposal', summary: proposal.summary, cost: null })
     }
@@ -187,7 +191,9 @@ const writeProposals = async (
       continue
     }
     const content = typeof block.content === 'string' ? (JSON.parse(block.content) as Record<string, unknown>) : {}
-    results[index] = { ...block, content: JSON.stringify({ ...content, proposalId }) }
+    // Under `auto` a record-only proposal is already applied: the model must not tell the writer it waits.
+    const status = appliedNow.has(proposalId) ? { status: 'Applied at once: the writer has automatic apply on. They can undo the run.' } : {}
+    results[index] = { ...block, content: JSON.stringify({ ...content, ...status, proposalId }) }
   }
 }
 

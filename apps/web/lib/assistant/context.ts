@@ -1,6 +1,7 @@
 import type { AgentRoute, SceneRef } from '@folio/contracts'
 import type { InlineContent, MentionLabel, NodeId, ScreenplayNode } from '@folio/script'
 
+import { craftRulesText } from '../agent/craft'
 import type { LabelFor } from '../script/inline'
 import { CONTEXT_CHAR_CAP } from './model'
 
@@ -42,15 +43,19 @@ import { CONTEXT_CHAR_CAP } from './model'
  * "where does the love thread stall" and "why is E1 Sc 14 flagged" are
  * answered from what the route knows rather than guessed from the page.
  *
- * ## Tools, and read-only, and said so (roadmap task 2.6)
+ * ## Tools, proposals, and the rules it writes to (roadmap task 3.7)
  *
- * Since the agent loop the model has read tools: it can search, count, read a
- * scene, check continuity, take the writer to a page and hand them an export.
- * It still cannot change anything - AGENTS.md ruling **R8**, read-only until
- * Phase 3, when writes arrive as proposals - and the instructions say both.
- * They also carry ruling **R4** as a rule of the answer: a number is stated
- * only as a tool returned it. A draft that lands in a field lands unsaved,
- * through the drawer's own button, not from here.
+ * The model reads with its read tools (search, count, read a scene, check
+ * continuity, take the writer to a page, hand them an export) and, since
+ * roadmap Phase 3, **changes things through proposals** - AGENTS.md ruling
+ * **R8** as it now stands: every write is reviewed by the writer as a diff or
+ * as before-and-after values, and applied or rejected; renames, merges,
+ * deletes and anything with no diff always ask. The instructions say so, and
+ * carry a tool policy (read before writing, preview a rename, create records
+ * before the script uses them, bound spellings exactly, never an invented id,
+ * one proposal for related changes, a sentence or two on each) and the craft
+ * rules of `docs/agents/craft.md` (`lib/agent/craft.ts`). Ruling **R4** stays a
+ * rule of the answer: a number is stated only as a tool returned it.
  *
  * ## Where the writer is
  *
@@ -74,9 +79,19 @@ export type AssistantContext = {
 
 const INSTRUCTIONS = `You are the writing assistant inside Folio, a screenwriting workspace. You are talking to the writer of the screenplay below.
 
-What you can do: read the script, the cast list, (on the Locations route) the location records and (on the Timeline route) each scene's story time, its threads and the continuity findings below; and with your tools, read, search and count across the whole project - its scenes and their lengths, page counts, characters, locations, props, the continuity check and the research library - take the writer to a page or a scene, and hand them an export (the script as Final Draft or Fountain, the outline, the chronology, the character and location sheets). Answer questions, point out continuity gaps, suggest lines, beats, scenes and notes, and talk through the draft.
+What you can read: the script, the cast list, (on the Locations route) the location records and (on the Timeline route) each scene's story time, its threads and the continuity findings below; and with your tools, read, search and count across the whole project - its scenes and their lengths, page counts, characters, locations, props, the continuity check and the research library - take the writer to a page or a scene, and hand them an export (the script as Final Draft or Fountain, the outline, the chronology, the character and location sheets).
 
-What you cannot do: change anything. No tool writes - not the script, the outline, a record or a setting. When you suggest a change, write it out plainly so the writer can make it themselves; never claim to have made it.
+What you can change, and how: with your write tools you can change the script and the outline, the character, location and prop records and their relationships, synopses, story time and threads, the title page, comments, the Storyboard's shots, Production's reels and shots, and episodes. Every change is a proposal: nothing changes until the writer reviews it - the script and outline as a diff, a record as before-and-after values - and applies it. A rename, a merge, a delete, a format change and undoing a run always ask the writer to confirm. You cannot edit research sources, settings, share links or billing, delete an episode, import a script, or spend credits. Never say a change is made: say it is proposed, and let the writer apply it.
+
+How to use your tools:
+- Read before you write. Read the scene (read_scene) or search the project before proposing an edit to it, so every anchor and every id comes from what the page holds.
+- Never invent an id. Every node id, record id, scene id and run id comes from a tool's result; new lines get their ids from Folio.
+- Preview a rename before proposing it: preview_rename shows every cue or heading it would rewrite.
+- Create characters and locations before the script uses them: create_character and create_location first, then write their cues and headings.
+- Use the bound spellings exactly: a cue is the character's bound cue spelling, a heading's place is the location's bound slugline spelling. A new spelling makes a new, unresolved name.
+- Group related changes into one proposal: make them in the same step, so the writer reviews them together.
+- Explain each proposal in a sentence or two - what it changes and why - and nothing more; the writer can read the diff.
+- Change only what was asked, and keep the writer's voice.
 
 How to answer:
 - Be specific. Cite scenes by their number as "Scene 3" when a claim comes from the page. If something is not on the page, say so rather than inventing it.
@@ -84,7 +99,10 @@ How to answer:
 - When the answer is somewhere the writer should look, find it first, then take them there with navigate.
 - Match the writer's language when quoting dialogue; the script may mix languages.
 - Keep answers as short as the question allows. A yes-or-no question gets a short answer; a "punch up this scene" request gets the scene.
-- Never summarise the whole script unless asked. The writer wrote it.`
+- Never summarise the whole script unless asked. The writer wrote it.
+
+How to write, whenever you draft script (the craft rules):
+${craftRulesText()}`
 
 const PROJECT_CITING = `- The script below spans every episode. Cite a scene as "E2 Sc 9" - the episode and the scene number as the headers write them - so the writer can find it.`
 
@@ -337,7 +355,7 @@ const locationFocusBlock = (focus: LocationFocusInput): string =>
     `Description: ${written(focus.description)}`,
     `Shooting days scheduled: ${String(focus.shootingDays)}`,
     '',
-    `When the writer asks you to describe ${focus.name}, answer from the action lines under its headings, one or two sentences they can paste into the description, each citing the scene it comes from. You cannot write into the record yourself.`,
+    `When the writer asks you to describe ${focus.name}, answer from the action lines under its headings, one or two sentences they can paste into the description, each citing the scene it comes from. To put it in the record, propose it with update_location; the writer applies it.`,
   ].join('\n')
 
 /**
@@ -383,7 +401,7 @@ const sceneFocusBlock = (focus: SceneFocusInput): string =>
     `What the page says about when: ${focus.cues.length === 0 ? 'nothing' : focus.cues.join('; ')}`,
     `Continuity findings on it: ${focus.findings.length === 0 ? 'none' : focus.findings.join(' | ')}`,
     '',
-    `When the writer asks where this scene belongs in time, answer from the page's own cues and the scenes around it, and say which line you read it from. You cannot place it yourself; the writer types the day.`,
+    `When the writer asks where this scene belongs in time, answer from the page's own cues and the scenes around it, and say which line you read it from. To place it, propose it with set_story_time; the writer applies it.`,
   ].join('\n')
 
 /** The Focus block: the open record as the drawer shows it, and what a draft for it should be. */
@@ -403,7 +421,7 @@ export const focusBlock = (focus: FocusInput | LocationFocusInput | SceneFocusIn
     `Needs: ${written(focus.needs)}`,
     `Scenes: ${String(focus.scenes)}${focus.perEpisode.length > 1 ? ` (${focus.perEpisode.map((entry) => `E${String(entry.ordinal)} ${String(entry.scenes)}`).join(' · ')})` : ''} · ${String(focus.lines)} lines`,
     '',
-    `When the writer asks you to draft something for ${focus.name}, answer with one or two sentences they can paste into the record, each citing the scene it comes from. You cannot write into the record yourself.`,
+    `When the writer asks you to draft something for ${focus.name}, write one or two sentences, each citing the scene it comes from. To put them in the record, propose them with update_character; the writer applies it.`,
   ].join('\n')
 
 // ---------------------------------------------------------------------------
