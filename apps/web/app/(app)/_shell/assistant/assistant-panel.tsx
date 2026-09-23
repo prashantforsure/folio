@@ -717,8 +717,9 @@ export const AssistantPanel = ({
     composer.current?.focus()
   }, [chatKey, setStoredChat])
 
-  const send = useCallback(async () => {
-    const message = draft.trim()
+  /** Ask. `override` is a message that did not come from the composer - the launcher's story. */
+  const send = useCallback(async (override?: string) => {
+    const message = (override ?? draft).trim()
     if (message.length === 0 || busy || !connected) return
     setBusy(true)
     setNotice(null)
@@ -851,6 +852,20 @@ export const AssistantPanel = ({
       setBusy(false)
     }
   }, [busy, chat, chatEpisode, chatKey, connected, draft, episode, focus, projectId, route, router, selection, setDraft, setStoredChat, wholeProject])
+
+  // The launcher's "Start from a story" (roadmap task 3.6, ADR 0003 D15): the
+  // story it was given becomes this project's first message, sent once. With
+  // no assistant connected it waits in the composer instead.
+  const pending = useSession((state) => state.assistantPending)
+  const setPending = useSession((state) => state.setAssistantPending)
+  const sendRef = useRef(send)
+  sendRef.current = send
+  useEffect(() => {
+    if (pending === null || pending.projectId !== projectId || hidden || busy) return
+    setPending(null)
+    if (connected) void sendRef.current(pending.message)
+    else setDraft(pending.message)
+  }, [busy, connected, hidden, pending, projectId, setDraft, setPending])
 
   const empty = turns.length === 0
 

@@ -92,6 +92,7 @@ describe('session state', () => {
       'assistantChats',
       'assistantDraft',
       'assistantOpen',
+      'assistantPending',
       'colourCues',
       'navOpen',
       'sideOpen',
@@ -127,6 +128,8 @@ describe('the state boundaries', () => {
     // `assistantChats` and `assistantDraft` joined with roadmap task 2.2
     // (2026-09-23): the app-wide panel's open chat per episode and its unsent
     // draft, which must survive a reload and a trip to another project.
+    // `assistantPending` joined with roadmap task 3.6: the launcher's story,
+    // waiting for the project it just made - it must survive that navigation.
     const values = Object.keys(useSession.getState()).filter(
       (key) => typeof useSession.getState()[key as 'zoom'] !== 'function',
     )
@@ -134,6 +137,7 @@ describe('the state boundaries', () => {
       'assistantChats',
       'assistantDraft',
       'assistantOpen',
+      'assistantPending',
       'colourCues',
       'navOpen',
       'sideOpen',

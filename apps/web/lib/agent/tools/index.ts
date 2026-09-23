@@ -8,6 +8,10 @@ import { RESEARCH_TOOLS } from './research'
 import { SCRIPT_TOOLS } from './script'
 import { TIMELINE_TOOLS } from './timeline'
 import { ENTITY_WRITE_TOOLS } from './writes-entities'
+import { EPISODE_WRITE_TOOLS } from './writes-episodes'
+import { PRODUCTION_WRITE_TOOLS } from './writes-production'
+import { DOCUMENT_TOOLS, SCRIPT_WRITE_TOOLS } from './writes-script'
+import { STORYBOARD_WRITE_TOOLS } from './writes-storyboard'
 import { TIMELINE_WRITE_TOOLS } from './writes-timeline'
 import { executorsOf, toolsOf } from '../write-tool'
 
@@ -28,11 +32,24 @@ if (registeredTools().length === 0) {
     ...TIMELINE_TOOLS,
     ...RESEARCH_TOOLS,
     // Phase 3: the writes, each beside its executor.
+    ...DOCUMENT_TOOLS,
+    ...toolsOf(SCRIPT_WRITE_TOOLS),
     ...toolsOf(ENTITY_WRITE_TOOLS),
     ...toolsOf(TIMELINE_WRITE_TOOLS),
+    ...toolsOf(STORYBOARD_WRITE_TOOLS),
+    ...toolsOf(PRODUCTION_WRITE_TOOLS),
+    ...toolsOf(EPISODE_WRITE_TOOLS),
   ])
 }
 // What applying each write means (roadmap Phase 3) - idempotent, so a second import is harmless.
-registerExecutors([...DOCUMENT_EXECUTORS, ...executorsOf(ENTITY_WRITE_TOOLS), ...executorsOf(TIMELINE_WRITE_TOOLS)])
+registerExecutors([
+  ...DOCUMENT_EXECUTORS,
+  ...executorsOf(SCRIPT_WRITE_TOOLS),
+  ...executorsOf(ENTITY_WRITE_TOOLS),
+  ...executorsOf(TIMELINE_WRITE_TOOLS),
+  ...executorsOf(STORYBOARD_WRITE_TOOLS),
+  ...executorsOf(PRODUCTION_WRITE_TOOLS),
+  ...executorsOf(EPISODE_WRITE_TOOLS),
+])
 
 export { registeredTools }

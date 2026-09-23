@@ -393,7 +393,17 @@ Phase 2 is done when every box is ticked, the Playwright specs pass, and a user 
   `create_character` goes through `characters/create.ts` so the record is `origin = 'agent'`.
   Research has no write tool (R3). **Follow-up:** `resolve_queue_item` takes a queue key no read
   tool returns yet - adding one widens what the agent reads, which is ask-first.
-- [ ] 3.6 Remaining write tools. Register the Phase 3 tools for script and outline edits, comments (minimum role reader, per D2), title page, format and pagination, storyboard, non-paid production edits (including ai_shotlist, which costs 0 credits), episodes, start_story_project and undo_run. start_story_project wraps an adapter around createProject's logic that returns the new project instead of redirecting. Enable the launcher's "Start from a story" button: it creates the project after confirmation and continues the chat inside it.
+- [x] 3.6 Remaining write tools. Register the Phase 3 tools for script and outline edits, comments (minimum role reader, per D2), title page, format and pagination, storyboard, non-paid production edits (including ai_shotlist, which costs 0 credits), episodes, start_story_project and undo_run. start_story_project wraps an adapter around createProject's logic that returns the new project instead of redirecting. Enable the launcher's "Start from a story" button: it creates the project after confirmation and continues the chat inside it.
+
+  **Done 2026-09-23.** Every Phase 3 row of `tools.md` is registered (56 tools with Phase 2's,
+  asserted by `tests/agent-tools.test.ts`): `writes-script.ts` (script and outline edits folded per
+  document per step, title page, comments at `reader`, format and pagination as confirm),
+  `writes-storyboard.ts`, `writes-production.ts` (no paid tool; `ai_shotlist` direct, 0 credits),
+  `writes-episodes.ts` (with `undo_run`, confirm). `start_story_project` only asks; the launcher's
+  `Start from a story` confirms and calls `startStoryProject` (`lib/projects/create.ts`, shared with
+  `createProject`), then the story is sent inside the new project. **Cannot be undone, and said so
+  on the card:** comments, accepting or discarding shots, deleting a reel or shot, merges, deletes,
+  `create_episode` (its inverse is owner-only and not exposed, D16).
 - [ ] 3.7 Autonomy and prompt v3. Add the autonomy setting to account settings and honour it in apply, per D1. Rewrite the system prompt: the agent can now act through proposals. Include the rules from docs/agents/craft.md. Add a tool policy: read before writing, preview renames, create characters and locations before referencing them in the script, use their bound cue and slugline spellings exactly, never invent ids, group related changes into one proposal, and explain each proposal in a sentence or two. Remove the "cannot write" lines from the focus blocks, and update AGENTS.md ruling R8's status now that writes have shipped.
 
 Phase 3 is done when every box is ticked, and a user can ask for any allowed edit, review it as a diff, apply it, and undo the whole run.

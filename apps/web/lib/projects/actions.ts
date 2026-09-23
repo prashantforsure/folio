@@ -1,9 +1,17 @@
 'use server'
 
-import { CreateProjectInputSchema, LoglineSchema, ProjectIdSchema, TitleSchema, userId as brandUserId } from '@folio/contracts'
+import {
+  ASSISTANT_MESSAGE_MAX,
+  CreateProjectInputSchema,
+  LoglineSchema,
+  ProjectIdSchema,
+  ProjectTypeSchema,
+  ScriptFormatSchema,
+  TitleSchema,
+  userId as brandUserId,
+} from '@folio/contracts'
 import type { MembershipRole, ProjectId, UserId } from '@folio/contracts'
 import {
-  createProjectFor,
   openProjectForRequest,
   readMembershipFor,
   renameProject as renameProjectRow,
@@ -14,17 +22,18 @@ import {
   trashProject as trashProjectRow,
 } from '@folio/db'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { redirect } from 'next/navigation'
 
 import { ROLE, ROLE_REFUSED, meetsRole } from '../auth/roles'
 import { currentIdentity, requireUser } from '../auth/session'
 import { importScript } from '../script/actions'
 import { IMPORT_IDLE } from '../script/result'
+import { makeProject } from './create'
 import { DONE, failure, IDLE } from './result'
-import type { ProjectActionResult, ProjectField } from './result'
+import type { ProjectActionResult, ProjectField, StoryProjectResult } from './result'
 import { readProjectList } from './server'
 import { kindLine, statsLine } from './view'
-import { workspaceHref } from './workspace'
 
 /**
  * The three mutations the shell routes make, and the gate each one enforces.
@@ -95,8 +104,8 @@ export const createProject = async (
   const attached = formData.get('file')
   const file = attached instanceof File && attached.size > 0 ? attached : null
 
-  const db = await transactionDatabase()
-  const { project, episode } = await createProjectFor(db, user.id, parsed.data)
+  // One path with the launcher's `startStoryProject` (`./create.ts`).
+  const { project, episode, href } = await makeProject(user.id, parsed.data)
 
   if (file !== null) {
     const importing = new FormData()
@@ -122,7 +131,35 @@ export const createProject = async (
   // The lists are dynamic, but the client router keeps a copy of the last
   // render; this is what makes the new card appear without a hard reload.
   revalidatePath('/app', 'layout')
-  redirect(workspaceHref(project, episode.slug))
+  redirect(href)
+}
+
+const StoryProjectSchema = z.object({
+  title: TitleSchema,
+  projectType: ProjectTypeSchema,
+  format: ScriptFormatSchema,
+  story: z.string().trim().min(1).max(ASSISTANT_MESSAGE_MAX),
+})
+
+/**
+ * The launcher's "Start from a story" (roadmap task 3.6, ADR 0003 **D15**):
+ * `createProject`'s logic with the redirect taken out. The launcher asks for
+ * a title, film or series and the story, shows what will be made, and only on
+ * the writer's confirmation calls this; it then opens the project and the
+ * story becomes the first message of a chat there. No chat is stored outside a
+ * project - until this returns, the story lives in the launcher alone.
+ */
+export const startStoryProject = async (raw: unknown): Promise<StoryProjectResult> => {
+  const user = await requireUser('/app/projects')
+  const parsed = StoryProjectSchema.safeParse(raw)
+  if (!parsed.success) {
+    const at = parsed.error.issues[0]?.path[0]
+    return { status: 'error', message: at === 'title' ? 'Give the project a title.' : at === 'story' ? 'Write or paste the story first.' : 'Choose a film or a series.' }
+  }
+  const { title, projectType, format } = parsed.data
+  const { project, href } = await makeProject(user.id, { title, kind: 'screenwriting', projectType, format, logline: null })
+  revalidatePath('/app', 'layout')
+  return { status: 'created', projectId: project.id, title: project.title, href }
 }
 
 // ---------------------------------------------------------------------------

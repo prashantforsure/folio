@@ -81,9 +81,11 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `_shell/assistant/assistant-host.tsx` once, beside `children`, so no navigation re-mounts it. Inside
   a project it draws the chat panel (`_shell/assistant/assistant-panel.tsx`) for the project and
   episode `project-shell.tsx` publishes into `lib/assistant/project-cell.ts`; outside one, the
-  launcher (`_shell/assistant/launcher.tsx`, ADR 0003 D15) - recent projects and a disabled
-  `Start from a story`, **no composer** (ruled 2026-09-23: a launcher turn has no project to be
-  recorded on). Closed, the chat panel is **hidden, never unmounted**; the open chat per episode and
+  launcher (`_shell/assistant/launcher.tsx`, ADR 0003 D15) - recent projects and `Start from a
+  story` (roadmap task 3.6: a form, a confirmation step, then `startStoryProject` - `createProject`'s
+  logic via `lib/projects/create.ts`, returning instead of redirecting - and the story waits in
+  `assistantPending` until the panel sends it inside the new project), **no composer** (ruled
+  2026-09-23: a launcher turn has no project to be recorded on). Closed, the chat panel is **hidden, never unmounted**; the open chat per episode and
   the draft are in the session store. The host owns `⌘J`; the project shell keeps the nav-collapse
   rule and reads `assistantOpen` for it.
 - **The assistant is a tool-use loop** (roadmap task 2.3): `POST /api/assistant` streams
@@ -92,6 +94,16 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `lib/agent/registry.ts` + `lib/agent/tools/`, and **a tool not in `docs/agents/tools.md` does not
   exist**. Each turn is an `agent_runs` row; every API message is stored with its content blocks and
   replayed by `lib/agent/replay.ts`. The panel reads the stream with `lib/agent/stream.ts`.
+- **The agent writes through proposals** (roadmap Phase 3, ADR 0003 D1/D10/D11): a write tool
+  (`lib/agent/tools/writes-*.ts`, built with `lib/agent/write-tool.ts`) never writes - it queues an
+  operation; `loop.ts` stores a step's `propose` operations as one `agent_proposals` row and each
+  `confirm` alone (`proposer.ts`). Applying is `lib/agent/apply.ts` (`actions.ts` for the card's
+  buttons): claim, stale check, `before_agent_run` snapshots, each operation's executor
+  (`executors.ts`) inside one batched re-derive, an `agent:<tool>` activity row each; `undoRunWith`
+  reverses a run and proposes what changed since. Script and outline edits
+  (`lib/agent/document-ops.ts`) go to the **open editor** when there is one
+  (`lib/agent/editor-channel.ts`, registered by both workspaces) and are saved with `expectedDigest`
+  when there is not. The card is `_shell/assistant/proposal-card.tsx`.
 - **What a workspace computes, the server can read** (roadmap task 2.4): `readContinuity`
   (`lib/timeline/server.ts`, over `continuityOf` in `view.ts`), `readPageCount` (`lib/script/page-count.ts`
   - the stored measurement when its digest matches, else `measure()`; asian refuses), `readProjectList`

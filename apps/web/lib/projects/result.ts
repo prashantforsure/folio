@@ -34,3 +34,8 @@ export const failure = (field: ProjectField, message: string): ProjectActionResu
   field,
   message,
 })
+
+/** The launcher's "Start from a story": the project made, and where to go - never a redirect. */
+export type StoryProjectResult =
+  | { readonly status: 'created'; readonly projectId: string; readonly title: string; readonly href: string }
+  | { readonly status: 'error'; readonly message: string }

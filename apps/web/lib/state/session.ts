@@ -84,6 +84,13 @@ type SessionState = {
   readonly assistantChats: Readonly<Record<string, string>>
   /** What is typed in the composer and not yet sent. One, because there is one composer. */
   readonly assistantDraft: string
+  /**
+   * A first message waiting for a project that has just been made - the
+   * launcher's "Start from a story" (roadmap task 3.6, ADR 0003 D15). The
+   * panel sends it once, when it opens inside that project, and clears it: the
+   * launcher's conversation continues inside the project it made.
+   */
+  readonly assistantPending: { readonly projectId: string; readonly message: string } | null
   readonly setZoom: (zoom: Zoom) => void
   readonly setNavOpen: (open: PanelState) => void
   readonly setSideOpen: (open: PanelState) => void
@@ -92,6 +99,7 @@ type SessionState = {
   readonly setColourCues: (on: boolean) => void
   readonly setAssistantChat: (key: string, chatId: string | null) => void
   readonly setAssistantDraft: (draft: string) => void
+  readonly setAssistantPending: (pending: { readonly projectId: string; readonly message: string } | null) => void
   readonly toggleNav: () => void
   readonly toggleSide: () => void
 }
@@ -131,6 +139,7 @@ export const useSession = create<SessionState>()(
       colourCues: false,
       assistantChats: {},
       assistantDraft: '',
+      assistantPending: null,
       setZoom: (zoom) => {
         set({ zoom })
       },
@@ -159,6 +168,9 @@ export const useSession = create<SessionState>()(
       },
       setAssistantDraft: (assistantDraft) => {
         set({ assistantDraft })
+      },
+      setAssistantPending: (assistantPending) => {
+        set({ assistantPending })
       },
       toggleNav: () => {
         set((state) => ({ navOpen: flip(state.navOpen) }))
@@ -196,6 +208,7 @@ export const useSession = create<SessionState>()(
         colourCues: state.colourCues,
         assistantChats: state.assistantChats,
         assistantDraft: state.assistantDraft,
+        assistantPending: state.assistantPending,
       }),
     },
   ),

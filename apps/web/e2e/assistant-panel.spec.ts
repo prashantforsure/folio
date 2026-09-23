@@ -88,7 +88,8 @@ test('outside a project the panel is the launcher', async ({ page, account }) =>
   const launcher = page.locator('[data-assistant-launcher]')
   await expect(launcher).toBeVisible()
   await expect(launcher.locator('[data-launcher-project]').first()).toBeVisible()
-  await expect(launcher.locator('[data-launcher-story]')).toBeDisabled()
+  // Start from a story is live since roadmap task 3.6; it opens a form, never a composer.
+  await expect(launcher.locator('[data-launcher-story]')).toBeEnabled()
   await expect(launcher.getByLabel('Ask the assistant')).toHaveCount(0)
   // Opening a project from the launcher is a plain link to its front door.
   await launcher.locator('[data-launcher-project]').first().click()

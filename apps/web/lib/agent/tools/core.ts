@@ -231,8 +231,9 @@ export const navigate = defineTool({
 export const loadToolset = defineTool({
   name: 'load_toolset',
   description:
-    'Load another route\'s tools for the rest of this turn: "script" (page counts, script and outline exports), "entities" (rename previews, character and location CSVs), ' +
-    '"timeline" (the continuity check, the chronology), "research" (the research library). The core tools are always loaded.',
+    "Load another route's tools for the rest of this turn: \"script\" (script and outline edits, synopses, the title page, comments, page counts, exports, episodes), " +
+    '"entities" (characters, locations and props: create, update, rename, merge, relationships, the resolve queue, CSVs), "timeline" (the continuity check, story time, threads), ' +
+    '"storyboard" (shots on the board), "production" (episode settings, reels, shots, the AI shotlist), "research" (the research library, read only). The core tools are always loaded.',
   toolset: 'core',
   minimumRole: ROLE.read,
   mode: 'read',

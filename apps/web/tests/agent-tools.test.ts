@@ -242,11 +242,10 @@ describe('the registry against docs/agents/tools.md', () => {
   const phaseTwo = rows.filter((row) => row.phase.startsWith('2'))
   const built = rows.filter((row) => row.phase.startsWith('2') || row.phase.startsWith('3'))
 
-  it('registers every Phase 2 tool the catalogue lists, and nothing it does not list for Phases 2 and 3', () => {
+  it('registers every Phase 2 and Phase 3 tool the catalogue lists, and nothing it does not', () => {
     expect(phaseTwo.length).toBe(17)
-    const names = registeredTools().map((tool) => tool.name)
-    for (const row of phaseTwo) expect(names, row.name).toContain(row.name)
-    for (const name of names) expect(built.map((row) => row.name), name).toContain(name)
+    expect(built.length).toBe(56)
+    expect(registeredTools().map((tool) => tool.name).sort()).toEqual(built.map((row) => row.name).sort())
   })
 
   it('gives each tool the catalogue`s role and mode - a "propose · confirm" tool is registered as propose and confirms its destructive action', () => {
@@ -264,7 +263,8 @@ describe('the registry against docs/agents/tools.md', () => {
   })
 
   it('gives every write tool an executor under its own name, so a stored operation can be applied', () => {
-    for (const tool of registeredTools().filter((entry) => entry.mode !== 'read' && entry.mode !== 'client')) {
+    // `start_story_project` excepted: outside a project there is no proposal to store; the launcher's confirmation creates it.
+    for (const tool of registeredTools().filter((entry) => entry.mode !== 'read' && entry.mode !== 'client' && entry.name !== 'start_story_project')) {
       expect(executorFor(tool.name), tool.name).toBeDefined()
     }
   })

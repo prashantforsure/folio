@@ -1,4 +1,4 @@
-import { ProjectIdSchema } from '@folio/contracts'
+import { ASSISTANT_MESSAGE_MAX, ProjectIdSchema, ProjectTypeSchema, ScriptFormatSchema, TitleSchema } from '@folio/contracts'
 import { transactionDatabase } from '@folio/db'
 import { z } from 'zod'
 
@@ -14,7 +14,8 @@ import type { Tool } from '../registry'
  * (`minimumRole: null` here). What either tool reads is the caller's own
  * memberships and nothing else.
  *
- * **No model turn calls these yet** (ruled 2026-09-23): a launcher turn has no
+ * **No model turn calls these yet** (ruled 2026-09-23); `start_story_project`
+ * joined them in roadmap task 3.6, and its button in the launcher is live: a launcher turn has no
  * project for `agent_runs` to record it on, and the D3 meter and D14 limits
  * are per project. The launcher panel reads the same list through
  * `listRecentProjects`, and a click is its `open_project`. The tools are
@@ -65,4 +66,29 @@ export const openProject = defineTool({
   },
 })
 
-export const LAUNCHER_TOOLS: readonly Tool[] = [listProjects, openProject]
+/**
+ * `start_story_project` - **confirm** (roadmap task 3.6, ADR 0003 D15). A new
+ * project from a story, created only after the writer says yes, with the chat
+ * continuing inside it. Outside a project there is no proposal to write - a
+ * proposal row needs a project - so the confirmation is the launcher's own
+ * step and the creation is `startStoryProject`, called by that step. This tool
+ * never creates anything: it asks (`confirm_required`) and says so. A model
+ * cannot confirm on the writer's behalf.
+ */
+export const startStoryProject = defineTool({
+  name: 'start_story_project',
+  description:
+    'Offer to start a new screenwriting project from a story the writer has given you: a title, film or series, and the story. The writer confirms it in the launcher; nothing is created until they do.',
+  toolset: 'launcher',
+  minimumRole: null,
+  mode: 'confirm',
+  input: z.object({ title: TitleSchema, projectType: ProjectTypeSchema, format: ScriptFormatSchema.default('hollywood'), story: z.string().trim().min(1).max(ASSISTANT_MESSAGE_MAX) }),
+  label: (input) => `Offering to start ${input.title}`,
+  run: (ctx, input) => {
+    const summary = `Create ${input.title}, a ${input.projectType}, and continue there with the story`
+    ctx.emit({ type: 'confirm_required', id: ctx.idempotencyKey, name: 'start_story_project', summary, cost: null })
+    return Promise.resolve({ ok: true, content: { awaiting: summary, status: 'The writer confirms this in the launcher; nothing has been created.' }, summary: 'Waiting for the writer to confirm' })
+  },
+})
+
+export const LAUNCHER_TOOLS: readonly Tool[] = [listProjects, openProject, startStoryProject]

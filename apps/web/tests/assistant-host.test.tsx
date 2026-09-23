@@ -20,6 +20,8 @@ const spies = vi.hoisted(() => ({
   openAssistantChat: vi.fn(),
   startAssistantChat: vi.fn(),
   listRecentProjects: vi.fn(),
+  startStoryProject: vi.fn(),
+  push: vi.fn(),
 }))
 
 vi.mock('../lib/assistant/actions', () => ({
@@ -36,8 +38,10 @@ vi.mock('../lib/agent/actions', () => ({
 }))
 vi.mock('../lib/projects/actions', () => ({
   listRecentProjects: () => spies.listRecentProjects(),
+  startStoryProject: (...args: readonly unknown[]) => spies.startStoryProject(...args),
 }))
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }))
+const router = { push: (...args: readonly unknown[]) => spies.push(...args), refresh: vi.fn() }
+vi.mock('next/navigation', () => ({ useRouter: () => router }))
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { readonly href: string; readonly children: ReactNode }) => (
     <a href={href} {...rest}>
@@ -72,7 +76,7 @@ const host = () =>
   )
 
 beforeEach(() => {
-  useSession.setState({ assistantOpen: true, assistantChats: {}, assistantDraft: '' })
+  useSession.setState({ assistantOpen: true, assistantChats: {}, assistantDraft: '', assistantPending: null })
   spies.listAssistantChats.mockResolvedValue({ status: 'ok', chats: [] })
   spies.listRecentProjects.mockResolvedValue({
     status: 'ok',
@@ -97,13 +101,43 @@ afterEach(() => {
 })
 
 describe('outside a project', () => {
-  it('draws the launcher: recent projects as links, and Start from a story disabled', async () => {
+  it('draws the launcher: recent projects as links, and Start from a story', async () => {
     host()
     const link = await screen.findByText('Harbour Lights')
     expect(link.closest('a')?.getAttribute('href')).toBe(`/app/project/${PROJECT_A}`)
-    expect(screen.getByRole('button', { name: /Start from a story/u }).hasAttribute('disabled')).toBe(true)
-    // No composer: the launcher runs no model turn in Phase 2 (ruled 2026-09-23).
+    expect(screen.getByRole('button', { name: /Start from a story/u }).hasAttribute('disabled')).toBe(false)
+    // No composer: the launcher runs no model turn (ruled 2026-09-23).
     expect(screen.queryByLabelText('Ask the assistant')).toBeNull()
+  })
+
+  it('starts a project from a story only after a confirmation, then opens it with the story waiting (task 3.6)', async () => {
+    spies.startStoryProject.mockResolvedValue({ status: 'created', projectId: PROJECT_A, title: 'Tide Line', href: `/app/project/${PROJECT_A}/script` })
+    host()
+    fireEvent.click(await screen.findByRole('button', { name: /Start from a story/u }))
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Tide Line' } })
+    fireEvent.change(screen.getByLabelText('The story'), { target: { value: 'A lighthouse keeper finds a letter.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    // The confirmation names what will be made; nothing has been created yet.
+    expect(screen.getByText(/Create “Tide Line”, a film/u)).toBeTruthy()
+    expect(spies.startStoryProject).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }))
+    await waitFor(() => expect(spies.push).toHaveBeenCalledWith(`/app/project/${PROJECT_A}/script`))
+    expect(spies.startStoryProject).toHaveBeenCalledWith({ title: 'Tide Line', projectType: 'film', format: 'hollywood', story: 'A lighthouse keeper finds a letter.' })
+    expect(useSession.getState().assistantPending).toEqual({ projectId: PROJECT_A, message: 'A lighthouse keeper finds a letter.' })
+  })
+
+  it('puts the waiting story in the composer inside the new project when no assistant is connected', async () => {
+    useSession.setState({ assistantPending: { projectId: PROJECT_A, message: 'A lighthouse keeper finds a letter.' } })
+    render(
+      <EphemeralProvider>
+        <AssistantHost connected={false} />
+      </EphemeralProvider>,
+    )
+    act(() => {
+      publishAssistantProject(inside(PROJECT_A))
+    })
+    await waitFor(() => expect(useSession.getState().assistantDraft).toBe('A lighthouse keeper finds a letter.'))
+    expect(useSession.getState().assistantPending).toBeNull()
   })
 })
 
