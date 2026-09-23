@@ -128,6 +128,23 @@ export const AskFocusSchema = z.discriminatedUnion('kind', [
 
 export type AskFocus = z.infer<typeof AskFocusSchema>
 
+/** The most node ids a selection carries. A selection past this is a whole act; the first ones say where it is. */
+export const ASK_SELECTION_MAX = 200
+
+/**
+ * What the writer has selected in an editor (roadmap task 2.6): the ids of the
+ * blocks the selection touches, in document order - the caret's block when
+ * nothing is selected. Ids, never text: the server reads the text from the
+ * stored document, so a selection cannot smuggle in words the script does not
+ * hold. `script` from the Script editor, `outline` from the Outline's.
+ */
+export const AskSelectionSchema = z.object({
+  kind: z.enum(['script', 'outline']),
+  nodeIds: z.array(NodeIdSchema).max(ASK_SELECTION_MAX),
+})
+
+export type AskSelection = z.infer<typeof AskSelectionSchema>
+
 /** The request body the streaming route reads (`POST /api/assistant`). */
 export const AskInputSchema = z.object({
   projectId: z.string(),
@@ -146,6 +163,8 @@ export const AskInputSchema = z.object({
    * `toolsetForRoute`). Absent: the core toolset alone.
    */
   route: AgentRouteSchema.optional(),
+  /** The editor selection, on the Script and Outline routes (roadmap task 2.6). */
+  selection: AskSelectionSchema.optional(),
 })
 
 export type AskRequest = z.input<typeof AskInputSchema>

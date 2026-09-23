@@ -264,7 +264,8 @@ screenwriting tool expect their work to come back out of it.
 
 ## Phase 6 — The agent's write path
 
-The assistant is a **read-only chat** today: it reads, it answers, it writes nothing. The full
+The assistant is **read-only** today: it reads, it answers, it writes nothing - since roadmap Phase 2
+(2026-09-23) through a tool-use loop with read tools (`docs/agents/roadmap.md`). The full
 lifecycle specified in `AGENTS.md` — Brief → Plan → Run → Review → Commit, tool use, proposals,
 allowlist enforcement, locks, parser parity — is entirely unbuilt.
 

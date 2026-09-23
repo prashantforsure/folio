@@ -580,7 +580,7 @@ export const AssistantPanel = ({
   const scroller = useRef<HTMLDivElement>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
   const abort = useRef<AbortController | null>(null)
-  const { assistantPrompt, setAssistantPrompt, assistantFocus } = useEphemeral()
+  const { assistantPrompt, setAssistantPrompt, assistantFocus, assistantSelection } = useEphemeral()
   const facts = useCharacterFacts()
   const places = useLocationFacts()
   const things = usePropFacts()
@@ -594,6 +594,12 @@ export const AssistantPanel = ({
     assistantFocus !== null &&
     ((route === 'characters' && assistantFocus.kind === 'character') || (route === 'locations' && assistantFocus.kind === 'location') || (route === 'timeline' && assistantFocus.kind === 'scene'))
       ? assistantFocus
+      : null
+
+  // The editor selection (roadmap task 2.6), sent only from the editor it came from.
+  const selection =
+    assistantSelection !== null && ((route === 'script' && assistantSelection.kind === 'script') || (route === 'outline' && assistantSelection.kind === 'outline'))
+      ? assistantSelection
       : null
 
   // A route handed a question in (Production's `Suggest rewrite`): it becomes the draft, once.
@@ -737,6 +743,7 @@ export const AssistantPanel = ({
         message,
         scope: wholeProject ? 'project' : 'episode',
         ...(route === null ? {} : { route }),
+        ...(selection === null ? {} : { selection: { kind: selection.kind, nodeIds: [...selection.nodeIds] } }),
         ...(focus === null ? {} : { focus: { kind: focus.kind, id: focus.id } }),
         ...(route === 'locations' ? { places: true } : {}),
         ...(route === 'timeline' ? { timeline: true } : {}),
@@ -817,7 +824,7 @@ export const AssistantPanel = ({
       abort.current = null
       setBusy(false)
     }
-  }, [busy, chat, chatEpisode, chatKey, connected, draft, episode, focus, projectId, route, router, setDraft, setStoredChat, wholeProject])
+  }, [busy, chat, chatEpisode, chatKey, connected, draft, episode, focus, projectId, route, router, selection, setDraft, setStoredChat, wholeProject])
 
   const empty = turns.length === 0
 

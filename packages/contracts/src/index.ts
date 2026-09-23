@@ -670,14 +670,16 @@ export {
 export type { ShareLink, ShareLinkRole } from './share'
 export { SHARE_LINK_ROLES, ShareLinkRoleSchema, ShareLinkSchema, ShareTokenSchema } from './share'
 
-export type { AskFocus, AskRequest, AskScope, AssistantChat, AssistantContent, AssistantMessage, AssistantRole } from './assistant'
+export type { AskFocus, AskRequest, AskScope, AskSelection, AssistantChat, AssistantContent, AssistantMessage, AssistantRole } from './assistant'
 export {
   ASK_SCOPES,
+  ASK_SELECTION_MAX,
   ASSISTANT_MESSAGE_MAX,
   ASSISTANT_ROLES,
   AskFocusSchema,
   AskInputSchema,
   AskScopeSchema,
+  AskSelectionSchema,
   AssistantChatSchema,
   AssistantContentSchema,
   AssistantMessageSchema,

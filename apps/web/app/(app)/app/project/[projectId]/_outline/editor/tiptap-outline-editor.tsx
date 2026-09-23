@@ -6,6 +6,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 
+import { useSelectionPublisher } from '../../../../../../../lib/assistant/use-selection'
 import { blockAttrsOf, toDoc } from '../../../../../../../lib/outline/pm-model'
 import type { IdentityLog } from '../../../../../../../lib/script/identity'
 import { mintNodeId } from '../../../../../../../lib/script/identity'
@@ -174,6 +175,11 @@ export const OutlineEditor = ({
 
   const content = useMemo(() => toDoc(nodes), [nodes])
 
+  // The selection the assistant is told (roadmap task 2.6): node ids, published on change.
+  const publishSelection = useSelectionPublisher('outline')
+  const publishRef = useRef(publishSelection)
+  publishRef.current = publishSelection
+
   const reportCaret = (editor: Editor): void => {
     const block = caretBlock(editor.state)
     store.caret.set({ blockId: block === null ? null : blockAttrsOf(block.node).id, type: block?.type ?? null })
@@ -206,6 +212,9 @@ export const OutlineEditor = ({
       },
       onTransaction: ({ editor: at }) => {
         reportCaret(at)
+      },
+      onSelectionUpdate: ({ editor: at }) => {
+        publishRef.current(at.state)
       },
       onCreate: ({ editor: created }) => {
         onEditorRef.current(created)

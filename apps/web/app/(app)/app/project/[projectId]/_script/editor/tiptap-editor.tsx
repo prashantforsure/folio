@@ -6,6 +6,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 
+import { useSelectionPublisher } from '../../../../../../../lib/assistant/use-selection'
 import type { IdentityLog } from '../../../../../../../lib/script/identity'
 import { mintNodeId } from '../../../../../../../lib/script/identity'
 import type { LabelFor } from '../../../../../../../lib/script/inline'
@@ -128,6 +129,10 @@ export const ScriptEditor = ({
   createRef.current = onCreateMention
   const onEditorRef = useRef(onEditor)
   onEditorRef.current = onEditor
+  // The selection the assistant is told (roadmap task 2.6): node ids, published on change.
+  const publishSelection = useSelectionPublisher('script')
+  const publishRef = useRef(publishSelection)
+  publishRef.current = publishSelection
 
   const hosts = useMemo<HostRegistry>(
     () => ({
@@ -203,6 +208,7 @@ export const ScriptEditor = ({
         const block = caretBlock(at.state)
         const id = block === null ? null : blockAttrsOf(block.node).id
         store.caret.set({ blockId: id, type: block?.type ?? null })
+        publishRef.current(at.state)
       },
       onCreate: ({ editor: created }) => {
         onEditorRef.current(created)

@@ -3,7 +3,7 @@ import type { MentionLabel, NodeId, ScreenplayNode } from '@folio/script'
 import { makeScreenplayNode, nodeId, text, typed } from '@folio/script'
 import { describe, expect, it } from 'vitest'
 
-import { buildContext, focusBlock, renderProject, renderScript, sliceScenes } from '../lib/assistant/context'
+import { SELECTION_LINES, buildContext, focusBlock, renderProject, renderScript, scriptSelection, sliceScenes, whereBlock } from '../lib/assistant/context'
 
 /**
  * What the assistant is shown - `lib/assistant/context.ts`. The episode
@@ -145,5 +145,63 @@ describe('focusBlock', () => {
     })
     expect(context.focus).toContain('In the script as: no spelling bound yet')
     expect(context.system).not.toContain('Focus:')
+  })
+})
+
+describe('the instructions, since the agent loop (roadmap task 2.6)', () => {
+  const system = buildContext({ projectTitle: 'Buckets', script: { kind: 'episode', episodeTitle: 'Buckets', nodes: episodeOne }, labels, cast: [] }).system
+
+  it('say what the tools do: read, search, navigate and export', () => {
+    expect(system).toContain('with your tools, read, search and count across the whole project')
+    expect(system).toContain('take the writer to a page or a scene')
+    expect(system).toContain('hand them an export')
+  })
+
+  it('say it cannot change anything yet, and never to claim it has', () => {
+    expect(system).toContain('What you cannot do: change anything. No tool writes')
+    expect(system).toContain('never claim to have made it')
+  })
+
+  it('keep citing scenes as they did, and put every number on a tool (ruling R4)', () => {
+    expect(system).toContain('Cite scenes by their number as "Scene 3"')
+    expect(system).toContain('State a number only as a tool returned it.')
+    expect(system).toContain('never estimate a page count')
+  })
+})
+
+describe('where the writer is', () => {
+  it('quotes a Script selection from the stored script, each run under its scene', () => {
+    const selection = scriptSelection(episodeOne, [node(4), node(7), node(8)], labels)
+    expect(selection).toEqual({
+      kind: 'script',
+      lines: ['(in Scene 1)', 'Two buckets.', '(in Scene 2)', 'KADAM', 'The paper is the paper.'],
+      more: 0,
+    })
+  })
+
+  it('ignores an id the stored script does not hold, and a selection of only those is no selection', () => {
+    expect(scriptSelection(episodeOne, [node(99)], labels)).toBeNull()
+  })
+
+  it('cuts a long selection and says how many more', () => {
+    const long = Array.from({ length: SELECTION_LINES + 5 }, (_, at) => line(100 + at, 'action', `Line ${String(at)}`))
+    const selection = scriptSelection([line(99, 'scene', 'INT. HALL - DAY'), ...long], long.map((entry) => entry.id), labels)
+    expect(selection?.kind === 'script' ? selection.more : -1).toBe(5)
+  })
+
+  it('names the page, and counts an Outline selection without reading the outline', () => {
+    expect(whereBlock({ route: 'outline', selection: { kind: 'outline', blocks: 3 } })).toBe(
+      ['Where the writer is:', 'The writer is on the Outline page.', '', "They have 3 outline blocks selected. The outline's text is not in what you can read; ask them to paste it if the question needs it."].join('\n'),
+    )
+    expect(whereBlock({ route: null, selection: null })).toBeNull()
+  })
+
+  it('is its own block, so the cached system prefix does not move with the route or the selection', () => {
+    const base = { projectTitle: 'Buckets', script: { kind: 'episode' as const, episodeTitle: 'Buckets', nodes: episodeOne }, labels, cast: [] }
+    const onScript = buildContext({ ...base, where: { route: 'script', selection: scriptSelection(episodeOne, [node(4)], labels) } })
+    const onOutline = buildContext({ ...base, where: { route: 'outline', selection: null } })
+    expect(onScript.system).toBe(onOutline.system)
+    expect(onScript.where).toContain('Two buckets.')
+    expect(onOutline.where).toBe('Where the writer is:\nThe writer is on the Outline page.')
   })
 })

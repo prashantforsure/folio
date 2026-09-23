@@ -64,6 +64,19 @@ export type AssistantFocus =
   /** The Timeline drawer's scene (the Timeline rebuild, phase 5); `name` is its ref. The panel sends it on `/timeline`. */
   | { readonly kind: 'scene'; readonly id: string; readonly name: string }
 
+/**
+ * What the writer has selected in the Script or Outline editor (roadmap task
+ * 2.6): the ids of the blocks the selection touches, the caret's block when it
+ * is collapsed. Published by the editor on a selection change - only when the
+ * ids change, so typing inside one block re-renders nothing here - and cleared
+ * on unmount, exactly as a drawer publishes `assistantFocus`. The panel sends it
+ * with a turn on the route it came from; the server reads the text itself.
+ */
+export type AssistantSelection = {
+  readonly kind: 'script' | 'outline'
+  readonly nodeIds: readonly string[]
+}
+
 type EphemeralValue = {
   readonly paletteOpen: boolean
   readonly setPaletteOpen: (open: boolean) => void
@@ -74,6 +87,8 @@ type EphemeralValue = {
   readonly setAssistantPrompt: (prompt: string | null) => void
   readonly assistantFocus: AssistantFocus | null
   readonly setAssistantFocus: (focus: AssistantFocus | null) => void
+  readonly assistantSelection: AssistantSelection | null
+  readonly setAssistantSelection: (selection: AssistantSelection | null) => void
 }
 
 const EphemeralContext = createContext<EphemeralValue | null>(null)
@@ -83,6 +98,7 @@ export const EphemeralProvider = ({ children }: { readonly children: ReactNode }
   const [aiScope, setAiScope] = useState<AiScope>('scene')
   const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null)
   const [assistantFocus, setAssistantFocus] = useState<AssistantFocus | null>(null)
+  const [assistantSelection, setAssistantSelection] = useState<AssistantSelection | null>(null)
 
   const togglePalette = useCallback(() => {
     setPaletteOpen((open) => !open)
@@ -99,8 +115,10 @@ export const EphemeralProvider = ({ children }: { readonly children: ReactNode }
       setAssistantPrompt,
       assistantFocus,
       setAssistantFocus,
+      assistantSelection,
+      setAssistantSelection,
     }),
-    [paletteOpen, togglePalette, aiScope, assistantPrompt, assistantFocus],
+    [paletteOpen, togglePalette, aiScope, assistantPrompt, assistantFocus, assistantSelection],
   )
 
   return <EphemeralContext.Provider value={value}>{children}</EphemeralContext.Provider>

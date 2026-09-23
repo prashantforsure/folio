@@ -316,7 +316,16 @@ new `Export as .fountain` menu item.
   episode of the same project. **Flag:** the per-source Research `readable` toggle
   AGENTS.md names does not exist, so `read_research` returns no source or clip text
   until it does - adding it is AGENTS.md's "widen what the AI can read".
-- [ ] 2.6 Context and prompt v2. Publish the editor selection (node ids) from the Script and Outline editors through the ephemeral context, the same way assistantFocus works, and include the route, selection and focus in each request. Rewrite the instructions in lib/assistant/context.ts: the agent can read, search, navigate and export, but cannot change anything yet. It keeps citing scenes as it does today, and states report numbers only as returned by tools. Keep the focus blocks.
+- [x] 2.6 Context and prompt v2. Publish the editor selection (node ids) from the Script and Outline editors through the ephemeral context, the same way assistantFocus works, and include the route, selection and focus in each request. Rewrite the instructions in lib/assistant/context.ts: the agent can read, search, navigate and export, but cannot change anything yet. It keeps citing scenes as it does today, and states report numbers only as returned by tools. Keep the focus blocks.
+
+  **Done 2026-09-23.** The Script and Outline editors publish their selection as node
+  ids (`useSelectionPublisher`, `useEphemeral().assistantSelection`), only when the ids
+  change; the panel sends it with the route. The instructions now say the agent can
+  read, search, navigate and export but change nothing, keep "Scene 3" citations, and
+  state numbers only as tools return them; the focus blocks are unchanged. The route
+  and selection go in a last, uncached block (`whereBlock`); a Script selection is
+  quoted from the stored script, an Outline one only counted (the outline is not in
+  the assistant's context - reading it is an ask-first widening).
 
 Phase 2 is done when every box is ticked, the Playwright specs pass, and a user can ask questions from any page and be navigated to the answers.
 

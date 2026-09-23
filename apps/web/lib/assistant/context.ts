@@ -1,4 +1,4 @@
-import type { SceneRef } from '@folio/contracts'
+import type { AgentRoute, SceneRef } from '@folio/contracts'
 import type { InlineContent, MentionLabel, NodeId, ScreenplayNode } from '@folio/script'
 
 import type { LabelFor } from '../script/inline'
@@ -42,19 +42,30 @@ import { CONTEXT_CHAR_CAP } from './model'
  * "where does the love thread stall" and "why is E1 Sc 14 flagged" are
  * answered from what the route knows rather than guessed from the page.
  *
- * ## Read-only, and said so
+ * ## Tools, and read-only, and said so (roadmap task 2.6)
  *
- * The system prompt tells the model it cannot edit the script. AGENTS.md,
- * The AI agent: "Every write returns a proposal, never a mutation" - the
- * chat builds no proposal surface, so the honest instruction is that
- * suggestions are text the writer applies by hand. A draft that lands in
- * a field lands unsaved, through the drawer's own button, not from here.
+ * Since the agent loop the model has read tools: it can search, count, read a
+ * scene, check continuity, take the writer to a page and hand them an export.
+ * It still cannot change anything - AGENTS.md ruling **R8**, read-only until
+ * Phase 3, when writes arrive as proposals - and the instructions say both.
+ * They also carry ruling **R4** as a rule of the answer: a number is stated
+ * only as a tool returned it. A draft that lands in a field lands unsaved,
+ * through the drawer's own button, not from here.
+ *
+ * ## Where the writer is
+ *
+ * The route and the editor selection go in a block of their own after the
+ * Focus block (`whereBlock`): they change on every click, and the cacheable
+ * prefix must not. A selection is sent as node ids and rendered here from the
+ * stored script - the words the page holds, never words the request carried.
  */
 
 export type AssistantContext = {
   readonly system: string
   /** The Focus block, when the writer has a record open; sent as its own, uncached block. */
   readonly focus: string | null
+  /** Where the writer is - the route and the selection; its own uncached block, last. */
+  readonly where: string | null
   /** True when the script was cut to fit `CONTEXT_CHAR_CAP`. */
   readonly truncated: boolean
   /** In project scope: the ordinals of the episodes that were cut. */
@@ -63,12 +74,14 @@ export type AssistantContext = {
 
 const INSTRUCTIONS = `You are the writing assistant inside Folio, a screenwriting workspace. You are talking to the writer of the screenplay below.
 
-What you can do: read the script, the cast list, (on the Locations route) the location records and (on the Timeline route) each scene's story time, its threads and the continuity findings, answer questions about them, point out continuity gaps, suggest lines, beats, scenes, character or location notes, and talk through the draft.
+What you can do: read the script, the cast list, (on the Locations route) the location records and (on the Timeline route) each scene's story time, its threads and the continuity findings below; and with your tools, read, search and count across the whole project - its scenes and their lengths, page counts, characters, locations, props, the continuity check and the research library - take the writer to a page or a scene, and hand them an export (the script as Final Draft or Fountain, the outline, the chronology, the character and location sheets). Answer questions, point out continuity gaps, suggest lines, beats, scenes and notes, and talk through the draft.
 
-What you cannot do: change the script. You have no way to edit it. When you suggest a change, write it out plainly so the writer can put it in themselves; do not claim to have made it.
+What you cannot do: change anything. No tool writes - not the script, the outline, a record or a setting. When you suggest a change, write it out plainly so the writer can make it themselves; never claim to have made it.
 
 How to answer:
 - Be specific. Cite scenes by their number as "Scene 3" when a claim comes from the page. If something is not on the page, say so rather than inventing it.
+- State a number only as a tool returned it. A count, a page length, a list of scenes or findings comes from a tool - call it rather than counting the script yourself, and never estimate a page count.
+- When the answer is somewhere the writer should look, find it first, then take them there with navigate.
 - Match the writer's language when quoting dialogue; the script may mix languages.
 - Keep answers as short as the question allows. A yes-or-no question gets a short answer; a "punch up this scene" request gets the scene.
 - Never summarise the whole script unless asked. The writer wrote it.`
@@ -394,6 +407,83 @@ export const focusBlock = (focus: FocusInput | LocationFocusInput | SceneFocusIn
   ].join('\n')
 
 // ---------------------------------------------------------------------------
+// Where the writer is (roadmap task 2.6)
+// ---------------------------------------------------------------------------
+
+/**
+ * The selection as the model reads it. A Script selection is its lines, from
+ * the stored script; an Outline selection is only a count, because the
+ * outline is not in the assistant's context (ruled 2026-09-16 for the Outline
+ * route: the model reads the script) and reading it is a widening AGENTS.md
+ * puts behind a question.
+ */
+export type SelectionInput =
+  | { readonly kind: 'script'; readonly lines: readonly string[]; readonly more: number }
+  | { readonly kind: 'outline'; readonly blocks: number }
+
+export type WhereInput = {
+  readonly route: AgentRoute | null
+  readonly selection: SelectionInput | null
+}
+
+/** The most selected lines quoted; past it the block says how many more. */
+export const SELECTION_LINES = 40
+
+const PAGE_NAME: Readonly<Record<AgentRoute, string>> = {
+  script: 'Script',
+  outline: 'Outline',
+  storyboard: 'Storyboard',
+  scenes: 'Scenes',
+  production: 'Production',
+  characters: 'Characters',
+  locations: 'Locations',
+  props: 'Props',
+  timeline: 'Timeline',
+  research: 'Research',
+}
+
+/**
+ * The script lines a selection covers, rendered as the Script block renders
+ * them, each run under the scene it is in. Ids that name no node here (a
+ * block typed since the last save) are skipped; none at all is no selection.
+ */
+export const scriptSelection = (nodes: readonly ScreenplayNode[], nodeIds: readonly string[], labels: readonly MentionLabel[]): SelectionInput | null => {
+  const wanted = new Set(nodeIds)
+  const labelFor = labelBookOf(labels)
+  const lines: string[] = []
+  let scene = 0
+  let printed = -1
+  let matched = 0
+  for (const node of nodes) {
+    if (node.type === 'scene') scene += 1
+    if (!wanted.has(node.id)) continue
+    matched += 1
+    if (lines.length >= SELECTION_LINES) continue
+    if (node.type !== 'scene' && printed !== scene) lines.push(scene === 0 ? '(before the first scene)' : `(in Scene ${String(scene)})`)
+    printed = scene
+    lines.push(renderNode(node, labelFor, `[Scene ${String(scene)}]`).trim())
+  }
+  return matched === 0 ? null : { kind: 'script', lines, more: Math.max(0, matched - SELECTION_LINES) }
+}
+
+/** The route and the selection, as their own block; null when neither is known. */
+export const whereBlock = (where: WhereInput): string | null => {
+  const lines: string[] = []
+  if (where.route !== null) lines.push(`The writer is on the ${PAGE_NAME[where.route]} page.`)
+  const selection = where.selection
+  if (selection?.kind === 'script') {
+    lines.push('', 'They have selected these lines of the script - "this", "these lines" and "the selection" mean them:', ...selection.lines)
+    if (selection.more > 0) lines.push(`(and ${String(selection.more)} more)`)
+  } else if (selection?.kind === 'outline') {
+    lines.push(
+      '',
+      `They have ${String(selection.blocks)} outline ${selection.blocks === 1 ? 'block' : 'blocks'} selected. The outline's text is not in what you can read; ask them to paste it if the question needs it.`,
+    )
+  }
+  return lines.length === 0 ? null : ['Where the writer is:', ...lines].join('\n')
+}
+
+// ---------------------------------------------------------------------------
 // The whole prompt
 // ---------------------------------------------------------------------------
 
@@ -409,6 +499,7 @@ export const buildContext = ({
   places,
   timeline,
   focus,
+  where,
 }: {
   readonly projectTitle: string
   readonly script: ScriptInput
@@ -420,7 +511,10 @@ export const buildContext = ({
   /** Every scene's story time and threads, and the open findings, on the Timeline route only; absent elsewhere. */
   readonly timeline?: { readonly scenes: readonly StoryTimeInput[]; readonly findings: readonly string[] }
   readonly focus?: FocusInput | LocationFocusInput | SceneFocusInput
+  /** The route and the editor selection (roadmap task 2.6). */
+  readonly where?: WhereInput
 }): AssistantContext => {
+  const whereText = where === undefined ? null : whereBlock(where)
   const castLines =
     cast.length === 0
       ? 'No character records yet - the cast is whoever the cues name.'
@@ -467,7 +561,7 @@ export const buildContext = ({
         ? 'The script is empty. Nothing has been written yet.'
         : `${rendered.text}${rendered.truncated ? '\n\n[The script continues; it was cut here to fit. Say so if the writer asks about a later scene.]' : ''}`
     const system = [INSTRUCTIONS, '', `Project: ${projectTitle}`, `Episode: ${script.episodeTitle}`, '', 'Cast:', castLines, ...placeLines, ...timelineLines, '', 'Script:', scriptBlock].join('\n')
-    return { system, focus: focus === undefined ? null : focusBlock(focus), truncated: rendered.truncated, cut: [] }
+    return { system, focus: focus === undefined ? null : focusBlock(focus), where: whereText, truncated: rendered.truncated, cut: [] }
   }
 
   const empty = script.episodes.every((episode) => episode.nodes.length === 0)
@@ -487,5 +581,5 @@ export const buildContext = ({
     'Script:',
     scriptBlock,
   ].join('\n')
-  return { system, focus: focus === undefined ? null : focusBlock(focus), truncated: rendered.cut.length > 0, cut: rendered.cut }
+  return { system, focus: focus === undefined ? null : focusBlock(focus), where: whereText, truncated: rendered.cut.length > 0, cut: rendered.cut }
 }

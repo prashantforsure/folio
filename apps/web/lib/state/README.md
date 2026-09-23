@@ -13,7 +13,7 @@ the differences start costing something.
 | --- | --- | --- | --- |
 | React Context → **localStorage**, per user | [theme.tsx](theme.tsx) | `theme` | a closed browser? yes. a new device? no |
 | **Zustand + `persist` → sessionStorage**, per tab | [session.ts](session.ts) | `zoom`, `navOpen`, `sideOpen`, `sideTab`, `assistantOpen`, `colourCues`, `assistantChats`, `assistantDraft` | a route change, a reload; not a closed tab |
-| React Context, **ephemeral** | [ephemeral.tsx](ephemeral.tsx) | `paletteOpen`, `aiScope`, `assistantPrompt`, `assistantFocus` | nothing |
+| React Context, **ephemeral** | [ephemeral.tsx](ephemeral.tsx) | `paletteOpen`, `aiScope`, `assistantPrompt`, `assistantFocus`, `assistantSelection` | nothing |
 | **A database row, per project** | [project-preferences.ts](project-preferences.ts) → `projects.page_mode` / `projects.live_repaginate` | `pageMode`, `liveRepaginate` | everything — it is shared with collaborators |
 | **A database row, per user + episode** | `view_preferences` | Production's `Cards \| Columns` and its 17 field toggles | everything |
 | Module-level cells (`useSyncExternalStore`) and per-route React Context | `lib/workspace/open-cell.ts`'s `createCell`; `_<route>/view-state.tsx` | each route's sub-view, its selection, its drawer | a route change, or not, per route — see below |
@@ -53,7 +53,9 @@ read, never a grant.
 command palette that opens by itself. Plain React state; nothing to persist and nothing to clean up.
 `assistantPrompt` and `assistantFocus` are here too, and they are the one-directional channel from a
 route to the assistant panel: a drawer publishes the record it has open, the panel reads it, and the
-publisher clears it on unmount. **Nothing goes back the other way.**
+publisher clears it on unmount. **Nothing goes back the other way.** `assistantSelection` (2026-09-23,
+roadmap task 2.6) is the same channel from the Script and Outline editors: the ids of the selected
+blocks, published only when they change.
 
 > `aiScope` is placed here on the client's instruction for this phase. AGENTS.md's exception table
 > groups it with the session flags. If a scope selection is meant to survive a route change, this is

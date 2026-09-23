@@ -41,7 +41,7 @@ import { isRefusal, openEpisodeWith } from '../script/gate'
 import { readContinuity } from '../timeline/server'
 import { findingNote, findingsAbout, previousFrameScene, sceneRef } from '../timeline/view'
 import type { FocusInput, LocationFocusInput, PlaceInput, SceneFocusInput, ScriptInput, StoryTimeInput } from './context'
-import { buildContext } from './context'
+import { buildContext, scriptSelection } from './context'
 import { ASSISTANT_MODEL, MAX_OUTPUT_TOKENS } from './model'
 
 /**
@@ -311,6 +311,8 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
   let index: readonly SceneRef[] = []
   let sceneRows: readonly SceneIndexRow[] = []
   let projectNodes: readonly ScreenplayNode[] = []
+  /** The episode's own nodes, in episode scope - what a Script selection is read from. */
+  let episodeNodes: readonly ScreenplayNode[] = []
   if (input.scope === 'project') {
     const [runs, rows] = await Promise.all([readProjectScreenplayByEpisode(scope), listSceneIndex(scope)])
     sceneRows = rows
@@ -328,6 +330,7 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
       const read = await readScreenplayNodes(scope, document.id)
       if (read.ok) nodes = read.value.map((entry) => entry.node)
     }
+    episodeNodes = nodes
     script = { kind: 'episode', episodeTitle: episode.title, nodes }
   }
   const focus =
@@ -370,11 +373,25 @@ export const ask = async (raw: unknown, signal: AbortSignal): Promise<AskOutcome
     ...(placeRead === null ? {} : { places: placeRead.places }),
     ...(timelineRead === null ? {} : { timeline: { scenes: timelineRead.scenes, findings: timelineRead.findings } }),
     ...(focused === null ? {} : { focus: focused }),
+    // Where the writer is (roadmap task 2.6): the route, and the editor
+    // selection read from the stored script by its ids - never the request's words.
+    where: {
+      route: input.route ?? null,
+      selection:
+        input.selection === undefined
+          ? null
+          : input.selection.kind === 'script'
+            ? scriptSelection(episodeNodes, input.selection.nodeIds, extra.labels)
+            : input.selection.nodeIds.length === 0
+              ? null
+              : { kind: 'outline', blocks: input.selection.nodeIds.length },
+    },
   })
 
   const messages: Anthropic.MessageParam[] = [...replayOf(history), { role: 'user', content: input.message }]
   const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: context.system, cache_control: { type: 'ephemeral' } }]
   if (context.focus !== null) system.push({ type: 'text', text: context.focus })
+  if (context.where !== null) system.push({ type: 'text', text: context.where })
 
   const encoder = new TextEncoder()
   const client: ModelClient = { stream: (params, options) => anthropic.messages.stream(params, options) }

@@ -108,6 +108,12 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `lib/agent/navigate.ts` (`hrefs.ts` only). **`read_research` returns no source or clip text**:
   the per-source `readable` toggle AGENTS.md names does not exist, so every source counts as
   unreadable. Within one project an open chat stays open when the page moves to another episode.
+- **The prompt knows where the writer is** (roadmap task 2.6): the route and the editor selection go
+  in a last, uncached system block (`whereBlock`, `lib/assistant/context.ts`), so the cached prefix
+  never moves with a click. The Script and Outline editors publish the selection as node ids
+  (`lib/assistant/use-selection.ts`, `useEphemeral().assistantSelection`) only when the ids change;
+  the server quotes a Script selection from the stored script and only counts an Outline one - the
+  outline is not in the assistant's context.
 - **The workspace, in one directory:** [lib/workspace/](lib/workspace/). `routes.ts` is the route
   tree and both orders (rail, episode nav); `params.ts` the sub-view params; `hrefs.ts` every
   workspace URL and the film/series shape; `context.ts` the membership gate and the `cache()`d
