@@ -1,7 +1,8 @@
-import type { AgentOpMode, AgentProposalId, MembershipRole } from '@folio/contracts'
-import type { DocumentId, RunId } from '@folio/script'
+import type { AgentOpMode, AgentOpStatus, AgentProposalId, AgentRoute, MembershipRole } from '@folio/contracts'
+import type { DocumentId, NodeId, RunId } from '@folio/script'
 import type { z } from 'zod'
 
+import type { DiffView, RecordChange } from './diff-view'
 import type { ToolGate } from './registry'
 
 /**
@@ -78,6 +79,39 @@ export type InvertOutcome =
   | { readonly kind: 'changed'; readonly ops: readonly InverseOp[]; readonly note: string }
   | { readonly kind: 'failed'; readonly message: string }
 
+/**
+ * What the card shows for one operation (roadmap task 3.3): record changes as
+ * before and after values, a document change as hunks, and where Open goes.
+ * Every part is optional - a comment has no before, a merge no hunk.
+ */
+export type OpPreview = {
+  readonly changes?: readonly RecordChange[]
+  readonly diff?: DiffView
+  readonly open?: OpenTarget
+}
+
+/** Where the card's Open button takes the writer - resolved to a URL target on the server (`targets.ts`). */
+export type OpenTarget = {
+  readonly route: AgentRoute
+  readonly episode?: number
+  readonly sceneId?: NodeId
+  readonly recordId?: string
+}
+
+/**
+ * What a preview reads with. `scratch` is shared by the operations of one
+ * proposal, in order, so the second edit to one script previews on top of the
+ * first rather than against the stored list.
+ */
+export type PreviewContext = {
+  readonly gate: ToolGate
+  readonly runId: RunId
+  readonly scratch: Map<string, unknown>
+}
+
+/** An operation as the preview sees it: pending ones read current state, applied ones their undo record. */
+export type StoredOp = { readonly status: AgentOpStatus; readonly undo: unknown; readonly result: unknown }
+
 /** Who the activity row is about. `id` is a uuid or null - `activity_log.target_id` is a uuid column. */
 export type ActivityTarget = { readonly type: string; readonly id: string | null }
 
@@ -96,6 +130,8 @@ export type ExecutorDefinition<Args> = {
   readonly run: (ctx: ExecContext, args: Args, captured: unknown) => Promise<ExecOutcome>
   /** Absent: the operation cannot be undone, whatever `capture` said. */
   readonly invert?: (ctx: ExecContext, args: Args, undo: unknown, result: unknown) => Promise<InvertOutcome>
+  /** What the card shows. Absent: the description is all there is to show. */
+  readonly preview?: (ctx: PreviewContext, args: Args, op: StoredOp) => Promise<OpPreview>
 }
 
 /** An executor as the registry holds it: `args` erased, parsed on the way in. */
@@ -110,6 +146,7 @@ export type Executor = {
   readonly capture: (ctx: ExecContext, raw: unknown) => Promise<unknown>
   readonly run: (ctx: ExecContext, raw: unknown, captured: unknown) => Promise<ExecOutcome>
   readonly invert: ((ctx: ExecContext, raw: unknown, undo: unknown, result: unknown) => Promise<InvertOutcome>) | null
+  readonly preview: (ctx: PreviewContext, raw: unknown, op: StoredOp) => Promise<OpPreview>
 }
 
 const unreadable = (tool: string): string => `The stored ${tool} operation did not read.`
@@ -121,6 +158,7 @@ export const defineExecutor = <Args>(definition: ExecutorDefinition<Args>): Exec
     return parsed.success ? parsed.data : null
   }
   const invert = definition.invert
+  const preview = definition.preview
   return {
     tool: definition.tool,
     minimumRole: definition.minimumRole,
@@ -156,6 +194,10 @@ export const defineExecutor = <Args>(definition: ExecutorDefinition<Args>): Exec
             const args = parse(raw)
             return args === null ? { kind: 'failed', message: unreadable(definition.tool) } : invert(ctx, args, undo, result)
           },
+    preview: async (ctx, raw, op) => {
+      const args = parse(raw)
+      return args === null || preview === undefined ? {} : preview(ctx, args, op)
+    },
   }
 }
 

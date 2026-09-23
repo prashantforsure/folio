@@ -24,10 +24,9 @@ import { TimestampSchema } from './primitives'
  *
  * The panel has to tell a sentence from a navigation from a download without
  * parsing prose, which is why the stream is typed at all (D7's rationale).
- * `proposal` and `confirm_required` are declared now and emitted by nothing
- * until roadmap Phase 3: the assistant stays read-only until then (AGENTS.md
- * ruling **R8**), and a shape the panel already parses is one less thing to
- * change on the day writes land.
+ * `proposal` and `confirm_required` were declared in Phase 2 and are emitted
+ * from Phase 3, when the assistant started writing through proposals
+ * (AGENTS.md ruling **R8**).
  */
 
 // ---------------------------------------------------------------------------
@@ -153,8 +152,19 @@ export const AgentEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('tool_started'), id: z.string(), name: z.string(), label: z.string() }),
   /** A tool call ended; `summary` is a short line the panel prints, never the model's words. */
   z.object({ type: z.literal('tool_finished'), id: z.string(), name: z.string(), ok: z.boolean(), summary: z.string() }),
-  /** Phase 3. A stored proposal the writer reviews. */
-  z.object({ type: z.literal('proposal'), proposalId: z.uuid(), summary: z.string() }),
+  /**
+   * A stored proposal the writer reviews (roadmap task 3.3). `auto` is the
+   * writer's autonomy saying the panel may apply it at once - never when
+   * `needsConfirmation`, which no setting skips (ADR 0003 D1).
+   */
+  z.object({
+    type: z.literal('proposal'),
+    proposalId: z.uuid(),
+    runId: RunIdSchema,
+    summary: z.string(),
+    needsConfirmation: z.boolean(),
+    auto: z.boolean(),
+  }),
   /** Phase 3. A confirm- or paid-mode action waiting for the writer; `cost` in credits when it spends. */
   z.object({ type: z.literal('confirm_required'), id: z.string(), name: z.string(), summary: z.string(), cost: z.number().int().nonnegative().nullable() }),
   z.object({ type: z.literal('navigate'), target: NavigateTargetSchema }),

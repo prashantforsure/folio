@@ -8,6 +8,8 @@ import { ROLE } from '../auth/roles'
 import { isRefusal, openProject } from '../script/gate'
 import type { ApplyOutcome, UndoOutcome } from './apply'
 import { applyProposalWith, rejectProposalWith, undoRunWith } from './apply'
+import type { ProposalCard } from './card'
+import { buildProposalCard } from './card'
 import './tools'
 import type { ToolGate } from './registry'
 
@@ -77,4 +79,16 @@ export const undoRun = async (projectId: string, rawRun: string): Promise<UndoOu
   const gate = await gateFor(projectId, row.episodeId)
   if ('status' in gate) return gate
   return undoRunWith(gate, run.data)
+}
+
+/** The card's content: the proposal, each operation described and previewed, and - when it asks first - the balance. */
+export const readProposalCard = async (
+  projectId: string,
+  proposalId: string,
+): Promise<{ readonly status: 'ok'; readonly card: ProposalCard } | { readonly status: 'refused'; readonly message: string }> => {
+  const opened = await proposalGate(projectId, proposalId)
+  if ('status' in opened) return opened
+  const read = await readProposal(opened.gate.scope, opened.id)
+  if (read === null) return { status: 'refused', message: NOT_FOUND }
+  return { status: 'ok', card: await buildProposalCard(opened.gate, read) }
 }

@@ -29,6 +29,7 @@ import type { RailSection, WorkspaceRoute } from '../../../../lib/workspace/rout
 import type { CitationChip } from '../../app/project/[projectId]/_chrome/citation-chips'
 import { CitationChips } from '../../app/project/[projectId]/_chrome/citation-chips'
 import { Orb } from '../../app/project/[projectId]/_chrome/orb'
+import { ProposalCard } from './proposal-card'
 
 /**
  * The assistant panel. 400px, `--sunk`, one left hairline - `docs/ui
@@ -523,10 +524,24 @@ const saveFile = (filename: string, mime: string, text: string): void => {
   URL.revokeObjectURL(url)
 }
 
+/** A proposal the answer made (roadmap task 3.3); `auto` is the writer's autonomy letting the card apply it at once. */
+type ProposalLine = { readonly id: string; readonly auto: boolean }
+
 type Turn =
-  | (MessageRow & { readonly tools?: readonly ToolLine[] })
-  | { readonly id: 'pending'; readonly role: 'assistant'; readonly body: string; readonly createdAt: ''; readonly tools: readonly ToolLine[] }
+  | (Omit<MessageRow, 'proposals'> & { readonly tools?: readonly ToolLine[]; readonly proposals?: readonly ProposalLine[] })
+  | {
+      readonly id: 'pending'
+      readonly role: 'assistant'
+      readonly body: string
+      readonly createdAt: ''
+      readonly tools: readonly ToolLine[]
+      readonly proposals: readonly ProposalLine[]
+    }
   | Report
+
+/** Stored turns, with the proposals read back from their tool results - a reloaded card never applies itself. */
+const turnsOf = (rows: readonly MessageRow[]): readonly Turn[] =>
+  rows.map(({ proposals, ...row }) => (proposals === undefined ? row : { ...row, proposals: proposals.map((id) => ({ id, auto: false })) }))
 
 export const AssistantPanel = ({
   projectId,
@@ -654,7 +669,7 @@ export const AssistantPanel = ({
       }
       setChat(result.chat)
       setChatEpisode(episode)
-      setTurns(result.messages)
+      setTurns(turnsOf(result.messages))
     })
     return () => {
       cancelled = true
@@ -685,7 +700,7 @@ export const AssistantPanel = ({
       setStoredChat(chatKey, result.chat.id)
       setChat(result.chat)
       setChatEpisode(episode)
-      setTurns(result.messages)
+      setTurns(turnsOf(result.messages))
       setNotice(null)
     },
     [chatKey, episode, projectId, setStoredChat],
@@ -731,7 +746,7 @@ export const AssistantPanel = ({
     setTurns((existing) => [
       ...existing,
       { id: `user:${stamp}`, role: 'user', body: message, createdAt: stamp },
-      { id: 'pending', role: 'assistant', body: '', createdAt: '', tools: [] },
+      { id: 'pending', role: 'assistant', body: '', createdAt: '', tools: [], proposals: [] },
     ])
     const controller = new AbortController()
     abort.current = controller
@@ -763,10 +778,12 @@ export const AssistantPanel = ({
       // by the tool, never the model's words.
       let answer = ''
       let tools: readonly ToolLine[] = []
+      let proposals: readonly ProposalLine[] = []
       const show = (): void => {
         const body = answer
         const lines = tools
-        setTurns((existing) => existing.map((turn) => (turn.id === 'pending' ? { ...turn, body, tools: lines } : turn)))
+        const made = proposals
+        setTurns((existing) => existing.map((turn) => (turn.id === 'pending' ? { ...turn, body, tools: lines, proposals: made } : turn)))
       }
       await readAgentStream(response.body, (event) => {
         switch (event.type) {
@@ -781,6 +798,14 @@ export const AssistantPanel = ({
           case 'tool_finished':
             tools = tools.map((line) => (line.id === event.id ? { ...line, state: event.ok ? 'done' : 'failed', summary: event.summary } : line))
             show()
+            return
+          // A write (roadmap task 3.3): a card the writer reviews, or - under
+          // `auto`, and never for a confirmation - one that applies itself.
+          case 'proposal':
+            if (!proposals.some((line) => line.id === event.proposalId)) {
+              proposals = [...proposals, { id: event.proposalId, auto: event.auto && !event.needsConfirmation }]
+              show()
+            }
             return
           case 'error':
             setNotice(event.message)
@@ -803,12 +828,13 @@ export const AssistantPanel = ({
       })
       const finished = answer
       const lines = tools
+      const made = proposals
       setTurns((existing) =>
         existing.flatMap((turn): Turn[] => {
           if (turn.id !== 'pending') return [turn]
           // A turn that said nothing and called nothing leaves no row behind.
           if (finished.length === 0 && lines.length === 0) return []
-          return [{ id: `assistant:${stamp}`, role: 'assistant', body: finished, createdAt: new Date().toISOString(), tools: lines }]
+          return [{ id: `assistant:${stamp}`, role: 'assistant', body: finished, createdAt: new Date().toISOString(), tools: lines, proposals: made }]
         }),
       )
       setChats((existing) =>
@@ -969,6 +995,13 @@ export const AssistantPanel = ({
                 ) : (
                   turn.body
                 )}
+                {turn.role === 'assistant' && turn.proposals !== undefined && turn.proposals.length > 0 ? (
+                  <div data-proposals className="mt-[8px] flex flex-col gap-[8px] whitespace-normal">
+                    {turn.proposals.map((proposal) => (
+                      <ProposalCard key={proposal.id} projectId={projectId} proposalId={proposal.id} auto={proposal.auto} />
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ),
           )}

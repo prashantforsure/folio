@@ -27,6 +27,13 @@ vi.mock('../lib/assistant/actions', () => ({
   openAssistantChat: (...args: readonly unknown[]) => spies.openAssistantChat(...args),
   startAssistantChat: (...args: readonly unknown[]) => spies.startAssistantChat(...args),
 }))
+// The proposal card's actions (roadmap task 3.3) - server actions, never run here.
+vi.mock('../lib/agent/actions', () => ({
+  applyProposal: vi.fn(),
+  readProposalCard: vi.fn(),
+  rejectProposal: vi.fn(),
+  undoRun: vi.fn(),
+}))
 vi.mock('../lib/projects/actions', () => ({
   listRecentProjects: () => spies.listRecentProjects(),
 }))

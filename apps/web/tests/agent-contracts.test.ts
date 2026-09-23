@@ -28,7 +28,7 @@ describe('AgentEventSchema', () => {
     { type: 'text', text: 'Forty-one scenes.' },
     { type: 'tool_started', id: 'toolu_01', name: 'list_scenes', label: 'Reading the scene list' },
     { type: 'tool_finished', id: 'toolu_01', name: 'list_scenes', ok: true, summary: '41 scenes' },
-    { type: 'proposal', proposalId: RUN, summary: 'Two lines in Scene 4' },
+    { type: 'proposal', proposalId: RUN, runId: RUN, summary: 'Two lines in Scene 4', needsConfirmation: false, auto: false },
     { type: 'confirm_required', id: 'toolu_02', name: 'shoot_reel', summary: 'Shoot reel 2', cost: 375 },
     { type: 'navigate', target: { kind: 'episode', projectId: PROJECT, shape: 'collapsed', episode: 'ep_001', route: 'script', sceneNodeId: NODE } },
     { type: 'refresh' },

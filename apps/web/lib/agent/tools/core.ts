@@ -1,9 +1,7 @@
-import type { AgentRoute, NavigateTarget } from '@folio/contracts'
-import { AgentRouteSchema, AGENT_EPISODE_ROUTES, NodeIdSchema } from '@folio/contracts'
+import { AgentRouteSchema, NodeIdSchema } from '@folio/contracts'
 import {
   listAgentRuns,
   listCharacterRecords,
-  listEpisodes,
   listLiveGenerations,
   listLocationRecords,
   listPropRecords,
@@ -26,6 +24,7 @@ import { ROUTE_TITLE } from '../../workspace/routes'
 import { TOOLSETS, defineTool, registeredTools } from '../registry'
 import type { Tool, ToolContext, Toolset } from '../registry'
 import { searchProject } from '../search'
+import { resolveTarget } from '../targets'
 
 /**
  * The core toolset - `docs/agents/tools.md`, *Core - always loaded*.
@@ -193,14 +192,6 @@ export const searchProjectTool = defineTool({
   },
 })
 
-/** The routes with a page per record, and what the record is. */
-const RECORD_ENTITY: Partial<Record<AgentRoute, 'character' | 'location' | 'prop' | 'research'>> = {
-  characters: 'character',
-  locations: 'location',
-  props: 'prop',
-  research: 'research',
-}
-
 /**
  * `navigate` - a **client** tool: the server resolves where, the panel goes
  * there (`lib/agent/navigate.ts`, `router.push`). The shape and the episode
@@ -224,31 +215,9 @@ export const navigate = defineTool({
   }),
   label: (input) => `Opening ${ROUTE_TITLE[input.route]}`,
   run: async (ctx, input) => {
-    const { project } = ctx.gate
-    let target: NavigateTarget
-    if ((AGENT_EPISODE_ROUTES as readonly string[]).includes(input.route)) {
-      const route = z.enum(AGENT_EPISODE_ROUTES).parse(input.route)
-      const [episodes, index] = await Promise.all([listEpisodes(ctx.gate.scope), input.sceneId === undefined ? Promise.resolve([]) : listSceneIndex(ctx.gate.scope)])
-      const scene = input.sceneId === undefined ? undefined : index.find((row) => row.sceneNodeId === input.sceneId)
-      if (input.sceneId !== undefined && scene === undefined) return { ok: false, message: 'There is no such scene in this project.' }
-      const ordinal = scene?.episodeOrdinal ?? input.episode ?? ctx.gate.episode.ordinal
-      const episode = episodes.find((entry) => entry.ordinal === ordinal)
-      if (episode === undefined) return { ok: false, message: `There is no episode ${String(ordinal)}.` }
-      target = {
-        kind: 'episode',
-        projectId: project.id,
-        shape: project.projectType === 'film' ? 'collapsed' : 'episodic',
-        episode: episode.slug,
-        route,
-        ...(route === 'script' && scene !== undefined ? { sceneNodeId: scene.sceneNodeId } : {}),
-      }
-    } else if (input.recordId !== undefined) {
-      const entity = RECORD_ENTITY[input.route]
-      if (entity === undefined) return { ok: false, message: 'Only characters, locations, props and research have record pages.' }
-      target = { kind: 'record', projectId: project.id, entity, id: input.recordId }
-    } else {
-      target = { kind: 'route', projectId: project.id, route: z.enum(['characters', 'locations', 'props', 'timeline', 'research']).parse(input.route) }
-    }
+    const resolved = await resolveTarget(ctx.gate, input)
+    if (!resolved.ok) return { ok: false, message: resolved.message }
+    const { target } = resolved
     ctx.emit({ type: 'navigate', target })
     return { ok: true, content: { opened: target }, summary: `Opened ${ROUTE_TITLE[input.route]}` }
   },
