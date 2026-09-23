@@ -1,8 +1,7 @@
-import type { EpisodeSlug, ProjectId, SceneRef } from '@folio/contracts'
+import type { EpisodeSlug, ProjectId, PropRow, SceneRef } from '@folio/contracts'
 import type { PropId } from '@folio/script'
 
 import type { WorkspaceShape } from '../workspace/hrefs'
-import { createCell } from '../workspace/open-cell'
 
 /**
  * What the Props workspace knows that the assistant panel wants: which
@@ -43,9 +42,20 @@ export type PropFacts = {
   readonly unwritten: readonly FactsProp[]
 }
 
-const cell = createCell<PropFacts | null>(null)
+// ---------------------------------------------------------------------------
+// The predicates - roadmap task 2.4
+// ---------------------------------------------------------------------------
 
-export const publishPropFacts = cell.set
+/**
+ * The panel's two reports as functions of the rows; the workspace publishes
+ * them and `readPropFacts` (`lib/props/server.ts`) answers the agent with the
+ * same ones (AGENTS.md ruling R4).
+ */
+/** What the two predicates read of a row. */
+export type FactsRow = Pick<PropRow, 'id' | 'name' | 'status' | 'scenes' | 'firstSeen' | 'lines'>
 
-/** The published cell, or `null` when no Props workspace is mounted. */
-export const usePropFacts = cell.use
+export const unsourcedOf = (rows: readonly FactsRow[]): readonly FactsProp[] =>
+  rows.filter((row) => row.status === 'needed').map((row) => ({ id: row.id, name: row.name, scenes: row.scenes.length, first: row.firstSeen }))
+
+export const unwrittenOf = (rows: readonly FactsRow[]): readonly FactsProp[] =>
+  rows.filter((row) => row.lines === 0).map((row) => ({ id: row.id, name: row.name, scenes: 0, first: null }))

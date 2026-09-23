@@ -8,7 +8,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { uploadPortrait } from '../../../../../../lib/characters/actions'
 import { figuresOf, routeIdOf } from '../../../../../../lib/characters/cast'
 import { setQueueIntent, useNewCharacterOpen, useQueueIntent } from '../../../../../../lib/characters/compose'
-import { publishCharacterFacts } from '../../../../../../lib/characters/facts'
+import { noDescriptionOf, unrelatedOf } from '../../../../../../lib/characters/facts'
+import { publishCharacterFacts } from '../../../../../../lib/characters/facts-cell'
 import { useModalToast } from '../../../../../../lib/characters/modal-toast'
 import { pairKey } from '../../../../../../lib/characters/relationships'
 import type { Derivable, SceneIndexRef } from '../../../../../../lib/characters/server'
@@ -134,15 +135,14 @@ export const CharactersWorkspace = ({
     : `${String(figures.length)} ${figures.length === 1 ? 'character' : 'characters'} · ${String(relationships.length)} ${relationships.length === 1 ? 'relationship' : 'relationships'}${selected === null ? '' : ` · ${selected.name}`}`
 
   useEffect(() => {
-    const related = new Set(relationships.flatMap((row) => [row.aId, row.bId]))
     publishCharacterFacts({
       projectId,
       shape,
       episodes,
       index,
       open: selected === null ? null : { id: selected.id, name: selected.name },
-      noDescription: figures.filter((figure) => figure.bio === null).map((figure) => ({ id: figure.id, name: figure.name })),
-      unrelated: figures.filter((figure) => !related.has(figure.id)).map((figure) => ({ id: figure.id, name: figure.name })),
+      noDescription: noDescriptionOf(figures),
+      unrelated: unrelatedOf(figures, relationships),
     })
   }, [episodes, figures, index, projectId, relationships, selected, shape])
   useEffect(

@@ -37,7 +37,12 @@ import { sceneRefOf } from '../characters/figures'
 import { deriveSpeculatively, readDerivationReads } from '../script/server'
 import { publicUrl, storageAvailable } from '../storage/r2'
 import type { ProjectContext } from '../workspace/context'
+import { CSV_MIME } from '../workspace/export'
+import type { TextExport } from '../workspace/export'
+import { nightExteriorsOf, oneOffsOf } from './facts'
+import type { FactsPlace } from './facts'
 import { NO_LOCATION_COUNTS, ieOf, perEpisodeCounts, peopleAt, subtreeOf, sumEighths, treeOrder } from './figures'
+import { breakdownCsvOf, breakdownFilename, csvOf, sortRows } from './sheet'
 import { kindOf } from './view'
 
 /**
@@ -161,7 +166,14 @@ const setKeyOf = (heading: string): string => {
 /** `set:<a>:<b>` with the two ids in order - the decision key for "these two are different places". */
 export const similarKey = (a: LocationId, b: LocationId): string => `set:${[a, b].sort().join(':')}`
 
-export const loadLocations = cache(async (context: ProjectContext): Promise<LocationsLoad> => {
+/**
+ * What the load reads of a context - the scope, the project (its format) and
+ * the episodes. Narrowed from `ProjectContext` (roadmap task 2.4) so the
+ * agent's tools, which hold a gate, read through the same cached loader.
+ */
+export type LocationsContext = Pick<ProjectContext, 'scope' | 'project' | 'episodes'>
+
+export const loadLocations = cache(async (context: LocationsContext): Promise<LocationsLoad> => {
   const { scope, episodes, project } = context
   const [records, index, openRows, tallies, eighths, bound, synopses, characters, storyTime, filedClips, decisions, nodesRead] =
     await Promise.all([
@@ -475,7 +487,7 @@ const structureItemOf = (row: OpenLocationRow, nameOf: ReadonlyMap<LocationId, s
 }
 
 /** With no record yet: how many places a pass over the script would mint, and the headings behind them. */
-const countDerivable = async (context: ProjectContext): Promise<Derivable> => {
+const countDerivable = async (context: LocationsContext): Promise<Derivable> => {
   const reads = await readDerivationReads(context.scope)
   const pass = deriveSpeculatively(reads)
   if (pass === null) return { count: 0, sluglines: 0, top: [] }
@@ -508,3 +520,37 @@ export const loadSelectedLocation = cache(async (context: ProjectContext, locati
   const into = await readLocationMergedInto(context.scope, locationId)
   return into === null ? { state: 'missing' } : { state: 'merged', into }
 })
+
+// ---------------------------------------------------------------------------
+// Server-side reads of what the workspace computes (roadmap task 2.4)
+// ---------------------------------------------------------------------------
+
+/** The panel's two report chips, answered on the server with the workspace's own predicates. */
+export const readLocationFacts = async (
+  context: LocationsContext,
+): Promise<{ readonly oneOffs: readonly FactsPlace[]; readonly nightExteriors: readonly (FactsPlace & { readonly nights: number })[] }> => {
+  const { rows } = await loadLocations(context)
+  return { oneOffs: oneOffsOf(rows), nightExteriors: nightExteriorsOf(rows) }
+}
+
+/**
+ * The Sheet view's `Export CSV`, on the server: every row, in the view's
+ * default order (most scenes first), for the whole series or one episode -
+ * the view's scope menu - through the same `csvOf`.
+ */
+export const locationsCsv = async (context: LocationsContext, ordinal: number | null): Promise<TextExport> => {
+  const { rows } = await loadLocations(context)
+  return {
+    filename: 'locations.csv',
+    mime: CSV_MIME,
+    text: csvOf(sortRows(rows, 'scenes', 'desc', ordinal), ordinal, ordinal === null ? context.episodes.map((episode) => episode.ordinal) : [ordinal]),
+  }
+}
+
+/** The Scenes view's per-set `Export breakdown`, on the server. `null` when the id names no set here. */
+export const locationBreakdownCsv = async (context: LocationsContext, locationId: string): Promise<TextExport | null> => {
+  const { rows } = await loadLocations(context)
+  const row = rows.find((entry) => entry.id === locationId)
+  if (row === undefined) return null
+  return { filename: breakdownFilename(row.name), mime: CSV_MIME, text: breakdownCsvOf(row) }
+}

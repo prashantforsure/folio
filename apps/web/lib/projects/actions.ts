@@ -4,7 +4,6 @@ import { CreateProjectInputSchema, LoglineSchema, ProjectIdSchema, TitleSchema, 
 import type { MembershipRole, ProjectId, UserId } from '@folio/contracts'
 import {
   createProjectFor,
-  listProjectsFor,
   openProjectForRequest,
   readMembershipFor,
   renameProject as renameProjectRow,
@@ -23,6 +22,7 @@ import { importScript } from '../script/actions'
 import { IMPORT_IDLE } from '../script/result'
 import { DONE, failure, IDLE } from './result'
 import type { ProjectActionResult, ProjectField } from './result'
+import { readProjectList } from './server'
 import { kindLine, statsLine } from './view'
 import { workspaceHref } from './workspace'
 
@@ -366,8 +366,8 @@ const RECENT_PROJECTS = 6
  * The assistant launcher's list: the signed-in person's live, unarchived
  * screenwriting projects, most recently edited first (roadmap task 2.2).
  *
- * A read of the same repository the Projects route reads, cut to a few rows
- * and to the fields a row prints. Filmmaking projects are left out because
+ * The Projects route's own list (`readProjectList`) under its `Screenwriting`
+ * chip, cut to a few rows and to the fields a row prints. Filmmaking projects are left out because
  * they have no workspace to open (AGENTS.md, open decision 9). Identity only -
  * there is no project yet to have a role in, and the query reads nothing but
  * the caller's own memberships. Refuses rather than redirects, because the
@@ -377,7 +377,7 @@ export const listRecentProjects = async (): Promise<RecentProjectsResult> => {
   const identity = await currentIdentity()
   if (identity === null) return { status: 'refused', message: 'Sign in to see your projects.' }
   const db = await transactionDatabase()
-  const cards = await listProjectsFor(db, brandUserId(identity.id), { kind: 'screenwriting', trashed: false, archived: false })
+  const { cards } = await readProjectList(db, brandUserId(identity.id), 'screenwriting', 'recent')
   return {
     status: 'ok',
     projects: cards.slice(0, RECENT_PROJECTS).map((card) => ({

@@ -1,5 +1,9 @@
 'use server'
 
+import type { TextExportResult } from '../workspace/export'
+import { listEpisodes } from '@folio/db'
+import { chronologyExport, readContinuity } from './server'
+
 import { FindingVerdictSchema, NodeIdSchema, PlacementsSchema, SceneThreadsSchema, StoryThreadEditSchema, StoryThreadIdSchema, StoryTimeEditSchema, ThreadOrderSchema } from '@folio/contracts'
 import type { StoryThreadId } from '@folio/contracts'
 import {
@@ -252,4 +256,16 @@ export const readSceneLines = async (projectId: string, rawSceneId: string): Pro
   )
   const excerpt = excerpts.get(sceneNodeId)
   return excerpt === undefined ? { status: 'error', message: REFUSED_SCENE } : { status: 'ok', lines: excerpt.lines }
+}
+
+// ---------------------------------------------------------------------------
+// Export (roadmap task 2.4)
+// ---------------------------------------------------------------------------
+
+/** The story chronology as Markdown, for the requesting user (`ROLE.export`, ADR 0003 D16). */
+export const exportChronology = async (projectId: string): Promise<TextExportResult> => {
+  const gate = await openProject(projectId, ROLE.export)
+  if (isRefusal(gate)) return gate
+  const read = await readContinuity({ scope: gate.scope, project: gate.project, episodes: await listEpisodes(gate.scope) })
+  return { status: 'exported', ...chronologyExport(read, gate.project.title) }
 }

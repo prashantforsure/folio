@@ -92,6 +92,14 @@ pattern, and Production alone has a spec on disk (`docs/production/`).
   `lib/agent/registry.ts` + `lib/agent/tools/`, and **a tool not in `docs/agents/tools.md` does not
   exist**. Each turn is an `agent_runs` row; every API message is stored with its content blocks and
   replayed by `lib/agent/replay.ts`. The panel reads the stream with `lib/agent/stream.ts`.
+- **What a workspace computes, the server can read** (roadmap task 2.4): `readContinuity`
+  (`lib/timeline/server.ts`, over `continuityOf` in `view.ts`), `readPageCount` (`lib/script/page-count.ts`
+  - the stored measurement when its digest matches, else `measure()`; asian refuses), `readProjectList`
+  (`lib/projects/server.ts`), the facts reads beside each loader, and five export actions returning a
+  `TextExportResult` (`lib/workspace/export.ts`). **A facts cell is two files now**: the pure
+  types and predicates in `lib/<route>/facts.ts` (server-importable), the client cell in
+  `facts-cell.ts`. The Characters, Locations, Props and Research loaders take a `Pick` of
+  `ProjectContext`, so a tool with only a gate reads through the same cached loader.
 - **The workspace, in one directory:** [lib/workspace/](lib/workspace/). `routes.ts` is the route
   tree and both orders (rail, episode nav); `params.ts` the sub-view params; `hrefs.ts` every
   workspace URL and the film/series shape; `context.ts` the membership gate and the `cache()`d

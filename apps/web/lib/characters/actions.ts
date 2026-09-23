@@ -1,5 +1,8 @@
 'use server'
 
+import type { TextExportResult } from '../workspace/export'
+import { charactersCsv } from './server'
+
 import {
   CanvasPositionSchema,
   CharacterIdSchema,
@@ -790,4 +793,19 @@ export const deriveNow = async (projectId: string): Promise<DeriveResult> => {
     status: 'derived',
     characters: pass.derivation.entities.characters.filter((record) => record.presence === 'present').length,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Export (roadmap task 2.4)
+// ---------------------------------------------------------------------------
+
+const CastColumnsSchema = z.object({ words: z.boolean(), share: z.boolean(), episodes: z.boolean() })
+
+/** The List view's CSV, for the requesting user (`ROLE.export`, ADR 0003 D16). */
+export const exportCharactersCsv = async (projectId: string, rawColumns: unknown): Promise<TextExportResult> => {
+  const columns = CastColumnsSchema.safeParse(rawColumns ?? { words: false, share: false, episodes: false })
+  if (!columns.success) return { status: 'error', message: 'Those columns could not be read.' }
+  const gate = await openProject(projectId, ROLE.export)
+  if (isRefusal(gate)) return gate
+  return { status: 'exported', ...(await charactersCsv({ scope: gate.scope, episodes: await listEpisodes(gate.scope) }, columns.data)) }
 }

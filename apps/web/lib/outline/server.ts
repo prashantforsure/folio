@@ -11,6 +11,9 @@ import {
 } from '@folio/db'
 import type { MentionLabel, ModelDefect, OutlineHeading, OutlineNode } from '@folio/script'
 import { labelBook, outlineBeats, outlineHeadings, outlineWordCount } from '@folio/script'
+import { MARKDOWN_MIME } from '../workspace/export'
+import type { TextExportResult } from '../workspace/export'
+import { outlineFilename, outlineMarkdown } from './markdown'
 import { cache } from 'react'
 
 /**
@@ -140,4 +143,23 @@ export const loadOutlineToc = async (scope: ProjectScope, episode: Episode): Pro
   if (read.state !== 'draft') return null
   const labels = await readLabels(scope)
   return outlineHeadings(read.nodes, labelBook(labels))
+}
+
+/**
+ * The Outline menu's `Export as Markdown`, on the server (roadmap task 2.4):
+ * the stored blocks, through the same `outlineMarkdown` and label book. The
+ * menu exports what the editor holds, which a moment after a keystroke may be
+ * ahead of the last autosave; this exports what is saved.
+ */
+export const outlineExport = async (scope: ProjectScope, episode: Episode): Promise<TextExportResult> => {
+  const read = await readOutlineDocument(scope, episode)
+  if (read.state === 'empty') return { status: 'error', message: 'There is no outline in this episode yet.' }
+  if (read.state === 'unreadable') return { status: 'error', message: 'The stored outline would not read, so it cannot be exported.' }
+  const labels = await readLabels(scope)
+  return {
+    status: 'exported',
+    filename: outlineFilename(episode.title),
+    mime: MARKDOWN_MIME,
+    text: outlineMarkdown(episode.title, read.nodes, labelBook(labels)),
+  }
 }

@@ -18,6 +18,8 @@ import { cache } from 'react'
 import { sceneRefOf } from '../characters/figures'
 import { publicUrl, storageAvailable } from '../storage/r2'
 import type { ProjectContext } from '../workspace/context'
+import { unsourcedOf, unwrittenOf } from './facts'
+import type { FactsProp } from './facts'
 import { categoriesOf } from './view'
 
 /**
@@ -71,7 +73,10 @@ export type PropsLoad = {
   readonly storage: boolean
 }
 
-export const loadProps = cache(async (context: ProjectContext): Promise<PropsLoad> => {
+/** What the load reads of a context: only the scope (narrowed for the agent's tools, roadmap task 2.4). */
+export type PropsContext = Pick<ProjectContext, 'scope'>
+
+export const loadProps = cache(async (context: PropsContext): Promise<PropsLoad> => {
   const { scope } = context
   const [records, aliases, index, shots, setups, characters, locations, nodesRead] = await Promise.all([
     listPropRecords(scope),
@@ -237,4 +242,10 @@ export const loadSelectedProp = async (context: ProjectContext, id: PropId): Pro
   if (record !== undefined) return { state: 'ok', record }
   const into = await readPropMergedInto(context.scope, id)
   return into === null ? { state: 'missing' } : { state: 'merged', into }
+}
+
+/** The panel's two report chips, answered on the server with the workspace's own predicates (roadmap task 2.4). */
+export const readPropFacts = async (context: PropsContext): Promise<{ readonly unsourced: readonly FactsProp[]; readonly unwritten: readonly FactsProp[] }> => {
+  const { rows } = await loadProps(context)
+  return { unsourced: unsourcedOf(rows), unwritten: unwrittenOf(rows) }
 }

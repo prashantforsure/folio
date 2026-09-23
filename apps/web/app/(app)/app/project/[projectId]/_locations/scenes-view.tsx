@@ -5,7 +5,7 @@ import { Icon } from '@folio/ui'
 import Link from 'next/link'
 
 import { citeOf } from '../../../../../../lib/characters/figures'
-import { breakdownCsvOf } from '../../../../../../lib/locations/sheet'
+import { breakdownCsvOf, breakdownFilename } from '../../../../../../lib/locations/sheet'
 import { daysLabel, metaLine, storyTimeLabel } from '../../../../../../lib/locations/view'
 import { ABSENT, eighths } from '../../../../../../lib/workspace/format'
 import type { WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
@@ -53,7 +53,7 @@ export const ScenesView = ({
     const url = URL.createObjectURL(new Blob([breakdownCsvOf(row)], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `${row.name.toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '') || 'set'}-breakdown.csv`
+    anchor.download = breakdownFilename(row.name)
     anchor.click()
     URL.revokeObjectURL(url)
   }

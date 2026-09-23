@@ -22,8 +22,7 @@ import {
   countLabel,
   filterCounts,
   isArchived,
-  matchesFilter,
-  sortCards,
+  visibleCards,
 } from '../../../../../lib/projects/view'
 import type { ProjectFilter, ProjectLayout, ProjectSort } from '../../../../../lib/projects/view'
 import { workspaceHref } from '../../../../../lib/projects/workspace'
@@ -92,7 +91,7 @@ export const ProjectsWorkspace = ({
 
   const counts = useMemo(() => filterCounts(cards, me), [cards, me])
   const visible = useMemo(
-    () => sortCards(cards.filter((card) => matchesFilter(card, filter, me)), sort),
+    () => visibleCards(cards, filter, sort, me),
     [cards, filter, me, sort],
   )
 

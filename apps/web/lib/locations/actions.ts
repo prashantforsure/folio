@@ -1,5 +1,8 @@
 'use server'
 
+import type { TextExportResult } from '../workspace/export'
+import { locationBreakdownCsv, locationsCsv } from './server'
+
 import { InlineContentSchema, LOCATION_PHOTO_MAX_BYTES, LocationEditSchema, LocationIdSchema, ParentEditSchema, TitleSchema } from '@folio/contracts'
 import {
   bindSlugline,
@@ -776,4 +779,29 @@ export const deriveLocationsNow = async (projectId: string): Promise<DeriveResul
     status: 'derived',
     locations: pass.derivation.entities.locations.filter((record) => record.presence === 'present').length,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Export (roadmap task 2.4)
+// ---------------------------------------------------------------------------
+
+/** The Sheet view's CSV - the series, or one episode by its ordinal - for the requesting user (`ROLE.export`). */
+export const exportLocationsCsv = async (projectId: string, rawOrdinal: unknown): Promise<TextExportResult> => {
+  const ordinal = z.number().int().min(1).nullable().safeParse(rawOrdinal ?? null)
+  if (!ordinal.success) return { status: 'error', message: 'That episode could not be read.' }
+  const gate = await openProject(projectId, ROLE.export)
+  if (isRefusal(gate)) return gate
+  const episodes = await listEpisodes(gate.scope)
+  if (ordinal.data !== null && !episodes.some((episode) => episode.ordinal === ordinal.data)) return { status: 'error', message: 'There is no such episode.' }
+  return { status: 'exported', ...(await locationsCsv({ scope: gate.scope, project: gate.project, episodes }, ordinal.data)) }
+}
+
+/** One set's scene breakdown as CSV, for the requesting user (`ROLE.export`). */
+export const exportLocationBreakdown = async (projectId: string, rawId: unknown): Promise<TextExportResult> => {
+  const id = LocationIdSchema.safeParse(rawId)
+  if (!id.success) return { status: 'error', message: 'That location could not be found.' }
+  const gate = await openProject(projectId, ROLE.export)
+  if (isRefusal(gate)) return gate
+  const csv = await locationBreakdownCsv({ scope: gate.scope, project: gate.project, episodes: await listEpisodes(gate.scope) }, id.data)
+  return csv === null ? { status: 'error', message: 'That location could not be found.' } : { status: 'exported', ...csv }
 }

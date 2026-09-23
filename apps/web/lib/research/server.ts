@@ -44,7 +44,10 @@ export type ResearchLoad = {
 const resolveFiling = (filing: StoredFiling, refs: ReadonlyMap<NodeId, SceneRef>): ResearchFilingRow =>
   filing.kind === 'scene' ? { ...filing, ref: refs.get(filing.sceneNodeId) ?? null } : filing
 
-export const loadResearch = cache(async (context: ProjectContext): Promise<ResearchLoad> => {
+/** What the load reads of a context: only the scope (narrowed for the agent's `read_research`, roadmap task 2.5). */
+export type ResearchContext = Pick<ProjectContext, 'scope'>
+
+export const loadResearch = cache(async (context: ResearchContext): Promise<ResearchLoad> => {
   const { scope } = context
   const [sources, collections, stored, index, characterRows, locationRows] = await Promise.all([
     listResearchSources(scope),

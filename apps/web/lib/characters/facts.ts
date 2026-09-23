@@ -1,8 +1,8 @@
-import type { EpisodeSlug, ProjectId, SceneRef } from '@folio/contracts'
+import type { EpisodeSlug, ProjectId, Relationship, SceneRef } from '@folio/contracts'
 import type { CharacterId } from '@folio/script'
 
 import type { WorkspaceShape } from '../workspace/hrefs'
-import { createCell } from '../workspace/open-cell'
+import type { CastFigure } from './cast'
 
 /**
  * What the Characters workspace knows that the assistant panel wants:
@@ -38,9 +38,24 @@ export type CharacterFacts = {
   readonly unrelated: readonly FactsPerson[]
 }
 
-const cell = createCell<CharacterFacts | null>(null)
+// ---------------------------------------------------------------------------
+// The predicates - roadmap task 2.4
+// ---------------------------------------------------------------------------
 
-export const publishCharacterFacts = cell.set
+/**
+ * The two findings the panel's report chips answer, as functions of the rows.
+ * The workspace's effect publishes them for the panel; `readCharacterFacts`
+ * (`lib/characters/server.ts`) answers the same question for the agent - one
+ * predicate, so the chip and the tool cannot disagree (AGENTS.md ruling R4).
+ */
+export const noDescriptionOf = (figures: readonly Pick<CastFigure, 'id' | 'name' | 'bio'>[]): readonly FactsPerson[] =>
+  figures.filter((figure) => figure.bio === null).map((figure) => ({ id: figure.id, name: figure.name }))
 
-/** The published cell, or `null` when no Characters workspace is mounted. */
-export const useCharacterFacts = cell.use
+/** Records no authored relationship names, in the order given (cast order). */
+export const unrelatedOf = (
+  figures: readonly Pick<CastFigure, 'id' | 'name'>[],
+  relationships: readonly Pick<Relationship, 'aId' | 'bId'>[],
+): readonly FactsPerson[] => {
+  const related = new Set(relationships.flatMap((row) => [row.aId, row.bId]))
+  return figures.filter((figure) => !related.has(figure.id)).map((figure) => ({ id: figure.id, name: figure.name }))
+}

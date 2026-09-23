@@ -3,7 +3,8 @@
 import type { EpisodeSlug, ProjectId, PropRow, SceneRef } from '@folio/contracts'
 import { useEffect, useMemo, useState } from 'react'
 
-import { publishPropFacts } from '../../../../../../lib/props/facts'
+import { unsourcedOf, unwrittenOf } from '../../../../../../lib/props/facts'
+import { publishPropFacts } from '../../../../../../lib/props/facts-cell'
 import type { Sort, StatusFilter } from '../../../../../../lib/props/view'
 import { DEFAULT_SORT, matchesFind, passesFilter, routeIdOf, statusLeft } from '../../../../../../lib/props/view'
 import type { ProjectRoutePath, WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
@@ -98,12 +99,8 @@ export const PropsWorkspace = ({
       episodes,
       index,
       open: selected === null ? null : { id: selected.id, name: selected.name },
-      unsourced: rows
-        .filter((row) => row.status === 'needed')
-        .map((row) => ({ id: row.id, name: row.name, scenes: row.scenes.length, first: row.firstSeen })),
-      unwritten: rows
-        .filter((row) => row.lines === 0)
-        .map((row) => ({ id: row.id, name: row.name, scenes: 0, first: null })),
+      unsourced: unsourcedOf(rows),
+      unwritten: unwrittenOf(rows),
     })
   }, [episodes, index, projectId, rows, selected, shape])
   useEffect(

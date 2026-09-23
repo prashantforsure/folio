@@ -3,7 +3,8 @@
 import type { EpisodeSlug, LocationRow, ProjectId, SceneRef, SluglineResolveItem } from '@folio/contracts'
 import { useEffect, useMemo, useState } from 'react'
 
-import { publishLocationFacts } from '../../../../../../lib/locations/facts'
+import { nightExteriorsOf, oneOffsOf } from '../../../../../../lib/locations/facts'
+import { publishLocationFacts } from '../../../../../../lib/locations/facts-cell'
 import type { Derivable } from '../../../../../../lib/locations/server'
 import type { StatusFilter } from '../../../../../../lib/locations/view'
 import { matchesFind, passesFilter, routeIdOf, statusLeft } from '../../../../../../lib/locations/view'
@@ -115,13 +116,8 @@ export const LocationsWorkspace = ({
       episodes,
       index,
       open: selected === null ? null : { id: selected.id, name: selected.name },
-      oneOffs: rows
-        .filter((row) => row.kind === 'one-off')
-        .map((row) => ({ id: row.id, name: row.name, scenes: row.rollup.scenes, first: row.firstSeen })),
-      nightExteriors: rows
-        .filter((row) => row.parentId === null && row.rollupQuadrant.extNight > 0)
-        .sort((a, b) => b.rollupQuadrant.extNight - a.rollupQuadrant.extNight)
-        .map((row) => ({ id: row.id, name: row.name, scenes: row.rollup.scenes, first: row.firstSeen, nights: row.rollupQuadrant.extNight })),
+      oneOffs: oneOffsOf(rows),
+      nightExteriors: nightExteriorsOf(rows),
     })
   }, [episodes, index, projectId, rows, selected, shape])
   useEffect(

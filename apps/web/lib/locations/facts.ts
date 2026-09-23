@@ -1,8 +1,7 @@
-import type { EpisodeSlug, ProjectId, SceneRef } from '@folio/contracts'
+import type { EpisodeSlug, LocationRow, ProjectId, SceneRef } from '@folio/contracts'
 import type { LocationId } from '@folio/script'
 
 import type { WorkspaceShape } from '../workspace/hrefs'
-import { createCell } from '../workspace/open-cell'
 
 /**
  * What the Locations workspace knows that the assistant panel wants: which
@@ -40,9 +39,24 @@ export type LocationFacts = {
   readonly nightExteriors: readonly (FactsPlace & { readonly nights: number })[]
 }
 
-const cell = createCell<LocationFacts | null>(null)
+// ---------------------------------------------------------------------------
+// The predicates - roadmap task 2.4
+// ---------------------------------------------------------------------------
 
-export const publishLocationFacts = cell.set
+/**
+ * The panel's two reports as functions of the rows; the workspace publishes
+ * them and `readLocationFacts` (`lib/locations/server.ts`) answers the agent
+ * with the same ones (AGENTS.md ruling R4).
+ */
+/** What the two predicates read of a row. */
+export type FactsRow = Pick<LocationRow, 'id' | 'name' | 'kind' | 'parentId' | 'firstSeen' | 'rollup' | 'rollupQuadrant'>
 
-/** The published cell, or `null` when no Locations workspace is mounted. */
-export const useLocationFacts = cell.use
+export const oneOffsOf = (rows: readonly FactsRow[]): readonly FactsPlace[] =>
+  rows.filter((row) => row.kind === 'one-off').map((row) => ({ id: row.id, name: row.name, scenes: row.rollup.scenes, first: row.firstSeen }))
+
+/** Primary sets with at least one night exterior, most first. */
+export const nightExteriorsOf = (rows: readonly FactsRow[]): readonly (FactsPlace & { readonly nights: number })[] =>
+  rows
+    .filter((row) => row.parentId === null && row.rollupQuadrant.extNight > 0)
+    .sort((a, b) => b.rollupQuadrant.extNight - a.rollupQuadrant.extNight)
+    .map((row) => ({ id: row.id, name: row.name, scenes: row.rollup.scenes, first: row.firstSeen, nights: row.rollupQuadrant.extNight }))

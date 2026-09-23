@@ -1,6 +1,6 @@
 'use client'
 
-import type { EpisodeSlug, Placement, ProjectId, SceneRef, StoryThreadId, StoryThreadRow, StoryTimeEdit, TimelineEpisodeColumn, TimelineSceneRow } from '@folio/contracts'
+import type { EpisodeSlug, Placement, ProjectId, StoryThreadId, StoryThreadRow, StoryTimeEdit, TimelineEpisodeColumn, TimelineSceneRow } from '@folio/contracts'
 import type { ContinuityFinding } from '@folio/script'
 import { chronology, formatStoryTime, proposePlacements, storyJumps } from '@folio/script'
 import type { NodeId } from '@folio/script'
@@ -8,7 +8,8 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { markDeliberate, placeScenes, reopenFinding, saveStoryTime, setSceneThreads, unplaceScenes } from '../../../../../../lib/timeline/actions'
-import { publishTimelineFacts } from '../../../../../../lib/timeline/facts'
+import { findingsForScene, quietOf, timelineRefOf, unplacedOf } from '../../../../../../lib/timeline/facts'
+import { publishTimelineFacts } from '../../../../../../lib/timeline/facts-cell'
 import { chronologyFilename, chronologyMarkdown } from '../../../../../../lib/timeline/markdown'
 import type { GridLanes, NoteBook, ScenePatch } from '../../../../../../lib/timeline/view'
 import {
@@ -23,12 +24,15 @@ import {
   gridOf,
   matchesFind,
   nextDayAfter,
+  noteBookOf,
   patchLanded,
+  placementInputsOf,
   placementsOf,
   plural,
   previousFrameScene,
   sceneRef,
   statusLeft,
+  timelineScenesOf,
   verdictOf,
 } from '../../../../../../lib/timeline/view'
 import type { ProjectRoutePath, ScenePath, WorkspaceShape } from '../../../../../../lib/workspace/hrefs'
@@ -101,14 +105,6 @@ export type TimelineWorkspaceProps = {
 
 type PatchEntry = { readonly patch: ScenePatch; readonly done: boolean }
 
-const refOf = (scene: TimelineSceneRow): SceneRef => ({
-  sceneNodeId: scene.sceneNodeId,
-  episode: scene.episode,
-  episodeOrdinal: scene.episodeOrdinal,
-  number: scene.number,
-  heading: scene.heading,
-})
-
 export const TimelineWorkspace = ({ projectId, projectTitle, shape, charactersHref, scenes: loaded, threads, episodes, introductions, deliberate }: TimelineWorkspaceProps) => {
   const router = useRouter()
   const { view, setView, selected, select, solo, byHand, save, run, setFlags } = useTimelineState()
@@ -137,7 +133,9 @@ export const TimelineWorkspace = ({ projectId, projectTitle, shape, charactersHr
   }, [loaded])
 
   const scenes = useMemo(() => applyPatches(loaded, new Map([...patches].map(([id, entry]) => [id, entry.patch]))), [loaded, patches])
-  const pure = useMemo(() => scenes.map((scene) => ({ id: scene.sceneNodeId, storyTime: scene.storyTime, flashback: scene.flashback })), [scenes])
+  // The same helpers `continuityOf` composes for the server (`lib/timeline/view.ts`),
+  // one memo each so a patch recomputes only what it changes.
+  const pure = useMemo(() => timelineScenesOf(scenes), [scenes])
   const chrono = useMemo(() => chronology(pure), [pure])
   const jumps = useMemo(() => storyJumps(pure), [pure])
   const findings = useMemo(() => findingsOf(scenes, introductions, threads), [scenes, introductions, threads])
@@ -145,14 +143,7 @@ export const TimelineWorkspace = ({ projectId, projectTitle, shape, charactersHr
   const buckets = useMemo(() => bucketFindings(findings, deliberateKeys), [findings, deliberateKeys])
   const proposals = useMemo(
     () =>
-      proposePlacements(
-        scenes.map((scene) => ({
-          id: scene.sceneNodeId,
-          storyTime: scene.storyTime,
-          flashback: scene.flashback,
-          cues: scene.cues === null ? null : { ...scene.cues, sceneNodeId: scene.sceneNodeId, light: scene.light },
-        })),
-      ).filter((proposal) => !skipped.has(proposal.sceneNodeId)),
+      proposePlacements(placementInputsOf(scenes)).filter((proposal) => !skipped.has(proposal.sceneNodeId)),
     [scenes, skipped],
   )
   const counts = useMemo(() => countsOf(scenes, threads.length, buckets.open.length), [scenes, threads.length, buckets.open.length])
@@ -160,16 +151,7 @@ export const TimelineWorkspace = ({ projectId, projectTitle, shape, charactersHr
   const shown: 'story' | 'chrono' | 'continuity' | 'empty' = empty ? 'empty' : view
 
   const byId = useMemo(() => new Map<NodeId, TimelineSceneRow>(scenes.map((scene) => [scene.sceneNodeId, scene])), [scenes])
-  const book = useMemo<NoteBook>(() => {
-    const people = new Map<string, string>()
-    for (const scene of scenes) for (const person of scene.cast) people.set(person.id, person.name)
-    const threadNames = new Map<string, string>(threads.map((thread) => [thread.id, thread.name]))
-    return {
-      sceneOf: (id) => byId.get(id) ?? null,
-      characterName: (id) => people.get(id) ?? null,
-      threadName: (id) => threadNames.get(id) ?? null,
-    }
-  }, [byId, scenes, threads])
+  const book = useMemo<NoteBook>(() => noteBookOf(scenes, threads), [scenes, threads])
   const noteOf = useCallback((finding: ContinuityFinding) => findingNote(finding, book), [book])
 
   // The header's Continuity badge reads the provider; the body is where the count is known.
@@ -196,7 +178,7 @@ export const TimelineWorkspace = ({ projectId, projectTitle, shape, charactersHr
 
   // The assistant panel's facts: the open scene, the unplaced, the quiet threads.
   useEffect(() => {
-    const index = scenes.map(refOf)
+    const index = scenes.map(timelineRefOf)
     publishTimelineFacts({
       projectId,
       shape,
@@ -207,18 +189,13 @@ export const TimelineWorkspace = ({ projectId, projectTitle, shape, charactersHr
           ? null
           : {
               id: selectedScene.sceneNodeId,
-              ref: refOf(selectedScene),
-              findings: findingsAbout(buckets, selectedScene.sceneNodeId).map((finding) => ({ key: finding.key, ref: refOf(selectedScene), note: noteOf(finding) })),
+              ref: timelineRefOf(selectedScene),
+              findings: findingsForScene(buckets, selectedScene, book),
             },
-      unplaced: scenes.filter((scene) => scene.storyTime === null).map(refOf),
-      quiet: buckets.open
-        .filter((finding) => finding.kind === 'thread-silent')
-        .flatMap((finding) => {
-          const scene = byId.get(finding.sceneId)
-          return scene === undefined ? [] : [{ key: finding.key, ref: refOf(scene), note: noteOf(finding), thread: (finding.subject === null ? null : book.threadName(finding.subject)) ?? 'A thread' }]
-        }),
+      unplaced: unplacedOf(scenes),
+      quiet: quietOf(buckets, scenes, book),
     })
-  }, [book, buckets, byId, episodes, noteOf, projectId, scenes, selectedScene, shape])
+  }, [book, buckets, episodes, projectId, scenes, selectedScene, shape])
   useEffect(
     () => () => {
       publishTimelineFacts(null)

@@ -259,6 +259,10 @@ export const csvOf = (rows: readonly LocationRow[], ordinal: number | null, epis
  * One set's breakdown as CSV - the `Scenes here` section's export: a row
  * per scene at the set or below, in reading order.
  */
+/** `harbour-wall-breakdown.csv`: the set's name as a slug, ASCII only, never empty. */
+export const breakdownFilename = (name: string): string =>
+  `${name.toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '') || 'set'}-breakdown.csv`
+
 export const breakdownCsvOf = (row: LocationRow): string => {
   const header = ['Scene', 'INT/EXT', 'Light', 'Time of day', 'Story day', 'Clock', 'Flashback', 'Heading', 'Set', 'Synopsis', 'Cast', 'Eighths']
   const lines = row.scenes.map((scene) => [

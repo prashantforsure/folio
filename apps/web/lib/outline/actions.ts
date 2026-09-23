@@ -1,5 +1,9 @@
 'use server'
 
+import type { TextExportResult } from '../workspace/export'
+import { openEpisode } from '../script/gate'
+import { outlineExport } from './server'
+
 import { OutlineNodeSchema } from '@folio/contracts'
 import type { DocumentRecord } from '@folio/contracts'
 import {
@@ -173,4 +177,15 @@ export const saveOutline = async (raw: SaveOutlineInput): Promise<SaveOutlineRes
     snapshotTaken: snapshot,
     acts: next.filter((node) => node.type === 'h1').length,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Export (roadmap task 2.4)
+// ---------------------------------------------------------------------------
+
+/** The episode's outline as Markdown, for the requesting user (`ROLE.export`, ADR 0003 D16). */
+export const exportOutlineMarkdown = async (projectId: string, episode: string): Promise<TextExportResult> => {
+  const gate = await openEpisode(projectId, episode, ROLE.export)
+  if (isRefusal(gate)) return gate
+  return outlineExport(gate.scope, gate.episode)
 }

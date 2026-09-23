@@ -186,3 +186,12 @@ export const countLabel = (visible: readonly ProjectCard[]): string => {
   if (filmmaking > 0) parts.push(`${String(filmmaking)} filmmaking`)
   return parts.join(' · ')
 }
+
+/**
+ * The list a filter chip and a sort show: the matching cards, sorted. The
+ * Projects route draws it and `readProjectList` (`lib/projects/server.ts`)
+ * answers the agent with it - one function, so "which projects are archived?"
+ * is answered by the chip's own predicate (roadmap task 2.4).
+ */
+export const visibleCards = (cards: readonly ProjectCard[], filter: ProjectFilter, sort: ProjectSort, me: string): readonly ProjectCard[] =>
+  sortCards(cards.filter((card) => matchesFilter(card, filter, me)), sort)

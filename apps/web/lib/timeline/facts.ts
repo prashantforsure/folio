@@ -1,8 +1,9 @@
-import type { EpisodeSlug, ProjectId, SceneRef } from '@folio/contracts'
+import type { EpisodeSlug, ProjectId, SceneRef, TimelineSceneRow } from '@folio/contracts'
 import type { NodeId } from '@folio/script'
 
 import type { WorkspaceShape } from '../workspace/hrefs'
-import { createCell } from '../workspace/open-cell'
+import type { FindingBuckets, NoteBook } from './view'
+import { findingNote, findingsAbout } from './view'
 
 /**
  * What the Timeline workspace knows that the assistant panel wants: which
@@ -37,9 +38,44 @@ export type TimelineFacts = {
   readonly quiet: readonly (FactsFinding & { readonly thread: string })[]
 }
 
-const cell = createCell<TimelineFacts | null>(null)
+// ---------------------------------------------------------------------------
+// The predicates - roadmap task 2.4
+// ---------------------------------------------------------------------------
 
-export const publishTimelineFacts = cell.set
+/** A timeline row as a scene ref - the join for a citation chip. */
+export const timelineRefOf = (scene: TimelineSceneRow): SceneRef => ({
+  sceneNodeId: scene.sceneNodeId,
+  episode: scene.episode,
+  episodeOrdinal: scene.episodeOrdinal,
+  number: scene.number,
+  heading: scene.heading,
+})
 
-/** The published cell, or `null` when no Timeline workspace is mounted. */
-export const useTimelineFacts = cell.use
+/**
+ * The panel's reports as functions of the rows and the bucketed check; the
+ * workspace publishes them and `readTimelineFacts` (`lib/timeline/server.ts`)
+ * answers the agent with the same ones (AGENTS.md ruling R4).
+ */
+export const unplacedOf = (scenes: readonly TimelineSceneRow[]): readonly SceneRef[] =>
+  scenes.filter((scene) => scene.storyTime === null).map(timelineRefOf)
+
+/** The `thread-silent` findings the writer has not answered, each with its thread's name. */
+export const quietOf = (
+  buckets: FindingBuckets,
+  scenes: readonly TimelineSceneRow[],
+  book: NoteBook,
+): readonly (FactsFinding & { readonly thread: string })[] => {
+  const byId = new Map<NodeId, TimelineSceneRow>(scenes.map((scene) => [scene.sceneNodeId, scene]))
+  return buckets.open
+    .filter((finding) => finding.kind === 'thread-silent')
+    .flatMap((finding) => {
+      const scene = byId.get(finding.sceneId)
+      return scene === undefined
+        ? []
+        : [{ key: finding.key, ref: timelineRefOf(scene), note: findingNote(finding, book), thread: (finding.subject === null ? null : book.threadName(finding.subject)) ?? 'A thread' }]
+    })
+}
+
+/** The open findings about one scene, as the drawer's chip answers them. */
+export const findingsForScene = (buckets: FindingBuckets, scene: TimelineSceneRow, book: NoteBook): readonly FactsFinding[] =>
+  findingsAbout(buckets, scene.sceneNodeId).map((finding) => ({ key: finding.key, ref: timelineRefOf(scene), note: findingNote(finding, book) }))

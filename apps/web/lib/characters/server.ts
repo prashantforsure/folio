@@ -11,8 +11,15 @@ import { deriveSpeculatively, readDerivationReads } from '../script/server'
 import { publicUrl, storageAvailable } from '../storage/r2'
 import type { ProjectContext } from '../workspace/context'
 import { loadProject } from '../workspace/context'
+import { CSV_MIME } from '../workspace/export'
+import type { TextExport } from '../workspace/export'
 import { characterHref } from '../workspace/hrefs'
+import { figuresOf } from './cast'
+import type { CastFigure } from './cast'
+import { noDescriptionOf, unrelatedOf } from './facts'
+import type { FactsPerson } from './facts'
 import { sceneRefOf } from './figures'
+import { csvOf, sortCast } from './list'
 import type { DialogueEdge } from './graph'
 import { dialogueEdges } from './graph'
 
@@ -155,7 +162,14 @@ export type Derivable = {
   readonly top: readonly { readonly cue: string; readonly scenes: number }[]
 }
 
-export const loadCharacters = cache(async (context: ProjectContext): Promise<CharactersLoad> => {
+/**
+ * What the load reads of a context: only the scope. Narrowed from
+ * `ProjectContext` (roadmap task 2.4) so the agent's tools, which hold a gate
+ * rather than a page's context, read through the same cached loader.
+ */
+export type CharactersContext = Pick<ProjectContext, 'scope'>
+
+export const loadCharacters = cache(async (context: CharactersContext): Promise<CharactersLoad> => {
   const { scope } = context
   const [records, sceneRows, cueRows, tallies, bound, decisions, relationshipRows] = await Promise.all([
     listCharacterRecords(scope),
@@ -262,7 +276,7 @@ export const loadCharacters = cache(async (context: ProjectContext): Promise<Cha
 })
 
 /** With no record yet: what a derivation pass over the script would mint - the count and the busiest cues. */
-const countDerivable = async (context: ProjectContext): Promise<Derivable> => {
+const countDerivable = async (context: CharactersContext): Promise<Derivable> => {
   const reads = await readDerivationReads(context.scope)
   const pass = deriveSpeculatively(reads)
   if (pass === null) return { count: 0, top: [] }
@@ -326,4 +340,47 @@ export const loadCharacterProfile = async (context: ProjectContext, characterId:
 export const enterCharacters = async (rawProjectId: string): Promise<{ readonly context: ProjectContext; readonly load: CharactersLoad }> => {
   const context = await loadProject(rawProjectId)
   return { context, load: await loadCharacters(context) }
+}
+
+// ---------------------------------------------------------------------------
+// Server-side reads of what the workspace computes (roadmap task 2.4)
+// ---------------------------------------------------------------------------
+
+/** The cast's context: the scope, and the episodes in running order - the figures count scenes per episode. */
+export type CastContext = Pick<ProjectContext, 'scope' | 'episodes'>
+
+/**
+ * The cast as the workspace draws it: `figuresOf` over the same load, with the
+ * same episode ordinals - the join `characters-workspace.tsx` runs in a memo.
+ */
+export const castFiguresOf = async (
+  context: CastContext,
+): Promise<{ readonly figures: readonly CastFigure[]; readonly relationships: readonly Relationship[]; readonly ordinals: readonly number[] }> => {
+  const load = await loadCharacters(context)
+  const ordinals = context.episodes.map((episode) => episode.ordinal)
+  return { figures: figuresOf(load.cast, load.index, ordinals, load.relationships), relationships: load.relationships, ordinals }
+}
+
+/** The panel's two report chips, answered on the server with the workspace's own predicates. */
+export const readCharacterFacts = async (
+  context: CastContext,
+): Promise<{ readonly noDescription: readonly FactsPerson[]; readonly unrelated: readonly FactsPerson[] }> => {
+  const { figures, relationships } = await castFiguresOf(context)
+  return { noDescription: noDescriptionOf(figures), unrelated: unrelatedOf(figures, relationships) }
+}
+
+/** Which of the List view's optional columns a CSV carries - its `Columns` menu. */
+export type CastColumns = { readonly words: boolean; readonly share: boolean; readonly episodes: boolean }
+
+/**
+ * The List view's `Export CSV`, on the server: every figure, in the view's
+ * default order (most scenes first), through the same `csvOf`.
+ */
+export const charactersCsv = async (context: CastContext, columns: CastColumns): Promise<TextExport> => {
+  const { figures, ordinals } = await castFiguresOf(context)
+  return {
+    filename: 'characters.csv',
+    mime: CSV_MIME,
+    text: csvOf(sortCast(figures, 'scenes', 'desc'), { words: columns.words, share: columns.share, episodes: columns.episodes ? ordinals : null }),
+  }
 }

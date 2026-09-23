@@ -1,4 +1,4 @@
-import type { StoryThreadRow, TimelineEpisodeColumn, TimelineSceneRow } from '@folio/contracts'
+import type { SceneRef, StoryThreadRow, TimelineEpisodeColumn, TimelineSceneRow } from '@folio/contracts'
 import { storyThreadId as brandStoryThreadId } from '@folio/contracts'
 import { listCharacterRecords, listFindingVerdicts, listStoryThreads, listTimelineScenes, readEpisodeBoard, readMentionLabels, readProjectScreenplayNodes } from '@folio/db'
 import type { NodeId } from '@folio/script'
@@ -6,7 +6,13 @@ import { timeCuesOf } from '@folio/script'
 import { cache } from 'react'
 
 import type { ProjectContext } from '../workspace/context'
-import { episodeFigures, threadFigures } from './view'
+import { MARKDOWN_MIME } from '../workspace/export'
+import type { TextExport } from '../workspace/export'
+import { quietOf, unplacedOf } from './facts'
+import type { FactsFinding } from './facts'
+import { chronologyFilename, chronologyMarkdown } from './markdown'
+import type { Continuity } from './view'
+import { continuityOf, episodeFigures, threadFigures } from './view'
 
 /**
  * Everything the Timeline route reads, and where each part comes from.
@@ -125,4 +131,38 @@ export const loadTimeline = cache(async (context: TimelineContext): Promise<Time
   }
 
   return { scenes, threads, episodes: columns, introductions, deliberate: [...deliberate] }
+})
+
+// ---------------------------------------------------------------------------
+// Server-side reads of what the workspace computes (roadmap task 2.4)
+// ---------------------------------------------------------------------------
+
+export type ContinuityRead = TimelineLoad & { readonly continuity: Continuity }
+
+/**
+ * The continuity check, the chronology and the placement proposals, on the
+ * server: the route's own load through `continuityOf`, the function the
+ * workspace's memos are made of. Promoted from the module-private `timelineOf`
+ * in `lib/assistant/server.ts` (which now reads this), so the assistant's
+ * system block, the agent's `run_continuity_check` and the route agree on
+ * every finding. No model is called and nothing is stored (AGENTS.md ruling R4).
+ */
+export const readContinuity = async (context: TimelineContext): Promise<ContinuityRead> => {
+  const load = await loadTimeline(context)
+  return { ...load, continuity: continuityOf(load) }
+}
+
+/** The panel's Timeline report chips, answered on the server with the workspace's own predicates. */
+export const readTimelineFacts = (
+  read: ContinuityRead,
+): { readonly unplaced: readonly SceneRef[]; readonly quiet: readonly (FactsFinding & { readonly thread: string })[] } => ({
+  unplaced: unplacedOf(read.scenes),
+  quiet: quietOf(read.continuity.buckets, read.scenes, read.continuity.book),
+})
+
+/** The toolbar's `Export chronology`, on the server: the same Markdown from the same load. */
+export const chronologyExport = (read: ContinuityRead, projectTitle: string): TextExport => ({
+  filename: chronologyFilename(projectTitle),
+  mime: MARKDOWN_MIME,
+  text: chronologyMarkdown(projectTitle, read.scenes, read.threads, read.continuity.chronology),
 })

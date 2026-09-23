@@ -9,8 +9,20 @@ import type {
   TimelineEpisodeColumn,
   TimelineSceneRow,
 } from '@folio/contracts'
-import type { Chronology, ContinuityFinding, ContinuityKind, ContinuityScene, PlacementProposal, StoryTime } from '@folio/script'
-import { FLAGGED_KINDS, INFORMATIONAL_KINDS, continuityFindings, formatStoryDay, formatStoryTime, precedesStoryTime, readSlugline, storySpan } from '@folio/script'
+import type { Chronology, ContinuityFinding, ContinuityKind, ContinuityScene, PlacementProposal, StoryJump, StoryTime } from '@folio/script'
+import {
+  FLAGGED_KINDS,
+  INFORMATIONAL_KINDS,
+  chronology,
+  continuityFindings,
+  formatStoryDay,
+  formatStoryTime,
+  precedesStoryTime,
+  proposePlacements,
+  readSlugline,
+  storyJumps,
+  storySpan,
+} from '@folio/script'
 import type { NodeId } from '@folio/script'
 
 import { eighths } from '../workspace/format'
@@ -322,6 +334,73 @@ export const proposalLine = (proposal: PlacementProposal, previous: Pick<Timelin
       return `"${proposal.quote ?? ''}" → ${formatStoryDay(proposal.time.day)}`
     case 'carried':
       return `no cue → ${formatStoryDay(proposal.time.day)}, carried from ${from}`
+  }
+}
+
+/** What `proposePlacements` reads of a row: its time, its flag and the cues the heading and first action gave. */
+export const placementInputsOf = (scenes: readonly TimelineSceneRow[]): Parameters<typeof proposePlacements>[0] =>
+  scenes.map((scene) => ({
+    id: scene.sceneNodeId,
+    storyTime: scene.storyTime,
+    flashback: scene.flashback,
+    cues: scene.cues === null ? null : { ...scene.cues, sceneNodeId: scene.sceneNodeId, light: scene.light },
+  }))
+
+/** The lookups a finding's note reads, over one load: the rows by id, the cast's names, the threads'. */
+export const noteBookOf = (scenes: readonly TimelineSceneRow[], threads: readonly Pick<StoryThreadRow, 'id' | 'name'>[]): NoteBook => {
+  const byId = new Map<NodeId, TimelineSceneRow>(scenes.map((scene) => [scene.sceneNodeId, scene]))
+  const people = new Map<string, string>()
+  for (const scene of scenes) for (const person of scene.cast) people.set(person.id, person.name)
+  const threadNames = new Map<string, string>(threads.map((thread) => [thread.id, thread.name]))
+  return {
+    sceneOf: (id) => byId.get(id) ?? null,
+    characterName: (id) => people.get(id) ?? null,
+    threadName: (id) => threadNames.get(id) ?? null,
+  }
+}
+
+/**
+ * Everything the Timeline route computes over one load, in one call - the
+ * story order, the jumps, the continuity check bucketed by the writer's
+ * verdicts, the placement proposals and the note book (roadmap task 2.4).
+ *
+ * Until 2026-09-23 this was a column of `useMemo`s in `timeline-workspace.tsx`
+ * and, separately, a module-private copy in `lib/assistant/server.ts`; the
+ * workspace now reads its pieces from the same helpers and the server reads
+ * this (`readContinuity`, `lib/timeline/server.ts`), so a finding the writer
+ * sees and one the agent reports are the same finding. Pure: no model, no
+ * node - AGENTS.md ruling R4, every number from code.
+ */
+export type Continuity = {
+  readonly chronology: Chronology
+  readonly jumps: ReadonlyMap<NodeId, StoryJump>
+  readonly findings: readonly ContinuityFinding[]
+  readonly buckets: FindingBuckets
+  readonly proposals: readonly PlacementProposal[]
+  readonly book: NoteBook
+}
+
+export type ContinuityInput = {
+  readonly scenes: readonly TimelineSceneRow[]
+  readonly threads: readonly StoryThreadRow[]
+  readonly introductions: Readonly<Record<string, NodeId>>
+  readonly deliberate: readonly string[]
+}
+
+/** The rows as the core's ordering reads them. */
+export const timelineScenesOf = (scenes: readonly TimelineSceneRow[]): Parameters<typeof chronology>[0] =>
+  scenes.map((scene) => ({ id: scene.sceneNodeId, storyTime: scene.storyTime, flashback: scene.flashback }))
+
+export const continuityOf = (input: ContinuityInput): Continuity => {
+  const pure = timelineScenesOf(input.scenes)
+  const findings = findingsOf(input.scenes, input.introductions, input.threads)
+  return {
+    chronology: chronology(pure),
+    jumps: storyJumps(pure),
+    findings,
+    buckets: bucketFindings(findings, new Set(input.deliberate)),
+    proposals: proposePlacements(placementInputsOf(input.scenes)),
+    book: noteBookOf(input.scenes, input.threads),
   }
 }
 
